@@ -64,6 +64,18 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Test frontend
+        if: runner.os == 'Linux'
+        run: npm test
+
+      - name: Check Rust formatting
+        if: runner.os == 'Linux'
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Lint Rust
+        if: runner.os == 'Linux'
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+
       - name: Check Rust
         run: cargo check --manifest-path src-tauri/Cargo.toml --locked
 
