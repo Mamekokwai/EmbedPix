@@ -22,14 +22,22 @@ import type {
   OutputFormat,
 } from "./types";
 
-const OUTPUT_FORMATS: Array<{ value: OutputFormat; label: string; hint: string }> = [
-  { value: "bmp", label: "BMP", hint: "嵌入式常用" },
-  { value: "png", label: "PNG", hint: "无损压缩" },
-  { value: "jpg", label: "JPG", hint: "体积更小" },
+const OUTPUT_FORMATS: Array<{
+  value: OutputFormat;
+  label: string;
+  hint: string;
+  description: string;
+}> = [
+  { value: "bmp", label: "BMP", hint: "1–32 位", description: "支持 1、4、8、16、24、32 位；仅 32 位保留透明度。" },
+  { value: "png", label: "PNG", hint: "24 / 32 位", description: "24 位不含透明度；32 位保留透明度，适合无损资源。" },
+  { value: "jpg", label: "JPG", hint: "固定 24 位", description: "固定 24 位，不支持透明度；透明区域使用背景色。" },
 ];
 
 const BMP_BIT_DEPTHS: BmpBitDepth[] = [1, 4, 8, 16, 24, 32];
-const MAX_DIMENSION = 20000;
+const PNG_BIT_DEPTHS: BmpBitDepth[] = [24, 32];
+const MAX_DIMENSION = 8192;
+const MAX_IMAGE_PIXELS = 16_777_216;
+const MAX_INPUT_BYTES = 32 * 1024 * 1024;
 
 type Status =
   | { kind: "idle"; text: string }
@@ -50,6 +58,10 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatMebibytes(bytes: number) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
 function normalizeDimension(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) {
@@ -57,6 +69,88 @@ function normalizeDimension(value: string, fallback: number) {
   }
 
   return Math.min(MAX_DIMENSION, Math.max(1, parsed));
+}
+
+function parseDimension(value: string) {
+  if (!/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= MAX_DIMENSION ? parsed : null;
+}
+
+function getDimensionError(value: string, label: string) {
+  if (value.length === 0) {
+    return `${label}不能为空。`;
+  }
+
+  return parseDimension(value) === null ? `${label}需为 1–${MAX_DIMENSION.toLocaleString("zh-CN")} 之间的整数。` : null;
+}
+
+function getPixelError(widthValue: string, heightValue: string) {
+  const nextWidth = parseDimension(widthValue);
+  const nextHeight = parseDimension(heightValue);
+  if (nextWidth === null || nextHeight === null || nextWidth * nextHeight <= MAX_IMAGE_PIXELS) {
+    return null;
+  }
+
+  return `输出尺寸不能超过 ${MAX_IMAGE_PIXELS.toLocaleString("zh-CN")} 像素。`;
+}
+
+function constrainDimensions(nextDimensions: ImageDimensions) {
+  const scale = Math.min(
+    1,
+    MAX_DIMENSION / nextDimensions.width,
+    MAX_DIMENSION / nextDimensions.height,
+    Math.sqrt(MAX_IMAGE_PIXELS / (nextDimensions.width * nextDimensions.height)),
+  );
+  return {
+    width: Math.max(1, Math.floor(nextDimensions.width * scale)),
+    height: Math.max(1, Math.floor(nextDimensions.height * scale)),
+  };
+}
+
+function constrainAspectDimensions(axis: "width" | "height", value: number, source: ImageDimensions) {
+  const ratio = source.width / source.height;
+  const maxWidth = Math.min(MAX_DIMENSION, Math.floor(Math.sqrt(MAX_IMAGE_PIXELS * ratio)));
+  const maxHeight = Math.min(MAX_DIMENSION, Math.floor(Math.sqrt(MAX_IMAGE_PIXELS / ratio)));
+  const nextWidth = axis === "width" ? Math.min(value, maxWidth) : Math.max(1, Math.round(value * ratio));
+  const nextHeight = axis === "height" ? Math.min(value, maxHeight) : Math.max(1, Math.round(value / ratio));
+  return constrainDimensions({ width: nextWidth, height: nextHeight });
+}
+
+function getBitDepths(format: OutputFormat) {
+  if (format === "png") {
+    return PNG_BIT_DEPTHS;
+  }
+
+  if (format === "jpg") {
+    return [24] as BmpBitDepth[];
+  }
+
+  return BMP_BIT_DEPTHS;
+}
+
+function getFormatInfo(format: OutputFormat) {
+  return OUTPUT_FORMATS.find((item) => item.value === format) ?? OUTPUT_FORMATS[0];
+}
+
+function getBackgroundNote(format: OutputFormat, bitDepth: BmpBitDepth) {
+  const keepsTransparency = (format === "png" && bitDepth === 32) || (format === "bmp" && bitDepth === 32);
+  return keepsTransparency ? "留白区域使用此颜色；源图透明度保留" : "透明区域使用此颜色";
+}
+
+function getBitDepthNote(format: OutputFormat, bitDepth: BmpBitDepth) {
+  if (format === "jpg") {
+    return "JPG 始终输出 24 位。";
+  }
+
+  if (bitDepth === 32) {
+    return "32 位输出保留透明度。";
+  }
+
+  return `${bitDepth} 位输出不含透明度，透明区域使用背景色。`;
 }
 
 function readImageDimensions(file: File) {
@@ -105,16 +199,34 @@ function FormatSelector({
   value: OutputFormat;
   onChange: (value: OutputFormat) => void;
 }) {
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
   return (
-    <div className="format-selector" role="radiogroup" aria-label="输出格式">
-      {OUTPUT_FORMATS.map((format) => (
+    <div className="format-selector" role="radiogroup" aria-label="输出格式" aria-describedby="format-description">
+      {OUTPUT_FORMATS.map((format, index) => (
         <button
           key={format.value}
           className={`format-option${value === format.value ? " format-option-selected" : ""}`}
           type="button"
           role="radio"
           aria-checked={value === format.value}
+          tabIndex={value === format.value ? 0 : -1}
+          ref={(element) => { optionRefs.current[index] = element; }}
           onClick={() => onChange(format.value)}
+          onKeyDown={(event) => {
+            const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+            if (direction !== 0 || event.key === "Home" || event.key === "End") {
+              event.preventDefault();
+              const nextIndex = event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? OUTPUT_FORMATS.length - 1
+                  : (index + direction + OUTPUT_FORMATS.length) % OUTPUT_FORMATS.length;
+              onChange(OUTPUT_FORMATS[nextIndex].value);
+              optionRefs.current[nextIndex]?.focus();
+            }
+          }}
+          aria-label={`${format.label}：${format.description}`}
         >
           <span>{format.label}</span>
           <small>{format.hint}</small>
@@ -130,6 +242,8 @@ export default function ImageConverter() {
   const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
+  const [widthInput, setWidthInput] = useState("");
+  const [heightInput, setHeightInput] = useState("");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("bmp");
   const [bitDepth, setBitDepth] = useState<BmpBitDepth>(24);
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
@@ -138,24 +252,45 @@ export default function ImageConverter() {
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const loadIdRef = useRef(0);
 
   useEffect(() => {
     return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
+      loadIdRef.current += 1;
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
       }
     };
-  }, [previewUrl]);
+  }, []);
+
+  const widthError = file ? getDimensionError(widthInput, "宽度") : null;
+  const heightError = file ? getDimensionError(heightInput, "高度") : null;
+  const dimensionError = widthError ?? heightError ?? (file ? getPixelError(widthInput, heightInput) : null);
+  const errorMessage = dimensionError ?? error;
+
+  const setSettingStatus = (nextWidthInput = widthInput, nextHeightInput = heightInput) => {
+    if (!file) {
+      return;
+    }
+
+    const nextDimensionError = getDimensionError(nextWidthInput, "宽度") ?? getDimensionError(nextHeightInput, "高度") ?? getPixelError(nextWidthInput, nextHeightInput);
+    setStatus(nextDimensionError ? { kind: "error", text: "请检查输出尺寸" } : { kind: "ready", text: "参数已更新，可以导出" });
+  };
 
   const outputSummary = useMemo(() => {
     if (!file) {
       return "导入图片后开始设置输出参数";
     }
 
-    return `${width} × ${height} · ${getOutputLabel(outputFormat)}${outputFormat === "bmp" ? ` · ${bitDepth} 位` : ""}`;
+    const summaryBitDepth = outputFormat === "jpg" ? 24 : bitDepth;
+    return `${width} × ${height} · ${getOutputLabel(outputFormat)} · ${summaryBitDepth} 位`;
   }, [bitDepth, file, height, outputFormat, width]);
 
   const loadFile = async (nextFile: File) => {
+    const loadId = loadIdRef.current + 1;
+    loadIdRef.current = loadId;
     setError(null);
     setStatus({ kind: "busy", text: "正在读取图片…" });
 
@@ -165,22 +300,42 @@ export default function ImageConverter() {
       return;
     }
 
+    if (nextFile.size > MAX_INPUT_BYTES) {
+      setStatus({ kind: "error", text: "文件过大，无法读取" });
+      setError(`图片文件不能超过 32 MiB，当前为 ${formatMebibytes(nextFile.size)}。`);
+      return;
+    }
+
     try {
       const nextDimensions = await readImageDimensions(nextFile);
+      if (loadId !== loadIdRef.current) {
+        return;
+      }
+
       const nextPreviewUrl = URL.createObjectURL(nextFile);
+      if (loadId !== loadIdRef.current) {
+        URL.revokeObjectURL(nextPreviewUrl);
+        return;
+      }
+
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+      previewUrlRef.current = nextPreviewUrl;
+      const targetDimensions = constrainDimensions(nextDimensions);
 
       setFile(nextFile);
-      setPreviewUrl((currentUrl) => {
-        if (currentUrl) {
-          URL.revokeObjectURL(currentUrl);
-        }
-        return nextPreviewUrl;
-      });
+      setPreviewUrl(nextPreviewUrl);
       setDimensions(nextDimensions);
-      setWidth(nextDimensions.width);
-      setHeight(nextDimensions.height);
+      setWidth(targetDimensions.width);
+      setHeight(targetDimensions.height);
+      setWidthInput(String(targetDimensions.width));
+      setHeightInput(String(targetDimensions.height));
       setStatus({ kind: "ready", text: "图片已载入，可以导出" });
     } catch (loadError) {
+      if (loadId !== loadIdRef.current) {
+        return;
+      }
       const message = loadError instanceof Error ? loadError.message : "图片读取失败，请重试。";
       setStatus({ kind: "error", text: "读取失败" });
       setError(message);
@@ -205,36 +360,151 @@ export default function ImageConverter() {
   };
 
   const clearFile = () => {
+    loadIdRef.current += 1;
     setFile(null);
     setDimensions(null);
     setWidth(0);
     setHeight(0);
+    setWidthInput("");
+    setHeightInput("");
     setError(null);
     setStatus({ kind: "idle", text: "等待导入图片" });
-    setPreviewUrl((currentUrl) => {
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl);
-      }
-      return null;
-    });
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setPreviewUrl(null);
   };
 
   const handleWidthChange = (value: string) => {
-    const nextWidth = normalizeDimension(value, width || 1);
-    setWidth(nextWidth);
-    if (keepAspectRatio && dimensions) {
-      setHeight(Math.max(1, Math.round(nextWidth / (dimensions.width / dimensions.height))));
+    setWidthInput(value);
+    const nextWidth = parseDimension(value);
+    if (nextWidth === null) {
+      setError(null);
+      setStatus({ kind: "error", text: "请检查输出尺寸" });
+      return;
     }
-    setStatus({ kind: "ready", text: "参数已更新，可以导出" });
+
+    let nextWidthInput = value;
+    let nextHeightInput = heightInput;
+    if (keepAspectRatio && dimensions) {
+      const target = constrainAspectDimensions("width", nextWidth, dimensions);
+      setWidth(target.width);
+      setHeight(target.height);
+      nextWidthInput = String(target.width);
+      nextHeightInput = String(target.height);
+      setWidthInput(nextWidthInput);
+      setHeightInput(nextHeightInput);
+    } else {
+      setWidth(nextWidth);
+    }
+    const nextError = getDimensionError(nextWidthInput, "宽度") ?? getDimensionError(nextHeightInput, "高度") ?? getPixelError(nextWidthInput, nextHeightInput);
+    setError(null);
+    setStatus(nextError ? { kind: "error", text: "请检查输出尺寸" } : { kind: "ready", text: "参数已更新，可以导出" });
   };
 
   const handleHeightChange = (value: string) => {
-    const nextHeight = normalizeDimension(value, height || 1);
-    setHeight(nextHeight);
-    if (keepAspectRatio && dimensions) {
-      setWidth(Math.max(1, Math.round(nextHeight * (dimensions.width / dimensions.height))));
+    setHeightInput(value);
+    const nextHeight = parseDimension(value);
+    if (nextHeight === null) {
+      setError(null);
+      setStatus({ kind: "error", text: "请检查输出尺寸" });
+      return;
     }
-    setStatus({ kind: "ready", text: "参数已更新，可以导出" });
+
+    let nextWidthInput = widthInput;
+    let nextHeightInput = value;
+    if (keepAspectRatio && dimensions) {
+      const target = constrainAspectDimensions("height", nextHeight, dimensions);
+      setWidth(target.width);
+      setHeight(target.height);
+      nextWidthInput = String(target.width);
+      nextHeightInput = String(target.height);
+      setWidthInput(nextWidthInput);
+      setHeightInput(nextHeightInput);
+    } else {
+      setHeight(nextHeight);
+    }
+    const nextError = getDimensionError(nextWidthInput, "宽度") ?? getDimensionError(nextHeightInput, "高度") ?? getPixelError(nextWidthInput, nextHeightInput);
+    setError(null);
+    setStatus(nextError ? { kind: "error", text: "请检查输出尺寸" } : { kind: "ready", text: "参数已更新，可以导出" });
+  };
+
+  const handleDimensionBlur = (axis: "width" | "height") => {
+    const value = axis === "width" ? widthInput : heightInput;
+    if (parseDimension(value) !== null) {
+      return;
+    }
+
+    const fallback = axis === "width" ? width : height;
+    const normalized = normalizeDimension(value, fallback || 1);
+    const target = keepAspectRatio && dimensions
+      ? constrainAspectDimensions(axis, normalized, dimensions)
+      : null;
+    const nextWidthInput = target?.width !== undefined
+      ? String(target.width)
+      : axis === "width"
+        ? String(normalized)
+        : widthInput;
+    const nextHeightInput = target?.height !== undefined
+      ? String(target.height)
+      : axis === "height"
+        ? String(normalized)
+        : heightInput;
+    if (axis === "width") {
+      setWidth(target?.width ?? normalized);
+      setWidthInput(nextWidthInput);
+    } else {
+      setHeight(target?.height ?? normalized);
+      setHeightInput(nextHeightInput);
+    }
+    if (target) {
+      setWidth(target.width);
+      setHeight(target.height);
+      setWidthInput(String(target.width));
+      setHeightInput(String(target.height));
+    }
+    setError(null);
+    setSettingStatus(nextWidthInput, nextHeightInput);
+  };
+
+  const handleFormatChange = (nextFormat: OutputFormat) => {
+    setOutputFormat(nextFormat);
+    if (nextFormat === "jpg" || (nextFormat === "png" && !PNG_BIT_DEPTHS.includes(bitDepth))) {
+      setBitDepth(24);
+    }
+    setError(null);
+    setSettingStatus();
+  };
+
+  const handleBitDepthChange = (nextBitDepth: BmpBitDepth) => {
+    setBitDepth(nextBitDepth);
+    setError(null);
+    setSettingStatus();
+  };
+
+  const handleBackgroundColorChange = (nextColor: string) => {
+    setBackgroundColor(nextColor.toUpperCase());
+    setError(null);
+    setSettingStatus();
+  };
+
+  const handleKeepAspectRatioChange = (checked: boolean) => {
+    setKeepAspectRatio(checked);
+    let nextWidthInput = widthInput;
+    let nextHeightInput = heightInput;
+    if (checked && dimensions) {
+      const currentWidth = parseDimension(widthInput) ?? width;
+      const target = constrainAspectDimensions("width", currentWidth, dimensions);
+      setWidth(target.width);
+      setHeight(target.height);
+      nextWidthInput = String(target.width);
+      nextHeightInput = String(target.height);
+      setWidthInput(nextWidthInput);
+      setHeightInput(nextHeightInput);
+    }
+    setError(null);
+    setSettingStatus(nextWidthInput, nextHeightInput);
   };
 
   const handleExport = async () => {
@@ -255,7 +525,7 @@ export default function ImageConverter() {
         width,
         height,
         keepAspectRatio,
-        bitDepth: outputFormat === "bmp" ? bitDepth : null,
+        bitDepth: outputFormat === "jpg" ? 24 : bitDepth,
         backgroundColor,
       };
       const outputPath = await exportImage(request);
@@ -321,7 +591,7 @@ export default function ImageConverter() {
               }}
               onDragOver={(event) => event.preventDefault()}
               onDragLeave={(event) => {
-                if (event.currentTarget === event.target) {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                   setIsDragging(false);
                 }
               }}
@@ -331,9 +601,11 @@ export default function ImageConverter() {
               tabIndex={0}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
                   inputRef.current?.click();
                 }
               }}
+              aria-label="拖拽图片到这里，或按 Enter 选择本地文件"
             >
               <div className="drop-icon"><Upload size={22} aria-hidden="true" /></div>
               <strong>拖拽图片到这里</strong>
@@ -368,27 +640,30 @@ export default function ImageConverter() {
           </div>
 
           <div className="settings-stack">
-            <div className="setting-group">
-              <label className="field-label">输出格式</label>
-              <FormatSelector value={outputFormat} onChange={setOutputFormat} />
-            </div>
+            <fieldset className="setting-group format-group">
+              <legend className="field-label">输出格式</legend>
+              <FormatSelector value={outputFormat} onChange={handleFormatChange} />
+              <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>
+            </fieldset>
 
             <div className="setting-group">
               <div className="label-row">
                 <label className="field-label" htmlFor="bit-depth">位深</label>
-                {outputFormat !== "bmp" ? <span className="field-note">仅 BMP 支持</span> : null}
+                <span className="field-note">{outputFormat === "jpg" ? "JPG 固定 24 位" : `${getBitDepths(outputFormat).join(" / ")} 位可选`}</span>
               </div>
               <div className="select-wrap">
                 <select
                   id="bit-depth"
                   value={bitDepth}
-                  disabled={outputFormat !== "bmp"}
-                  onChange={(event) => setBitDepth(Number(event.target.value) as BmpBitDepth)}
+                  disabled={outputFormat === "jpg"}
+                  aria-describedby="bit-depth-description"
+                  onChange={(event) => handleBitDepthChange(Number(event.target.value) as BmpBitDepth)}
                 >
-                  {BMP_BIT_DEPTHS.map((depth) => <option key={depth} value={depth}>{depth} 位</option>)}
+                  {getBitDepths(outputFormat).map((depth) => <option key={depth} value={depth}>{depth} 位</option>)}
                 </select>
                 <ChevronDown size={15} aria-hidden="true" />
               </div>
+              <p className="field-help" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>
             </div>
 
             <div className="setting-group">
@@ -397,20 +672,20 @@ export default function ImageConverter() {
                 {dimensions ? <span className="field-note">原图 {dimensions.width} × {dimensions.height}</span> : null}
               </div>
               <div className="dimensions-row">
-                <label className="dimension-input">
+                <label className={`dimension-input${widthError ? " dimension-input-invalid" : ""}`} htmlFor="output-width">
                   <span>宽</span>
-                  <input type="number" min="1" max={MAX_DIMENSION} value={width || ""} disabled={!file} onChange={(event) => handleWidthChange(event.target.value)} />
+                  <input id="output-width" type="number" inputMode="numeric" min="1" max={MAX_DIMENSION} step="1" value={widthInput} disabled={!file} aria-invalid={Boolean(widthError)} aria-describedby={dimensionError ? "dimension-error" : undefined} onChange={(event) => handleWidthChange(event.target.value)} onBlur={() => handleDimensionBlur("width")} />
                   <em>px</em>
                 </label>
                 <span className="dimension-times" aria-hidden="true">×</span>
-                <label className="dimension-input">
+                <label className={`dimension-input${heightError ? " dimension-input-invalid" : ""}`} htmlFor="output-height">
                   <span>高</span>
-                  <input type="number" min="1" max={MAX_DIMENSION} value={height || ""} disabled={!file} onChange={(event) => handleHeightChange(event.target.value)} />
+                  <input id="output-height" type="number" inputMode="numeric" min="1" max={MAX_DIMENSION} step="1" value={heightInput} disabled={!file} aria-invalid={Boolean(heightError)} aria-describedby={dimensionError ? "dimension-error" : undefined} onChange={(event) => handleHeightChange(event.target.value)} onBlur={() => handleDimensionBlur("height")} />
                   <em>px</em>
                 </label>
               </div>
               <label className="toggle-row">
-                <input type="checkbox" checked={keepAspectRatio} onChange={(event) => setKeepAspectRatio(event.target.checked)} />
+                <input type="checkbox" checked={keepAspectRatio} onChange={(event) => handleKeepAspectRatioChange(event.target.checked)} />
                 <span className="toggle-track" aria-hidden="true"><span /></span>
                 <span>保持比例</span>
               </label>
@@ -419,22 +694,24 @@ export default function ImageConverter() {
             <div className="setting-group">
               <div className="label-row">
                 <label className="field-label" htmlFor="background-color">背景色</label>
-                <span className="field-note">透明区域填充色</span>
+                <span className="field-note">{getBackgroundNote(outputFormat, bitDepth)}</span>
               </div>
               <label className="color-control" htmlFor="background-color">
-                <input id="background-color" type="color" value={backgroundColor} onChange={(event) => setBackgroundColor(event.target.value.toUpperCase())} />
+                <input id="background-color" type="color" value={backgroundColor} onChange={(event) => handleBackgroundColorChange(event.target.value)} />
                 <span>{backgroundColor}</span>
               </label>
             </div>
           </div>
 
           <div className="panel-footer">
-            <div className={`status-message status-${status.kind}`} role={status.kind === "error" ? "alert" : "status"}>
-              <span className="status-indicator" aria-hidden="true" />
-              <span>{status.text}</span>
+            <div className="footer-status">
+              <div className={`status-message status-${status.kind}`} role="status" aria-live="polite">
+                <span className="status-indicator" aria-hidden="true" />
+                <span>{status.text}</span>
+              </div>
+              {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}
             </div>
-            {error ? <p className="error-message">{error}</p> : null}
-            <button className="export-button" type="button" disabled={!file || status.kind === "busy"} onClick={() => void handleExport()}>
+            <button className="export-button" type="button" disabled={!file || status.kind === "busy" || Boolean(dimensionError)} aria-busy={status.kind === "busy"} onClick={() => void handleExport()}>
               <Download size={17} aria-hidden="true" />
               {status.kind === "busy" ? "处理中…" : `导出 ${getOutputLabel(outputFormat)}`}
             </button>
