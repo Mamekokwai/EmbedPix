@@ -15,29 +15,35 @@ import {
   X,
 } from "lucide-react";
 import { exportImage } from "../../platform/image/imageExportGateway";
+import {
+  MAX_DIMENSION,
+  MAX_INPUT_BYTES,
+  OUTPUT_FORMATS,
+  PNG_BIT_DEPTHS,
+  SUPPORTED_IMAGE_ACCEPT,
+  SUPPORTED_IMAGE_FORMAT_LABEL,
+  constrainAspectDimensions,
+  constrainDimensions,
+  formatFileSize,
+  formatMebibytes,
+  getBackgroundNote,
+  getBitDepthNote,
+  getBitDepths,
+  getDimensionError,
+  getEffectiveBitDepth,
+  getFormatInfo,
+  getOutputLabel,
+  getPixelError,
+  isImageFile,
+  normalizeDimension,
+  parseDimension,
+} from "./imageConverterLogic";
 import type {
-  BmpBitDepth,
   ExportImageRequest,
   ImageDimensions,
+  BmpBitDepth,
   OutputFormat,
 } from "./types";
-
-const OUTPUT_FORMATS: Array<{
-  value: OutputFormat;
-  label: string;
-  hint: string;
-  description: string;
-}> = [
-  { value: "bmp", label: "BMP", hint: "1–32 位", description: "支持 1、4、8、16、24、32 位；仅 32 位保留透明度。" },
-  { value: "png", label: "PNG", hint: "24 / 32 位", description: "24 位不含透明度；32 位保留透明度，适合无损资源。" },
-  { value: "jpg", label: "JPG", hint: "固定 24 位", description: "固定 24 位，不支持透明度；透明区域使用背景色。" },
-];
-
-const BMP_BIT_DEPTHS: BmpBitDepth[] = [1, 4, 8, 16, 24, 32];
-const PNG_BIT_DEPTHS: BmpBitDepth[] = [24, 32];
-const MAX_DIMENSION = 8192;
-const MAX_IMAGE_PIXELS = 16_777_216;
-const MAX_INPUT_BYTES = 32 * 1024 * 1024;
 
 type Status =
   | { kind: "idle"; text: string }
@@ -46,112 +52,6 @@ type Status =
   | { kind: "success"; text: string }
   | { kind: "error"; text: string };
 
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatMebibytes(bytes: number) {
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-}
-
-function normalizeDimension(value: string, fallback: number) {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-
-  return Math.min(MAX_DIMENSION, Math.max(1, parsed));
-}
-
-function parseDimension(value: string) {
-  if (!/^\d+$/.test(value)) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= MAX_DIMENSION ? parsed : null;
-}
-
-function getDimensionError(value: string, label: string) {
-  if (value.length === 0) {
-    return `${label}不能为空。`;
-  }
-
-  return parseDimension(value) === null ? `${label}需为 1–${MAX_DIMENSION.toLocaleString("zh-CN")} 之间的整数。` : null;
-}
-
-function getPixelError(widthValue: string, heightValue: string) {
-  const nextWidth = parseDimension(widthValue);
-  const nextHeight = parseDimension(heightValue);
-  if (nextWidth === null || nextHeight === null || nextWidth * nextHeight <= MAX_IMAGE_PIXELS) {
-    return null;
-  }
-
-  return `输出尺寸不能超过 ${MAX_IMAGE_PIXELS.toLocaleString("zh-CN")} 像素。`;
-}
-
-function constrainDimensions(nextDimensions: ImageDimensions) {
-  const scale = Math.min(
-    1,
-    MAX_DIMENSION / nextDimensions.width,
-    MAX_DIMENSION / nextDimensions.height,
-    Math.sqrt(MAX_IMAGE_PIXELS / (nextDimensions.width * nextDimensions.height)),
-  );
-  return {
-    width: Math.max(1, Math.floor(nextDimensions.width * scale)),
-    height: Math.max(1, Math.floor(nextDimensions.height * scale)),
-  };
-}
-
-function constrainAspectDimensions(axis: "width" | "height", value: number, source: ImageDimensions) {
-  const ratio = source.width / source.height;
-  const maxWidth = Math.min(MAX_DIMENSION, Math.floor(Math.sqrt(MAX_IMAGE_PIXELS * ratio)));
-  const maxHeight = Math.min(MAX_DIMENSION, Math.floor(Math.sqrt(MAX_IMAGE_PIXELS / ratio)));
-  const nextWidth = axis === "width" ? Math.min(value, maxWidth) : Math.max(1, Math.round(value * ratio));
-  const nextHeight = axis === "height" ? Math.min(value, maxHeight) : Math.max(1, Math.round(value / ratio));
-  return constrainDimensions({ width: nextWidth, height: nextHeight });
-}
-
-function getBitDepths(format: OutputFormat) {
-  if (format === "png") {
-    return PNG_BIT_DEPTHS;
-  }
-
-  if (format === "jpg") {
-    return [24] as BmpBitDepth[];
-  }
-
-  return BMP_BIT_DEPTHS;
-}
-
-function getFormatInfo(format: OutputFormat) {
-  return OUTPUT_FORMATS.find((item) => item.value === format) ?? OUTPUT_FORMATS[0];
-}
-
-function getBackgroundNote(format: OutputFormat, bitDepth: BmpBitDepth) {
-  const keepsTransparency = (format === "png" && bitDepth === 32) || (format === "bmp" && bitDepth === 32);
-  return keepsTransparency ? "留白区域使用此颜色；源图透明度保留" : "透明区域使用此颜色";
-}
-
-function getBitDepthNote(format: OutputFormat, bitDepth: BmpBitDepth) {
-  if (format === "jpg") {
-    return "JPG 始终输出 24 位。";
-  }
-
-  if (bitDepth === 32) {
-    return "32 位输出保留透明度。";
-  }
-
-  return `${bitDepth} 位输出不含透明度，透明区域使用背景色。`;
-}
 
 function readImageDimensions(file: File) {
   return new Promise<ImageDimensions>((resolve, reject) => {
@@ -182,14 +82,6 @@ function fileToBase64(file: File) {
 
     return btoa(binary);
   });
-}
-
-function isImageFile(file: File) {
-  return file.type.startsWith("image/") || /\.(bmp|gif|jpe?g|png|webp|tiff?)$/i.test(file.name);
-}
-
-function getOutputLabel(format: OutputFormat) {
-  return format.toUpperCase();
 }
 
 function FormatSelector({
@@ -284,7 +176,7 @@ export default function ImageConverter() {
       return "导入图片后开始设置输出参数";
     }
 
-    const summaryBitDepth = outputFormat === "jpg" ? 24 : bitDepth;
+    const summaryBitDepth = getEffectiveBitDepth(outputFormat, bitDepth);
     return `${width} × ${height} · ${getOutputLabel(outputFormat)} · ${summaryBitDepth} 位`;
   }, [bitDepth, file, height, outputFormat, width]);
 
@@ -296,7 +188,7 @@ export default function ImageConverter() {
 
     if (!isImageFile(nextFile)) {
       setStatus({ kind: "error", text: "文件格式不支持" });
-      setError("请选择 BMP、PNG、JPG 或其他常见图片文件。" );
+      setError(`请选择 ${SUPPORTED_IMAGE_FORMAT_LABEL} 文件。`);
       return;
     }
 
@@ -525,7 +417,7 @@ export default function ImageConverter() {
         width,
         height,
         keepAspectRatio,
-        bitDepth: outputFormat === "jpg" ? 24 : bitDepth,
+        bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
         backgroundColor,
       };
       const outputPath = await exportImage(request);
@@ -610,8 +502,8 @@ export default function ImageConverter() {
               <div className="drop-icon"><Upload size={22} aria-hidden="true" /></div>
               <strong>拖拽图片到这里</strong>
               <span>或点击选择本地文件</span>
-              <small>支持 BMP、PNG、JPG、WEBP 等常见格式</small>
-              <input ref={inputRef} type="file" accept="image/*" onChange={handleFileChange} hidden />
+              <small>支持 {SUPPORTED_IMAGE_FORMAT_LABEL}</small>
+              <input ref={inputRef} type="file" accept={SUPPORTED_IMAGE_ACCEPT} onChange={handleFileChange} hidden />
             </div>
           ) : (
             <div className="preview-content">

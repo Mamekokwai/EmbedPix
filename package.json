@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "npm run check:types && npm run check:lint",
+    "test": "npm run check:types && npm run check:lint && vitest run",
     "check:types": "tsc --noEmit -p tsconfig.json",
     "check:lint": "eslint . --max-warnings 0",
     "tauri": "tauri"
@@ -29,6 +29,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.64.0",
-    "vite": "^8.1.4"
+    "vite": "^8.1.4",
+    "vitest": "^4.1.11"
   }
 }
