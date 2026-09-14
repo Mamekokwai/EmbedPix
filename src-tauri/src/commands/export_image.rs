@@ -1,12 +1,21 @@
 use std::{
     fs,
-    io::Cursor,
+    io::{self, Cursor, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use image::{imageops::FilterType, DynamicImage, ImageFormat, Rgba, RgbaImage};
+use image::{
+    imageops::FilterType, io::Reader as ImageReader, DynamicImage, GenericImage, ImageFormat, Rgba,
+    RgbaImage,
+};
 use serde::{Deserialize, Serialize};
+
+const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION: u32 = 8_192;
+const MAX_IMAGE_PIXELS: u64 = 16_777_216;
+const MAX_DECODER_ALLOC_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_OUTPUT_BYTES: usize = 128 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OutputFormat {
@@ -52,7 +61,7 @@ struct ExportRequest {
     bit_depth: u16,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ExportImageDto {
     input_data_base64: String,
@@ -92,7 +101,7 @@ pub struct ExportImageResult {
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(rename_all = "camelCase")]
-pub fn export_image(
+pub async fn export_image(
     input_data_base64: String,
     file_name: String,
     output_format: String,
@@ -113,14 +122,22 @@ pub fn export_image(
         bit_depth,
     }
     .into_request()?;
-    let (bytes, actual_bit_depth) = convert_image(&request)?;
+    let conversion_request = request.clone();
+    let (bytes, actual_bit_depth) =
+        tauri::async_runtime::spawn_blocking(move || convert_image(&conversion_request))
+            .await
+            .map_err(|error| format!("image conversion task failed: {error}"))??;
     let output_path = choose_output_path(&request)?;
-    fs::write(&output_path, bytes).map_err(|error| {
-        format!(
-            "failed to write exported image `{}`: {error}",
-            output_path.display()
-        )
-    })?;
+    let path_for_write = output_path.clone();
+    tauri::async_runtime::spawn_blocking(move || fs::write(&path_for_write, bytes))
+        .await
+        .map_err(|error| format!("image write task failed: {error}"))?
+        .map_err(|error| {
+            format!(
+                "failed to write exported image `{}`: {error}",
+                output_path.display()
+            )
+        })?;
 
     Ok(ExportImageResult {
         output_path: output_path.to_string_lossy().into_owned(),
@@ -141,11 +158,18 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
         .filter(|(prefix, _)| prefix.trim_start().starts_with("data:"))
         .map(|(_, data)| data)
         .unwrap_or(encoded_input);
+    validate_encoded_input_size(encoded_input.len())?;
     let input_bytes = STANDARD
         .decode(encoded_input)
         .map_err(|error| format!("invalid base64 image data: {error}"))?;
-    let source = image::load_from_memory(&input_bytes)
-        .map_err(|error| format!("failed to decode input image: {error}"))?;
+    if input_bytes.len() > MAX_INPUT_BYTES {
+        return Err(format!(
+            "input image is too large: decoded data is {} MiB, maximum is {} MiB",
+            input_bytes.len() / (1024 * 1024),
+            MAX_INPUT_BYTES / (1024 * 1024)
+        ));
+    }
+    let source = decode_input(&input_bytes)?;
     let image = resize_image(
         source,
         request.width,
@@ -165,7 +189,81 @@ fn validate_dimensions(width: u32, height: u32) -> Result<(), String> {
     if width == 0 || height == 0 {
         return Err("target width and height must be greater than zero".to_string());
     }
+    if width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
+        return Err(format!(
+            "target dimensions cannot exceed {MAX_IMAGE_DIMENSION}x{MAX_IMAGE_DIMENSION}"
+        ));
+    }
+    let pixels = u64::from(width)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| "target dimensions overflow the pixel limit".to_string())?;
+    if pixels > MAX_IMAGE_PIXELS {
+        return Err(format!(
+            "target image has too many pixels ({pixels}); maximum is {MAX_IMAGE_PIXELS}"
+        ));
+    }
     Ok(())
+}
+
+fn validate_image_dimensions(width: u32, height: u32) -> Result<(), String> {
+    if width == 0 || height == 0 {
+        return Err("source image has an invalid zero dimension".to_string());
+    }
+    if width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
+        return Err(format!(
+            "source image dimensions cannot exceed {MAX_IMAGE_DIMENSION}x{MAX_IMAGE_DIMENSION}"
+        ));
+    }
+    let pixels = u64::from(width)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| "source image dimensions overflow the pixel limit".to_string())?;
+    if pixels > MAX_IMAGE_PIXELS {
+        return Err(format!(
+            "source image has too many pixels ({pixels}); maximum is {MAX_IMAGE_PIXELS}"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_encoded_input_size(encoded_len: usize) -> Result<(), String> {
+    let max_encoded_len = MAX_INPUT_BYTES
+        .checked_add(2)
+        .and_then(|bytes| bytes.checked_div(3))
+        .and_then(|bytes| bytes.checked_mul(4))
+        .ok_or_else(|| "configured input image limit overflowed".to_string())?;
+    if encoded_len > max_encoded_len {
+        return Err(format!(
+            "input image is too large: base64 data exceeds the {} MiB limit",
+            MAX_INPUT_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
+}
+
+fn decode_input(input_bytes: &[u8]) -> Result<DynamicImage, String> {
+    let reader = ImageReader::new(Cursor::new(input_bytes))
+        .with_guessed_format()
+        .map_err(|error| format!("failed to inspect input image format: {error}"))?;
+    let format = reader
+        .format()
+        .map(|format| format!("{format:?}"))
+        .unwrap_or_else(|| "unknown".to_string());
+    let (width, height) = reader
+        .into_dimensions()
+        .map_err(|error| format!("failed to read input image dimensions ({format}): {error}"))?;
+    validate_image_dimensions(width, height)?;
+
+    let mut reader = ImageReader::new(Cursor::new(input_bytes))
+        .with_guessed_format()
+        .map_err(|error| format!("failed to inspect input image format: {error}"))?;
+    let mut limits = image::io::Limits::default();
+    limits.max_image_width = Some(MAX_IMAGE_DIMENSION);
+    limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
+    limits.max_alloc = Some(MAX_DECODER_ALLOC_BYTES);
+    reader.limits(limits);
+    reader
+        .decode()
+        .map_err(|error| format!("failed to decode input image ({format}): {error}"))
 }
 
 fn validate_bit_depth(format: OutputFormat, bit_depth: u16) -> Result<(), String> {
@@ -223,10 +321,13 @@ fn resize_image(
     let (scaled_width, scaled_height) = if keep_aspect_ratio {
         let scale = (target_width as f64 / source_width as f64)
             .min(target_height as f64 / source_height as f64);
-        (
-            ((source_width as f64 * scale).round() as u32).max(1),
-            ((source_height as f64 * scale).round() as u32).max(1),
-        )
+        let scaled_width = ((source_width as f64 * scale).round() as u32)
+            .max(1)
+            .min(target_width);
+        let scaled_height = ((source_height as f64 * scale).round() as u32)
+            .max(1)
+            .min(target_height);
+        (scaled_width, scaled_height)
     } else {
         (target_width, target_height)
     };
@@ -240,12 +341,9 @@ fn resize_image(
     let mut canvas = RgbaImage::from_pixel(target_width, target_height, background_color);
     let offset_x = (target_width - scaled_width) / 2;
     let offset_y = (target_height - scaled_height) / 2;
-    image::imageops::overlay(
-        &mut canvas,
-        &resized,
-        i64::from(offset_x),
-        i64::from(offset_y),
-    );
+    canvas
+        .copy_from(&resized, offset_x, offset_y)
+        .expect("resized image must fit inside the target canvas");
     canvas
 }
 
@@ -254,7 +352,7 @@ fn encode_png(
     bit_depth: u16,
     background_color: Rgba<u8>,
 ) -> Result<(Vec<u8>, u16), String> {
-    let mut bytes = Cursor::new(Vec::new());
+    let mut bytes = LimitedCursor::new(MAX_OUTPUT_BYTES);
     let image = if bit_depth == 24 {
         DynamicImage::ImageRgb8(
             DynamicImage::ImageRgba8(composite_over_background(image, background_color)).to_rgb8(),
@@ -269,7 +367,7 @@ fn encode_png(
 }
 
 fn encode_jpg(image: RgbaImage, background_color: Rgba<u8>) -> Result<(Vec<u8>, u16), String> {
-    let mut bytes = Cursor::new(Vec::new());
+    let mut bytes = LimitedCursor::new(MAX_OUTPUT_BYTES);
     DynamicImage::ImageRgba8(composite_over_background(image, background_color))
         .write_to(&mut bytes, ImageFormat::Jpeg)
         .map_err(|error| format!("failed to encode jpg: {error}"))?;
@@ -296,6 +394,7 @@ fn encode_bmp(
     background_color: Rgba<u8>,
 ) -> Result<(Vec<u8>, u16), String> {
     validate_bit_depth(OutputFormat::Bmp, bit_depth)?;
+    validate_dimensions(image.width(), image.height())?;
     let width = i32::try_from(image.width()).map_err(|_| "BMP width is too large".to_string())?;
     let height =
         i32::try_from(image.height()).map_err(|_| "BMP height is too large".to_string())?;
@@ -489,9 +588,55 @@ fn with_expected_extension(mut path: PathBuf, format: OutputFormat) -> PathBuf {
     path
 }
 
+struct LimitedCursor {
+    cursor: Cursor<Vec<u8>>,
+    max_bytes: usize,
+}
+
+impl LimitedCursor {
+    fn new(max_bytes: usize) -> Self {
+        Self {
+            cursor: Cursor::new(Vec::new()),
+            max_bytes,
+        }
+    }
+
+    fn into_inner(self) -> Vec<u8> {
+        self.cursor.into_inner()
+    }
+}
+
+impl Write for LimitedCursor {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        let position = usize::try_from(self.cursor.position())
+            .map_err(|_| io::Error::other("encoded output position is too large"))?;
+        let end = position
+            .checked_add(buffer.len())
+            .ok_or_else(|| io::Error::other("encoded output is too large"))?;
+        if end > self.max_bytes {
+            return Err(io::Error::other(format!(
+                "encoded output exceeds the {} MiB limit",
+                self.max_bytes / (1024 * 1024)
+            )));
+        }
+        self.cursor.write(buffer)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.cursor.flush()
+    }
+}
+
+impl Seek for LimitedCursor {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.cursor.seek(position)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use image::GenericImageView;
 
     fn sample_image() -> RgbaImage {
         let mut image = RgbaImage::new(2, 1);
@@ -593,6 +738,60 @@ mod tests {
     }
 
     #[test]
+    fn bmp_4_bit_palette_and_nibbles_are_encoded_in_order() {
+        let mut image = RgbaImage::new(2, 1);
+        image.put_pixel(0, 0, Rgba([0, 0, 0, 255]));
+        image.put_pixel(1, 0, Rgba([255, 255, 255, 255]));
+
+        let (bytes, _) = encode_bmp(&image, 4, Rgba([0, 0, 0, 255])).unwrap();
+
+        assert_eq!(u32::from_le_bytes(bytes[10..14].try_into().unwrap()), 118);
+        assert_eq!(&bytes[54..58], &[0, 0, 0, 0]);
+        assert_eq!(&bytes[58..62], &[17, 17, 17, 0]);
+        assert_eq!(&bytes[118..122], &[0x0F, 0, 0, 0]);
+    }
+
+    #[test]
+    fn bmp_8_bit_palette_and_rgb332_indices_are_encoded() {
+        let (bytes, _) = encode_bmp(&sample_image(), 8, Rgba([255, 255, 255, 255])).unwrap();
+        let pixel_offset = u32::from_le_bytes(bytes[10..14].try_into().unwrap()) as usize;
+        let red_palette_offset = 54 + 224 * 4;
+        let green_palette_offset = 54 + 28 * 4;
+
+        assert_eq!(bytes.len(), pixel_offset + 4);
+        assert_eq!(&bytes[54..58], &[0, 0, 0, 0]);
+        assert_eq!(
+            &bytes[red_palette_offset..red_palette_offset + 4],
+            &[0, 0, 255, 0]
+        );
+        assert_eq!(
+            &bytes[green_palette_offset..green_palette_offset + 4],
+            &[0, 255, 0, 0]
+        );
+        assert_eq!(&bytes[pixel_offset..], &[224, 28, 0, 0]);
+    }
+
+    #[test]
+    fn bmp_16_bit_pixels_use_rgb565_masks_and_values() {
+        let (bytes, _) = encode_bmp(&sample_image(), 16, Rgba([255, 255, 255, 255])).unwrap();
+        let pixel_offset = u32::from_le_bytes(bytes[10..14].try_into().unwrap()) as usize;
+
+        assert_eq!(&bytes[54..66], &[0, 248, 0, 0, 224, 7, 0, 0, 31, 0, 0, 0]);
+        assert_eq!(&bytes[pixel_offset..pixel_offset + 4], &[0, 248, 224, 7]);
+    }
+
+    #[test]
+    fn bmp_24_bit_row_padding_is_zeroed() {
+        let mut image = RgbaImage::new(1, 1);
+        image.put_pixel(0, 0, Rgba([1, 2, 3, 255]));
+
+        let (bytes, _) = encode_bmp(&image, 24, Rgba([0, 0, 0, 255])).unwrap();
+
+        assert_eq!(u32::from_le_bytes(bytes[34..38].try_into().unwrap()), 4);
+        assert_eq!(&bytes[54..58], &[3, 2, 1, 0]);
+    }
+
+    #[test]
     fn frontend_dto_accepts_camel_case_contract_and_null_bit_depth() {
         let dto: ExportImageDto = serde_json::from_str(
             r##"{
@@ -616,6 +815,24 @@ mod tests {
     }
 
     #[test]
+    fn tauri_camel_case_contract_keeps_input_data_base64_key() {
+        let dto = ExportImageDto {
+            input_data_base64: "aW1hZ2U=".to_string(),
+            file_name: "source.png".to_string(),
+            output_format: "png".to_string(),
+            width: 1,
+            height: 1,
+            keep_aspect_ratio: false,
+            background_color: None,
+            bit_depth: None,
+        };
+        let value = serde_json::to_value(dto).unwrap();
+
+        assert_eq!(value["inputDataBase64"], "aW1hZ2U=");
+        assert!(value.get("inputData").is_none());
+    }
+
+    #[test]
     fn aspect_ratio_resize_pads_to_target_dimensions() {
         let image = resize_image(
             DynamicImage::ImageRgba8(sample_image()),
@@ -627,5 +844,94 @@ mod tests {
 
         assert_eq!(image.dimensions(), (4, 4));
         assert_eq!(image.get_pixel(0, 0), &Rgba([1, 2, 3, 255]));
+    }
+
+    #[test]
+    fn aspect_ratio_resize_preserves_source_alpha_in_letterbox_region() {
+        let mut source = RgbaImage::new(1, 1);
+        source.put_pixel(0, 0, Rgba([255, 0, 0, 128]));
+
+        let resized = resize_image(
+            DynamicImage::ImageRgba8(source),
+            2,
+            4,
+            true,
+            Rgba([1, 2, 3, 255]),
+        );
+
+        assert_eq!(resized.get_pixel(0, 0), &Rgba([1, 2, 3, 255]));
+        assert_eq!(resized.get_pixel(0, 1), &Rgba([255, 0, 0, 128]));
+    }
+
+    #[test]
+    fn png_and_jpg_outputs_have_expected_signatures() {
+        let (png, bit_depth) = encode_png(sample_image(), 24, Rgba([255, 255, 255, 255])).unwrap();
+        let (jpg, jpg_bit_depth) = encode_jpg(sample_image(), Rgba([255, 255, 255, 255])).unwrap();
+
+        assert_eq!(bit_depth, 24);
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(jpg_bit_depth, 24);
+        assert_eq!(&jpg[..3], &[0xFF, 0xD8, 0xFF]);
+        assert_eq!(decode_input(&png).unwrap().dimensions(), (2, 1));
+        assert_eq!(decode_input(&jpg).unwrap().dimensions(), (2, 1));
+    }
+
+    #[test]
+    fn png_24_composites_alpha_after_aspect_ratio_resize() {
+        let mut source = RgbaImage::new(1, 1);
+        source.put_pixel(0, 0, Rgba([255, 0, 0, 128]));
+        let resized = resize_image(
+            DynamicImage::ImageRgba8(source),
+            2,
+            4,
+            true,
+            Rgba([1, 2, 3, 255]),
+        );
+
+        let (bytes, _) = encode_png(resized, 24, Rgba([0, 255, 0, 255])).unwrap();
+        let output = decode_input(&bytes).unwrap().to_rgba8();
+
+        assert_eq!(output.get_pixel(0, 1), &Rgba([128, 127, 0, 255]));
+        assert_eq!(output.get_pixel(0, 0), &Rgba([1, 2, 3, 255]));
+    }
+
+    #[test]
+    fn invalid_parameters_have_explicit_errors() {
+        assert!(validate_dimensions(0, 1)
+            .unwrap_err()
+            .contains("greater than zero"));
+        assert!(validate_dimensions(MAX_IMAGE_DIMENSION + 1, 1)
+            .unwrap_err()
+            .contains("cannot exceed"));
+        assert!(validate_dimensions(4_096, 4_097)
+            .unwrap_err()
+            .contains("too many pixels"));
+        assert!(validate_bit_depth(OutputFormat::Jpg, 32)
+            .unwrap_err()
+            .contains("supported bit depths are 24"));
+        assert!(parse_background_color(Some("#xyzxyz"))
+            .unwrap_err()
+            .contains("non-hex"));
+    }
+
+    #[test]
+    fn resource_limits_reject_large_encoded_inputs_and_source_dimensions() {
+        let encoded_limit = MAX_INPUT_BYTES
+            .checked_add(2)
+            .unwrap()
+            .checked_div(3)
+            .unwrap()
+            .checked_mul(4)
+            .unwrap();
+        assert!(validate_encoded_input_size(encoded_limit).is_ok());
+        assert!(validate_encoded_input_size(encoded_limit + 1)
+            .unwrap_err()
+            .contains("too large"));
+        assert!(validate_image_dimensions(MAX_IMAGE_DIMENSION + 1, 1)
+            .unwrap_err()
+            .contains("source image dimensions"));
+        assert!(validate_image_dimensions(4_096, 4_097)
+            .unwrap_err()
+            .contains("source image has too many pixels"));
     }
 }
