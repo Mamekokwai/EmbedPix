@@ -1,0 +1,41 @@
+:root {
+  --qp-bg-app: #f3f4f6;
+  --qp-bg-canvas: #fafafa;
+  --qp-bg-panel: #ffffff;
+  --qp-bg-elevated: #f6f7f8;
+  --qp-border-subtle: #dfe2e6;
+  --qp-border-strong: #b9bec7;
+  --qp-text-primary: #1d232c;
+  --qp-text-secondary: #596273;
+  --qp-text-tertiary: #8992a1;
+  --qp-accent-default: #356ca8;
+  --qp-accent-muted: #e5eef8;
+  --qp-success: #2f7d49;
+  --qp-warning: #9a6700;
+  --qp-danger: #b53a3a;
+  --qp-radius-panel: 14px;
+  --qp-radius-control: 10px;
+  --qp-radius-button: 8px;
+  --qp-shadow-overlay: 0 10px 24px rgb(17 24 39 / 8%);
+  --font-sans: "IBM Plex Sans", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, monospace;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --qp-bg-app: #202328;
+  --qp-bg-canvas: #272b31;
+  --qp-bg-panel: #2d3239;
+  --qp-bg-elevated: #343a43;
+  --qp-border-subtle: #444b55;
+  --qp-border-strong: #656e7b;
+  --qp-text-primary: #e7eaf0;
+  --qp-text-secondary: #b7beca;
+  --qp-text-tertiary: #8b95a3;
+  --qp-accent-default: #8db4df;
+  --qp-accent-muted: #334353;
+  --qp-success: #84bc93;
+  --qp-warning: #d3aa68;
+  --qp-danger: #dc9292;
+  color-scheme: dark;
+}

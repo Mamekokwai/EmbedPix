@@ -1,0 +1,34 @@
+{
+  "name": "engiformat",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "面向嵌入式 UI 开发的本地图片格式转换工具",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "npm run check:types && npm run check:lint",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "check:lint": "eslint . --max-warnings 0",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.3",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.64.0",
+    "vite": "^8.1.4"
+  }
+}

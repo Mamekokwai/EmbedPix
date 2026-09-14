@@ -1,0 +1,43 @@
+@import url("./styles/tokens.css");
+@import url("./styles/features/image-converter.css");
+
+:root {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--qp-bg-app);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--qp-bg-app);
+  color: var(--qp-text-primary);
+  font-family: var(--font-sans);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+label,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  cursor: not-allowed;
+}
