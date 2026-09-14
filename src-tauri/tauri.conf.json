@@ -3,7 +3,7 @@
   "productName": "EngiFormat",
   "mainBinaryName": "EngiFormat",
   "version": "0.1.0",
-  "identifier": "com.engiformat.app",
+  "identifier": "com.engiformat.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -17,11 +17,13 @@
         "title": "EngiFormat",
         "width": 1100,
         "height": 760,
+        "minWidth": 480,
+        "minHeight": 560,
         "resizable": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {
