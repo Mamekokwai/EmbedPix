@@ -4,16 +4,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::{
     imageops::FilterType, io::Reader as ImageReader, DynamicImage, GenericImage, ImageFormat, Rgba,
     RgbaImage,
 };
 use serde::{Deserialize, Serialize};
+use tauri::ipc::{InvokeBody, Request};
 
 mod bmp;
 
 const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
+const MAX_METADATA_BYTES: usize = 64 * 1024;
+const MAX_SOURCE_FILE_NAME_BYTES: usize = 1024;
+const MAX_DEFAULT_STEM_CHARS: usize = 120;
 const MAX_IMAGE_DIMENSION: u32 = 8_192;
 const MAX_IMAGE_PIXELS: u64 = 16_777_216;
 const MAX_DECODER_ALLOC_BYTES: u64 = 128 * 1024 * 1024;
@@ -51,9 +54,9 @@ impl OutputFormat {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct ExportRequest {
-    input_data: String,
+    input_data: Vec<u8>,
     source_file_name: String,
     output_format: OutputFormat,
     width: u32,
@@ -64,9 +67,9 @@ struct ExportRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct ExportImageDto {
-    input_data_base64: String,
+struct ExportMetadata {
     file_name: String,
     output_format: String,
     width: u32,
@@ -76,10 +79,11 @@ struct ExportImageDto {
     bit_depth: Option<u16>,
 }
 
-impl ExportImageDto {
-    fn into_request(self) -> Result<ExportRequest, String> {
+impl ExportMetadata {
+    fn into_request(self, input_data: Vec<u8>) -> Result<ExportRequest, String> {
+        validate_source_file_name(&self.file_name)?;
         Ok(ExportRequest {
-            input_data: self.input_data_base64,
+            input_data,
             source_file_name: self.file_name,
             output_format: OutputFormat::parse(&self.output_format)?,
             width: self.width,
@@ -101,35 +105,18 @@ pub struct ExportImageResult {
     pub bit_depth: u16,
 }
 
-#[allow(clippy::too_many_arguments)]
 #[tauri::command(rename_all = "camelCase")]
-pub async fn export_image(
-    input_data_base64: String,
-    file_name: String,
-    output_format: String,
-    width: u32,
-    height: u32,
-    keep_aspect_ratio: bool,
-    background_color: Option<String>,
-    bit_depth: Option<u16>,
-) -> Result<ExportImageResult, String> {
-    let request = ExportImageDto {
-        input_data_base64,
-        file_name,
-        output_format,
-        width,
-        height,
-        keep_aspect_ratio,
-        background_color,
-        bit_depth,
-    }
-    .into_request()?;
-    let conversion_request = request.clone();
+pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, String> {
+    let request = parse_raw_request(request)?;
+    let source_file_name = request.source_file_name.clone();
+    let output_format = request.output_format;
+    let width = request.width;
+    let height = request.height;
     let (bytes, actual_bit_depth) =
-        tauri::async_runtime::spawn_blocking(move || convert_image(&conversion_request))
+        tauri::async_runtime::spawn_blocking(move || convert_image(&request))
             .await
             .map_err(|error| format!("image conversion task failed: {error}"))??;
-    let output_path = choose_output_path(&request)?;
+    let output_path = choose_output_path(&source_file_name, output_format)?;
     let path_for_write = output_path.clone();
     tauri::async_runtime::spawn_blocking(move || fs::write(&path_for_write, bytes))
         .await
@@ -143,9 +130,9 @@ pub async fn export_image(
 
     Ok(ExportImageResult {
         output_path: output_path.to_string_lossy().into_owned(),
-        width: request.width,
-        height: request.height,
-        format: request.output_format.name().to_string(),
+        width,
+        height,
+        format: output_format.name().to_string(),
         bit_depth: actual_bit_depth,
     })
 }
@@ -154,24 +141,8 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
     validate_dimensions(request.width, request.height)?;
     validate_bit_depth(request.output_format, request.bit_depth)?;
 
-    let encoded_input = request.input_data.trim();
-    let encoded_input = encoded_input
-        .split_once(',')
-        .filter(|(prefix, _)| prefix.trim_start().starts_with("data:"))
-        .map(|(_, data)| data)
-        .unwrap_or(encoded_input);
-    validate_encoded_input_size(encoded_input.len())?;
-    let input_bytes = STANDARD
-        .decode(encoded_input)
-        .map_err(|error| format!("invalid base64 image data: {error}"))?;
-    if input_bytes.len() > MAX_INPUT_BYTES {
-        return Err(format!(
-            "input image is too large: decoded data is {} MiB, maximum is {} MiB",
-            input_bytes.len() / (1024 * 1024),
-            MAX_INPUT_BYTES / (1024 * 1024)
-        ));
-    }
-    let source = decode_input(&input_bytes)?;
+    validate_input_size(&request.input_data)?;
+    let source = decode_input(&request.input_data)?;
     let image = resize_image(
         source,
         request.width,
@@ -227,19 +198,80 @@ fn validate_image_dimensions(width: u32, height: u32) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_encoded_input_size(encoded_len: usize) -> Result<(), String> {
-    let max_encoded_len = MAX_INPUT_BYTES
-        .checked_add(2)
-        .and_then(|bytes| bytes.checked_div(3))
-        .and_then(|bytes| bytes.checked_mul(4))
-        .ok_or_else(|| "configured input image limit overflowed".to_string())?;
-    if encoded_len > max_encoded_len {
+fn validate_input_size(input: &[u8]) -> Result<(), String> {
+    validate_input_len(input.len())
+}
+
+fn validate_input_len(input_len: usize) -> Result<(), String> {
+    if input_len == 0 {
+        return Err("input image data must not be empty".to_string());
+    }
+    if input_len > MAX_INPUT_BYTES {
         return Err(format!(
-            "input image is too large: base64 data exceeds the {} MiB limit",
+            "input image is too large: raw data exceeds the {} MiB limit",
             MAX_INPUT_BYTES / (1024 * 1024)
         ));
     }
     Ok(())
+}
+
+fn validate_source_file_name(file_name: &str) -> Result<(), String> {
+    if file_name.is_empty() {
+        return Err("source file name must not be empty".to_string());
+    }
+    if file_name.len() > MAX_SOURCE_FILE_NAME_BYTES {
+        return Err(format!(
+            "source file name is too long: maximum is {MAX_SOURCE_FILE_NAME_BYTES} UTF-8 bytes"
+        ));
+    }
+    if file_name.chars().any(char::is_control) {
+        return Err("source file name must not contain control characters".to_string());
+    }
+    Ok(())
+}
+
+fn parse_raw_request(request: Request<'_>) -> Result<ExportRequest, String> {
+    let payload = match request.body() {
+        InvokeBody::Raw(payload) => payload,
+        InvokeBody::Json(_) => {
+            return Err("export_image requires a raw binary IPC request".to_string());
+        }
+    };
+    parse_raw_payload(payload)
+}
+
+fn parse_raw_payload(payload: &[u8]) -> Result<ExportRequest, String> {
+    if payload.len() < 8 {
+        return Err("raw request must contain an 8-byte header".to_string());
+    }
+    if &payload[..4] != b"EGF1" {
+        return Err("raw request has invalid magic; expected EGF1".to_string());
+    }
+
+    let metadata_len = u32::from_le_bytes(
+        payload[4..8]
+            .try_into()
+            .expect("the minimum payload length was checked"),
+    ) as usize;
+    if metadata_len > MAX_METADATA_BYTES {
+        return Err(format!(
+            "metadata is too large: maximum is {MAX_METADATA_BYTES} bytes"
+        ));
+    }
+    let metadata_end = 8_usize
+        .checked_add(metadata_len)
+        .ok_or_else(|| "raw request metadata length overflowed".to_string())?;
+    if metadata_end > payload.len() {
+        return Err("raw request metadata length exceeds payload size".to_string());
+    }
+
+    let input_len = payload.len() - metadata_end;
+    validate_input_len(input_len)?;
+
+    let metadata = serde_json::from_slice::<ExportMetadata>(&payload[8..metadata_end])
+        .map_err(|error| format!("invalid metadata JSON: {error}"))?;
+    let input_data = payload[metadata_end..].to_vec();
+    metadata.into_request(input_data)
 }
 
 fn decode_input(input_bytes: &[u8]) -> Result<DynamicImage, String> {
@@ -385,26 +417,64 @@ fn composite_over_background(image: RgbaImage, background_color: Rgba<u8>) -> Rg
     output
 }
 
-fn choose_output_path(request: &ExportRequest) -> Result<PathBuf, String> {
-    let default_name = default_output_name(&request.source_file_name, request.output_format);
-    let filter_name = request.output_format.name().to_ascii_uppercase();
+fn choose_output_path(
+    source_file_name: &str,
+    output_format: OutputFormat,
+) -> Result<PathBuf, String> {
+    let default_name = default_output_name(source_file_name, output_format);
+    let filter_name = output_format.name().to_ascii_uppercase();
     let path = rfd::FileDialog::new()
         .set_title("Export image")
         .set_file_name(default_name)
-        .add_filter(&filter_name, &[request.output_format.extension()])
+        .add_filter(&filter_name, &[output_format.extension()])
         .save_file()
         .ok_or_else(|| "image export cancelled".to_string())?;
 
-    Ok(with_expected_extension(path, request.output_format))
+    Ok(with_expected_extension(path, output_format))
 }
 
 fn default_output_name(source_file_name: &str, format: OutputFormat) -> String {
-    let stem = Path::new(source_file_name)
+    let base_name = source_file_name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(source_file_name);
+    let stem = Path::new(base_name)
         .file_stem()
         .and_then(|value| value.to_str())
         .filter(|value| !value.is_empty())
         .unwrap_or("image");
-    format!("{stem}.{}", format.extension())
+    let safe_stem: String = stem
+        .chars()
+        .map(|character| {
+            if character.is_control()
+                || matches!(
+                    character,
+                    '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
+                )
+            {
+                '_'
+            } else {
+                character
+            }
+        })
+        .take(MAX_DEFAULT_STEM_CHARS)
+        .collect();
+    let mut safe_stem = safe_stem.trim_matches([' ', '.']).to_string();
+    if safe_stem.is_empty() {
+        safe_stem = "image".to_string();
+    }
+    let uppercase = safe_stem.to_ascii_uppercase();
+    let is_reserved = matches!(uppercase.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || uppercase
+            .strip_prefix("COM")
+            .or_else(|| uppercase.strip_prefix("LPT"))
+            .is_some_and(|suffix| {
+                matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+            });
+    if is_reserved {
+        safe_stem.insert(0, '_');
+    }
+    format!("{safe_stem}.{}", format.extension())
 }
 
 fn with_expected_extension(mut path: PathBuf, format: OutputFormat) -> PathBuf {
@@ -470,10 +540,9 @@ mod tests {
     }
 
     #[test]
-    fn frontend_dto_accepts_camel_case_contract_and_null_bit_depth() {
-        let dto: ExportImageDto = serde_json::from_str(
+    fn raw_metadata_accepts_camel_case_contract_and_null_bit_depth() {
+        let metadata: ExportMetadata = serde_json::from_str(
             r##"{
-                "inputDataBase64": "aW1hZ2U=",
                 "fileName": "source.png",
                 "outputFormat": "png",
                 "width": 20,
@@ -485,17 +554,35 @@ mod tests {
         )
         .unwrap();
 
-        let request = dto.into_request().unwrap();
-        assert_eq!(request.input_data, "aW1hZ2U=");
+        let request = metadata.into_request(vec![1, 2, 3]).unwrap();
+        assert_eq!(request.input_data, vec![1, 2, 3]);
         assert_eq!(request.source_file_name, "source.png");
         assert_eq!(request.bit_depth, 24);
         assert_eq!(request.background_color, Rgba([16, 32, 48, 255]));
     }
 
     #[test]
-    fn tauri_camel_case_contract_keeps_input_data_base64_key() {
-        let dto = ExportImageDto {
-            input_data_base64: "aW1hZ2U=".to_string(),
+    fn raw_metadata_rejects_removed_base64_field() {
+        let error = serde_json::from_str::<ExportMetadata>(
+            r##"{
+                "inputDataBase64": "aW1hZ2U=",
+                "fileName": "source.png",
+                "outputFormat": "png",
+                "width": 1,
+                "height": 1,
+                "keepAspectRatio": false,
+                "backgroundColor": null,
+                "bitDepth": null
+            }"##,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn raw_payload_owns_image_bytes_and_preserves_unicode_metadata() {
+        let metadata = ExportMetadata {
             file_name: "source.png".to_string(),
             output_format: "png".to_string(),
             width: 1,
@@ -504,10 +591,147 @@ mod tests {
             background_color: None,
             bit_depth: None,
         };
-        let value = serde_json::to_value(dto).unwrap();
+        let payload = raw_payload(&metadata, &[0x89, 0x50, 0x4e, 0x47]);
+        let request = parse_raw_payload(&payload).unwrap();
 
-        assert_eq!(value["inputDataBase64"], "aW1hZ2U=");
-        assert!(value.get("inputData").is_none());
+        assert_eq!(request.source_file_name, "source.png");
+        assert_eq!(request.input_data, vec![0x89, 0x50, 0x4e, 0x47]);
+    }
+
+    #[test]
+    fn raw_payload_preserves_unicode_file_name() {
+        let metadata = ExportMetadata {
+            file_name: "界面/图标.png".to_string(),
+            output_format: "bmp".to_string(),
+            width: 1,
+            height: 1,
+            keep_aspect_ratio: false,
+            background_color: Some("#102030".to_string()),
+            bit_depth: Some(16),
+        };
+        let request = parse_raw_payload(&raw_payload(&metadata, &[1, 2, 3])).unwrap();
+
+        assert_eq!(request.source_file_name, "界面/图标.png");
+        assert_eq!(request.output_format, OutputFormat::Bmp);
+        assert_eq!(request.background_color, Rgba([16, 32, 48, 255]));
+        assert_eq!(request.bit_depth, 16);
+    }
+
+    #[test]
+    fn raw_payload_rejects_short_and_invalid_headers() {
+        assert!(parse_raw_payload(&[])
+            .unwrap_err()
+            .contains("8-byte header"));
+        assert!(parse_raw_payload(b"EGF1")
+            .unwrap_err()
+            .contains("8-byte header"));
+        assert!(parse_raw_payload(b"NOPE\0\0\0\0")
+            .unwrap_err()
+            .contains("invalid magic"));
+    }
+
+    #[test]
+    fn raw_payload_rejects_metadata_length_errors() {
+        let mut oversized = b"EGF1".to_vec();
+        oversized.extend_from_slice(&((MAX_METADATA_BYTES as u32) + 1).to_le_bytes());
+        assert!(parse_raw_payload(&oversized)
+            .unwrap_err()
+            .contains("metadata is too large"));
+
+        let mut truncated = b"EGF1".to_vec();
+        truncated.extend_from_slice(&4_u32.to_le_bytes());
+        truncated.extend_from_slice(b"{}");
+        assert!(parse_raw_payload(&truncated)
+            .unwrap_err()
+            .contains("exceeds payload size"));
+    }
+
+    #[test]
+    fn raw_payload_rejects_invalid_json_empty_image_and_large_image() {
+        let mut invalid_json = b"EGF1".to_vec();
+        invalid_json.extend_from_slice(&3_u32.to_le_bytes());
+        invalid_json.extend_from_slice(b"no!");
+        invalid_json.push(1);
+        assert!(parse_raw_payload(&invalid_json)
+            .unwrap_err()
+            .contains("invalid metadata JSON"));
+
+        let metadata = ExportMetadata {
+            file_name: "source.png".to_string(),
+            output_format: "png".to_string(),
+            width: 1,
+            height: 1,
+            keep_aspect_ratio: false,
+            background_color: None,
+            bit_depth: None,
+        };
+        assert!(parse_raw_payload(&raw_payload(&metadata, &[]))
+            .unwrap_err()
+            .contains("must not be empty"));
+        assert!(validate_input_len(MAX_INPUT_BYTES + 1)
+            .unwrap_err()
+            .contains("raw data"));
+    }
+
+    #[test]
+    fn raw_metadata_rejects_unsafe_source_file_names() {
+        let create_metadata = |file_name: String| ExportMetadata {
+            file_name,
+            output_format: "png".to_string(),
+            width: 1,
+            height: 1,
+            keep_aspect_ratio: false,
+            background_color: None,
+            bit_depth: None,
+        };
+
+        assert!(create_metadata(String::new())
+            .into_request(vec![1])
+            .unwrap_err()
+            .contains("must not be empty"));
+        assert!(create_metadata("bad\0name.png".to_string())
+            .into_request(vec![1])
+            .unwrap_err()
+            .contains("control characters"));
+        assert!(create_metadata("界".repeat(MAX_SOURCE_FILE_NAME_BYTES))
+            .into_request(vec![1])
+            .unwrap_err()
+            .contains("too long"));
+    }
+
+    #[test]
+    fn default_output_names_are_portable_and_preserve_unicode() {
+        assert_eq!(
+            default_output_name("folder/屏幕 图标.png", OutputFormat::Bmp),
+            "屏幕 图标.bmp"
+        );
+        assert_eq!(
+            default_output_name(r"folder\bad:name?.png", OutputFormat::Png),
+            "bad_name_.png"
+        );
+        assert_eq!(
+            default_output_name("CON.png", OutputFormat::Jpg),
+            "_CON.jpg"
+        );
+        assert_eq!(
+            default_output_name("...png", OutputFormat::Bmp),
+            "image.bmp"
+        );
+
+        let output = default_output_name(&format!("{}.png", "x".repeat(200)), OutputFormat::Png);
+        assert_eq!(
+            output,
+            format!("{}.png", "x".repeat(MAX_DEFAULT_STEM_CHARS))
+        );
+    }
+
+    fn raw_payload(metadata: &ExportMetadata, input_data: &[u8]) -> Vec<u8> {
+        let metadata = serde_json::to_vec(metadata).unwrap();
+        let mut payload = b"EGF1".to_vec();
+        payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
+        payload.extend_from_slice(&metadata);
+        payload.extend_from_slice(input_data);
+        payload
     }
 
     #[test]
@@ -593,16 +817,9 @@ mod tests {
     }
 
     #[test]
-    fn resource_limits_reject_large_encoded_inputs_and_source_dimensions() {
-        let encoded_limit = MAX_INPUT_BYTES
-            .checked_add(2)
-            .unwrap()
-            .checked_div(3)
-            .unwrap()
-            .checked_mul(4)
-            .unwrap();
-        assert!(validate_encoded_input_size(encoded_limit).is_ok());
-        assert!(validate_encoded_input_size(encoded_limit + 1)
+    fn resource_limits_reject_large_raw_inputs_and_source_dimensions() {
+        assert!(validate_input_len(MAX_INPUT_BYTES).is_ok());
+        assert!(validate_input_len(MAX_INPUT_BYTES + 1)
             .unwrap_err()
             .contains("too large"));
         assert!(validate_image_dimensions(MAX_IMAGE_DIMENSION + 1, 1)

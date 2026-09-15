@@ -4,7 +4,7 @@ export type BmpBitDepth = 1 | 4 | 8 | 16 | 24 | 32;
 
 export interface ExportImageRequest {
   fileName: string;
-  inputDataBase64: string;
+  inputData: Uint8Array;
   outputFormat: OutputFormat;
   width: number;
   height: number;

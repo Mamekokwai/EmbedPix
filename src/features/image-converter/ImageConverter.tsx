@@ -70,20 +70,6 @@ function readImageDimensions(file: File) {
   });
 }
 
-function fileToBase64(file: File) {
-  return file.arrayBuffer().then((buffer) => {
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    const chunkSize = 0x8000;
-
-    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-    }
-
-    return btoa(binary);
-  });
-}
-
 function FormatSelector({
   value,
   onChange,
@@ -412,7 +398,7 @@ export default function ImageConverter() {
     try {
       const request: ExportImageRequest = {
         fileName: file.name,
-        inputDataBase64: await fileToBase64(file),
+        inputData: new Uint8Array(await file.arrayBuffer()),
         outputFormat,
         width,
         height,
