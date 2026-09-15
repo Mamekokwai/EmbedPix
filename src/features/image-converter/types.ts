@@ -4,6 +4,7 @@ export type ByteOrder = "little" | "big";
 export type ChannelOrder = "rgb" | "bgr";
 export type RowOrder = "top-down" | "bottom-up";
 export type RowAlignment = 1 | 2 | 4;
+export type OutputLocation = "source" | "subfolder" | "directory";
 
 export type BmpBitDepth = 1 | 4 | 8 | 16 | 24 | 32;
 
@@ -22,6 +23,10 @@ export interface ExportImageRequest {
   rowOrder: RowOrder;
   rowAlignment: RowAlignment;
   cArrayName: string;
+  outputLocation?: OutputLocation;
+  sourcePath?: string | null;
+  outputSubdirectory?: string;
+  outputDirectory?: string;
 }
 
 export interface ExportImageResponse {

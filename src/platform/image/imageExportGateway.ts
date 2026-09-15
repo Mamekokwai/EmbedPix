@@ -9,6 +9,12 @@ export const MAX_METADATA_BYTES = 64 * 1024;
 export const MAX_RAW_IMAGE_BYTES = 32 * 1024 * 1024;
 export const MAX_SOURCE_FILE_NAME_BYTES = 1024;
 
+export interface NativeImageFile {
+  path: string;
+  fileName: string;
+  data: number[];
+}
+
 const EXPORT_ENVELOPE_MAGIC = new Uint8Array([0x45, 0x47, 0x46, 0x31]);
 
 function getExportMetadata(request: ExportImageRequest) {
@@ -26,6 +32,10 @@ function getExportMetadata(request: ExportImageRequest) {
     rowOrder: request.rowOrder,
     rowAlignment: request.rowAlignment,
     cArrayName: request.cArrayName,
+    ...(request.outputLocation ? { outputLocation: request.outputLocation } : {}),
+    ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
+    ...(request.outputSubdirectory ? { outputSubdirectory: request.outputSubdirectory } : {}),
+    ...(request.outputDirectory ? { outputDirectory: request.outputDirectory } : {}),
   };
 }
 
@@ -74,9 +84,17 @@ function getErrorMessage(error: unknown) {
   return "导出失败，请检查图片和转换参数后重试。";
 }
 
-function isTauriEnvironment() {
+export function isTauriEnvironment() {
   return typeof window !== "undefined" &&
     Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+}
+
+export async function pickImageFile(): Promise<NativeImageFile | null> {
+  return invoke<NativeImageFile | null>("pick_image");
+}
+
+export async function readImageFile(path: string): Promise<NativeImageFile> {
+  return invoke<NativeImageFile>("read_image_file", { path });
 }
 
 export async function exportImage(request: ExportImageRequest) {

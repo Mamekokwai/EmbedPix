@@ -17,6 +17,8 @@ mod raw;
 const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 64 * 1024;
 const MAX_SOURCE_FILE_NAME_BYTES: usize = 1024;
+const MAX_OUTPUT_PATH_BYTES: usize = 4096;
+const MAX_OUTPUT_SUBDIRECTORY_BYTES: usize = 255;
 const MAX_DEFAULT_STEM_CHARS: usize = 120;
 const MAX_IMAGE_DIMENSION: u32 = 8_192;
 const MAX_IMAGE_PIXELS: u64 = 16_777_216;
@@ -30,6 +32,33 @@ enum OutputFormat {
     Bmp,
     Rgb565,
     CArray,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputLocation {
+    Dialog,
+    Source,
+    Subfolder,
+    Directory,
+}
+
+impl OutputLocation {
+    fn parse(value: Option<&str>) -> Result<Self, String> {
+        match value
+            .unwrap_or("dialog")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "dialog" => Ok(Self::Dialog),
+            "source" => Ok(Self::Source),
+            "subfolder" => Ok(Self::Subfolder),
+            "directory" => Ok(Self::Directory),
+            other => Err(format!(
+                "unsupported output location `{other}`; expected source, subfolder, or directory"
+            )),
+        }
+    }
 }
 
 impl OutputFormat {
@@ -67,7 +96,7 @@ impl OutputFormat {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ExportRequest {
     input_data: Vec<u8>,
     source_file_name: String,
@@ -80,6 +109,10 @@ struct ExportRequest {
     jpeg_quality: u8,
     raw_options: raw::RawOptions,
     c_array_name: String,
+    output_location: OutputLocation,
+    source_path: Option<String>,
+    output_subdirectory: Option<String>,
+    output_directory: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -105,6 +138,14 @@ struct ExportMetadata {
     row_alignment: Option<u8>,
     #[serde(default)]
     c_array_name: Option<String>,
+    #[serde(default)]
+    output_location: Option<String>,
+    #[serde(default)]
+    source_path: Option<String>,
+    #[serde(default)]
+    output_subdirectory: Option<String>,
+    #[serde(default)]
+    output_directory: Option<String>,
 }
 
 impl ExportMetadata {
@@ -113,6 +154,10 @@ impl ExportMetadata {
         validate_source_file_name(&source_file_name)?;
         validate_input_size(&input_data)?;
         let output_format = OutputFormat::parse(&self.output_format)?;
+        let output_location = OutputLocation::parse(self.output_location.as_deref())?;
+        let source_path = normalize_optional_path(self.source_path, "sourcePath")?;
+        let output_directory = normalize_optional_path(self.output_directory, "outputDirectory")?;
+        let output_subdirectory = normalize_optional_subdirectory(self.output_subdirectory)?;
         let bit_depth = self.bit_depth.unwrap_or(match output_format {
             OutputFormat::Rgb565 | OutputFormat::CArray => 16,
             _ => 24,
@@ -142,6 +187,10 @@ impl ExportMetadata {
                 .as_deref()
                 .map(raw::sanitize_c_array_name)
                 .unwrap_or_else(|| raw::default_c_array_name(&source_file_name)),
+            output_location,
+            source_path,
+            output_subdirectory,
+            output_directory,
         })
     }
 }
@@ -156,6 +205,61 @@ pub struct ExportImageResult {
     pub bit_depth: u16,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeImageFile {
+    pub path: String,
+    pub file_name: String,
+    pub data: Vec<u8>,
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn pick_image() -> Result<Option<NativeImageFile>, String> {
+    let path = rfd::FileDialog::new()
+        .set_title("选择图片")
+        .add_filter("图片", &["png", "jpg", "jpeg", "bmp", "gif", "webp"])
+        .pick_file();
+    let Some(path) = path else {
+        return Ok(None);
+    };
+
+    tauri::async_runtime::spawn_blocking(move || read_image_file_from_path(path))
+        .await
+        .map_err(|error| format!("image read task failed: {error}"))?
+        .map(Some)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn read_image_file(path: String) -> Result<NativeImageFile, String> {
+    tauri::async_runtime::spawn_blocking(move || read_image_file_from_path(PathBuf::from(path)))
+        .await
+        .map_err(|error| format!("image read task failed: {error}"))?
+}
+
+fn read_image_file_from_path(path: PathBuf) -> Result<NativeImageFile, String> {
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "selected image has no valid file name".to_string())?
+        .to_string();
+    validate_source_file_name(&file_name)?;
+    let metadata = fs::metadata(&path)
+        .map_err(|error| format!("failed to inspect selected image: {error}"))?;
+    if metadata.len() > MAX_INPUT_BYTES as u64 {
+        return Err(format!(
+            "image file cannot exceed {} MiB",
+            MAX_INPUT_BYTES / (1024 * 1024)
+        ));
+    }
+    let data =
+        fs::read(&path).map_err(|error| format!("failed to read selected image: {error}"))?;
+    Ok(NativeImageFile {
+        path: path.to_string_lossy().into_owned(),
+        file_name,
+        data,
+    })
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, String> {
     let request = parse_raw_request(request)?;
@@ -163,11 +267,12 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
     let output_format = request.output_format;
     let width = request.width;
     let height = request.height;
+    let conversion_request = request.clone();
     let (bytes, actual_bit_depth) =
-        tauri::async_runtime::spawn_blocking(move || convert_image(&request))
+        tauri::async_runtime::spawn_blocking(move || convert_image(&conversion_request))
             .await
             .map_err(|error| format!("image conversion task failed: {error}"))??;
-    let output_path = choose_output_path(&source_file_name, output_format)?;
+    let output_path = choose_output_path(&request, &source_file_name, output_format)?;
     let path_for_write = output_path.clone();
     tauri::async_runtime::spawn_blocking(move || fs::write(&path_for_write, bytes))
         .await
@@ -215,6 +320,56 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
             raw::encode_c_array(&bytes, image.width(), image.height(), &request.c_array_name)
         }
     }
+}
+
+fn normalize_optional_path(value: Option<String>, field: &str) -> Result<Option<String>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    if value.len() > MAX_OUTPUT_PATH_BYTES {
+        return Err(format!(
+            "{field} cannot exceed {MAX_OUTPUT_PATH_BYTES} UTF-8 bytes"
+        ));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(format!("{field} cannot contain control characters"));
+    }
+    Ok(Some(value))
+}
+
+fn normalize_optional_subdirectory(value: Option<String>) -> Result<Option<String>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    if value.len() > MAX_OUTPUT_SUBDIRECTORY_BYTES {
+        return Err(format!(
+            "outputSubdirectory cannot exceed {MAX_OUTPUT_SUBDIRECTORY_BYTES} UTF-8 bytes"
+        ));
+    }
+    if value == "." || value == ".." {
+        return Err("outputSubdirectory cannot be . or ..".to_string());
+    }
+    if value.chars().any(|character| {
+        character.is_control()
+            || matches!(
+                character,
+                '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+            )
+    }) {
+        return Err(
+            "outputSubdirectory cannot contain path separators or Windows reserved characters"
+                .to_string(),
+        );
+    }
+    Ok(Some(value))
 }
 
 fn validate_dimensions(width: u32, height: u32) -> Result<(), String> {
@@ -484,19 +639,99 @@ fn composite_over_background(image: RgbaImage, background_color: Rgba<u8>) -> Rg
 }
 
 fn choose_output_path(
+    request: &ExportRequest,
     source_file_name: &str,
     output_format: OutputFormat,
 ) -> Result<PathBuf, String> {
     let default_name = default_output_name(source_file_name, output_format);
-    let filter_name = output_format.name().to_ascii_uppercase();
-    let path = rfd::FileDialog::new()
-        .set_title("Export image")
-        .set_file_name(default_name)
-        .add_filter(&filter_name, &[output_format.extension()])
-        .save_file()
-        .ok_or_else(|| "image export cancelled".to_string())?;
+    let directory = match request.output_location {
+        OutputLocation::Dialog => {
+            let path = rfd::FileDialog::new()
+                .set_title("Export image")
+                .set_file_name(default_name)
+                .add_filter(
+                    &output_format.name().to_ascii_uppercase(),
+                    &[output_format.extension()],
+                )
+                .save_file()
+                .ok_or_else(|| "image export cancelled".to_string())?;
 
-    Ok(with_expected_extension(path, output_format))
+            return Ok(with_expected_extension(path, output_format));
+        }
+        OutputLocation::Source | OutputLocation::Subfolder => {
+            let source_path = request.source_path.as_deref().ok_or_else(|| {
+                "source folder output requires the original file path; choose a specified directory instead"
+                    .to_string()
+            })?;
+            let source_path = Path::new(source_path);
+            source_path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from("."))
+        }
+        OutputLocation::Directory => PathBuf::from(
+            request
+                .output_directory
+                .as_deref()
+                .ok_or_else(|| "output directory is required".to_string())?,
+        ),
+    };
+
+    let directory = if request.output_location == OutputLocation::Subfolder {
+        directory.join(
+            request
+                .output_subdirectory
+                .as_deref()
+                .ok_or_else(|| "output subdirectory is required".to_string())?,
+        )
+    } else {
+        directory
+    };
+    fs::create_dir_all(&directory).map_err(|error| {
+        format!(
+            "failed to create output directory `{}`: {error}",
+            directory.display()
+        )
+    })?;
+
+    let output_path = with_expected_extension(directory.join(default_name), output_format);
+    Ok(avoid_source_overwrite(
+        output_path,
+        request.source_path.as_deref(),
+    ))
+}
+
+fn avoid_source_overwrite(output_path: PathBuf, source_path: Option<&str>) -> PathBuf {
+    let Some(source_path) = source_path else {
+        return output_path;
+    };
+
+    let source_path = Path::new(source_path);
+    let normalized_output = fs::canonicalize(&output_path).unwrap_or_else(|_| output_path.clone());
+    let normalized_source =
+        fs::canonicalize(source_path).unwrap_or_else(|_| source_path.to_path_buf());
+    let same_path = if cfg!(windows) {
+        normalized_output
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&normalized_source.to_string_lossy())
+    } else {
+        normalized_output == normalized_source
+    };
+    if !same_path {
+        return output_path;
+    }
+
+    let stem = output_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("image");
+    let extension = output_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| format!(".{value}"))
+        .unwrap_or_default();
+    output_path.with_file_name(format!("{stem}_converted{extension}"))
 }
 
 fn default_output_name(source_file_name: &str, format: OutputFormat) -> String {
@@ -745,6 +980,10 @@ mod tests {
             row_order: None,
             row_alignment: None,
             c_array_name: None,
+            output_location: None,
+            source_path: None,
+            output_subdirectory: None,
+            output_directory: None,
         };
         let payload = raw_payload(&metadata, &[0x89, 0x50, 0x4e, 0x47]);
         let request = parse_raw_payload(&payload).unwrap();
@@ -769,6 +1008,10 @@ mod tests {
             row_order: None,
             row_alignment: None,
             c_array_name: None,
+            output_location: None,
+            source_path: None,
+            output_subdirectory: None,
+            output_directory: None,
         };
         let request = parse_raw_payload(&raw_payload(&metadata, &[1, 2, 3])).unwrap();
 
@@ -831,6 +1074,10 @@ mod tests {
             row_order: None,
             row_alignment: None,
             c_array_name: None,
+            output_location: None,
+            source_path: None,
+            output_subdirectory: None,
+            output_directory: None,
         };
         assert!(parse_raw_payload(&raw_payload(&metadata, &[]))
             .unwrap_err()
@@ -856,6 +1103,10 @@ mod tests {
             row_order: None,
             row_alignment: None,
             c_array_name: None,
+            output_location: None,
+            source_path: None,
+            output_subdirectory: None,
+            output_directory: None,
         };
 
         assert!(create_metadata(String::new())
@@ -904,6 +1155,39 @@ mod tests {
             output,
             format!("{}.png", "x".repeat(MAX_DEFAULT_STEM_CHARS))
         );
+    }
+
+    #[test]
+    fn output_location_metadata_preserves_directory_preferences() {
+        let metadata: ExportMetadata = serde_json::from_str(
+            r##"{
+                "fileName": "screen.png",
+                "outputFormat": "png",
+                "width": 2,
+                "height": 1,
+                "keepAspectRatio": false,
+                "backgroundColor": null,
+                "outputLocation": "subfolder",
+                "sourcePath": "C:\\Images\\screen.png",
+                "outputSubdirectory": "export"
+            }"##,
+        )
+        .unwrap();
+        let request = metadata.into_request(vec![1]).unwrap();
+
+        assert_eq!(request.output_location, OutputLocation::Subfolder);
+        assert_eq!(
+            request.source_path.as_deref(),
+            Some(r"C:\Images\screen.png")
+        );
+        assert_eq!(request.output_subdirectory.as_deref(), Some("export"));
+    }
+
+    #[test]
+    fn output_subdirectories_reject_path_escape_characters() {
+        assert!(normalize_optional_subdirectory(Some("..".to_string())).is_err());
+        assert!(normalize_optional_subdirectory(Some(r"nested\folder".to_string())).is_err());
+        assert!(normalize_optional_subdirectory(Some("export".to_string())).is_ok());
     }
 
     fn raw_payload(metadata: &ExportMetadata, input_data: &[u8]) -> Vec<u8> {

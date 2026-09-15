@@ -5,6 +5,7 @@ import {
   useState,
 } from "react";
 import type { ChangeEvent, DragEvent } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   Check,
   ChevronDown,
@@ -14,7 +15,13 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { exportImage } from "../../platform/image/imageExportGateway";
+import {
+  exportImage,
+  isTauriEnvironment,
+  pickImageFile,
+  readImageFile,
+  type NativeImageFile,
+} from "../../platform/image/imageExportGateway";
 import {
   DEFAULT_C_ARRAY_NAME,
   DEFAULT_JPEG_QUALITY,
@@ -52,6 +59,7 @@ import type {
   ImageDimensions,
   BmpBitDepth,
   OutputFormat,
+  OutputLocation,
   RowAlignment,
   RowOrder,
 } from "./types";
@@ -68,6 +76,33 @@ type Status =
   | { kind: "busy"; text: string }
   | { kind: "success"; text: string }
   | { kind: "error"; text: string };
+
+type FileWithPath = File & { path?: string };
+
+function getSourcePath(file: File): string | null {
+  const path = (file as FileWithPath).path;
+  return typeof path === "string" && path.trim() ? path.trim() : null;
+}
+
+function createNativeFile(source: NativeImageFile): File {
+  const file = new File([new Uint8Array(source.data)], source.fileName);
+  Object.defineProperty(file, "path", { configurable: false, enumerable: false, value: source.path });
+  return file;
+}
+
+function getSubdirectoryError(value: string): string | null {
+  const name = value.trim();
+  if (!name) {
+    return "请输入子文件夹名称。";
+  }
+  if (name === "." || name === "..") {
+    return "子文件夹名称不能是 . 或 ..。";
+  }
+  if (/[\\/:*?"<>|\u0000-\u001f]/u.test(name)) {
+    return "子文件夹名称不能包含路径分隔符或 Windows 保留字符。";
+  }
+  return null;
+}
 
 
 function readImageDimensions(file: File) {
@@ -168,6 +203,7 @@ export default function ImageConverter({
   defaultKeepAspectRatio = true,
 }: ImageConverterProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [sourcePath, setSourcePath] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
   const [width, setWidth] = useState(0);
@@ -184,12 +220,16 @@ export default function ImageConverter({
   const [cArrayName, setCArrayName] = useState(DEFAULT_C_ARRAY_NAME);
   const [keepAspectRatio, setKeepAspectRatio] = useState(defaultKeepAspectRatio);
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
+  const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
+  const [outputSubdirectory, setOutputSubdirectory] = useState("");
+  const [outputDirectory, setOutputDirectory] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const loadIdRef = useRef(0);
+  const loadNativeImageRef = useRef<(path?: string) => void>(() => undefined);
 
   useEffect(() => {
     return () => {
@@ -205,6 +245,22 @@ export default function ImageConverter({
   const heightError = file ? getDimensionError(heightInput, "高度") : null;
   const dimensionError = widthError ?? heightError ?? (file ? getPixelError(widthInput, heightInput) : null);
   const errorMessage = dimensionError ?? error;
+
+  const outputLocationError = useMemo(() => {
+    if (!file) {
+      return null;
+    }
+    if ((outputLocation === "source" || outputLocation === "subfolder") && !sourcePath) {
+      return "当前导入方式没有可用的源文件路径，请改用“指定目录”。";
+    }
+    if (outputLocation === "subfolder") {
+      return getSubdirectoryError(outputSubdirectory);
+    }
+    if (outputLocation === "directory" && !outputDirectory.trim()) {
+      return "请输入输出目录。";
+    }
+    return null;
+  }, [file, outputDirectory, outputLocation, outputSubdirectory, sourcePath]);
 
   const setSettingStatus = (nextWidthInput = widthInput, nextHeightInput = heightInput) => {
     if (!file) {
@@ -261,6 +317,7 @@ export default function ImageConverter({
       const targetDimensions = constrainDimensions(nextDimensions);
 
       setFile(nextFile);
+      setSourcePath(getSourcePath(nextFile));
       setPreviewUrl(nextPreviewUrl);
       setDimensions(nextDimensions);
       setWidth(targetDimensions.width);
@@ -278,12 +335,65 @@ export default function ImageConverter({
     }
   };
 
+  const loadNativeImage = async (path?: string) => {
+    try {
+      const source = path ? await readImageFile(path) : await pickImageFile();
+      if (source) {
+        await loadFile(createNativeFile(source));
+      }
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : "图片读取失败，请重试。";
+      setStatus({ kind: "error", text: "读取失败" });
+      setError(message);
+    }
+  };
+
+  loadNativeImageRef.current = (path) => {
+    void loadNativeImage(path);
+  };
+
+  useEffect(() => {
+    if (!isTauriEnvironment()) {
+      return;
+    }
+
+    let unlisten: (() => void) | undefined;
+    try {
+      void getCurrentWebview().onDragDropEvent((event) => {
+        if (event.payload.type === "enter" || event.payload.type === "over") {
+          setIsDragging(true);
+        } else if (event.payload.type === "leave") {
+          setIsDragging(false);
+        } else {
+          setIsDragging(false);
+          const path = event.payload.paths[0];
+          if (path) {
+            void loadNativeImageRef.current(path);
+          }
+        }
+      }).then((cleanup) => {
+        unlisten = cleanup;
+      }).catch(() => undefined);
+    } catch {
+      return undefined;
+    }
+    return () => unlisten?.();
+  }, []);
+
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0];
     if (nextFile) {
       void loadFile(nextFile);
     }
     event.target.value = "";
+  };
+
+  const handleSelectImage = () => {
+    if (isTauriEnvironment()) {
+      void loadNativeImage();
+    } else {
+      inputRef.current?.click();
+    }
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -298,6 +408,7 @@ export default function ImageConverter({
   const clearFile = () => {
     loadIdRef.current += 1;
     setFile(null);
+    setSourcePath(null);
     setDimensions(null);
     setWidth(0);
     setHeight(0);
@@ -432,6 +543,11 @@ export default function ImageConverter({
     setSettingStatus();
   };
 
+  const handleOutputLocationChange = (nextLocation: OutputLocation) => {
+    setOutputLocation(nextLocation);
+    setError(null);
+  };
+
   const handleKeepAspectRatioChange = (checked: boolean) => {
     setKeepAspectRatio(checked);
     let nextWidthInput = widthInput;
@@ -457,6 +573,12 @@ export default function ImageConverter({
       return;
     }
 
+    if (outputLocationError) {
+      setError(outputLocationError);
+      setStatus({ kind: "error", text: "请检查输出位置" });
+      return;
+    }
+
     setError(null);
     setStatus({ kind: "busy", text: "正在导出图片…" });
 
@@ -476,6 +598,10 @@ export default function ImageConverter({
         rowOrder,
         rowAlignment,
         cArrayName: normalizeCArrayName(cArrayName),
+        outputLocation,
+        sourcePath,
+        outputSubdirectory: outputSubdirectory.trim() || undefined,
+        outputDirectory: outputDirectory.trim() || undefined,
       };
       const outputPath = await exportImage(request);
       setStatus({
@@ -545,13 +671,13 @@ export default function ImageConverter({
                 }
               }}
               onDrop={handleDrop}
-              onClick={() => inputRef.current?.click()}
+              onClick={handleSelectImage}
               role="button"
               tabIndex={0}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  inputRef.current?.click();
+                  handleSelectImage();
                 }
               }}
               aria-label="拖拽图片到这里，或按 Enter 选择本地文件"
@@ -730,6 +856,57 @@ export default function ImageConverter({
                 <span>{backgroundColor}</span>
               </label>
             </div>
+
+            <div className="setting-group output-location-group">
+              <div className="label-row">
+                <label className="field-label" htmlFor="output-location">输出位置</label>
+                <span className="field-note">导出后自动使用对应目录</span>
+              </div>
+              <div className="select-wrap">
+                <select
+                  id="output-location"
+                  value={outputLocation}
+                  onChange={(event) => handleOutputLocationChange(event.target.value as OutputLocation)}
+                >
+                  <option value="source">源文件夹</option>
+                  <option value="subfolder">源文件夹 / 子文件夹</option>
+                  <option value="directory">指定目录</option>
+                </select>
+                <ChevronDown size={15} aria-hidden="true" />
+              </div>
+              {outputLocation === "subfolder" ? (
+                <label className="text-field" htmlFor="output-subdirectory">
+                  <span>子文件夹名称</span>
+                  <input
+                    id="output-subdirectory"
+                    value={outputSubdirectory}
+                    onChange={(event) => { setOutputSubdirectory(event.target.value); setError(null); }}
+                    placeholder="例如 export"
+                    spellCheck={false}
+                  />
+                </label>
+              ) : null}
+              {outputLocation === "directory" ? (
+                <label className="text-field" htmlFor="output-directory">
+                  <span>输出目录</span>
+                  <input
+                    id="output-directory"
+                    value={outputDirectory}
+                    onChange={(event) => { setOutputDirectory(event.target.value); setError(null); }}
+                    placeholder="例如 D:\\Images\\Export"
+                    spellCheck={false}
+                  />
+                </label>
+              ) : null}
+              <p className="field-help">
+                {outputLocation === "source"
+                  ? "直接保存到源图片所在文件夹。"
+                  : outputLocation === "subfolder"
+                    ? "子文件夹不存在时会自动创建。"
+                    : "目录不存在时会自动创建，支持绝对路径。"}
+              </p>
+              {outputLocationError ? <p className="error-message output-location-error" role="alert">{outputLocationError}</p> : null}
+            </div>
           </div>
 
           <div className="panel-footer">
@@ -740,7 +917,7 @@ export default function ImageConverter({
               </div>
               {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}
             </div>
-            <button className="export-button" type="button" disabled={!file || status.kind === "busy" || Boolean(dimensionError)} aria-busy={status.kind === "busy"} onClick={() => void handleExport()}>
+            <button className="export-button" type="button" disabled={!file || status.kind === "busy" || Boolean(dimensionError) || Boolean(outputLocationError)} aria-busy={status.kind === "busy"} onClick={() => void handleExport()}>
               <Download size={17} aria-hidden="true" />
               {status.kind === "busy" ? "处理中…" : `导出 ${getOutputLabel(outputFormat)}`}
             </button>
