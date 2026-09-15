@@ -1,9 +1,10 @@
-import { Cpu, FileImage, Info, ShieldCheck } from "lucide-react";
+import { Cpu, FileImage, Github, Info, ShieldCheck } from "lucide-react";
 import packageJson from "../../../package.json";
+import UpdateView, { type UpdateViewProps } from "../update/UpdateView";
 
 const SUPPORTED_OUTPUTS = ["BMP", "PNG", "JPG", "RGB565 BIN", "C 数组"];
 
-export default function AboutView() {
+export default function AboutView(updateProps: UpdateViewProps) {
   return (
     <div className="about-view page-view">
       <header className="page-header">
@@ -41,6 +42,21 @@ export default function AboutView() {
             <div><h3>轻量工作流</h3><p>拖入图片、调整尺寸与参数，直接导出可用资源。</p></div>
           </article>
         </div>
+
+        <section className="about-author-card" aria-label="作者信息">
+          <div className="about-author-mark" aria-hidden="true">N</div>
+          <div className="about-author-copy">
+            <p className="about-section-eyebrow">MADE BY NYWERYA</p>
+            <h2>Nywerya · XUNCHANG WANG</h2>
+            <p>EmbedPix 的作者与维护者，专注于嵌入式界面和本地工具。</p>
+          </div>
+          <a className="about-author-link" href="https://github.com/Mamekokwai" target="_blank" rel="noreferrer">
+            <Github size={15} aria-hidden="true" />
+            @Mamekokwai
+          </a>
+        </section>
+
+        <UpdateView {...updateProps} embedded />
 
         <p className="about-footnote">EmbedPix · 为嵌入式屏幕 UI 准备的图片工具</p>
       </div>

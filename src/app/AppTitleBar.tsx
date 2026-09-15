@@ -53,6 +53,10 @@ export default function AppTitleBar() {
         onDoubleClick={() => runWindowAction(toggleCurrentWindowMaximized, "toggle window maximize")}
       />
 
+      <span className="app-titlebar-author" title="作者：Nywerya / XUNCHANG WANG">
+        Nywerya
+      </span>
+
       <div className="app-titlebar-controls">
         <button
           type="button"

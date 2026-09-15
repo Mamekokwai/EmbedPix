@@ -64,7 +64,6 @@ import type {
   OutputLocation,
   RowAlignment,
   RowOrder,
-  WatermarkPosition,
 } from "./types";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 
@@ -73,8 +72,6 @@ interface ImageConverterProps {
   defaultJpegQuality?: number;
   defaultKeepAspectRatio?: boolean;
 }
-
-const DEFAULT_WATERMARK_TEXT = "XUNCHANG WANG · EmbedPix";
 
 type Status =
   | { kind: "idle"; text: string }
@@ -229,11 +226,6 @@ export default function ImageConverter({
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
   const [overwriteSameName, setOverwriteSameName] = useState(false);
-  const [watermarkEnabled, setWatermarkEnabled] = useState(false);
-  const [watermarkText, setWatermarkText] = useState(DEFAULT_WATERMARK_TEXT);
-  const [watermarkPosition, setWatermarkPosition] = useState<WatermarkPosition>("bottom-right");
-  const [watermarkOpacity, setWatermarkOpacity] = useState(60);
-  const [watermarkFontSize, setWatermarkFontSize] = useState(16);
   const [deleteSource, setDeleteSource] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
@@ -261,8 +253,7 @@ export default function ImageConverter({
   const widthError = file ? getDimensionError(widthInput, "宽度") : null;
   const heightError = file ? getDimensionError(heightInput, "高度") : null;
   const dimensionError = widthError ?? heightError ?? (file ? getPixelError(widthInput, heightInput) : null);
-  const watermarkError = watermarkEnabled && !watermarkText.trim() ? "请输入水印文本。" : null;
-  const errorMessage = dimensionError ?? watermarkError ?? error;
+  const errorMessage = dimensionError ?? error;
 
   const outputLocationError = useMemo(() => {
     if (!file) {
@@ -766,10 +757,6 @@ export default function ImageConverter({
           outputSubdirectory: outputSubdirectory.trim() || undefined,
           outputDirectory: outputDirectory.trim() || undefined,
           overwriteSameName,
-          watermarkText: watermarkEnabled ? watermarkText : undefined,
-          watermarkPosition: watermarkEnabled ? watermarkPosition : undefined,
-          watermarkOpacity: watermarkEnabled ? watermarkOpacity : undefined,
-          watermarkFontSize: watermarkEnabled ? watermarkFontSize : undefined,
           deleteSource,
         };
         lastOutputPath = await exportImage(request);
@@ -943,6 +930,9 @@ export default function ImageConverter({
               <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>
             </fieldset>
 
+            <details className="settings-module">
+              <summary>画面与像素参数</summary>
+              <div className="settings-module-body">
             <div className="setting-group">
               <div className="label-row">
                 <label className="field-label" htmlFor="bit-depth">位深</label>
@@ -1076,6 +1066,12 @@ export default function ImageConverter({
               </label>
             </div>
 
+                </div>
+              </details>
+
+              <details className="settings-module">
+                <summary>输出位置与文件处理</summary>
+                <div className="settings-module-body">
             <div className="setting-group output-location-group">
               <div className="label-row">
                 <label className="field-label" htmlFor="output-location">输出位置</label>
@@ -1156,63 +1152,9 @@ export default function ImageConverter({
                 </div>
               )}
             </div>
-
-            <div className="setting-group watermark-group">
-              <div className="label-row">
-                <span className="field-label">作者水印</span>
-                <span className="field-note">默认关闭</span>
-              </div>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={watermarkEnabled}
-                  aria-describedby="watermark-help"
-                  onChange={(event) => { setWatermarkEnabled(event.target.checked); setError(null); }}
-                />
-                <span className="toggle-track" aria-hidden="true"><span /></span>
-                <span>导出时添加作者信息</span>
-              </label>
-              {watermarkEnabled ? (
-                <div className="watermark-options">
-                  <label className="text-field" htmlFor="watermark-text">
-                    <span>信息文本</span>
-                    <input
-                      id="watermark-text"
-                      value={watermarkText}
-                      maxLength={80}
-                      aria-invalid={Boolean(watermarkError)}
-                      aria-describedby="watermark-help"
-                      onChange={(event) => { setWatermarkText(event.target.value); setError(null); }}
-                      placeholder={DEFAULT_WATERMARK_TEXT}
-                    />
-                  </label>
-                  <div className="parameter-grid watermark-select-grid">
-                    <SelectField
-                      id="watermark-position"
-                      label="位置"
-                      value={watermarkPosition}
-                      options={[
-                        { value: "top-left" as const, label: "左上" },
-                        { value: "top-right" as const, label: "右上" },
-                        { value: "bottom-left" as const, label: "左下" },
-                        { value: "bottom-right" as const, label: "右下" },
-                      ]}
-                      onChange={(value) => { setWatermarkPosition(value); setError(null); }}
-                    />
-                    <label className="compact-field" htmlFor="watermark-font-size">
-                      <span>字号</span>
-                      <input id="watermark-font-size" type="number" min="8" max="72" step="1" value={watermarkFontSize} onChange={(event) => { setWatermarkFontSize(Math.min(72, Math.max(8, Number(event.target.value) || 8))); setError(null); }} />
-                    </label>
-                  </div>
-                  <div className="label-row watermark-opacity-label">
-                    <label className="field-label" htmlFor="watermark-opacity">透明度</label>
-                    <span className="field-note">{watermarkOpacity}%</span>
-                  </div>
-                  <input className="range-input" id="watermark-opacity" type="range" min="10" max="100" step="5" value={watermarkOpacity} onChange={(event) => { setWatermarkOpacity(Number(event.target.value)); setError(null); }} aria-describedby="watermark-help" />
                 </div>
-              ) : null}
-              <p className={`field-help${watermarkError ? " error-message" : ""}`} id="watermark-help" role={watermarkError ? "alert" : undefined}>{watermarkError ?? "为每张单独或批量导出的图片叠加相同作者信息。"}</p>
-            </div>
+              </details>
+
           </div>
 
           <div className="panel-footer">
@@ -1223,7 +1165,7 @@ export default function ImageConverter({
               </div>
               {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}
             </div>
-            <button className="export-button" type="button" disabled={!file || status.kind === "busy" || Boolean(dimensionError) || Boolean(watermarkError) || Boolean(batchOutputLocationError)} aria-busy={status.kind === "busy"} onClick={() => void handleExport()}>
+            <button className="export-button" type="button" disabled={!file || status.kind === "busy" || Boolean(dimensionError) || Boolean(batchOutputLocationError)} aria-busy={status.kind === "busy"} onClick={() => void handleExport()}>
               <Download size={17} aria-hidden="true" />
               {status.kind === "busy" ? "处理中…" : `导出 ${getOutputLabel(outputFormat)}`}
             </button>

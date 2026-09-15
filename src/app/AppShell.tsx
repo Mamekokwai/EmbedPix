@@ -3,13 +3,11 @@ import {
   Info,
   Images,
   Menu,
-  RefreshCw,
   Settings2,
 } from "lucide-react";
 import AppTitleBar from "./AppTitleBar";
 import ImageConverter from "../features/image-converter/ImageConverter";
 import AboutView from "../features/about/AboutView";
-import UpdateView from "../features/update/UpdateView";
 import SettingsView from "../features/settings/SettingsView";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import type { UpdateCheckState } from "./hooks/useUpdateCheck";
@@ -22,13 +20,12 @@ import {
   type ThemeMode,
 } from "../platform/preferences/appPreferences";
 
-type AppView = "converter" | "settings" | "about" | "update";
+type AppView = "converter" | "settings" | "about";
 
 const NAV_ITEMS: ReadonlyArray<{ id: AppView; label: string; hint: string; icon: typeof Images }> = [
   { id: "converter", label: "图片转换", hint: "导入、调整并导出", icon: Images },
   { id: "settings", label: "设置", hint: "外观与默认参数", icon: Settings2 },
   { id: "about", label: "关于", hint: "版本与项目信息", icon: Info },
-  { id: "update", label: "更新", hint: "检查新版本", icon: RefreshCw },
 ];
 
 function toUpdateViewProps(state: UpdateCheckState) {
@@ -158,15 +155,15 @@ export default function AppShell() {
               onReset={() => setPreferences(DEFAULT_APP_PREFERENCES)}
             />
           ) : view === "about" ? (
-            <AboutView />
-          ) : (
-            <UpdateView
+            <AboutView
               {...toUpdateViewProps(updateState)}
               onCheckForUpdates={async () => { await checkForUpdates(); }}
               onDownloadUpdate={async () => { await downloadUpdate(); }}
               onInstallUpdate={async () => { await installUpdate(); }}
               onOpenReleasePage={() => openReleasePage(updateState.info?.releaseUrl)}
             />
+          ) : (
+            null
           )}
         </main>
       </div>
