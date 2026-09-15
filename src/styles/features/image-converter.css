@@ -416,6 +416,14 @@
   padding: 0 38px 0 12px;
   color: var(--qp-text-primary);
   font-size: 12px;
+  box-shadow: none;
+}
+
+.select-wrap select:focus,
+.select-wrap select:active {
+  border-color: var(--qp-border-strong);
+  outline: none;
+  box-shadow: none;
 }
 
 .select-wrap select:hover:not(:disabled),
@@ -503,6 +511,10 @@
 
 .output-action-danger {
   color: color-mix(in srgb, var(--qp-danger) 78%, var(--qp-text-tertiary));
+}
+
+.output-action-info {
+  margin-top: 2px;
 }
 
 .range-input {

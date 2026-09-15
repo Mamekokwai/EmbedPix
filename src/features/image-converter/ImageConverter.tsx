@@ -223,7 +223,6 @@ export default function ImageConverter({
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
-  const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [deleteSource, setDeleteSource] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
@@ -252,8 +251,10 @@ export default function ImageConverter({
     if (!file) {
       return null;
     }
-    if ((outputLocation === "source" || outputLocation === "subfolder") && !sourcePath) {
-      return "当前导入方式没有可用的源文件路径，请改用“指定目录”。";
+    if ((outputLocation === "source" || outputLocation === "subfolder" || outputLocation === "original") && !sourcePath) {
+      return outputLocation === "original"
+        ? "覆盖原图需要可用的源文件路径，请重新导入图片。"
+        : "当前导入方式没有可用的源文件路径，请改用“指定目录”。";
     }
     if (outputLocation === "subfolder") {
       return getSubdirectoryError(outputSubdirectory);
@@ -263,6 +264,11 @@ export default function ImageConverter({
     }
     return null;
   }, [file, outputDirectory, outputLocation, outputSubdirectory, sourcePath]);
+  const outputLocationDescription = [
+    "output-location-help",
+    outputLocation === "original" ? "output-original-help" : null,
+    outputLocationError ? "output-location-error" : null,
+  ].filter(Boolean).join(" ");
 
   const setSettingStatus = (nextWidthInput = widthInput, nextHeightInput = heightInput) => {
     if (!file) {
@@ -320,6 +326,7 @@ export default function ImageConverter({
 
       setFile(nextFile);
       setSourcePath(getSourcePath(nextFile));
+      setDeleteSource(false);
       setPreviewUrl(nextPreviewUrl);
       setDimensions(nextDimensions);
       setWidth(targetDimensions.width);
@@ -547,6 +554,9 @@ export default function ImageConverter({
 
   const handleOutputLocationChange = (nextLocation: OutputLocation) => {
     setOutputLocation(nextLocation);
+    if (nextLocation === "original") {
+      setDeleteSource(false);
+    }
     setError(null);
   };
 
@@ -612,7 +622,6 @@ export default function ImageConverter({
         sourcePath,
         outputSubdirectory: outputSubdirectory.trim() || undefined,
         outputDirectory: outputDirectory.trim() || undefined,
-        overwriteExisting,
         deleteSource,
       };
       const outputPath = await exportImage(request);
@@ -878,11 +887,14 @@ export default function ImageConverter({
                 <select
                   id="output-location"
                   value={outputLocation}
+                  aria-describedby={outputLocationDescription}
+                  aria-invalid={Boolean(outputLocationError)}
                   onChange={(event) => handleOutputLocationChange(event.target.value as OutputLocation)}
                 >
                   <option value="source">源文件夹</option>
                   <option value="subfolder">源文件夹 / 子文件夹</option>
                   <option value="directory">指定目录</option>
+                  <option value="original">覆盖原图</option>
                 </select>
                 <ChevronDown size={15} aria-hidden="true" />
               </div>
@@ -892,6 +904,8 @@ export default function ImageConverter({
                   <input
                     id="output-subdirectory"
                     value={outputSubdirectory}
+                    aria-describedby={outputLocationDescription}
+                    aria-invalid={Boolean(outputLocationError)}
                     onChange={(event) => { setOutputSubdirectory(event.target.value); setError(null); }}
                     placeholder="例如 export"
                     spellCheck={false}
@@ -904,36 +918,36 @@ export default function ImageConverter({
                   <input
                     id="output-directory"
                     value={outputDirectory}
+                    aria-describedby={outputLocationDescription}
+                    aria-invalid={Boolean(outputLocationError)}
                     onChange={(event) => { setOutputDirectory(event.target.value); setError(null); }}
                     placeholder="例如 D:\\Images\\Export"
                     spellCheck={false}
                   />
                 </label>
               ) : null}
-              <p className="field-help">
+              <p className="field-help" id="output-location-help">
                 {outputLocation === "source"
                   ? "直接保存到源图片所在文件夹。"
                   : outputLocation === "subfolder"
                     ? "子文件夹不存在时会自动创建。"
-                    : "目录不存在时会自动创建，支持绝对路径。"}
+                    : outputLocation === "directory"
+                      ? "目录不存在时会自动创建，支持绝对路径。"
+                      : "替换源图片并保留旧文件备份。"}
               </p>
-              {outputLocationError ? <p className="error-message output-location-error" role="alert">{outputLocationError}</p> : null}
-              <div className="output-action">
-                <label className="toggle-row output-action-toggle">
-                  <input type="checkbox" checked={overwriteExisting} aria-describedby="overwrite-output-help" onChange={(event) => { setOverwriteExisting(event.target.checked); setError(null); }} />
-                  <span className="toggle-track" aria-hidden="true"><span /></span>
-                  <span>覆盖已有输出</span>
-                </label>
-                <p className="field-help output-action-help" id="overwrite-output-help">同名文件会先移入输出目录的 bak 文件夹，再写入新文件。</p>
-              </div>
-              <div className="output-action">
-                <label className="toggle-row output-action-toggle">
-                  <input type="checkbox" checked={deleteSource} aria-describedby="delete-source-help" onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
-                  <span className="toggle-track" aria-hidden="true"><span /></span>
-                  <span>导出成功后删除源图片</span>
-                </label>
-                <p className="field-help output-action-help output-action-danger" id="delete-source-help">这是破坏性操作，仅在确认导出文件无误后使用。</p>
-              </div>
+              {outputLocationError ? <p className="error-message output-location-error" id="output-location-error" role="alert">{outputLocationError}</p> : null}
+              {outputLocation === "original" ? (
+                <p className="field-help output-action-help output-action-info" id="output-original-help">旧图片会先移入同目录的 bak 文件夹，再将新文件写回原图位置；输出格式不同会使用对应的新扩展名。</p>
+              ) : (
+                <div className="output-action">
+                  <label className="toggle-row output-action-toggle">
+                    <input type="checkbox" checked={deleteSource} aria-describedby="delete-source-help" onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
+                    <span className="toggle-track" aria-hidden="true"><span /></span>
+                    <span>导出成功后删除源图片</span>
+                  </label>
+                  <p className="field-help output-action-help output-action-danger" id="delete-source-help">这是破坏性操作，仅在确认导出文件无误后使用。</p>
+                </div>
+              )}
             </div>
           </div>
 

@@ -40,6 +40,7 @@ enum OutputLocation {
     Source,
     Subfolder,
     Directory,
+    Original,
 }
 
 impl OutputLocation {
@@ -54,8 +55,9 @@ impl OutputLocation {
             "source" => Ok(Self::Source),
             "subfolder" => Ok(Self::Subfolder),
             "directory" => Ok(Self::Directory),
+            "original" => Ok(Self::Original),
             other => Err(format!(
-                "unsupported output location `{other}`; expected source, subfolder, or directory"
+                "unsupported output location `{other}`; expected source, subfolder, directory, or original"
             )),
         }
     }
@@ -286,6 +288,7 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
     let manage_existing_output = request.output_location != OutputLocation::Dialog;
     let overwrite_existing = request.overwrite_existing;
     let delete_source = request.delete_source;
+    let replace_original = request.output_location == OutputLocation::Original;
     tauri::async_runtime::spawn_blocking(move || {
         write_exported_file(
             &path_for_write,
@@ -294,6 +297,7 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
             manage_existing_output,
             overwrite_existing,
             delete_source,
+            replace_original,
         )
     })
     .await
@@ -665,6 +669,21 @@ fn choose_output_path(
     output_format: OutputFormat,
 ) -> Result<PathBuf, String> {
     let default_name = default_output_name(source_file_name, output_format);
+    if request.output_location == OutputLocation::Original {
+        let source_path = request
+            .source_path
+            .as_deref()
+            .ok_or_else(|| "original output requires the original file path".to_string())?;
+        let source_path = Path::new(source_path);
+        if !source_path.is_file() {
+            return Err("original output requires an existing source image".to_string());
+        }
+        return Ok(with_expected_extension(
+            source_path.to_path_buf(),
+            output_format,
+        ));
+    }
+
     let directory = match request.output_location {
         OutputLocation::Dialog => {
             let path = rfd::FileDialog::new()
@@ -697,6 +716,7 @@ fn choose_output_path(
                 .as_deref()
                 .ok_or_else(|| "output directory is required".to_string())?,
         ),
+        OutputLocation::Original => unreachable!("original output handled above"),
     };
 
     let directory = if request.output_location == OutputLocation::Subfolder {
@@ -731,8 +751,14 @@ fn write_exported_file(
     manage_existing_output: bool,
     overwrite_existing: bool,
     delete_source: bool,
+    replace_original: bool,
 ) -> Result<(), String> {
-    let backup_path = if output_path.exists() && manage_existing_output {
+    if replace_original {
+        return replace_original_file(output_path, bytes, source_path);
+    }
+
+    let output_existed_before_write = output_path.exists();
+    let backup_path = if output_existed_before_write && manage_existing_output {
         if !overwrite_existing {
             return Err(
                 "output file already exists; enable overwrite to move it into the bak folder"
@@ -745,23 +771,146 @@ fn write_exported_file(
     };
 
     if let Err(error) = fs::write(output_path, bytes) {
-        if let Some(backup_path) = backup_path {
-            let _ = fs::rename(&backup_path, output_path);
-        }
-        return Err(error.to_string());
+        return Err(format_write_failure(
+            output_path,
+            error,
+            backup_path.as_ref(),
+            backup_path.is_some() || !output_existed_before_write,
+        ));
     }
 
     if delete_source {
         if let Some(source_path) = source_path {
             let source_path = Path::new(source_path);
             if !paths_equal(source_path, output_path) && source_path.exists() {
-                fs::remove_file(source_path)
-                    .map_err(|error| format!("failed to delete source image: {error}"))?;
+                if let Err(error) = fs::remove_file(source_path) {
+                    let rollback_error = rollback_written_output(
+                        output_path,
+                        backup_path.as_ref(),
+                        backup_path.is_some() || !output_existed_before_write,
+                    );
+                    return Err(match rollback_error {
+                        Ok(()) => format!("failed to delete source image: {error}"),
+                        Err(rollback_error) => format!(
+                            "failed to delete source image: {error}; export rollback also failed: {rollback_error}"
+                        ),
+                    });
+                }
             }
         }
     }
 
     Ok(())
+}
+
+fn replace_original_file(
+    output_path: &Path,
+    bytes: Vec<u8>,
+    source_path: Option<&str>,
+) -> Result<(), String> {
+    let source_path = source_path
+        .map(Path::new)
+        .ok_or_else(|| "original output requires the original file path".to_string())?;
+    if !source_path.is_file() {
+        return Err("original output requires an existing source image".to_string());
+    }
+
+    let mut backups = Vec::new();
+    let source_backup = move_existing_output_to_backup(source_path)?;
+    backups.push((source_path.to_path_buf(), source_backup));
+
+    if output_path.exists() && !paths_equal(source_path, output_path) {
+        match move_existing_output_to_backup(output_path) {
+            Ok(output_backup) => backups.push((output_path.to_path_buf(), output_backup)),
+            Err(error) => {
+                return Err(with_rollback_error(error, restore_backups(&backups)));
+            }
+        }
+    }
+
+    if let Err(error) = fs::write(output_path, bytes) {
+        let rollback_error = rollback_written_output(output_path, None, true);
+        let restore_error = restore_backups(&backups);
+        return Err(with_rollback_error(
+            format_write_error(error, rollback_error),
+            restore_error,
+        ));
+    }
+
+    Ok(())
+}
+
+fn format_write_failure(
+    output_path: &Path,
+    error: io::Error,
+    backup_path: Option<&PathBuf>,
+    remove_incomplete_output: bool,
+) -> String {
+    let rollback_error =
+        rollback_written_output(output_path, backup_path, remove_incomplete_output);
+    format_write_error(error, rollback_error)
+}
+
+fn format_write_error(error: io::Error, rollback_error: Result<(), String>) -> String {
+    match rollback_error {
+        Ok(()) => error.to_string(),
+        Err(rollback_error) => {
+            format!("{error}; export rollback also failed: {rollback_error}")
+        }
+    }
+}
+
+fn rollback_written_output(
+    output_path: &Path,
+    backup_path: Option<&PathBuf>,
+    remove_incomplete_output: bool,
+) -> Result<(), String> {
+    let mut errors = Vec::new();
+    if remove_incomplete_output && output_path.exists() {
+        if let Err(error) = fs::remove_file(output_path) {
+            errors.push(format!("failed to remove incomplete output: {error}"));
+        }
+    }
+    if let Some(backup_path) = backup_path {
+        if !output_path.exists() {
+            if let Err(error) = fs::rename(backup_path, output_path) {
+                errors.push(format!("failed to restore previous output: {error}"));
+            }
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+fn restore_backups(backups: &[(PathBuf, PathBuf)]) -> Result<(), String> {
+    let mut errors = Vec::new();
+    for (original_path, backup_path) in backups.iter().rev() {
+        if !original_path.exists() {
+            if let Err(error) = fs::rename(backup_path, original_path) {
+                errors.push(format!(
+                    "failed to restore `{}`: {error}",
+                    original_path.display()
+                ));
+            }
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+fn with_rollback_error(operation_error: String, rollback_error: Result<(), String>) -> String {
+    match rollback_error {
+        Ok(()) => operation_error,
+        Err(rollback_error) => {
+            format!("{operation_error}; export rollback also failed: {rollback_error}")
+        }
+    }
 }
 
 fn move_existing_output_to_backup(output_path: &Path) -> Result<PathBuf, String> {
@@ -1329,6 +1478,7 @@ mod tests {
             true,
             true,
             true,
+            false,
         )
         .unwrap();
 
@@ -1359,6 +1509,7 @@ mod tests {
             true,
             true,
             true,
+            false,
         )
         .unwrap();
 
@@ -1368,6 +1519,107 @@ mod tests {
             b"old-source"
         );
         let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn original_output_backs_up_source_and_existing_new_extension() {
+        let directory = std::env::temp_dir().join(format!(
+            "embedpix-original-output-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("screen.png");
+        let output = directory.join("screen.bmp");
+        fs::write(&source, b"old-source").unwrap();
+        fs::write(&output, b"old-bmp").unwrap();
+
+        replace_original_file(&output, b"new-bmp".to_vec(), source.to_str()).unwrap();
+
+        assert!(!source.exists());
+        assert_eq!(fs::read(&output).unwrap(), b"new-bmp");
+        assert_eq!(
+            fs::read(directory.join("bak/screen.png")).unwrap(),
+            b"old-source"
+        );
+        assert_eq!(
+            fs::read(directory.join("bak/screen.bmp")).unwrap(),
+            b"old-bmp"
+        );
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn original_output_restores_source_when_write_fails() {
+        let directory = std::env::temp_dir().join(format!(
+            "embedpix-original-rollback-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("screen.png");
+        let output = directory.join("missing").join("screen.bmp");
+        fs::write(&source, b"old-source").unwrap();
+
+        let error =
+            replace_original_file(&output, b"new-bmp".to_vec(), source.to_str()).unwrap_err();
+
+        assert!(!error.is_empty());
+        assert_eq!(fs::read(&source).unwrap(), b"old-source");
+        assert!(!output.exists());
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn original_output_same_extension_backs_up_source_before_writeback() {
+        let directory = std::env::temp_dir().join(format!(
+            "embedpix-original-same-extension-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("screen.png");
+        fs::write(&source, b"old-source").unwrap();
+
+        replace_original_file(&source, b"new-source".to_vec(), source.to_str()).unwrap();
+
+        assert_eq!(fs::read(&source).unwrap(), b"new-source");
+        assert_eq!(
+            fs::read(directory.join("bak/screen.png")).unwrap(),
+            b"old-source"
+        );
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn failed_source_deletion_rolls_back_new_output_and_previous_output() {
+        let directory = std::env::temp_dir().join(format!(
+            "embedpix-source-delete-rollback-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("source-directory");
+        let output = directory.join("screen.png");
+        fs::create_dir(&source).unwrap();
+        fs::write(&output, b"old-output").unwrap();
+
+        let error = write_exported_file(
+            &output,
+            b"new-output".to_vec(),
+            source.to_str(),
+            true,
+            true,
+            true,
+            false,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("failed to delete source image"));
+        assert!(source.is_dir());
+        assert_eq!(fs::read(&output).unwrap(), b"old-output");
+        assert!(!directory.join("bak/screen.png").exists());
+        let _ = fs::remove_dir_all(&directory);
     }
 
     fn raw_payload(metadata: &ExportMetadata, input_data: &[u8]) -> Vec<u8> {
