@@ -11,6 +11,8 @@ export const MAX_FRAMES = 200;
 export const MAX_FRAME_BYTES = 32 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 export const MAX_TOTAL_PIXELS = 64 * 1024 * 1024;
+export const GIF_PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2] as const;
+export type GifPlaybackSpeed = typeof GIF_PLAYBACK_SPEEDS[number];
 
 export function clampFrameDuration(value: number): number {
   return Number.isFinite(value) ? Math.min(60_000, Math.max(10, Math.floor(value / 10) * 10)) : 100;
@@ -26,6 +28,21 @@ export function durationFromGifFps(value: number): number {
 
 export function fpsFromFrameDuration(value: number): number {
   return Math.round((1000 / clampFrameDuration(value)) * 100) / 100;
+}
+
+export function clampGifPlaybackSpeed(value: number): GifPlaybackSpeed {
+  if (!Number.isFinite(value)) return 1;
+  return GIF_PLAYBACK_SPEEDS.reduce((closest, speed) => Math.abs(speed - value) < Math.abs(closest - value) ? speed : closest, 1 as GifPlaybackSpeed);
+}
+
+// 预览速度只换算显示时序，导出仍使用原始帧时长，避免改变导出契约。
+export function previewFrameDurationAtSpeed(frameDuration: number, speed: number): number {
+  return clampFrameDuration(clampFrameDuration(frameDuration) / clampGifPlaybackSpeed(speed));
+}
+
+export function calculateBoundaryFrameDuration(frameDuration: number, holdDuration: number): number {
+  const safeHold = Number.isFinite(holdDuration) ? Math.max(0, holdDuration) : 0;
+  return clampFrameDuration(clampFrameDuration(frameDuration) + safeHold);
 }
 
 export function resolveGifCanvasSize(source: GifCanvasSize, width: number, height: number, keepRatio: boolean): GifCanvasSize {

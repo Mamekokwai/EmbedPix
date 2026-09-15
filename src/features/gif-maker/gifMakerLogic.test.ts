@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, clampFrameDuration, clampGifFps, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("estimates export workload without pretending to know compressed file size", () => {
@@ -27,6 +27,24 @@ describe("GIF maker logic", () => {
     expect(durationFromGifFps(20)).toBe(50);
     expect(durationFromGifFps(29.97)).toBe(30);
     expect(fpsFromFrameDuration(50)).toBe(20);
+  });
+
+  it("converts preview timing for supported playback speeds without changing export timing", () => {
+    expect(clampGifPlaybackSpeed(0.25)).toBe(0.25);
+    expect(clampGifPlaybackSpeed(1.3)).toBe(1);
+    expect(clampGifPlaybackSpeed(Number.NaN)).toBe(1);
+    expect(previewFrameDurationAtSpeed(100, 0.25)).toBe(400);
+    expect(previewFrameDurationAtSpeed(100, 0.5)).toBe(200);
+    expect(previewFrameDurationAtSpeed(100, 1)).toBe(100);
+    expect(previewFrameDurationAtSpeed(100, 2)).toBe(50);
+    expect(clampFrameDuration(100)).toBe(100);
+  });
+
+  it("calculates safe first and last frame hold durations", () => {
+    expect(calculateBoundaryFrameDuration(100, 250)).toBe(350);
+    expect(calculateBoundaryFrameDuration(100, -20)).toBe(100);
+    expect(calculateBoundaryFrameDuration(59_950, 500)).toBe(60_000);
+    expect(calculateBoundaryFrameDuration(Number.NaN, Number.POSITIVE_INFINITY)).toBe(100);
   });
 
   it("keeps the source ratio when requested", () => {
