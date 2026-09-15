@@ -95,6 +95,9 @@
 .gif-input-with-suffix, .gif-dimensions-row, .gif-output-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .gif-input-with-suffix input { flex: 1; }
 .gif-input-with-suffix small { color: var(--qp-text-secondary); white-space: nowrap; }
+.gif-batch-duration-row { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.gif-batch-duration-row .gif-input-with-suffix { flex: 1; }
+.gif-batch-duration-row .quiet-button { min-height: 30px; padding-inline: 8px; }
 .gif-dimensions-row label { flex: 1; min-width: 0; }
 .gif-check-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 .gif-check-row span { display: flex; flex-direction: column; gap: 4px; }

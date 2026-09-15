@@ -20,8 +20,8 @@ import {
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { estimateGifSize, exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
 import type { GifExportFrame } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
-import type { GifCanvasPreset, GifCanvasSize } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import type { GifCanvasPreset, GifCanvasSize, GifPlaybackSpeed } from "./gifMakerLogic";
 import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
@@ -412,6 +412,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [fitMode, setFitMode] = useState<GifFitMode>("contain");
   const [background, setBackground] = useState<GifBackground>("transparent");
   const [globalDuration, setGlobalDuration] = useState(DEFAULT_DURATION);
+  const [batchDuration, setBatchDuration] = useState(DEFAULT_DURATION);
+  const [firstFrameHoldDuration, setFirstFrameHoldDuration] = useState(0);
+  const [lastFrameHoldDuration, setLastFrameHoldDuration] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState<GifPlaybackSpeed>(1);
   const [loopMode, setLoopMode] = useState<GifLoopMode>("infinite");
   const [loopCount, setLoopCount] = useState(3);
   const [encodingQuality, setEncodingQuality] = useState<GifEncodingQuality>("high");
@@ -492,9 +496,17 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       repeatRef.current = next.repeats;
       setSelectedIndex(next.index);
       if (next.stopped) setIsPlaying(false);
-    }, frames[selectedIndex]?.durationMs ?? DEFAULT_DURATION);
+    }, previewFrameDurationAtSpeed(
+      calculateBoundaryFrameDuration(
+        frames[selectedIndex]?.durationMs ?? DEFAULT_DURATION,
+        frames.length === 1
+          ? firstFrameHoldDuration + lastFrameHoldDuration
+          : selectedIndex === 0 ? firstFrameHoldDuration : selectedIndex === frames.length - 1 ? lastFrameHoldDuration : 0,
+      ),
+      playbackSpeed,
+    ));
     return () => window.clearTimeout(timer);
-  }, [active, frames, isPlaying, selectedIndex, loopCount, loopMode]);
+  }, [active, firstFrameHoldDuration, frames, isPlaying, lastFrameHoldDuration, loopCount, loopMode, playbackSpeed, selectedIndex]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -865,6 +877,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setFrames((current) => current.map((frame, index) => index === selectedIndex ? { ...frame, durationMs: duration } : frame));
   };
 
+  const updateSelectedFramesDuration = () => {
+    if (lockedRef.current || !selectedFrameIndices.size) return;
+    const duration = clampFrameDuration(batchDuration);
+    setBatchDuration(duration);
+    setFrames((current) => current.map((frame, index) => selectedFrameIndices.has(index) ? { ...frame, durationMs: duration } : frame));
+  };
+
+  const clampHoldDuration = (value: number) => Number.isFinite(value) ? Math.min(60_000, Math.max(0, Math.floor(value))) : 0;
+
   const chooseOutput = async () => {
     if (lockedRef.current) return;
     lockedRef.current = true;
@@ -1189,8 +1210,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <label className="gif-field"><span>全局帧时长 · 应用全部帧</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={globalDuration} onChange={(event) => updateAllDurations(Number(event.target.value))} /><small>ms</small></div></label>
                 <label className="gif-field"><span>动画帧率 · 应用全部帧</span><div className="gif-input-with-suffix"><input type="number" min="1" max="100" step="0.01" value={fpsFromFrameDuration(globalDuration)} onChange={(event) => updateAnimationFps(Number(event.target.value))} /><small>FPS</small></div></label>
                 <label className="gif-field"><span>当前帧时长</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={selectedFrame?.durationMs ?? DEFAULT_DURATION} disabled={!selectedFrame} onChange={(event) => updateSelectedDuration(Number(event.target.value))} /><small>ms</small></div></label>
+                <label className="gif-field"><span>批量设置选中帧时长 · {selectedFrameIndices.size} 帧</span><div className="gif-batch-duration-row"><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={batchDuration} disabled={!selectedFrameIndices.size} onChange={(event) => setBatchDuration(clampFrameDuration(Number(event.target.value)))} /><small>ms</small></div><button className="quiet-button" type="button" disabled={!selectedFrameIndices.size || locked} onClick={updateSelectedFramesDuration}>应用</button></div></label>
+                <label className="gif-field"><span>首帧停留时间 · 仅预览</span><div className="gif-input-with-suffix"><input type="number" min="0" max="60000" step="10" value={firstFrameHoldDuration} onChange={(event) => setFirstFrameHoldDuration(clampHoldDuration(Number(event.target.value)))} /><small>ms</small></div></label>
+                <label className="gif-field"><span>尾帧停留时间 · 仅预览</span><div className="gif-input-with-suffix"><input type="number" min="0" max="60000" step="10" value={lastFrameHoldDuration} onChange={(event) => setLastFrameHoldDuration(clampHoldDuration(Number(event.target.value)))} /><small>ms</small></div></label>
+                <SelectField id="gif-playback-speed" label="预览速度" value={playbackSpeed} options={[{ value: 0.25 as const, label: "0.25x" }, { value: 0.5 as const, label: "0.5x" }, { value: 1 as const, label: "1x" }, { value: 2 as const, label: "2x" }]} onChange={setPlaybackSpeed} />
               </div>
-              <p className="gif-help-text">10–60000 ms，向下取整到 10 ms；总时长 {(frames.reduce((sum, frame) => sum + frame.durationMs, 0) / 1000).toFixed(2)} 秒 / 轮。</p>
+              <p className="gif-help-text">10–60000 ms，向下取整到 10 ms；总时长 {(frames.reduce((sum, frame) => sum + frame.durationMs, 0) / 1000).toFixed(2)} 秒 / 轮。首尾停留和预览速度不改变导出时长。</p>
           </div> : null}
           {group === "canvas" ? <div id="gif-panel-canvas" role="region" aria-labelledby="gif-group-canvas">
               <div className="gif-settings-grid">
