@@ -59,8 +59,18 @@ input:disabled {
 
 .app-kept-view { min-width: 0; min-height: 0; }
 .app-kept-view[hidden] { display: none; }
-.app-main.app-main-gif { overflow: hidden; }
-.app-kept-gif { height: 100%; }
+.app-main.app-main-gif {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-kept-gif {
+  display: flex;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
 
 @media (max-width: 560px) {
   .app-shell:has(.app-main-gif) { grid-template-columns: 48px minmax(0, 1fr); gap: 6px; padding: 6px; }
