@@ -7,6 +7,10 @@ export interface GifWorkloadEstimate {
   paletteBytes: number;
   level: GifWorkloadLevel;
 }
+export interface GifByteFrame {
+  data: Uint8Array;
+  durationMs: number;
+}
 export const MAX_FRAMES = 200;
 export const MAX_FRAME_BYTES = 32 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
@@ -74,6 +78,27 @@ export function formatGifBytes(bytes: number): string {
   if (bytes < 1024) return `${Math.round(bytes)} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function hasSameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+export function mergeConsecutiveIdenticalFrames(frames: ReadonlyArray<GifByteFrame>): GifByteFrame[] {
+  const merged: GifByteFrame[] = [];
+  for (const frame of frames) {
+    const previous = merged[merged.length - 1];
+    if (previous && hasSameBytes(previous.data, frame.data)) {
+      merged[merged.length - 1] = { ...previous, durationMs: previous.durationMs + frame.durationMs };
+    } else {
+      merged.push(frame);
+    }
+  }
+  return merged;
 }
 
 export function getGifFrameOrder(length: number, index: number, direction: -1 | 1): number {

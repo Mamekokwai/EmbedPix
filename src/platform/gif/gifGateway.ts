@@ -41,6 +41,16 @@ export interface PngSequenceExportRequest {
   overwriteExisting?: boolean;
 }
 
+export interface AnimationExportRequest {
+  outputPath: string;
+  width: number;
+  height: number;
+  loopMode: "infinite" | "finite";
+  loopCount: number;
+  frames: GifExportFrame[];
+  overwriteExisting?: boolean;
+}
+
 function isTauriEnvironment(): boolean {
   return typeof window !== "undefined"
     && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
@@ -143,4 +153,46 @@ export async function exportPngSequence(request: PngSequenceExportRequest): Prom
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }
+}
+
+export async function pickAnimationOutput(
+  format: "webp" | "apng",
+  suggestedName: string,
+): Promise<string | null> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持选择动图保存位置，请在桌面应用中执行导出。");
+  }
+  try {
+    return await invoke<string | null>("pick_animation_output", { format, suggestedName });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+async function exportAnimation(
+  command: "export_webp_animation" | "export_apng",
+  request: AnimationExportRequest,
+): Promise<string> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持动图导出，请在桌面应用中执行导出。");
+  }
+  try {
+    return await invoke<string>(command, {
+      request: {
+        ...request,
+        overwriteExisting: request.overwriteExisting ?? false,
+        frames: serializeGifFrames(request.frames),
+      },
+    });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export function exportWebpAnimation(request: AnimationExportRequest): Promise<string> {
+  return exportAnimation("export_webp_animation", request);
+}
+
+export function exportApng(request: AnimationExportRequest): Promise<string> {
+  return exportAnimation("export_apng", request);
 }

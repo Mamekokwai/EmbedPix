@@ -24,4 +24,6 @@ tokio = { version = "1", features = ["fs", "io-util"] }
 image = { version = "0.24", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
 gif = "0.13"
 color_quant = "1.1"
+apng = { version = "0.3.4", features = ["png"] }
+webp-animation = { version = "0.10", features = ["static"] }
 rfd = "0.15.4"

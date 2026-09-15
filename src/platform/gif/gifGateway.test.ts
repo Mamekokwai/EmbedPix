@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { estimateGifSize, exportGif, exportPngSequence, pickGifOutput, pickGifSequenceOutput } from "./gifGateway";
+import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput } from "./gifGateway";
 import type { GifExportRequest } from "./gifGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -106,6 +106,24 @@ describe("GIF desktop gateway", () => {
     vi.mocked(invoke).mockResolvedValueOnce(result);
     await expect(pickGifOutput("动画.gif")).resolves.toBe(result);
     expect(invoke).toHaveBeenCalledWith("pick_gif_output", { suggestedName: "动画.gif" });
+  });
+
+  it.each([["webp", "pick_animation_output"], ["apng", "pick_animation_output"]] as const)("passes %s animation picker requests", async (format, command) => {
+    vi.mocked(invoke).mockResolvedValueOnce("E:\\动画." + format);
+    await expect(pickAnimationOutput(format, "动画." + format)).resolves.toBe("E:\\动画." + format);
+    expect(invoke).toHaveBeenCalledWith(command, { format, suggestedName: "动画." + format });
+  });
+
+  it.each([[exportWebpAnimation, "export_webp_animation"], [exportApng, "export_apng"]] as const)("serializes animation export requests", async (exportAnimation, command) => {
+    const input = { outputPath: "E:\\动画", width: 3, height: 2, loopMode: "infinite" as const, loopCount: 0, frames: request().frames };
+    vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
+    await expect(exportAnimation(input)).resolves.toBe(input.outputPath);
+    expect(invoke).toHaveBeenCalledWith(command, { request: {
+      ...input, overwriteExisting: false, frames: [
+        { data: [0, 127, 128, 255], durationMs: 19 },
+        { data: [255, 1], durationMs: 25 },
+      ],
+    } });
   });
 
   it.each([undefined, {}])("rejects browser-only environments without invoking Rust", async (browser) => {

@@ -48,6 +48,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
+name = "apng"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a79142fc4e25db11e703bf09431aad1488d65d2e1bb4d0f664a8f8af000054c"
+dependencies = [
+ "byteorder",
+ "flate2",
+ "image",
+ "png 0.17.16",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "ashpd"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -949,6 +962,7 @@ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 name = "embedpix"
 version = "0.1.7"
 dependencies = [
+ "apng",
  "color_quant",
  "gif",
  "image",
@@ -961,6 +975,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-opener",
  "tokio",
+ "webp-animation",
 ]
 
 [[package]]
@@ -1014,7 +1029,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2069,6 +2084,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "libwebp-sys2"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4790186411a6843ecc0a141c8948c8e623a0bb5e886834b1b6c90f3dfa85bb99"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
+name = "libwebp-sys2"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dc3d00aeaa1d6bf4f35f3003bc1835135e0fb41f2fc19082a3f98d619792505"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "libwebp-sys2 0.1.11",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2828,7 +2870,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3120,7 +3162,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3975,7 +4017,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4475,6 +4517,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
 name = "version-compare"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4758,6 +4806,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "webp-animation"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcf0c124cbce8c045bc972736d9f9f116bbd8243fd75ea1b68db429d809de44d"
+dependencies = [
+ "libwebp-sys2 0.2.0",
+ "log",
+]
+
+[[package]]
 name = "webpki-roots"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4830,7 +4888,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

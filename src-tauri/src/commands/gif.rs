@@ -13,6 +13,7 @@ use image::{
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 
+mod animation;
 mod dither;
 mod sequence;
 mod storage;
@@ -147,6 +148,26 @@ pub async fn export_png_sequence(
     request: sequence::PngSequenceExportRequest,
 ) -> Result<Vec<String>, String> {
     sequence::export_png_sequence(request).await
+}
+
+#[tauri::command]
+pub async fn pick_animation_output(
+    format: String,
+    suggested_name: String,
+) -> Result<Option<String>, String> {
+    animation::pick_animation_output(format, suggested_name).await
+}
+
+#[tauri::command]
+pub async fn export_webp_animation(
+    request: animation::AnimationExportRequest,
+) -> Result<String, String> {
+    animation::export_webp_animation(request).await
+}
+
+#[tauri::command]
+pub async fn export_apng(request: animation::AnimationExportRequest) -> Result<String, String> {
+    animation::export_apng(request).await
 }
 
 fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {

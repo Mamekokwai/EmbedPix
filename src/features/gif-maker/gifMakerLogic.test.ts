@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("estimates export workload without pretending to know compressed file size", () => {
@@ -38,6 +38,21 @@ describe("GIF maker logic", () => {
     expect(previewFrameDurationAtSpeed(100, 1)).toBe(100);
     expect(previewFrameDurationAtSpeed(100, 2)).toBe(50);
     expect(clampFrameDuration(100)).toBe(100);
+  });
+
+  it("merges only consecutive identical PNG byte frames and preserves duration", () => {
+    const first = { data: new Uint8Array([1, 2]), durationMs: 100 };
+    const same = { data: new Uint8Array([1, 2]), durationMs: 250 };
+    const different = { data: new Uint8Array([1, 3]), durationMs: 80 };
+    const merged = mergeConsecutiveIdenticalFrames([first, same, different, first]);
+    expect(merged).toHaveLength(3);
+    expect(merged[0]).toEqual({ data: first.data, durationMs: 350 });
+    expect(merged[1]).toEqual(different);
+    expect(merged[2]).toBe(first);
+  });
+
+  it("returns an empty list for empty frame input", () => {
+    expect(mergeConsecutiveIdenticalFrames([])).toEqual([]);
   });
 
   it("calculates safe first and last frame hold durations", () => {
