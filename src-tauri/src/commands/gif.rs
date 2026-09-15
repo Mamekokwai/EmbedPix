@@ -13,6 +13,7 @@ use image::{
 use rfd::FileDialog;
 use serde::Deserialize;
 
+mod dither;
 mod storage;
 #[cfg(test)]
 mod tests;
@@ -44,6 +45,8 @@ pub struct GifExportRequest {
     encoding_speed: i32,
     #[serde(default = "default_color_count")]
     color_count: u16,
+    #[serde(default = "default_dither_mode")]
+    dither_mode: String,
     frames: Vec<GifFrameRequest>,
     #[serde(default)]
     overwrite_existing: bool,
@@ -55,6 +58,10 @@ fn default_encoding_speed() -> i32 {
 
 fn default_color_count() -> u16 {
     MAX_COLOR_COUNT
+}
+
+fn default_dither_mode() -> String {
+    "none".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,10 +146,22 @@ fn encode_gif(writer: impl Write, request: &GifExportRequest) -> Result<(), Stri
                 request.color_count as usize,
                 &pixels,
             );
-            let indexed = pixels
-                .chunks_exact(4)
-                .map(|pixel| quantizer.index_of(pixel) as u8)
-                .collect::<Vec<_>>();
+            let indexed = pixels.as_slice();
+            let dither_mode = dither::DitherMode::parse(&request.dither_mode)?;
+            let indexed = if dither_mode == dither::DitherMode::None {
+                indexed
+                    .chunks_exact(4)
+                    .map(|pixel| quantizer.index_of(pixel) as u8)
+                    .collect()
+            } else {
+                dither::quantize_rgba(
+                    indexed,
+                    request.width,
+                    request.height,
+                    &quantizer.color_map_rgb(),
+                    dither_mode,
+                )
+            };
             let mut gif_frame = GifFrame::from_palette_pixels(
                 request.width as u16,
                 request.height as u16,

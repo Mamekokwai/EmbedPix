@@ -14,6 +14,7 @@ export interface GifExportRequest {
   loopCount: number;
   encodingSpeed?: number;
   colorCount?: number;
+  ditherMode?: "none" | "floydSteinberg" | "atkinson";
   frames: GifExportFrame[];
   overwriteExisting?: boolean;
 }
@@ -51,6 +52,7 @@ export async function exportGif(request: GifExportRequest): Promise<string> {
         overwriteExisting: request.overwriteExisting ?? false,
         encodingSpeed: request.encodingSpeed ?? 1,
         colorCount: request.colorCount ?? 256,
+        ditherMode: request.ditherMode ?? "none",
         frames: request.frames.map((frame) => ({
           data: Array.from(frame.data),
           durationMs: frame.durationMs,

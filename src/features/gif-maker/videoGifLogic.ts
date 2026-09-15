@@ -7,6 +7,11 @@ export interface VideoFramePlan {
   durationMs: number;
 }
 
+export interface VideoFrameSamplingOptions {
+  everyNthFrame?: number;
+  maxFrames?: number;
+}
+
 export function clampVideoFps(value: number): number {
   if (!Number.isFinite(value)) return 10;
   return Math.min(MAX_VIDEO_FPS, Math.max(MIN_VIDEO_FPS, Math.round(value)));
@@ -24,13 +29,26 @@ export function planVideoFrames(
   duration: number,
   fps: number,
 ): VideoFramePlan {
+  return planVideoFramesWithSampling(start, end, duration, fps);
+}
+
+export function planVideoFramesWithSampling(
+  start: number,
+  end: number,
+  duration: number,
+  fps: number,
+  options: VideoFrameSamplingOptions = {},
+): VideoFramePlan {
   const safeDuration = Math.max(0, duration);
   const safeStart = clampVideoRange(start, safeDuration);
   const safeEnd = Math.min(safeDuration, Math.max(safeStart, Number.isFinite(end) ? end : safeStart));
   const safeFps = clampVideoFps(fps);
+  const everyNthFrame = Math.max(1, Math.floor(options.everyNthFrame ?? 1));
+  const maxFrames = Math.min(MAX_VIDEO_FRAMES, Math.max(1, Math.floor(options.maxFrames ?? MAX_VIDEO_FRAMES)));
   const frameDurationMs = Math.max(10, Math.round(1000 / safeFps / 10) * 10);
-  const frameCount = Math.min(MAX_VIDEO_FRAMES, Math.max(1, Math.ceil((safeEnd - safeStart) * safeFps)));
-  const times = Array.from({ length: frameCount }, (_, index) => Math.min(safeEnd, safeStart + index / safeFps));
+  const sourceFrameCount = Math.max(1, Math.ceil((safeEnd - safeStart) * safeFps));
+  const frameCount = Math.min(maxFrames, Math.ceil(sourceFrameCount / everyNthFrame));
+  const times = Array.from({ length: frameCount }, (_, index) => Math.min(safeEnd, safeStart + (index * everyNthFrame) / safeFps));
   return { times, durationMs: frameDurationMs };
 }
 

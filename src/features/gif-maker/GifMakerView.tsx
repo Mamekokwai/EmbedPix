@@ -558,9 +558,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const frame = frames[index];
     if (!frame) return;
     URL.revokeObjectURL(frame.previewUrl);
-    framesRef.current = frames.filter((_, frameIndex) => frameIndex !== index);
-    setFrames(framesRef.current);
-    setSelectedIndex((current) => Math.max(0, Math.min(current - (index < current ? 1 : 0), frames.length - 2)));
+    const next = frames.filter((_, frameIndex) => frameIndex !== index);
+    framesRef.current = next;
+    setFrames(next);
+    const nextIndex = next.length ? Math.min(index, next.length - 1) : 0;
+    setSelectedIndex(nextIndex);
+    setSelectedFrameIndices(next.length ? new Set([nextIndex]) : new Set());
+    selectionAnchorRef.current = nextIndex;
     setStatus({ kind: "ready", text: "已移除一帧" });
   };
 
@@ -619,7 +623,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
       return next;
     });
+    setSelectedFrameIndices((current) => new Set([...current].map((selected) => selected === index ? targetIndex : selected === targetIndex ? index : selected)));
     setSelectedIndex(targetIndex);
+    selectionAnchorRef.current = targetIndex;
   };
 
   const reverseFrames = () => {
@@ -627,6 +633,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setIsPlaying(false);
     setFrames((current) => [...current].reverse());
     setSelectedIndex((current) => Math.max(0, frames.length - current - 1));
+    setSelectedFrameIndices((current) => new Set([...current].map((index) => frames.length - index - 1)));
+    selectionAnchorRef.current = Math.max(0, frames.length - selectionAnchorRef.current - 1);
   };
 
   const clearFrames = () => {
@@ -636,6 +644,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     framesRef.current = [];
     setFrames([]);
     setSelectedIndex(0);
+    setSelectedFrameIndices(new Set());
+    selectionAnchorRef.current = 0;
     setIsPlaying(false);
     setOutputPath(null);
     setStatus({ kind: "idle", text: "等待导入图片" });

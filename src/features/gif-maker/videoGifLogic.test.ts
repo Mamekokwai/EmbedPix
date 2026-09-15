@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampVideoFps, clampVideoRange, formatVideoTime, planVideoFrames } from "./videoGifLogic";
+import { clampVideoFps, clampVideoRange, formatVideoTime, planVideoFrames, planVideoFramesWithSampling } from "./videoGifLogic";
 
 describe("video GIF planning", () => {
   it("clamps FPS and ranges to safe values", () => {
@@ -16,6 +16,23 @@ describe("video GIF planning", () => {
     expect(plan.times[plan.times.length - 1]).toBeCloseTo(1.95);
     expect(plan.durationMs).toBe(50);
     expect(planVideoFrames(0, 100, 100, 30).times).toHaveLength(200);
+  });
+
+  it("plans every Nth frame without changing the frame duration", () => {
+    const plan = planVideoFramesWithSampling(0, 2, 4, 10, { everyNthFrame: 2 });
+    expect(plan.times).toHaveLength(10);
+    expect(plan.times.slice(0, 3)).toEqual([0, 0.2, 0.4]);
+    expect(plan.durationMs).toBe(100);
+  });
+
+  it("caps sampled frames and clamps unsafe sampling options", () => {
+    expect(planVideoFramesWithSampling(0, 10, 10, 30, { maxFrames: 7 }).times).toHaveLength(7);
+    expect(planVideoFramesWithSampling(0, 10, 10, 30, { maxFrames: 999 }).times).toHaveLength(200);
+    expect(planVideoFramesWithSampling(0, 1, 10, 10, { everyNthFrame: 0, maxFrames: 0 }).times).toHaveLength(1);
+  });
+
+  it("keeps the original planner behavior when sampling is omitted", () => {
+    expect(planVideoFrames(1, 2, 4, 20)).toEqual(planVideoFramesWithSampling(1, 2, 4, 20));
   });
 
   it("formats timeline labels for the video controls", () => {

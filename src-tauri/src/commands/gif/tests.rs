@@ -80,6 +80,7 @@ fn request(path: &Path) -> GifExportRequest {
         loop_count: 0,
         encoding_speed: 1,
         color_count: 256,
+        dither_mode: "none".into(),
         overwrite_existing: false,
         frames: vec![
             frame([255, 0, 0, 255], 19),
