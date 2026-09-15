@@ -459,6 +459,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const replaceFrameIdRef = useRef<string | null>(null);
   const frameIdRef = useRef(0);
   const importQueueRef = useRef(new GifImportQueue());
+  const draggedFrameIndexRef = useRef<number | null>(null);
   const lockedRef = useRef(false);
   const pendingRef = useRef(0);
   const initializedRef = useRef(false);
@@ -840,6 +841,41 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setSelectedFrameIndices((current) => new Set([...current].map((selected) => selected === index ? targetIndex : selected === targetIndex ? index : selected)));
     setSelectedIndex(targetIndex);
     selectionAnchorRef.current = targetIndex;
+  };
+
+  const reorderFrame = (fromIndex: number, toIndex: number) => {
+    if (lockedRef.current || fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= frames.length || toIndex >= frames.length) return;
+    setIsPlaying(false);
+    const remapIndex = (index: number) => {
+      if (index === fromIndex) return toIndex;
+      if (fromIndex < toIndex && index > fromIndex && index <= toIndex) return index - 1;
+      if (fromIndex > toIndex && index >= toIndex && index < fromIndex) return index + 1;
+      return index;
+    };
+    const next = [...frames];
+    const [moved] = next.splice(fromIndex, 1);
+    if (!moved) return;
+    next.splice(toIndex, 0, moved);
+    framesRef.current = next;
+    setFrames(next);
+    setSelectedIndex((current) => remapIndex(current));
+    setSelectedFrameIndices((current) => new Set([...current].map(remapIndex)));
+    selectionAnchorRef.current = remapIndex(selectionAnchorRef.current);
+    setStatus({ kind: "ready", text: "已调整帧顺序" });
+  };
+
+  const handleFrameDragStart = (event: DragEvent<HTMLDivElement>, index: number) => {
+    if (lockedRef.current) return;
+    draggedFrameIndexRef.current = index;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+  };
+
+  const handleFrameDrop = (event: DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    const fromIndex = draggedFrameIndexRef.current;
+    draggedFrameIndexRef.current = null;
+    if (fromIndex !== null) reorderFrame(fromIndex, index);
   };
 
   const reverseFrames = () => {
@@ -1281,7 +1317,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 </div>
                 <div className="gif-frame-list" aria-label="GIF 帧列表">
                   {frames.map((frame, index) => (
-                    <div className={`gif-frame-row${selectedFrameIndices.has(index) ? " gif-frame-row-selected" : ""}`} key={frame.id}>
+                    <div className={`gif-frame-row${selectedFrameIndices.has(index) ? " gif-frame-row-selected" : ""}`} key={frame.id} draggable={!locked} onDragStart={(event) => handleFrameDragStart(event, index)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleFrameDrop(event, index)} onDragEnd={() => { draggedFrameIndexRef.current = null; }}>
                       <button className="gif-frame-select" type="button" onClick={(event) => selectFrame(index, event)} aria-pressed={selectedFrameIndices.has(index)} aria-label={`选择第 ${index + 1} 帧：${frame.name}`}>
                         <span className="gif-frame-number">{String(index + 1).padStart(2, "0")}</span>
                         <img src={frame.previewUrl} alt="" />

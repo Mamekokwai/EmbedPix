@@ -65,6 +65,8 @@
 .gif-frame-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: none; }
 .gif-frame-list::-webkit-scrollbar { display: none; }
 .gif-frame-row { display: flex; align-items: center; gap: 2px; border: 1px solid transparent; border-radius: var(--qp-radius-button); padding: 3px; margin-bottom: 4px; }
+.gif-frame-row[draggable="true"] { cursor: grab; }
+.gif-frame-row[draggable="true"]:active { cursor: grabbing; }
 .gif-frame-row-selected { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }
 .gif-frame-select { display: flex; flex: 1; min-width: 0; align-items: center; gap: 6px; text-align: left; border: 0; background: transparent; color: var(--qp-text-primary); padding: 0; }
 .gif-frame-select img { width: 38px; height: 38px; flex: 0 0 auto; object-fit: contain; background: var(--qp-bg-elevated); border-radius: 4px; }
