@@ -3,12 +3,16 @@ import {
   Info,
   Images,
   Menu,
+  RefreshCw,
   Settings2,
 } from "lucide-react";
 import AppTitleBar from "./AppTitleBar";
 import ImageConverter from "../features/image-converter/ImageConverter";
 import AboutView from "../features/about/AboutView";
+import UpdateView from "../features/update/UpdateView";
 import SettingsView from "../features/settings/SettingsView";
+import { useUpdateCheck } from "./hooks/useUpdateCheck";
+import type { UpdateCheckState } from "./hooks/useUpdateCheck";
 import {
   DEFAULT_APP_PREFERENCES,
   loadAppPreferences,
@@ -18,13 +22,34 @@ import {
   type ThemeMode,
 } from "../platform/preferences/appPreferences";
 
-type AppView = "converter" | "settings" | "about";
+type AppView = "converter" | "settings" | "about" | "update";
 
 const NAV_ITEMS: ReadonlyArray<{ id: AppView; label: string; hint: string; icon: typeof Images }> = [
   { id: "converter", label: "图片转换", hint: "导入、调整并导出", icon: Images },
   { id: "settings", label: "设置", hint: "外观与默认参数", icon: Settings2 },
   { id: "about", label: "关于", hint: "版本与项目信息", icon: Info },
+  { id: "update", label: "更新", hint: "检查新版本", icon: RefreshCw },
 ];
+
+function toUpdateViewProps(state: UpdateCheckState) {
+  const info = state.status === "complete" ? state.info : null;
+  return {
+    currentVersion: state.currentVersion,
+    latestVersion: info?.latestVersion,
+    status: state.status === "checking"
+      ? "checking" as const
+      : state.status === "error"
+        ? "error" as const
+        : info?.updateAvailable
+          ? "available" as const
+          : state.status === "complete"
+            ? "up-to-date" as const
+            : "idle" as const,
+    releaseNotes: info?.releaseNotes ?? undefined,
+    releaseUrl: info?.releaseUrl,
+    errorMessage: state.status === "error" ? state.error : undefined,
+  };
+}
 
 function getPrefersDark(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -35,6 +60,7 @@ export default function AppShell() {
   const [sidebarMode, setSidebarMode] = useState<"icon" | "labeled">("icon");
   const [preferences, setPreferences] = useState<AppPreferences>(() => loadAppPreferences());
   const [prefersDark, setPrefersDark] = useState(getPrefersDark);
+  const { state: updateState, runCheck: checkForUpdates } = useUpdateCheck();
   const activeTheme = useMemo(() => resolveTheme(preferences.themeMode, prefersDark), [preferences.themeMode, prefersDark]);
 
   useEffect(() => {
@@ -115,8 +141,10 @@ export default function AppShell() {
               onChange={updatePreferences}
               onReset={() => setPreferences(DEFAULT_APP_PREFERENCES)}
             />
-          ) : (
+          ) : view === "about" ? (
             <AboutView />
+          ) : (
+            <UpdateView {...toUpdateViewProps(updateState)} onCheckForUpdates={checkForUpdates} />
           )}
         </main>
       </div>
