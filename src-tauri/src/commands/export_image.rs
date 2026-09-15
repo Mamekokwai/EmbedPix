@@ -671,7 +671,7 @@ fn choose_output_path(
                 .set_title("Export image")
                 .set_file_name(default_name)
                 .add_filter(
-                    &output_format.name().to_ascii_uppercase(),
+                    output_format.name().to_ascii_uppercase(),
                     &[output_format.extension()],
                 )
                 .save_file()
