@@ -116,7 +116,17 @@ struct ExportRequest {
     output_subdirectory: Option<String>,
     output_directory: Option<String>,
     overwrite_existing: bool,
+    overwrite_same_name: bool,
     delete_source: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct WriteOptions {
+    manage_existing_output: bool,
+    overwrite_existing: bool,
+    overwrite_same_name: bool,
+    delete_source: bool,
+    replace_original: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -152,6 +162,8 @@ struct ExportMetadata {
     output_directory: Option<String>,
     #[serde(default)]
     overwrite_existing: bool,
+    #[serde(default)]
+    overwrite_same_name: bool,
     #[serde(default)]
     delete_source: bool,
 }
@@ -200,6 +212,7 @@ impl ExportMetadata {
             output_subdirectory,
             output_directory,
             overwrite_existing: self.overwrite_existing,
+            overwrite_same_name: self.overwrite_same_name,
             delete_source: self.delete_source,
         })
     }
@@ -300,19 +313,19 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
     let output_path = choose_output_path(&request, &source_file_name, output_format)?;
     let path_for_write = output_path.clone();
     let source_path = request.source_path.clone();
-    let manage_existing_output = request.output_location != OutputLocation::Dialog;
-    let overwrite_existing = request.overwrite_existing;
-    let delete_source = request.delete_source;
-    let replace_original = request.output_location == OutputLocation::Original;
+    let write_options = WriteOptions {
+        manage_existing_output: request.output_location != OutputLocation::Dialog,
+        overwrite_existing: request.overwrite_existing,
+        overwrite_same_name: request.overwrite_same_name,
+        delete_source: request.delete_source,
+        replace_original: request.output_location == OutputLocation::Original,
+    };
     tauri::async_runtime::spawn_blocking(move || {
         write_exported_file(
             &path_for_write,
             bytes,
             source_path.as_deref(),
-            manage_existing_output,
-            overwrite_existing,
-            delete_source,
-            replace_original,
+            write_options,
         )
     })
     .await
@@ -752,40 +765,42 @@ fn choose_output_path(
     })?;
 
     let output_path = with_expected_extension(directory.join(default_name), output_format);
-    Ok(if request.overwrite_existing {
-        output_path
-    } else {
-        avoid_source_overwrite(output_path, request.source_path.as_deref())
-    })
+    Ok(
+        if request.overwrite_existing || request.overwrite_same_name {
+            output_path
+        } else {
+            avoid_source_overwrite(output_path, request.source_path.as_deref())
+        },
+    )
 }
 
 fn write_exported_file(
     output_path: &Path,
     bytes: Vec<u8>,
     source_path: Option<&str>,
-    manage_existing_output: bool,
-    overwrite_existing: bool,
-    delete_source: bool,
-    replace_original: bool,
+    options: WriteOptions,
 ) -> Result<(), String> {
-    if replace_original {
+    if options.replace_original {
         return replace_original_file(output_path, bytes, source_path);
     }
 
     let output_existed_before_write = output_path.exists();
-    let backup_path = if output_existed_before_write && manage_existing_output {
-        if !overwrite_existing {
+    let backup_path = if output_existed_before_write && options.manage_existing_output {
+        if options.overwrite_same_name {
+            Some(move_existing_output_to_temporary_backup(output_path)?)
+        } else if !options.overwrite_existing {
             return Err(
                 "output file already exists; enable overwrite to move it into the bak folder"
                     .to_string(),
             );
+        } else {
+            Some(move_existing_output_to_backup(output_path)?)
         }
-        Some(move_existing_output_to_backup(output_path)?)
     } else {
         None
     };
 
-    if let Err(error) = fs::write(output_path, bytes) {
+    if let Err(error) = write_file_atomically(output_path, &bytes) {
         return Err(format_write_failure(
             output_path,
             error,
@@ -794,7 +809,7 @@ fn write_exported_file(
         ));
     }
 
-    if delete_source {
+    if options.delete_source {
         if let Some(source_path) = source_path {
             let source_path = Path::new(source_path);
             if !paths_equal(source_path, output_path) && source_path.exists() {
@@ -811,6 +826,17 @@ fn write_exported_file(
                         ),
                     });
                 }
+            }
+        }
+    }
+
+    if options.overwrite_same_name {
+        if let Some(backup_path) = backup_path.as_ref() {
+            if let Err(error) = fs::remove_file(backup_path) {
+                eprintln!(
+                    "failed to remove temporary overwrite backup `{}`: {error}",
+                    backup_path.display()
+                );
             }
         }
     }
@@ -843,7 +869,7 @@ fn replace_original_file(
         }
     }
 
-    if let Err(error) = fs::write(output_path, bytes) {
+    if let Err(error) = write_file_atomically(output_path, &bytes) {
         let rollback_error = rollback_written_output(output_path, None, true);
         let restore_error = restore_backups(&backups);
         return Err(with_rollback_error(
@@ -950,6 +976,69 @@ fn move_existing_output_to_backup(output_path: &Path) -> Result<PathBuf, String>
         )
     })?;
     Ok(backup_path)
+}
+
+fn move_existing_output_to_temporary_backup(output_path: &Path) -> Result<PathBuf, String> {
+    let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = output_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "output file has no valid file name".to_string())?;
+    let prefix = format!(".{file_name}.embedpix-overwrite-{}", std::process::id());
+    for index in 0..=10_000 {
+        let backup_path = parent.join(format!("{prefix}-{index}.tmp"));
+        match fs::rename(output_path, &backup_path) {
+            Ok(()) => return Ok(backup_path),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(format!(
+                    "failed to move existing output into temporary backup `{}`: {error}",
+                    backup_path.display()
+                ));
+            }
+        }
+    }
+    Err("failed to allocate a temporary overwrite backup path".to_string())
+}
+
+fn write_file_atomically(output_path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = output_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "output file has no name"))?;
+    let prefix = format!(".{file_name}.embedpix-write-{}", std::process::id());
+    let mut temporary_path = None;
+    for index in 0..=10_000 {
+        let candidate = parent.join(format!("{prefix}-{index}.tmp"));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+                    let _ = fs::remove_file(&candidate);
+                    return Err(error);
+                }
+                temporary_path = Some(candidate);
+                break;
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    let temporary_path = temporary_path.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "failed to allocate a temporary output path",
+        )
+    })?;
+    let result = fs::rename(&temporary_path, output_path);
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary_path);
+    }
+    result
 }
 
 fn next_backup_path(directory: &Path, file_name: &str) -> PathBuf {
@@ -1262,6 +1351,7 @@ mod tests {
             output_subdirectory: None,
             output_directory: None,
             overwrite_existing: false,
+            overwrite_same_name: false,
             delete_source: false,
         };
         let payload = raw_payload(&metadata, &[0x89, 0x50, 0x4e, 0x47]);
@@ -1292,6 +1382,7 @@ mod tests {
             output_subdirectory: None,
             output_directory: None,
             overwrite_existing: false,
+            overwrite_same_name: false,
             delete_source: false,
         };
         let request = parse_raw_payload(&raw_payload(&metadata, &[1, 2, 3])).unwrap();
@@ -1360,6 +1451,7 @@ mod tests {
             output_subdirectory: None,
             output_directory: None,
             overwrite_existing: false,
+            overwrite_same_name: false,
             delete_source: false,
         };
         assert!(parse_raw_payload(&raw_payload(&metadata, &[]))
@@ -1391,6 +1483,7 @@ mod tests {
             output_subdirectory: None,
             output_directory: None,
             overwrite_existing: false,
+            overwrite_same_name: false,
             delete_source: false,
         };
 
@@ -1454,7 +1547,8 @@ mod tests {
                 "backgroundColor": null,
                 "outputLocation": "subfolder",
                 "sourcePath": "C:\\Images\\screen.png",
-                "outputSubdirectory": "export"
+                "outputSubdirectory": "export",
+                "overwriteSameName": true
             }"##,
         )
         .unwrap();
@@ -1466,6 +1560,7 @@ mod tests {
             Some(r"C:\Images\screen.png")
         );
         assert_eq!(request.output_subdirectory.as_deref(), Some("export"));
+        assert!(request.overwrite_same_name);
     }
 
     #[test]
@@ -1490,10 +1585,13 @@ mod tests {
             &output,
             b"new-output".to_vec(),
             source.to_str(),
-            true,
-            true,
-            true,
-            false,
+            WriteOptions {
+                manage_existing_output: true,
+                overwrite_existing: true,
+                overwrite_same_name: false,
+                delete_source: true,
+                replace_original: false,
+            },
         )
         .unwrap();
 
@@ -1503,6 +1601,74 @@ mod tests {
             b"old-output"
         );
         assert!(!source.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn overwrite_same_name_replaces_output_without_persisting_a_backup() {
+        let directory = std::env::temp_dir().join(format!(
+            "embedpix-direct-overwrite-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("screen.png");
+        fs::write(&output, b"old-output").unwrap();
+
+        write_exported_file(
+            &output,
+            b"new-output".to_vec(),
+            None,
+            WriteOptions {
+                manage_existing_output: true,
+                overwrite_existing: false,
+                overwrite_same_name: true,
+                delete_source: false,
+                replace_original: false,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(fs::read(&output).unwrap(), b"new-output");
+        assert!(!directory.join("bak/screen.png").exists());
+        assert!(fs::read_dir(&directory)
+            .unwrap()
+            .filter_map(Result::ok)
+            .all(|entry| entry.file_name() == "screen.png"));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn overwrite_same_name_restores_output_when_source_deletion_fails() {
+        let directory = std::env::temp_dir().join(format!(
+            "embedpix-direct-overwrite-rollback-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("source-directory");
+        let output = directory.join("screen.png");
+        fs::create_dir(&source).unwrap();
+        fs::write(&output, b"old-output").unwrap();
+
+        let error = write_exported_file(
+            &output,
+            b"new-output".to_vec(),
+            source.to_str(),
+            WriteOptions {
+                manage_existing_output: true,
+                overwrite_existing: false,
+                overwrite_same_name: true,
+                delete_source: true,
+                replace_original: false,
+            },
+        )
+        .unwrap_err();
+
+        assert!(error.contains("failed to delete source image"));
+        assert_eq!(fs::read(&output).unwrap(), b"old-output");
+        assert!(source.is_dir());
+        assert!(!directory.join("bak/screen.png").exists());
         let _ = fs::remove_dir_all(directory);
     }
 
@@ -1521,10 +1687,13 @@ mod tests {
             &source,
             b"new-source".to_vec(),
             source.to_str(),
-            true,
-            true,
-            true,
-            false,
+            WriteOptions {
+                manage_existing_output: true,
+                overwrite_existing: true,
+                overwrite_same_name: false,
+                delete_source: true,
+                replace_original: false,
+            },
         )
         .unwrap();
 
@@ -1623,10 +1792,13 @@ mod tests {
             &output,
             b"new-output".to_vec(),
             source.to_str(),
-            true,
-            true,
-            true,
-            false,
+            WriteOptions {
+                manage_existing_output: true,
+                overwrite_existing: true,
+                overwrite_same_name: false,
+                delete_source: true,
+                replace_original: false,
+            },
         )
         .unwrap_err();
 
