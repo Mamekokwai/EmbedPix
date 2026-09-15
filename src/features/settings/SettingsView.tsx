@@ -1,6 +1,7 @@
 import { Laptop, Moon, RotateCcw, Settings2, Sun } from "lucide-react";
 import { OUTPUT_FORMATS } from "../image-converter/imageConverterLogic";
 import type { AppPreferences, ThemeMode } from "../../platform/preferences/appPreferences";
+import ThemeSelect from "../../shared/components/ThemeSelect";
 
 interface SettingsViewProps {
   preferences: AppPreferences;
@@ -76,14 +77,14 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               <h3>默认输出格式</h3>
               <p>适合嵌入式资源的常用格式也可以直接设为默认。</p>
             </div>
-            <select
+            <ThemeSelect
+              id="default-output-format"
               className="settings-select"
               value={preferences.defaultOutputFormat}
+              options={OUTPUT_FORMATS.map((format) => ({ value: format.value, label: `${format.label} · ${format.hint}` }))}
               aria-label="默认输出格式"
-              onChange={(event) => onChange({ defaultOutputFormat: event.target.value as AppPreferences["defaultOutputFormat"] })}
-            >
-              {OUTPUT_FORMATS.map((format) => <option key={format.value} value={format.value}>{format.label} · {format.hint}</option>)}
-            </select>
+              onChange={(value) => onChange({ defaultOutputFormat: value as AppPreferences["defaultOutputFormat"] })}
+            />
           </div>
           <div className="settings-row">
             <div>

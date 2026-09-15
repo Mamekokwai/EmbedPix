@@ -8,7 +8,6 @@ import type { ChangeEvent, DragEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   Check,
-  ChevronDown,
   Download,
   Image as ImageIcon,
   Info,
@@ -66,6 +65,7 @@ import type {
   RowAlignment,
   RowOrder,
 } from "./types";
+import ThemeSelect from "../../shared/components/ThemeSelect";
 
 interface ImageConverterProps {
   defaultOutputFormat?: OutputFormat;
@@ -193,17 +193,7 @@ function SelectField<T extends string | number>({
   return (
     <label className="compact-field" htmlFor={id}>
       <span>{label}</span>
-      <span className="select-wrap">
-        <select id={id} value={value} onChange={(event) => {
-          const next = options.find((option) => String(option.value) === event.target.value)?.value;
-          if (next !== undefined) {
-            onChange(next);
-          }
-        }}>
-          {options.map((option) => <option key={String(option.value)} value={option.value}>{option.label}</option>)}
-        </select>
-        <ChevronDown size={15} aria-hidden="true" />
-      </span>
+      <ThemeSelect id={id} value={value} options={options} onChange={onChange} aria-label={label} />
     </label>
   );
 }
@@ -942,18 +932,15 @@ export default function ImageConverter({
                 <label className="field-label" htmlFor="bit-depth">位深</label>
                 <span className="field-note">{outputFormat === "jpg" ? "JPG 固定 24 位" : isRawPixelFormat(outputFormat) ? "RGB565 固定 16 位" : `${getBitDepths(outputFormat).join(" / ")} 位可选`}</span>
               </div>
-              <div className="select-wrap">
-                <select
-                  id="bit-depth"
-                  value={bitDepth}
-                  disabled={outputFormat === "jpg" || isRawPixelFormat(outputFormat)}
-                  aria-describedby="bit-depth-description"
-                  onChange={(event) => handleBitDepthChange(Number(event.target.value) as BmpBitDepth)}
-                >
-                  {getBitDepths(outputFormat).map((depth) => <option key={depth} value={depth}>{depth} 位</option>)}
-                </select>
-                <ChevronDown size={15} aria-hidden="true" />
-              </div>
+              <ThemeSelect
+                id="bit-depth"
+                value={bitDepth}
+                options={getBitDepths(outputFormat).map((depth) => ({ value: depth, label: `${depth} 位` }))}
+                disabled={outputFormat === "jpg" || isRawPixelFormat(outputFormat)}
+                aria-label="位深"
+                aria-describedby="bit-depth-description"
+                onChange={handleBitDepthChange}
+              />
               <p className="field-help" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>
             </div>
 
@@ -1078,21 +1065,20 @@ export default function ImageConverter({
                 <label className="field-label" htmlFor="output-location">输出位置</label>
                 <span className="field-note">导出后自动使用对应目录</span>
               </div>
-              <div className="select-wrap">
-                <select
-                  id="output-location"
-                  value={outputLocation}
-                  aria-describedby={outputLocationDescription}
-                  aria-invalid={Boolean(outputLocationError)}
-                  onChange={(event) => handleOutputLocationChange(event.target.value as OutputLocation)}
-                >
-                  <option value="source">源文件夹</option>
-                  <option value="subfolder">源文件夹 / 子文件夹</option>
-                  <option value="directory">指定目录</option>
-                  <option value="original">覆盖原图</option>
-                </select>
-                <ChevronDown size={15} aria-hidden="true" />
-              </div>
+              <ThemeSelect
+                id="output-location"
+                value={outputLocation}
+                options={[
+                  { value: "source" as const, label: "源文件夹" },
+                  { value: "subfolder" as const, label: "源文件夹 / 子文件夹" },
+                  { value: "directory" as const, label: "指定目录" },
+                  { value: "original" as const, label: "覆盖原图" },
+                ]}
+                aria-label="输出位置"
+                aria-describedby={outputLocationDescription}
+                aria-invalid={Boolean(outputLocationError)}
+                onChange={handleOutputLocationChange}
+              />
               {outputLocation === "subfolder" ? (
                 <label className="text-field" htmlFor="output-subdirectory">
                   <span>子文件夹名称</span>

@@ -2,9 +2,12 @@
 @import url("./styles/app-shell.css");
 @import url("./styles/features/image-converter.css");
 @import url("./styles/features/settings.css");
+@import url("./styles/components/theme-select.css");
 @import url("./styles/features/about.css");
 
 :root {
+  width: 100%;
+  height: 100%;
   min-width: 320px;
   min-height: 100%;
   background: var(--qp-bg-app);
@@ -15,12 +18,21 @@
 }
 
 body {
+  width: 100%;
+  height: 100%;
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow: hidden;
   background: var(--qp-bg-app);
   color: var(--qp-text-primary);
   font-family: var(--font-sans);
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 button,

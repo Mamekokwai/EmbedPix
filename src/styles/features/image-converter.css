@@ -18,8 +18,7 @@
 .file-summary,
 .file-ready,
 .toggle-row,
-.color-control,
-.select-wrap {
+.color-control {
   display: flex;
   align-items: center;
 }
@@ -163,7 +162,6 @@
 .icon-button:focus-visible,
 .drop-zone:focus-visible,
 .format-option:focus-visible,
-.select-wrap:focus-within,
 .export-button:focus-visible,
 .toggle-row input:focus-visible + .toggle-track,
 .color-control:focus-within {
@@ -532,47 +530,9 @@
   font-size: 10px;
 }
 
-.select-wrap {
-  position: relative;
-}
-
-.select-wrap select {
-  width: 100%;
-  min-height: 36px;
-  appearance: none;
-  border: 1px solid var(--qp-border-subtle);
-  border-radius: var(--qp-radius-control);
-  outline: 0;
-  background: var(--qp-bg-panel);
-  padding: 0 38px 0 12px;
-  color: var(--qp-text-primary);
-  font-size: 12px;
-  box-shadow: none;
-}
-
-.select-wrap select:focus,
-.select-wrap select:active {
-  border-color: var(--qp-border-strong);
-  outline: none;
-  box-shadow: none;
-}
-
-.select-wrap select:hover:not(:disabled),
 .dimension-input:focus-within,
 .color-control:hover {
   border-color: var(--qp-border-strong);
-}
-
-.select-wrap svg {
-  position: absolute;
-  right: 12px;
-  pointer-events: none;
-  color: var(--qp-text-tertiary);
-}
-
-.select-wrap select:disabled {
-  background: var(--qp-bg-elevated);
-  color: var(--qp-text-disabled);
 }
 
 .parameter-grid {
@@ -589,21 +549,6 @@
   gap: 5px;
   color: var(--qp-text-tertiary);
   font-size: 10px;
-}
-
-.compact-field .select-wrap {
-  width: 100%;
-}
-
-.compact-field select {
-  min-height: 34px;
-  padding-right: 27px;
-  padding-left: 9px;
-  font-size: 11px;
-}
-
-.compact-field .select-wrap svg {
-  right: 8px;
 }
 
 .text-field {

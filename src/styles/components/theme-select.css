@@ -1,0 +1,109 @@
+.theme-select {
+  position: relative;
+  min-width: 0;
+}
+
+.theme-select-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--qp-border-subtle);
+  border-radius: var(--qp-radius-control);
+  background: var(--qp-bg-panel);
+  padding: 0 10px;
+  color: var(--qp-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.theme-select-trigger:hover:not(:disabled) {
+  border-color: var(--qp-border-strong);
+}
+
+.theme-select-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent);
+  outline-offset: 2px;
+}
+
+.theme-select-trigger:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.theme-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-select-chevron {
+  flex: 0 0 auto;
+  color: var(--qp-text-tertiary);
+  transition: transform var(--qp-motion-fast) var(--qp-motion-ease);
+}
+
+.theme-select-chevron-open {
+  transform: rotate(180deg);
+}
+
+.theme-select-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  border: 1px solid var(--qp-border-strong);
+  border-radius: var(--qp-radius-control);
+  background: var(--qp-bg-panel);
+  box-shadow: var(--qp-shadow-panel);
+  padding: 5px;
+}
+
+.theme-select-option {
+  min-height: 31px;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: var(--qp-radius-button);
+  background: transparent;
+  padding: 0 8px;
+  color: var(--qp-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.theme-select-option:hover,
+.theme-select-option-highlighted {
+  border-color: var(--qp-border-subtle);
+  background: var(--qp-bg-elevated);
+  color: var(--qp-text-primary);
+  outline: none;
+}
+
+.theme-select-option-selected {
+  border-color: color-mix(in srgb, var(--qp-accent-default) 45%, var(--qp-border-subtle));
+  background: var(--qp-accent-muted);
+  color: var(--qp-accent-default);
+}
+
+.settings-select {
+  width: min(275px, 100%);
+}
+
+@media (max-width: 620px) {
+  .settings-select {
+    width: 100%;
+  }
+}
