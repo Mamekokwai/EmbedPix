@@ -20,6 +20,7 @@ const MAX_SOURCE_FILE_NAME_BYTES: usize = 1024;
 const MAX_OUTPUT_PATH_BYTES: usize = 4096;
 const MAX_OUTPUT_SUBDIRECTORY_BYTES: usize = 255;
 const MAX_DEFAULT_STEM_CHARS: usize = 120;
+const MAX_WATERMARK_TEXT_BYTES: usize = 256;
 const MAX_IMAGE_DIMENSION: u32 = 8_192;
 const MAX_IMAGE_PIXELS: u64 = 16_777_216;
 const MAX_DECODER_ALLOC_BYTES: u64 = 128 * 1024 * 1024;
@@ -117,7 +118,38 @@ struct ExportRequest {
     output_directory: Option<String>,
     overwrite_existing: bool,
     overwrite_same_name: bool,
+    watermark: Option<WatermarkOptions>,
     delete_source: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum WatermarkPosition {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+#[derive(Debug, Clone)]
+struct WatermarkOptions {
+    text: String,
+    position: WatermarkPosition,
+    opacity: u8,
+    font_size: u16,
+}
+
+impl WatermarkPosition {
+    fn parse(value: Option<&str>) -> Result<Self, String> {
+        match value.unwrap_or("bottom-right").trim().to_ascii_lowercase().as_str() {
+            "top-left" => Ok(Self::TopLeft),
+            "top-right" => Ok(Self::TopRight),
+            "bottom-left" => Ok(Self::BottomLeft),
+            "bottom-right" => Ok(Self::BottomRight),
+            other => Err(format!(
+                "unsupported watermarkPosition `{other}`; expected top-left, top-right, bottom-left, or bottom-right"
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -165,6 +197,14 @@ struct ExportMetadata {
     #[serde(default)]
     overwrite_same_name: bool,
     #[serde(default)]
+    watermark_text: Option<String>,
+    #[serde(default)]
+    watermark_position: Option<String>,
+    #[serde(default)]
+    watermark_opacity: Option<u8>,
+    #[serde(default)]
+    watermark_font_size: Option<u16>,
+    #[serde(default)]
     delete_source: bool,
 }
 
@@ -186,6 +226,13 @@ impl ExportMetadata {
         if !(1..=100).contains(&jpeg_quality) {
             return Err("jpegQuality must be between 1 and 100".to_string());
         }
+        let watermark = parse_watermark(
+            output_format,
+            self.watermark_text,
+            self.watermark_position,
+            self.watermark_opacity,
+            self.watermark_font_size,
+        )?;
         Ok(ExportRequest {
             input_data,
             source_file_name: source_file_name.clone(),
@@ -213,9 +260,61 @@ impl ExportMetadata {
             output_directory,
             overwrite_existing: self.overwrite_existing,
             overwrite_same_name: self.overwrite_same_name,
+            watermark,
             delete_source: self.delete_source,
         })
     }
+}
+
+fn parse_watermark(
+    output_format: OutputFormat,
+    text: Option<String>,
+    position: Option<String>,
+    opacity: Option<u8>,
+    font_size: Option<u16>,
+) -> Result<Option<WatermarkOptions>, String> {
+    let has_any_setting =
+        text.is_some() || position.is_some() || opacity.is_some() || font_size.is_some();
+    let Some(text) = text else {
+        if has_any_setting {
+            return Err(
+                "watermarkText is required when watermark options are provided".to_string(),
+            );
+        }
+        return Ok(None);
+    };
+    if matches!(output_format, OutputFormat::Rgb565 | OutputFormat::CArray) {
+        return Err("watermark is supported only for PNG, JPG, and BMP outputs".to_string());
+    }
+    let text = text.trim().to_string();
+    if text.is_empty() {
+        return Err("watermarkText must not be empty".to_string());
+    }
+    if text.len() > MAX_WATERMARK_TEXT_BYTES {
+        return Err(format!(
+            "watermarkText cannot exceed {MAX_WATERMARK_TEXT_BYTES} UTF-8 bytes"
+        ));
+    }
+    if text.chars().any(char::is_control) {
+        return Err("watermarkText cannot contain control characters".to_string());
+    }
+    if text.chars().count() > 80 {
+        return Err("watermarkText cannot exceed 80 characters".to_string());
+    }
+    let opacity = opacity.unwrap_or(60);
+    if !(1..=100).contains(&opacity) {
+        return Err("watermarkOpacity must be between 1 and 100".to_string());
+    }
+    let font_size = font_size.unwrap_or(16);
+    if !(8..=72).contains(&font_size) {
+        return Err("watermarkFontSize must be between 8 and 72".to_string());
+    }
+    Ok(Some(WatermarkOptions {
+        text,
+        position: WatermarkPosition::parse(position.as_deref())?,
+        opacity,
+        font_size,
+    }))
 }
 
 #[derive(Debug, Serialize)]
@@ -352,13 +451,17 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
 
     validate_input_size(&request.input_data)?;
     let source = decode_input(&request.input_data)?;
-    let image = resize_image(
+    let mut image = resize_image(
         source,
         request.width,
         request.height,
         request.keep_aspect_ratio,
         request.background_color,
     );
+
+    if let Some(watermark) = request.watermark.as_ref() {
+        apply_watermark(&mut image, watermark);
+    }
 
     match request.output_format {
         OutputFormat::Png => encode_png(image, request.bit_depth, request.background_color),
@@ -642,6 +745,149 @@ fn resize_image(
         .copy_from(&resized, offset_x, offset_y)
         .expect("resized image must fit inside the target canvas");
     canvas
+}
+
+fn apply_watermark(image: &mut RgbaImage, options: &WatermarkOptions) {
+    let width = image.width();
+    let height = image.height();
+    let character_count = options.text.chars().count() as u32;
+    let requested_scale = u32::from(options.font_size).div_ceil(7).max(1);
+    let width_limited_scale = width
+        .saturating_sub(8)
+        .checked_div(character_count.saturating_mul(6).max(1))
+        .unwrap_or(1)
+        .max(1);
+    let scale = requested_scale.min(width_limited_scale);
+    let advance = scale.saturating_mul(6);
+    let text_width = character_count
+        .saturating_mul(advance)
+        .saturating_sub(scale);
+    let text_height = scale.saturating_mul(7);
+    let padding = scale.saturating_mul(2).max(4);
+    let x = match options.position {
+        WatermarkPosition::TopLeft | WatermarkPosition::BottomLeft => padding,
+        WatermarkPosition::TopRight | WatermarkPosition::BottomRight => {
+            width.saturating_sub(text_width.saturating_add(padding))
+        }
+    };
+    let y = match options.position {
+        WatermarkPosition::TopLeft | WatermarkPosition::TopRight => padding,
+        WatermarkPosition::BottomLeft | WatermarkPosition::BottomRight => {
+            height.saturating_sub(text_height.saturating_add(padding))
+        }
+    };
+    let foreground_alpha = ((u16::from(options.opacity) * 255) / 100) as u8;
+    let shadow_alpha = foreground_alpha / 2;
+
+    for (character_index, character) in options.text.chars().enumerate() {
+        let glyph_x = x.saturating_add((character_index as u32).saturating_mul(advance));
+        let rows = watermark_glyph_rows(character);
+        for (row_index, row) in rows.iter().enumerate() {
+            for column_index in 0..5_u32 {
+                if row & (1 << (4 - column_index)) == 0 {
+                    continue;
+                }
+                for offset_y in 0..scale {
+                    for offset_x in 0..scale {
+                        let pixel_x = glyph_x
+                            .saturating_add(column_index.saturating_mul(scale))
+                            .saturating_add(offset_x);
+                        let pixel_y = y
+                            .saturating_add((row_index as u32).saturating_mul(scale))
+                            .saturating_add(offset_y);
+                        if pixel_x >= width || pixel_y >= height {
+                            continue;
+                        }
+                        if shadow_alpha > 0 {
+                            let shadow_x = pixel_x.saturating_add(scale / 2 + 1);
+                            let shadow_y = pixel_y.saturating_add(scale / 2 + 1);
+                            if shadow_x < width && shadow_y < height {
+                                blend_watermark_pixel(
+                                    image.get_pixel_mut(shadow_x, shadow_y),
+                                    [0, 0, 0],
+                                    shadow_alpha,
+                                );
+                            }
+                        }
+                        blend_watermark_pixel(
+                            image.get_pixel_mut(pixel_x, pixel_y),
+                            [255, 255, 255],
+                            foreground_alpha,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn blend_watermark_pixel(pixel: &mut Rgba<u8>, color: [u8; 3], source_alpha: u8) {
+    let source_alpha = u32::from(source_alpha);
+    let destination_alpha = u32::from(pixel[3]);
+    let inverse_source_alpha = 255 - source_alpha;
+    let output_alpha = source_alpha + destination_alpha * inverse_source_alpha / 255;
+    if output_alpha == 0 {
+        return;
+    }
+    for (index, channel) in pixel.0.iter_mut().take(3).enumerate() {
+        let source = u32::from(color[index]) * source_alpha;
+        let destination = u32::from(*channel) * destination_alpha * inverse_source_alpha / 255;
+        *channel = ((source + destination) / output_alpha) as u8;
+    }
+    pixel[3] = output_alpha as u8;
+}
+
+fn watermark_glyph_rows(character: char) -> [u8; 7] {
+    let character = if character == '·' {
+        '.'
+    } else {
+        character.to_ascii_uppercase()
+    };
+    match character {
+        'A' => [0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
+        'B' => [0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E],
+        'C' => [0x0F, 0x10, 0x10, 0x10, 0x10, 0x10, 0x0F],
+        'D' => [0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E],
+        'E' => [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F],
+        'F' => [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10],
+        'G' => [0x0F, 0x10, 0x10, 0x17, 0x11, 0x11, 0x0F],
+        'H' => [0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
+        'I' => [0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x1F],
+        'J' => [0x01, 0x01, 0x01, 0x01, 0x11, 0x11, 0x0E],
+        'K' => [0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11],
+        'L' => [0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F],
+        'M' => [0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11],
+        'N' => [0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11],
+        'O' => [0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
+        'P' => [0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10],
+        'Q' => [0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D],
+        'R' => [0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11],
+        'S' => [0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E],
+        'T' => [0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
+        'U' => [0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
+        'V' => [0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04],
+        'W' => [0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A],
+        'X' => [0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11],
+        'Y' => [0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04],
+        'Z' => [0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F],
+        '0' => [0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E],
+        '1' => [0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E],
+        '2' => [0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F],
+        '3' => [0x1E, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x1E],
+        '4' => [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02],
+        '5' => [0x1F, 0x10, 0x10, 0x1E, 0x01, 0x01, 0x1E],
+        '6' => [0x0E, 0x10, 0x10, 0x1E, 0x11, 0x11, 0x0E],
+        '7' => [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
+        '8' => [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E],
+        '9' => [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x01, 0x0E],
+        '.' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C],
+        ':' => [0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x00],
+        '-' => [0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00],
+        '_' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1F],
+        '/' => [0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10],
+        ' ' => [0x00; 7],
+        _ => [0x1F, 0x11, 0x15, 0x11, 0x15, 0x11, 0x1F],
+    }
 }
 
 fn encode_png(
@@ -1312,6 +1558,69 @@ mod tests {
     }
 
     #[test]
+    fn watermark_defaults_trim_text_and_validate_output_formats() {
+        let watermark = parse_watermark(
+            OutputFormat::Png,
+            Some("  Author  ".to_string()),
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(watermark.text, "Author");
+        assert!(matches!(watermark.position, WatermarkPosition::BottomRight));
+        assert_eq!(watermark.opacity, 60);
+        assert_eq!(watermark.font_size, 16);
+
+        assert!(parse_watermark(
+            OutputFormat::Rgb565,
+            Some("Author".to_string()),
+            None,
+            None,
+            None,
+        )
+        .unwrap_err()
+        .contains("PNG, JPG, and BMP"));
+        assert!(
+            parse_watermark(OutputFormat::Png, Some("   ".to_string()), None, None, None,)
+                .unwrap_err()
+                .contains("must not be empty")
+        );
+        assert!(parse_watermark(
+            OutputFormat::Png,
+            Some("Author".to_string()),
+            Some("middle".to_string()),
+            Some(0),
+            Some(100),
+        )
+        .unwrap_err()
+        .contains("watermarkOpacity"));
+    }
+
+    #[test]
+    fn watermark_changes_supported_raster_pixels_and_preserves_transparency_elsewhere() {
+        let mut image = RgbaImage::from_pixel(64, 32, Rgba([20, 30, 40, 255]));
+        let original = image.clone();
+        let options = WatermarkOptions {
+            text: "A".to_string(),
+            position: WatermarkPosition::TopLeft,
+            opacity: 100,
+            font_size: 8,
+        };
+        apply_watermark(&mut image, &options);
+
+        assert_ne!(image, original);
+        assert_eq!(image.get_pixel(63, 31), original.get_pixel(63, 31));
+
+        let mut transparent = RgbaImage::from_pixel(64, 32, Rgba([20, 30, 40, 0]));
+        apply_watermark(&mut transparent, &options);
+        assert!(transparent
+            .pixels()
+            .any(|pixel| pixel[3] > 0 && pixel[0] >= pixel[1]));
+    }
+
+    #[test]
     fn raw_metadata_rejects_removed_base64_field() {
         let error = serde_json::from_str::<ExportMetadata>(
             r##"{
@@ -1352,6 +1661,10 @@ mod tests {
             output_directory: None,
             overwrite_existing: false,
             overwrite_same_name: false,
+            watermark_text: None,
+            watermark_position: None,
+            watermark_opacity: None,
+            watermark_font_size: None,
             delete_source: false,
         };
         let payload = raw_payload(&metadata, &[0x89, 0x50, 0x4e, 0x47]);
@@ -1383,6 +1696,10 @@ mod tests {
             output_directory: None,
             overwrite_existing: false,
             overwrite_same_name: false,
+            watermark_text: None,
+            watermark_position: None,
+            watermark_opacity: None,
+            watermark_font_size: None,
             delete_source: false,
         };
         let request = parse_raw_payload(&raw_payload(&metadata, &[1, 2, 3])).unwrap();
@@ -1452,6 +1769,10 @@ mod tests {
             output_directory: None,
             overwrite_existing: false,
             overwrite_same_name: false,
+            watermark_text: None,
+            watermark_position: None,
+            watermark_opacity: None,
+            watermark_font_size: None,
             delete_source: false,
         };
         assert!(parse_raw_payload(&raw_payload(&metadata, &[]))
@@ -1484,6 +1805,10 @@ mod tests {
             output_directory: None,
             overwrite_existing: false,
             overwrite_same_name: false,
+            watermark_text: None,
+            watermark_position: None,
+            watermark_opacity: None,
+            watermark_font_size: None,
             delete_source: false,
         };
 
