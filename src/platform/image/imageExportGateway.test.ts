@@ -82,6 +82,22 @@ describe("image export raw IPC envelope", () => {
     });
   });
 
+  it("serializes overwriteExisting only when same-name replacement is enabled", () => {
+    const enabledPayload = encodeExportEnvelope(createRequest(new Uint8Array([9]), {
+      overwriteExisting: true,
+    }));
+    const enabledLength = new DataView(enabledPayload.buffer, enabledPayload.byteOffset, enabledPayload.byteLength).getUint32(4, true);
+    const enabledMetadata = JSON.parse(new TextDecoder().decode(enabledPayload.subarray(8, 8 + enabledLength)));
+    expect(enabledMetadata.overwriteExisting).toBe(true);
+
+    const disabledPayload = encodeExportEnvelope(createRequest(new Uint8Array([9]), {
+      overwriteExisting: false,
+    }));
+    const disabledLength = new DataView(disabledPayload.buffer, disabledPayload.byteOffset, disabledPayload.byteLength).getUint32(4, true);
+    const disabledMetadata = JSON.parse(new TextDecoder().decode(disabledPayload.subarray(8, 8 + disabledLength)));
+    expect(disabledMetadata).not.toHaveProperty("overwriteExisting");
+  });
+
   it("rejects empty and oversized image data before allocating an envelope", () => {
     expect(() => validateExportEnvelopeInput(0, "icon.png")).toThrow("图片数据不能为空");
     expect(() => validateExportEnvelopeInput(MAX_RAW_IMAGE_BYTES, "icon.png")).not.toThrow();

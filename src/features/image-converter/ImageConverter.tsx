@@ -225,6 +225,7 @@ export default function ImageConverter({
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
+  const [overwriteSameName, setOverwriteSameName] = useState(false);
   const [deleteSource, setDeleteSource] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
@@ -681,6 +682,7 @@ export default function ImageConverter({
   const handleOutputLocationChange = (nextLocation: OutputLocation) => {
     setOutputLocation(nextLocation);
     if (nextLocation === "original") {
+      setOverwriteSameName(false);
       setDeleteSource(false);
     }
     setError(null);
@@ -754,6 +756,7 @@ export default function ImageConverter({
           sourcePath: image.sourcePath,
           outputSubdirectory: outputSubdirectory.trim() || undefined,
           outputDirectory: outputDirectory.trim() || undefined,
+          overwriteExisting: overwriteSameName,
           deleteSource,
         };
         lastOutputPath = await exportImage(request);
@@ -1120,13 +1123,23 @@ export default function ImageConverter({
               {outputLocation === "original" ? (
                 <p className="field-help output-action-help output-action-info" id="output-original-help">旧图片会先移入同目录的 bak 文件夹，再将新文件写回原图位置；输出格式不同会使用对应的新扩展名。</p>
               ) : (
-                <div className="output-action">
-                  <label className="toggle-row output-action-toggle">
-                    <input type="checkbox" checked={deleteSource} aria-describedby="delete-source-help" onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
-                    <span className="toggle-track" aria-hidden="true"><span /></span>
-                    <span>导出成功后删除源图片</span>
-                  </label>
-                  <p className="field-help output-action-help output-action-danger" id="delete-source-help">这是破坏性操作，仅在确认导出文件无误后使用。</p>
+                <div className="output-actions">
+                  <div className="output-action">
+                    <label className="toggle-row output-action-toggle">
+                      <input type="checkbox" checked={overwriteSameName} aria-describedby="overwrite-same-name-help" onChange={(event) => { setOverwriteSameName(event.target.checked); setError(null); }} />
+                      <span className="toggle-track" aria-hidden="true"><span /></span>
+                      <span>覆盖同名输出文件</span>
+                    </label>
+                    <p className="field-help output-action-help" id="overwrite-same-name-help">已有文件会先移入同目录的 bak 文件夹，再写入新的导出结果。</p>
+                  </div>
+                  <div className="output-action">
+                    <label className="toggle-row output-action-toggle">
+                      <input type="checkbox" checked={deleteSource} aria-describedby="delete-source-help" onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
+                      <span className="toggle-track" aria-hidden="true"><span /></span>
+                      <span>导出成功后删除源图片</span>
+                    </label>
+                    <p className="field-help output-action-help output-action-danger" id="delete-source-help">这是破坏性操作，仅在确认导出文件无误后使用。</p>
+                  </div>
                 </div>
               )}
             </div>

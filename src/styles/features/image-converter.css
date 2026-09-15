@@ -574,6 +574,12 @@
   outline-offset: 2px;
 }
 
+.output-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .output-action {
   display: flex;
   flex-direction: column;

@@ -27,6 +27,7 @@ export interface ExportImageRequest {
   sourcePath?: string | null;
   outputSubdirectory?: string;
   outputDirectory?: string;
+  overwriteExisting?: boolean;
   deleteSource?: boolean;
 }
 
