@@ -26,6 +26,15 @@
 .gif-coming-soon h2 { margin: 2px 0 0; color: var(--qp-text-primary); font-size: 16px; }
 .gif-coming-soon p, .gif-coming-soon span { max-width: 360px; margin: 0; font-size: 11px; }
 .gif-coming-soon span { color: var(--qp-text-tertiary); }
+.gif-video-card { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.gif-video-preview { display: block; width: min(100%, 520px); max-height: 170px; margin: 0 auto; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: #000; object-fit: contain; }
+.gif-video-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(150px, 1.4fr); gap: 8px 12px; align-items: end; }
+.gif-video-summary { display: flex; min-width: 0; flex-direction: column; gap: 3px; color: var(--qp-text-secondary); font-size: 10px; }
+.gif-video-summary strong { color: var(--qp-text-primary); font-size: 12px; font-weight: 600; }
+.gif-video-summary small { color: var(--qp-text-tertiary); }
+.gif-video-actions { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; color: var(--qp-text-secondary); font-size: 10px; }
+.gif-video-actions > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gif-video-empty { display: flex; min-height: 64px; align-items: center; justify-content: center; gap: 8px; color: var(--qp-text-secondary); font-size: 11px; }
 .gif-hidden-input { display: none; }
 .gif-maker-toolbar, .gif-frame-toolbar, .gif-frame-toolbar > div, .gif-card-heading, .gif-playback-controls, .gif-export-footer, .gif-group-tabs { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .gif-maker-toolbar { flex: 0 0 auto; }
@@ -124,6 +133,10 @@
   .gif-settings-grid, .gif-export-grid { gap: 6px 8px; }
   .gif-source-tabs { gap: 4px; margin-top: 5px; }
   .gif-source-tab { min-height: 24px; padding-inline: 7px; font-size: 10px; }
+  .gif-video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; }
+  .gif-video-summary { grid-column: 1 / -1; }
+  .gif-video-actions { align-items: stretch; flex-direction: column; }
+  .gif-video-actions .primary-button { width: 100%; }
 }
 @media (max-width: 560px) {
   .gif-group-tabs > span { display: none; }

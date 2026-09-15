@@ -20,6 +20,8 @@ import ThemeSelect from "../../shared/components/ThemeSelect";
 import { exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, clampFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasSize } from "./gifMakerLogic";
+import { clampVideoFps, formatVideoTime, planVideoFrames } from "./videoGifLogic";
+import type { VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
 
 export type GifFitMode = "contain" | "stretch";
@@ -45,9 +47,23 @@ type GifStatus =
 const DEFAULT_DURATION = 100;
 const DEFAULT_FILE_NAME = "embedpix-animation.gif";
 const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/bmp,.png,.jpg,.jpeg,.webp,.bmp";
+const VIDEO_ACCEPT = "video/mp4,video/webm,video/ogg,.mp4,.webm,.ogv";
+
+interface VideoSourceModel {
+  file: File;
+  previewUrl: string;
+  name: string;
+  width: number;
+  height: number;
+  duration: number;
+}
 
 function isImageFile(file: File): boolean {
   return /\.(bmp|jpe?g|png|webp)$/iu.test(file.name) && !file.type.startsWith("video/");
+}
+
+function isVideoFile(file: File): boolean {
+  return file.type.startsWith("video/") || /\.(mp4|webm|ogv)$/iu.test(file.name);
 }
 
 function getErrorMessage(error: unknown): string {
@@ -61,6 +77,122 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error("无法读取这张图片，请选择有效的图片文件。"));
     image.src = url;
   });
+}
+
+function loadVideoMetadata(url: string): Promise<{ width: number; height: number; duration: number }> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    const cleanup = () => {
+      video.removeEventListener("loadedmetadata", handleMetadata);
+      video.removeEventListener("error", handleError);
+      video.removeAttribute("src");
+      video.load();
+    };
+    const handleMetadata = () => {
+      const duration = video.duration;
+      if (!Number.isFinite(duration) || duration <= 0 || video.videoWidth <= 0 || video.videoHeight <= 0) {
+        cleanup();
+        reject(new Error("无法读取视频时长或尺寸，请选择有效的视频文件。"));
+        return;
+      }
+      const metadata = { width: video.videoWidth, height: video.videoHeight, duration };
+      cleanup();
+      resolve(metadata);
+    };
+    const handleError = () => {
+      cleanup();
+      reject(new Error("当前环境无法读取该视频格式，请尝试 MP4 或 WebM。"));
+    };
+    video.addEventListener("loadedmetadata", handleMetadata, { once: true });
+    video.addEventListener("error", handleError, { once: true });
+    video.src = url;
+  });
+}
+
+function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("视频帧读取超时，请尝试缩短时间范围或更换视频。"));
+    }, 10_000);
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener("seeked", handleSeeked);
+      video.removeEventListener("error", handleError);
+    };
+    const handleSeeked = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = () => {
+      cleanup();
+      reject(new Error("视频帧读取失败，请尝试更换视频。"));
+    };
+    video.addEventListener("seeked", handleSeeked, { once: true });
+    video.addEventListener("error", handleError, { once: true });
+    video.currentTime = time;
+  });
+}
+
+async function extractVideoFrames(
+  source: VideoSourceModel,
+  plan: VideoFramePlan,
+  onProgress: (current: number, total: number) => void,
+): Promise<GifFrameModel[]> {
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  video.src = source.previewUrl;
+  await new Promise<void>((resolve, reject) => {
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      resolve();
+      return;
+    }
+    const handleMetadata = () => { cleanup(); resolve(); };
+    const handleError = () => { cleanup(); reject(new Error("无法解码视频，请尝试 MP4 或 WebM。")); };
+    const cleanup = () => {
+      video.removeEventListener("loadedmetadata", handleMetadata);
+      video.removeEventListener("error", handleError);
+    };
+    video.addEventListener("loadedmetadata", handleMetadata, { once: true });
+    video.addEventListener("error", handleError, { once: true });
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("当前环境无法创建视频帧画布。");
+  const frames: GifFrameModel[] = [];
+  try {
+    for (const [index, time] of plan.times.entries()) {
+      await seekVideo(video, time);
+      drawGifFrame(context, video, { width: source.width, height: source.height }, "stretch", "transparent");
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("无法生成视频帧，请重试。");
+      const file = new File([blob], `${source.name.replace(/\.[^.]+$/u, "")}-${String(index + 1).padStart(3, "0")}.png`, { type: "image/png" });
+      frames.push({
+        id: `video-frame-${index + 1}`,
+        file,
+        previewUrl: URL.createObjectURL(blob),
+        name: file.name,
+        width: source.width,
+        height: source.height,
+        durationMs: plan.durationMs,
+      });
+      onProgress(index + 1, plan.times.length);
+    }
+    return frames;
+  } catch (error) {
+    frames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
+    throw error;
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+  }
 }
 
 function readImageFrame(file: File, id: string): Promise<GifFrameModel> {
@@ -83,7 +215,7 @@ function readImageFrame(file: File, id: string): Promise<GifFrameModel> {
 
 function drawGifFrame(
   context: CanvasRenderingContext2D,
-  image: HTMLImageElement,
+  image: HTMLImageElement | HTMLVideoElement,
   canvasSize: GifCanvasSize,
   fitMode: GifFitMode,
   background: GifBackground,
@@ -99,8 +231,8 @@ function drawGifFrame(
     return;
   }
 
-  const sourceWidth = image.naturalWidth;
-  const sourceHeight = image.naturalHeight;
+  const sourceWidth = image instanceof HTMLVideoElement ? image.videoWidth : image.naturalWidth;
+  const sourceHeight = image instanceof HTMLVideoElement ? image.videoHeight : image.naturalHeight;
   const scale = Math.min(canvasSize.width / sourceWidth, canvasSize.height / sourceHeight);
   const drawWidth = Math.max(1, Math.round(sourceWidth * scale));
   const drawHeight = Math.max(1, Math.round(sourceHeight * scale));
@@ -140,14 +272,14 @@ function SelectField<T extends string | number>({
   );
 }
 
-function EmptyFrames({ onImport }: { onImport: () => void }) {
+function EmptyFrames({ onImport, sourceMode }: { onImport: () => void; sourceMode: GifSourceMode }) {
   return (
     <div className="gif-empty-frames">
       <ImagePlus size={24} aria-hidden="true" />
       <strong>还没有动画帧</strong>
-      <span>导入多张图片，按顺序组成 GIF。</span>
+      <span>{sourceMode === "video" ? "先导入视频并提取时间范围内的帧。" : "导入多张图片，按顺序组成 GIF。"}</span>
       <button className="quiet-button" type="button" onClick={onImport}>
-        <Upload size={15} aria-hidden="true" />导入图片
+        <Upload size={15} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片"}
       </button>
     </div>
   );
@@ -169,6 +301,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [sourceMode, setSourceMode] = useState<GifSourceMode>("image");
+  const [videoSource, setVideoSource] = useState<VideoSourceModel | null>(null);
+  const [videoStart, setVideoStart] = useState(0);
+  const [videoEnd, setVideoEnd] = useState(0);
+  const [videoFps, setVideoFps] = useState(10);
   const [status, setStatus] = useState<GifStatus>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const [group, setGroup] = useState<"timing" | "canvas" | "export" | null>("timing");
@@ -191,7 +327,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   useEffect(() => () => {
     importQueueRef.current.cancel();
     framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
-  }, []);
+    if (videoSource) URL.revokeObjectURL(videoSource.previewUrl);
+  }, [videoSource]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
   const canvasSize = useMemo(
@@ -241,6 +378,78 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     if (lockedRef.current) return;
     replaceFrameIdRef.current = frameId;
     fileInputRef.current?.click();
+  };
+
+  const importVideo = async (file: File) => {
+    if (lockedRef.current || !isVideoFile(file)) {
+      setError("请选择 MP4、WebM 或 OGG 视频文件。");
+      setStatus({ kind: "error", text: "视频导入失败" });
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    setIsPlaying(false);
+    setError(null);
+    setStatus({ kind: "importing", text: "正在读取视频信息…" });
+    try {
+      const metadata = await loadVideoMetadata(previewUrl);
+      if (videoSource) URL.revokeObjectURL(videoSource.previewUrl);
+      const nextSource = { file, previewUrl, name: file.name, ...metadata };
+      setVideoSource(nextSource);
+      setVideoStart(0);
+      setVideoEnd(metadata.duration);
+      setFrames((current) => {
+        current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
+        return [];
+      });
+      framesRef.current = [];
+      setSelectedIndex(0);
+      setOutputPath(null);
+      setCanvasWidth(metadata.width);
+      setCanvasHeight(metadata.height);
+      ratioRef.current = metadata;
+      initializedRef.current = true;
+      setStatus({ kind: "ready", text: `已载入视频：${formatVideoTime(metadata.duration)}` });
+    } catch (loadError) {
+      URL.revokeObjectURL(previewUrl);
+      setError(getErrorMessage(loadError));
+      setStatus({ kind: "error", text: "视频导入失败" });
+    }
+  };
+
+  const extractVideo = async () => {
+    if (lockedRef.current || !videoSource) {
+      setError("请先导入视频。");
+      return;
+    }
+    const start = Math.max(0, Math.min(videoSource.duration, videoStart));
+    const end = Math.max(start, Math.min(videoSource.duration, videoEnd));
+    if (end - start < 0.01) {
+      setError("视频时间范围至少需要 0.01 秒。");
+      return;
+    }
+    const plan = planVideoFrames(start, end, videoSource.duration, videoFps);
+    setIsPlaying(false);
+    lockedRef.current = true;
+    setLocked(true);
+    setError(null);
+    setStatus({ kind: "importing", text: `正在提取视频帧 0/${plan.times.length}…` });
+    try {
+      const nextFrames = await extractVideoFrames(videoSource, plan, (current, total) => {
+        setStatus({ kind: "importing", text: `正在提取视频帧 ${current}/${total}…` });
+      });
+      framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
+      framesRef.current = nextFrames;
+      setFrames(nextFrames);
+      setSelectedIndex(0);
+      setOutputPath(null);
+      setStatus({ kind: "ready", text: `已提取 ${nextFrames.length} 帧，可以预览或导出` });
+    } catch (extractError) {
+      setError(getErrorMessage(extractError));
+      setStatus({ kind: "error", text: "视频抽帧失败" });
+    } finally {
+      lockedRef.current = false;
+      setLocked(false);
+    }
   };
 
   const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null) => {
@@ -305,13 +514,22 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const replaceFrameId = replaceFrameIdRef.current;
     replaceFrameIdRef.current = null;
     event.target.value = "";
-    void importFiles(selectedFiles, replaceFrameId);
+    if (sourceMode === "video") {
+      if (selectedFiles[0]) void importVideo(selectedFiles[0]);
+    } else {
+      void importFiles(selectedFiles, replaceFrameId);
+    }
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
-    void importFiles(Array.from(event.dataTransfer.files));
+    const droppedFiles = Array.from(event.dataTransfer.files);
+    if (sourceMode === "video") {
+      if (droppedFiles[0]) void importVideo(droppedFiles[0]);
+    } else {
+      void importFiles(droppedFiles);
+    }
   };
 
   const removeFrame = (index: number) => {
@@ -493,30 +711,47 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <Video size={14} aria-hidden="true" />视频生 GIF
             </button>
           </div>
-          <p>把图片序列整理成适合界面演示和嵌入式资源预览的轻量动画。</p>
+          <p>{sourceMode === "image" ? "把图片序列整理成适合界面演示和嵌入式资源预览的轻量动画。" : "截取视频片段并按指定帧率生成轻量 GIF。"}</p>
         </div>
-        <div className="gif-header-note"><span className="status-dot" />仅支持图片序列</div>
+        <div className="gif-header-note"><span className="status-dot" />支持图片序列与视频</div>
       </header>
 
       <fieldset className="page-content gif-maker-content" disabled={locked} aria-label="GIF 制作工作区" aria-busy={locked || pendingImports > 0}>
-        {sourceMode === "video" ? (
-          <div className="gif-coming-soon" role="tabpanel" aria-label="视频生 GIF">
-            <div className="gif-coming-soon-icon"><Video size={30} aria-hidden="true" /></div>
-            <h2>视频生 GIF</h2>
-            <p>视频导入、时间裁剪和帧率设置正在规划中。</p>
-            <span>当前版本先支持“图生 GIF”，已导入的图片帧和设置会保留。</span>
-            <button className="quiet-button" type="button" onClick={() => setSourceMode("image")}>返回图生 GIF</button>
-          </div>
-        ) : (
         <>
         <div className="gif-maker-toolbar">
           <button className="primary-button" type="button" onClick={() => openFileDialog()}>
-            <Upload size={16} aria-hidden="true" />导入图片序列
+            <Upload size={16} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片序列"}
           </button>
-          <span>多选 / 拖放追加 · 最多 200 帧，32 MiB / 帧，总计 128 MiB</span>
+          <span>{sourceMode === "video" ? "支持 MP4 / WebM / OGG · 最多提取 200 帧" : "多选 / 拖放追加 · 最多 200 帧，32 MiB / 帧，总计 128 MiB"}</span>
           {pendingImports > 0 ? <button className="quiet-button" type="button" onClick={clearFrames}>取消导入并清空</button> : null}
-          <input ref={fileInputRef} className="gif-hidden-input" type="file" accept={IMAGE_ACCEPT} multiple onChange={handleInputChange} />
+          <input ref={fileInputRef} className="gif-hidden-input" type="file" accept={sourceMode === "video" ? VIDEO_ACCEPT : IMAGE_ACCEPT} multiple={sourceMode === "image"} onChange={handleInputChange} />
         </div>
+
+        {sourceMode === "video" ? (
+          <section className="gif-card gif-video-card" aria-label="视频源设置">
+            <div className="gif-card-heading">
+              <div><p className="gif-card-kicker">VIDEO SOURCE</p><h2>视频片段</h2></div>
+              {videoSource ? <span className="gif-count-badge">{formatVideoTime(videoSource.duration)}</span> : null}
+            </div>
+            {videoSource ? (
+              <>
+                <video className="gif-video-preview" src={videoSource.previewUrl} controls preload="metadata" aria-label="视频预览" />
+                <div className="gif-video-grid">
+                  <label className="gif-field"><span>开始时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoStart} onChange={(event) => setVideoStart(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0)))} /></label>
+                  <label className="gif-field"><span>结束时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoEnd} onChange={(event) => setVideoEnd(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0)))} /></label>
+                  <label className="gif-field"><span>帧率 · FPS</span><input type="number" min="1" max="30" step="1" value={videoFps} onChange={(event) => setVideoFps(clampVideoFps(Number(event.target.value)))} /></label>
+                  <div className="gif-video-summary"><span>当前范围</span><strong>{formatVideoTime(videoStart)} – {formatVideoTime(videoEnd)}</strong><small>预计最多 {planVideoFrames(videoStart, videoEnd, videoSource.duration, videoFps).times.length} 帧</small></div>
+                </div>
+                <div className="gif-video-actions">
+                  <span>{videoSource.name} · {videoSource.width} × {videoSource.height} px</span>
+                  <button className="primary-button" type="button" onClick={() => void extractVideo()}><Video size={15} aria-hidden="true" />提取视频帧</button>
+                </div>
+              </>
+            ) : (
+              <div className="gif-video-empty"><Video size={24} aria-hidden="true" /><span>导入视频后设置截取范围与帧率。</span><button className="quiet-button" type="button" onClick={() => openFileDialog()}>选择视频</button></div>
+            )}
+          </section>
+        ) : null}
 
         <div className="gif-workspace-grid">
           <section className="gif-card gif-assets-card" aria-labelledby="gif-assets-title">
@@ -535,14 +770,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              aria-label="拖放图片或选择图片"
+              aria-label={sourceMode === "video" ? "拖放视频或选择视频" : "拖放图片或选择图片"}
             >
               <Upload size={20} aria-hidden="true" />
               <strong>
-                <span className="gif-drop-label-full">{isDragging ? "松开以添加图片" : "拖放图片到这里"}</span>
-                <span className="gif-drop-label-compact">添加图片</span>
+                <span className="gif-drop-label-full">{isDragging ? `松开以添加${sourceMode === "video" ? "视频" : "图片"}` : `拖放${sourceMode === "video" ? "视频" : "图片"}到这里`}</span>
+                <span className="gif-drop-label-compact">添加{sourceMode === "video" ? "视频" : "图片"}</span>
               </strong>
-              <span>或点击选择多个文件</span>
+              <span>{sourceMode === "video" ? "或点击选择视频文件" : "或点击选择多个文件"}</span>
             </div>
             {frames.length ? (
               <>
@@ -571,7 +806,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                   ))}
                 </div>
               </>
-            ) : <EmptyFrames onImport={() => openFileDialog()} />}
+            ) : <EmptyFrames sourceMode={sourceMode} onImport={() => openFileDialog()} />}
           </section>
 
           <div className="gif-main-column">
@@ -629,12 +864,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           </div> : null}
         </section>
         </>
-        )}
       </fieldset>
-      {sourceMode === "image" ? <div className="gif-export-footer">
+      <div className="gif-export-footer">
         {error ? <p className="gif-error-message" role="alert">{error}</p> : <p className={`gif-status gif-status-${status.kind}`} role="status">{status.text}</p>}
         <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!outputPath) { setGroup("export"); void chooseOutput(); } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputPath ? "导出 GIF" : "选择保存位置"}</button>
-      </div> : null}
+      </div>
     </div>
   );
 }
