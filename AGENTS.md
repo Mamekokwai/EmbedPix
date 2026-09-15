@@ -28,6 +28,7 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 
 ## 验收要求
 
+- 调试优先通过控制台调用构建后的 exe 并传入参数（如 `EngiFormat.exe -i ...`），根据标准输出、标准错误和退出码判断结果；仅在命令行无法定位问题时再使用 IDE 或断点。
 - 前端至少通过 `npm run check:types`、`npm run check:lint` 和 `npm run build`。
 - Rust 变更至少通过 `cargo check --manifest-path src-tauri/Cargo.toml --locked`，涉及编码逻辑时补充单元测试。
 - 导出失败必须给出可理解的错误，不得静默生成格式错误的文件。
