@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
-import { estimateGifSize, exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
+import { estimateGifSize, exportGif, exportPngSequence, pickGifOutput, pickGifSequenceOutput } from "../../platform/gif/gifGateway";
 import type { GifExportFrame } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifPlaybackSpeed } from "./gifMakerLogic";
@@ -32,6 +32,7 @@ export type GifLoopMode = "infinite" | "finite";
 export type GifEncodingQuality = "high" | "balanced" | "fast";
 export type GifColorCount = 64 | 128 | 256;
 export type GifDitherMode = "none" | "floydSteinberg" | "atkinson";
+type GifOutputFormat = "gif" | "png-sequence";
 type GifSourceMode = "image" | "video";
 
 export interface GifFrameModel {
@@ -427,6 +428,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
   const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
   const [outputPath, setOutputPath] = useState<string | null>(null);
+  const [sequenceOutputDir, setSequenceOutputDir] = useState<string | null>(null);
+  const [outputFormat, setOutputFormat] = useState<GifOutputFormat>("gif");
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [sourceMode, setSourceMode] = useState<GifSourceMode>("image");
@@ -456,6 +459,21 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const repeatRef = useRef(0);
   const framesRef = useRef<GifFrameModel[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const clearOutputSelection = () => {
+    setOutputPath(null);
+    setSequenceOutputDir(null);
+  };
+
+  const changeOutputFormat = (format: GifOutputFormat) => {
+    setOutputFormat(format);
+    clearOutputSelection();
+    setMeasuredSizeBytes(null);
+    setFileName((current) => {
+      const stem = current.trim().replace(/\.[^.]+$/u, "");
+      return format === "gif" ? `${stem || "embedpix-animation"}.gif` : stem || "embedpix-animation";
+    });
+  };
 
   framesRef.current = frames;
 
@@ -537,7 +555,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setSelectedIndex(0);
     setSelectedFrameIndices(new Set());
     setIsPlaying(false);
-    setOutputPath(null);
+    clearOutputSelection();
   };
 
   const updateVideoTransform = (cropPreset: VideoCropPreset, rotation: VideoRotation) => {
@@ -584,7 +602,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       });
       framesRef.current = [];
       setSelectedIndex(0);
-      setOutputPath(null);
+      clearOutputSelection();
       setCanvasWidth(metadata.width);
       setCanvasHeight(metadata.height);
       setCanvasPreset("source");
@@ -632,7 +650,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setFrames(nextFrames);
       setSelectedIndex(0);
       setSelectedFrameIndices(nextFrames.length ? new Set([0]) : new Set());
-      setOutputPath(null);
+      clearOutputSelection();
       setCanvasWidth(outputSize.width);
       setCanvasHeight(outputSize.height);
       setStatus({ kind: "ready", text: `已提取 ${nextFrames.length} 帧，可以预览或导出` });
@@ -832,7 +850,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setSelectedFrameIndices(new Set());
     selectionAnchorRef.current = 0;
     setIsPlaying(false);
-    setOutputPath(null);
+    clearOutputSelection();
     setStatus({ kind: "idle", text: "等待导入图片" });
     setError(null);
   };
@@ -892,11 +910,22 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setLocked(true);
     setIsPlaying(false);
     try {
-      const chosen = await pickGifOutput(fileName.trim() || DEFAULT_FILE_NAME);
-      if (chosen) {
-        setOutputPath(chosen);
-        setError(null);
-        setStatus({ kind: "ready", text: "已选择 GIF 保存位置" });
+      if (outputFormat === "gif") {
+        const chosen = await pickGifOutput(fileName.trim() || DEFAULT_FILE_NAME);
+        if (chosen) {
+          setOutputPath(chosen);
+          setSequenceOutputDir(null);
+          setError(null);
+          setStatus({ kind: "ready", text: "已选择 GIF 保存位置" });
+        }
+      } else {
+        const chosen = await pickGifSequenceOutput();
+        if (chosen) {
+          setSequenceOutputDir(chosen);
+          setOutputPath(null);
+          setError(null);
+          setStatus({ kind: "ready", text: "已选择 PNG 帧序列输出目录" });
+        }
       }
     } catch (chooseError) {
       setError(getErrorMessage(chooseError));
@@ -1005,11 +1034,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       return;
     }
     if (!fileName.trim()) {
-      setError("请输入 GIF 文件名。");
+      setError("请输入输出名称。");
       return;
     }
-    if (!outputPath) {
-      setError("请先选择 GIF 保存位置。");
+    const outputReady = outputFormat === "gif" ? Boolean(outputPath) : Boolean(sequenceOutputDir);
+    if (!outputReady) {
+      setError(outputFormat === "gif" ? "请先选择 GIF 保存位置。" : "请先选择 PNG 帧序列输出目录。");
       return;
     }
     setError(null);
@@ -1018,6 +1048,17 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setIsPlaying(false);
     setStatus({ kind: "exporting", text: `正在准备 ${frames.length} 帧…` });
     try {
+      if (outputFormat === "png-sequence") {
+        const exportFrames = await renderExportFrames(canvasSize);
+        const result = await exportPngSequence({
+          outputDir: sequenceOutputDir as string,
+          baseName: fileName.trim().replace(/\.[^.]+$/u, "") || "embedpix-animation",
+          frames: exportFrames,
+        });
+        setStatus({ kind: "success", text: `PNG 帧序列已导出：${result.length} 帧` });
+        return;
+      }
+      if (!outputPath) throw new Error("请先选择 GIF 保存位置。");
       const compression = await measureCompressionCandidates();
       const { frames: exportFrames, width, height } = compression;
       const result = await exportGif({
@@ -1229,24 +1270,27 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           </div> : null}
           {group === "export" ? <div id="gif-panel-export" role="region" aria-labelledby="gif-group-export">
           <div className="gif-export-grid">
-            <label className="gif-field"><span>文件名</span><input value={fileName} maxLength={120} onChange={(event) => { setFileName(event.target.value); setOutputPath(null); }} placeholder={DEFAULT_FILE_NAME} /></label>
-            <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); }} />
-            <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); }} /><small>次</small></div></label>
-            <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={setEncodingQuality} />
-            <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={setColorCount} />
-            <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={setDitherMode} />
-            <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="可选" /><small>KiB</small></div></label>
-            <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => setMaxSizeKiB(event.target.value)} placeholder="可选" /><small>KiB</small></div></label>
-            <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => setAutoCompress(event.target.checked)} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
-            <div className="gif-output-picker"><span className="gif-field-label">保存位置</span><div className="gif-output-row"><span title={outputPath ?? undefined}>{outputPath ?? "尚未选择保存位置"}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>选择位置</button></div></div>
+            <SelectField id="gif-output-format" label="输出格式" value={outputFormat} options={[{ value: "gif" as const, label: "GIF 动图" }, { value: "png-sequence" as const, label: "PNG 帧序列" }]} onChange={changeOutputFormat} />
+            <label className="gif-field"><span>{outputFormat === "gif" ? "文件名" : "序列基础名"}</span><input value={fileName} maxLength={120} onChange={(event) => { setFileName(event.target.value); clearOutputSelection(); }} placeholder={outputFormat === "gif" ? DEFAULT_FILE_NAME : "embedpix-animation"} /></label>
+            {outputFormat === "gif" ? <>
+              <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); }} />
+              <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); }} /><small>次</small></div></label>
+              <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={setEncodingQuality} />
+              <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={setColorCount} />
+              <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={setDitherMode} />
+              <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="可选" /><small>KiB</small></div></label>
+              <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => setMaxSizeKiB(event.target.value)} placeholder="可选" /><small>KiB</small></div></label>
+              <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => setAutoCompress(event.target.checked)} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
+            </> : <p className="gif-format-note">PNG 帧序列按当前画布逐帧导出，不使用 GIF 的循环、颜色、抖动和体积压缩参数。</p>}
+            <div className="gif-output-picker"><span className="gif-field-label">{outputFormat === "gif" ? "保存位置" : "输出目录"}</span><div className="gif-output-row"><span title={(outputFormat === "gif" ? outputPath : sequenceOutputDir) ?? undefined}>{(outputFormat === "gif" ? outputPath : sequenceOutputDir) ?? (outputFormat === "gif" ? "尚未选择保存位置" : "尚未选择输出目录")}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>{outputFormat === "gif" ? "选择位置" : "选择目录"}</button></div></div>
           </div>
-          <div className={`gif-workload-summary gif-workload-${workload.level}`}>
+          {outputFormat === "gif" ? <div className={`gif-workload-summary gif-workload-${workload.level}`}>
             <strong>导出负载</strong>
             <span>{(workload.totalPixels / 1_000_000).toFixed(1)} MP · 帧缓冲 {formatGifBytes(workload.decodedBytes)} · 调色板 {formatGifBytes(workload.paletteBytes)}</span>
             {measuredSizeBytes !== null ? <span className="gif-measured-size">最近实测 {formatGifBytes(measuredSizeBytes)}</span> : null}
             <small>{workload.level === "heavy" ? "负载较高，建议缩小画布或减少帧数。" : "实际文件体积取决于画面内容；开启自动压缩后将先实际测量候选参数。"}</small>
-          </div>
-          <p className="gif-help-text">桌面端保存；默认不覆盖同名文件，请选择新文件名。</p>
+          </div> : null}
+          <p className="gif-help-text">{outputFormat === "gif" ? "桌面端保存；默认不覆盖同名文件，请选择新文件名。" : "桌面端保存；每帧输出为 PNG，文件名按基础名-001.png 递增。"}</p>
           </div> : null}
         </section>
         </>
@@ -1254,7 +1298,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       <div className="gif-export-footer">
         {error ? <p className="gif-error-message" role="alert">{error}</p> : <p className={`gif-status gif-status-${status.kind}`} role="status">{status.text}</p>}
         {sourceMode === "video" && locked ? <button className="quiet-button" type="button" onClick={cancelVideoExtraction}>取消抽帧</button> : null}
-        <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!outputPath) { setGroup("export"); void chooseOutput(); } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputPath ? "导出 GIF" : "选择保存位置"}</button>
+        <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { const outputReady = outputFormat === "gif" ? outputPath : sequenceOutputDir; if (!outputReady) { setGroup("export"); void chooseOutput(); } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputFormat === "gif" ? (outputPath ? "导出 GIF" : "选择保存位置") : (sequenceOutputDir ? "导出 PNG 帧序列" : "选择输出目录")}</button>
       </div>
     </div>
   );
