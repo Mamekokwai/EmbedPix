@@ -1,4 +1,4 @@
-import type { BmpBitDepth, ImageDimensions, OutputFormat, RowAlignment } from "./types";
+import type { BmpBitDepth, ImageDimensions, OutputFormat, OutputLocation, RowAlignment } from "./types";
 
 export const MAX_DIMENSION = 8192;
 export const MAX_IMAGE_PIXELS = 16_777_216;
@@ -198,4 +198,25 @@ export function getOutputLabel(format: OutputFormat) {
     return "C 数组";
   }
   return format.toUpperCase();
+}
+
+export function getMissingSourcePathFileName(
+  outputLocation: OutputLocation,
+  images: ReadonlyArray<{ file: { name: string }; sourcePath: string | null }>,
+  enforceSourcePath: boolean,
+) {
+  if (!enforceSourcePath || !["source", "subfolder", "original"].includes(outputLocation)) {
+    return null;
+  }
+  return images.find((image) => !image.sourcePath)?.file.name ?? null;
+}
+
+export function getBatchExportStatus(completed: number, total: number, lastOutputPath: string | null) {
+  if (completed < total) {
+    return `已导出 ${completed}/${total} 张`;
+  }
+  if (completed > 1) {
+    return `已导出 ${completed} 张图片${lastOutputPath ? `，最后一张：${lastOutputPath}` : ""}`;
+  }
+  return lastOutputPath ? `已导出到 ${lastOutputPath}` : "导出完成";
 }

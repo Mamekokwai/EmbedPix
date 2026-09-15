@@ -6,6 +6,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::export_image::export_image,
             commands::export_image::pick_image,
+            commands::export_image::pick_images,
             commands::export_image::read_image_file
         ])
         .run(tauri::generate_context!())

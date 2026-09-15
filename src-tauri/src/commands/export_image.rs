@@ -240,6 +240,21 @@ pub async fn pick_image() -> Result<Option<NativeImageFile>, String> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub async fn pick_images() -> Result<Vec<NativeImageFile>, String> {
+    let paths = rfd::FileDialog::new()
+        .set_title("选择图片")
+        .add_filter("图片", &["png", "jpg", "jpeg", "bmp", "gif", "webp"])
+        .pick_files()
+        .unwrap_or_default();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        paths.into_iter().map(read_image_file_from_path).collect()
+    })
+    .await
+    .map_err(|error| format!("image read task failed: {error}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub async fn read_image_file(path: String) -> Result<NativeImageFile, String> {
     tauri::async_runtime::spawn_blocking(move || read_image_file_from_path(PathBuf::from(path)))
         .await

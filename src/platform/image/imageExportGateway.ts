@@ -94,6 +94,10 @@ export async function pickImageFile(): Promise<NativeImageFile | null> {
   return invoke<NativeImageFile | null>("pick_image");
 }
 
+export async function pickImageFiles(): Promise<NativeImageFile[]> {
+  return invoke<NativeImageFile[]>("pick_images");
+}
+
 export async function readImageFile(path: string): Promise<NativeImageFile> {
   return invoke<NativeImageFile>("read_image_file", { path });
 }

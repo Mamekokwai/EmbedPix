@@ -13,11 +13,13 @@ import {
   constrainDimensions,
   formatFileSize,
   getBackgroundNote,
+  getBatchExportStatus,
   getBitDepthNote,
   getBitDepths,
   getDimensionError,
   getEffectiveBitDepth,
   getOutputLabel,
+  getMissingSourcePathFileName,
   getPixelError,
   isImageFile,
   normalizeDimension,
@@ -130,5 +132,24 @@ describe("image file and display helpers", () => {
     expect(formatFileSize(512)).toBe("512 B");
     expect(formatFileSize(1024)).toBe("1.0 KB");
     expect(formatFileSize(1024 * 1024)).toBe("1.0 MB");
+  });
+});
+
+describe("batch image export helpers", () => {
+  const images = [
+    { file: { name: "first.png" }, sourcePath: "C:\\Images\\first.png" },
+    { file: { name: "second.png" }, sourcePath: null },
+  ];
+
+  it("reports the first image without a native source path only when required", () => {
+    expect(getMissingSourcePathFileName("source", images, true)).toBe("second.png");
+    expect(getMissingSourcePathFileName("directory", images, true)).toBeNull();
+    expect(getMissingSourcePathFileName("source", images, false)).toBeNull();
+  });
+
+  it("keeps batch progress and completion messages distinguishable", () => {
+    expect(getBatchExportStatus(1, 3, null)).toBe("已导出 1/3 张");
+    expect(getBatchExportStatus(1, 1, "C:\\Images\\first.bmp")).toBe("已导出到 C:\\Images\\first.bmp");
+    expect(getBatchExportStatus(2, 2, "C:\\Images\\second.bmp")).toContain("已导出 2 张图片");
   });
 });

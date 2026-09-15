@@ -12,13 +12,14 @@ import {
   Download,
   Image as ImageIcon,
   Info,
+  Plus,
   Upload,
   X,
 } from "lucide-react";
 import {
   exportImage,
   isTauriEnvironment,
-  pickImageFile,
+  pickImageFiles,
   readImageFile,
   type NativeImageFile,
 } from "../../platform/image/imageExportGateway";
@@ -44,6 +45,8 @@ import {
   getFormatInfo,
   getOutputLabel,
   getOutputParameterNote,
+  getBatchExportStatus,
+  getMissingSourcePathFileName,
   getPixelError,
   isCArrayFormat,
   isImageFile,
@@ -78,6 +81,14 @@ type Status =
   | { kind: "error"; text: string };
 
 type FileWithPath = File & { path?: string };
+
+interface LoadedImage {
+  id: string;
+  file: File;
+  sourcePath: string | null;
+  previewUrl: string;
+  dimensions: ImageDimensions;
+}
 
 function getSourcePath(file: File): string | null {
   const path = (file as FileWithPath).path;
@@ -203,9 +214,10 @@ export default function ImageConverter({
   defaultKeepAspectRatio = true,
 }: ImageConverterProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [sourcePath, setSourcePath] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
+  const [loadedImages, setLoadedImages] = useState<LoadedImage[]>([]);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
   const [widthInput, setWidthInput] = useState("");
@@ -230,7 +242,11 @@ export default function ImageConverter({
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const loadIdRef = useRef(0);
-  const loadNativeImageRef = useRef<(path?: string) => void>(() => undefined);
+  const imageIdRef = useRef(0);
+  const loadedImagesRef = useRef<LoadedImage[]>([]);
+  const replaceImageIdRef = useRef<string | null>(null);
+  loadedImagesRef.current = loadedImages;
+  const loadNativeImageRef = useRef<(paths?: string[]) => void>(() => undefined);
 
   useEffect(() => {
     return () => {
@@ -239,6 +255,7 @@ export default function ImageConverter({
         URL.revokeObjectURL(previewUrlRef.current);
         previewUrlRef.current = null;
       }
+      loadedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
   }, []);
 
@@ -251,7 +268,9 @@ export default function ImageConverter({
     if (!file) {
       return null;
     }
-    if ((outputLocation === "source" || outputLocation === "subfolder" || outputLocation === "original") && !sourcePath) {
+    if (isTauriEnvironment()
+      && (outputLocation === "source" || outputLocation === "subfolder" || outputLocation === "original")
+      && loadedImages.some((image) => !image.sourcePath)) {
       return outputLocation === "original"
         ? "覆盖原图需要可用的源文件路径，请重新导入图片。"
         : "当前导入方式没有可用的源文件路径，请改用“指定目录”。";
@@ -263,12 +282,24 @@ export default function ImageConverter({
       return "请输入输出目录。";
     }
     return null;
-  }, [file, outputDirectory, outputLocation, outputSubdirectory, sourcePath]);
+  }, [file, loadedImages, outputDirectory, outputLocation, outputSubdirectory]);
   const outputLocationDescription = [
     "output-location-help",
     outputLocation === "original" ? "output-original-help" : null,
     outputLocationError ? "output-location-error" : null,
   ].filter(Boolean).join(" ");
+  const batchOutputLocationError = useMemo(() => {
+    if (outputLocationError
+      || !isTauriEnvironment()
+      || !file
+      || !["source", "subfolder", "original"].includes(outputLocation)) {
+      return outputLocationError;
+    }
+    const missingPathFileName = getMissingSourcePathFileName(outputLocation, loadedImages, true);
+    return missingPathFileName
+      ? `“${missingPathFileName}”没有可用的源文件路径，请改用“指定目录”。`
+      : null;
+  }, [file, loadedImages, outputLocation, outputLocationError]);
 
   const setSettingStatus = (nextWidthInput = widthInput, nextHeightInput = heightInput) => {
     if (!file) {
@@ -288,7 +319,23 @@ export default function ImageConverter({
     return `${width} × ${height} · ${getOutputLabel(outputFormat)} · ${summaryBitDepth} 位`;
   }, [bitDepth, file, height, outputFormat, width]);
 
-  const loadFile = async (nextFile: File) => {
+  const activateLoadedImage = (image: LoadedImage, resetDeleteSource = true) => {
+    setFile(image.file);
+    setPreviewUrl(image.previewUrl);
+    setDimensions(image.dimensions);
+    const targetDimensions = constrainDimensions(image.dimensions);
+    setWidth(targetDimensions.width);
+    setHeight(targetDimensions.height);
+    setWidthInput(String(targetDimensions.width));
+    setHeightInput(String(targetDimensions.height));
+    if (resetDeleteSource) {
+      setDeleteSource(false);
+    }
+    previewUrlRef.current = image.previewUrl;
+    setStatus({ kind: "ready", text: "图片已载入，可以导出" });
+  };
+
+  const loadFile = async (nextFile: File, replaceImageId: string | null = null) => {
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
     setError(null);
@@ -319,21 +366,29 @@ export default function ImageConverter({
       }
 
       if (previewUrlRef.current) {
-        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
       }
-      previewUrlRef.current = nextPreviewUrl;
-      const targetDimensions = constrainDimensions(nextDimensions);
-
-      setFile(nextFile);
-      setSourcePath(getSourcePath(nextFile));
-      setDeleteSource(false);
-      setPreviewUrl(nextPreviewUrl);
-      setDimensions(nextDimensions);
-      setWidth(targetDimensions.width);
-      setHeight(targetDimensions.height);
-      setWidthInput(String(targetDimensions.width));
-      setHeightInput(String(targetDimensions.height));
-      setStatus({ kind: "ready", text: "图片已载入，可以导出" });
+      const nextImage: LoadedImage = {
+        id: `image-${imageIdRef.current += 1}`,
+        file: nextFile,
+        sourcePath: getSourcePath(nextFile),
+        previewUrl: nextPreviewUrl,
+        dimensions: nextDimensions,
+      };
+      setLoadedImages((current) => {
+        if (!replaceImageId) {
+          return [...current, nextImage];
+        }
+        const replacedImage = current.find((image) => image.id === replaceImageId);
+        if (!replacedImage) {
+          return [...current, nextImage];
+        }
+        URL.revokeObjectURL(replacedImage.previewUrl);
+        return current.map((image) => image.id === replaceImageId ? nextImage : image);
+      });
+      setSelectedImageId(nextImage.id);
+      activateLoadedImage(nextImage);
+      return true;
     } catch (loadError) {
       if (loadId !== loadIdRef.current) {
         return;
@@ -341,24 +396,50 @@ export default function ImageConverter({
       const message = loadError instanceof Error ? loadError.message : "图片读取失败，请重试。";
       setStatus({ kind: "error", text: "读取失败" });
       setError(message);
+      return false;
     }
   };
 
-  const loadNativeImage = async (path?: string) => {
-    try {
-      const source = path ? await readImageFile(path) : await pickImageFile();
-      if (source) {
-        await loadFile(createNativeFile(source));
+  const loadFiles = async (files: File[], replaceImageId: string | null = null) => {
+    const initialCount = loadedImagesRef.current.length;
+    const replacingExistingImage = replaceImageId !== null
+      && loadedImagesRef.current.some((image) => image.id === replaceImageId);
+    let loadedCount = 0;
+    for (const [index, nextFile] of files.entries()) {
+      if (await loadFile(nextFile, index === 0 ? replaceImageId : null)) {
+        loadedCount += 1;
       }
+    }
+    replaceImageIdRef.current = null;
+    if (loadedCount > 0) {
+      setStatus({
+        kind: "ready",
+        text: `${initialCount + loadedCount - (replacingExistingImage ? 1 : 0)} 张图片已载入，可以导出`,
+      });
+    }
+  };
+
+  const loadNativeImages = async (paths?: string[], replaceImageId: string | null = null) => {
+    try {
+      const sources: NativeImageFile[] = [];
+      if (paths) {
+        for (const path of paths) {
+          sources.push(await readImageFile(path));
+        }
+      } else {
+        sources.push(...await pickImageFiles());
+      }
+      await loadFiles(sources.map(createNativeFile), replaceImageId);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "图片读取失败，请重试。";
       setStatus({ kind: "error", text: "读取失败" });
       setError(message);
+      replaceImageIdRef.current = null;
     }
   };
 
-  loadNativeImageRef.current = (path) => {
-    void loadNativeImage(path);
+  loadNativeImageRef.current = (paths) => {
+    void loadNativeImages(paths);
   };
 
   useEffect(() => {
@@ -375,9 +456,8 @@ export default function ImageConverter({
           setIsDragging(false);
         } else {
           setIsDragging(false);
-          const path = event.payload.paths[0];
-          if (path) {
-            void loadNativeImageRef.current(path);
+          if (event.payload.paths.length > 0) {
+            loadNativeImageRef.current(event.payload.paths);
           }
         }
       }).then((cleanup) => {
@@ -390,16 +470,17 @@ export default function ImageConverter({
   }, []);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextFile = event.target.files?.[0];
-    if (nextFile) {
-      void loadFile(nextFile);
+    const nextFiles = Array.from(event.target.files ?? []);
+    if (nextFiles.length > 0) {
+      void loadFiles(nextFiles, replaceImageIdRef.current);
     }
     event.target.value = "";
   };
 
-  const handleSelectImage = () => {
+  const handleSelectImage = (replaceImageId: string | null = null) => {
+    replaceImageIdRef.current = replaceImageId;
     if (isTauriEnvironment()) {
-      void loadNativeImage();
+      void loadNativeImages(undefined, replaceImageId);
     } else {
       inputRef.current?.click();
     }
@@ -408,17 +489,38 @@ export default function ImageConverter({
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
-    const nextFile = event.dataTransfer.files[0];
-    if (nextFile) {
-      void loadFile(nextFile);
+    const nextFiles = Array.from(event.dataTransfer.files);
+    if (nextFiles.length > 0) {
+      void loadFiles(nextFiles);
     }
   };
 
-  const clearFile = () => {
+  const removeImage = (imageId: string) => {
+    const removedImage = loadedImages.find((image) => image.id === imageId);
+    if (!removedImage) {
+      return;
+    }
+
+    URL.revokeObjectURL(removedImage.previewUrl);
+    const remainingImages = loadedImages.filter((image) => image.id !== imageId);
+    setLoadedImages(remainingImages);
+
+    if (selectedImageId !== imageId) {
+      return;
+    }
+
+    const nextImage = remainingImages[remainingImages.length - 1];
+    if (nextImage) {
+      setSelectedImageId(nextImage.id);
+      activateLoadedImage(nextImage);
+      return;
+    }
+
+    setSelectedImageId(null);
     loadIdRef.current += 1;
     setFile(null);
-    setSourcePath(null);
     setDimensions(null);
+    setDeleteSource(false);
     setWidth(0);
     setHeight(0);
     setWidthInput("");
@@ -430,6 +532,40 @@ export default function ImageConverter({
       previewUrlRef.current = null;
     }
     setPreviewUrl(null);
+  };
+
+  const clearFile = () => {
+    if (selectedImageId) {
+      removeImage(selectedImageId);
+    }
+  };
+
+  const clearAllImages = () => {
+    loadIdRef.current += 1;
+    loadedImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+    setLoadedImages([]);
+    setSelectedImageId(null);
+    setFile(null);
+    setDimensions(null);
+    setDeleteSource(false);
+    setWidth(0);
+    setHeight(0);
+    setWidthInput("");
+    setHeightInput("");
+    setError(null);
+    setStatus({ kind: "idle", text: "等待导入图片" });
+    previewUrlRef.current = null;
+    setPreviewUrl(null);
+  };
+
+  const selectImage = (imageId: string) => {
+    const image = loadedImages.find((item) => item.id === imageId);
+    if (!image || image.id === selectedImageId) {
+      return;
+    }
+    setSelectedImageId(image.id);
+    activateLoadedImage(image);
+    setError(null);
   };
 
   const handleWidthChange = (value: string) => {
@@ -593,46 +729,59 @@ export default function ImageConverter({
       return;
     }
 
-    if (outputLocationError) {
-      setError(outputLocationError);
+    if (batchOutputLocationError) {
+      setError(batchOutputLocationError);
       setStatus({ kind: "error", text: "请检查输出位置" });
       return;
     }
 
     setError(null);
-    setStatus({ kind: "busy", text: "正在导出图片…" });
+    let lastOutputPath: string | null = null;
+    let completedCount = 0;
+    const failures: string[] = [];
+    for (const [index, image] of loadedImages.entries()) {
+      setStatus({ kind: "busy", text: `正在导出 ${index + 1}/${loadedImages.length} 张：${image.file.name}` });
+      try {
+        const targetDimensions = keepAspectRatio
+          ? constrainAspectDimensions("width", width, image.dimensions)
+          : { width, height };
+        const request: ExportImageRequest = {
+          fileName: image.file.name,
+          inputData: new Uint8Array(await image.file.arrayBuffer()),
+          outputFormat,
+          width: targetDimensions.width,
+          height: targetDimensions.height,
+          keepAspectRatio,
+          bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
+          backgroundColor,
+          jpegQuality,
+          byteOrder,
+          channelOrder,
+          rowOrder,
+          rowAlignment,
+          cArrayName: normalizeCArrayName(cArrayName),
+          outputLocation,
+          sourcePath: image.sourcePath,
+          outputSubdirectory: outputSubdirectory.trim() || undefined,
+          outputDirectory: outputDirectory.trim() || undefined,
+          deleteSource,
+        };
+        lastOutputPath = await exportImage(request);
+        completedCount += 1;
+      } catch (exportError) {
+        const message = exportError instanceof Error ? exportError.message : "导出失败，请重试。";
+        failures.push(`${image.file.name}：${message}`);
+      }
+    }
 
-    try {
-      const request: ExportImageRequest = {
-        fileName: file.name,
-        inputData: new Uint8Array(await file.arrayBuffer()),
-        outputFormat,
-        width,
-        height,
-        keepAspectRatio,
-        bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
-        backgroundColor,
-        jpegQuality,
-        byteOrder,
-        channelOrder,
-        rowOrder,
-        rowAlignment,
-        cArrayName: normalizeCArrayName(cArrayName),
-        outputLocation,
-        sourcePath,
-        outputSubdirectory: outputSubdirectory.trim() || undefined,
-        outputDirectory: outputDirectory.trim() || undefined,
-        deleteSource,
-      };
-      const outputPath = await exportImage(request);
+    if (failures.length > 0) {
+      setStatus({ kind: "error", text: `已导出 ${completedCount}/${loadedImages.length} 张` });
+      setError(failures.join("\n"));
+    } else {
       setStatus({
         kind: "success",
-        text: outputPath ? `已导出到 ${outputPath}` : "导出完成",
+        text: getBatchExportStatus(completedCount, loadedImages.length, lastOutputPath),
       });
-    } catch (exportError) {
-      const message = exportError instanceof Error ? exportError.message : "导出失败，请重试。";
-      setStatus({ kind: "error", text: "导出失败" });
-      setError(message);
     }
   };
 
@@ -656,7 +805,7 @@ export default function ImageConverter({
         <div>
           <p className="eyebrow">IMAGE WORKSPACE</p>
           <h2 id="workspace-title">转换图片，适配你的嵌入式界面</h2>
-          <p className="intro-copy">导入一张图片，调整尺寸与输出规格，然后导出到本地文件。</p>
+          <p className="intro-copy">导入一张或多张图片，统一调整尺寸与输出规格，然后导出到本地文件。</p>
         </div>
         <div className="intro-note">
           <Info size={16} aria-hidden="true" />
@@ -672,11 +821,13 @@ export default function ImageConverter({
               <h3>源图片</h3>
             </div>
             {file ? (
-              <button className="icon-button" type="button" onClick={clearFile} aria-label="移除图片" title="移除图片">
+              <button className="icon-button" type="button" onClick={clearFile} aria-label="移除当前图片" title="移除当前图片">
                 <X size={16} aria-hidden="true" />
               </button>
             ) : null}
           </div>
+
+          <input ref={inputRef} type="file" accept={SUPPORTED_IMAGE_ACCEPT} onChange={handleFileChange} multiple hidden />
 
           {!file ? (
             <div
@@ -692,7 +843,7 @@ export default function ImageConverter({
                 }
               }}
               onDrop={handleDrop}
-              onClick={handleSelectImage}
+              onClick={() => handleSelectImage()}
               role="button"
               tabIndex={0}
               onKeyDown={(event) => {
@@ -705,9 +856,8 @@ export default function ImageConverter({
             >
               <div className="drop-icon"><Upload size={22} aria-hidden="true" /></div>
               <strong>拖拽图片到这里</strong>
-              <span>或点击选择本地文件</span>
+              <span>或点击选择一个或多个本地文件</span>
               <small>支持 {SUPPORTED_IMAGE_FORMAT_LABEL}</small>
-              <input ref={inputRef} type="file" accept={SUPPORTED_IMAGE_ACCEPT} onChange={handleFileChange} hidden />
             </div>
           ) : (
             <div className="preview-content">
@@ -720,8 +870,53 @@ export default function ImageConverter({
                   <strong title={file.name}>{file.name}</strong>
                   <span>{dimensions?.width} × {dimensions?.height} px · {formatFileSize(file.size)}</span>
                 </div>
-                <span className="file-ready"><Check size={14} aria-hidden="true" /> 已载入</span>
+                <div className="file-summary-actions">
+                  <span className="file-ready"><Check size={14} aria-hidden="true" /> 已载入</span>
+                  <button
+                    className="quiet-button file-replace-button"
+                    type="button"
+                    onClick={() => handleSelectImage(selectedImageId)}
+                  >
+                    更换
+                  </button>
+                </div>
               </div>
+              <div className="file-list-toolbar">
+                <span className="file-count">已导入 {loadedImages.length} 张</span>
+                <div className="file-list-actions">
+                  <button className="quiet-button file-add-button" type="button" onClick={() => handleSelectImage()}>
+                    <Plus size={14} aria-hidden="true" />
+                    继续添加
+                  </button>
+                  {loadedImages.length > 1 ? (
+                    <button className="quiet-button file-clear-button" type="button" onClick={clearAllImages}>清空列表</button>
+                  ) : null}
+                </div>
+              </div>
+              {loadedImages.length > 1 ? (
+                <div className="file-list" role="listbox" aria-label="已导入图片列表">
+                  {loadedImages.map((image) => (
+                    <div className={`file-list-item${image.id === selectedImageId ? " file-list-item-selected" : ""}`} key={image.id}>
+                      <button
+                        className="file-list-select"
+                        type="button"
+                        role="option"
+                        aria-selected={image.id === selectedImageId}
+                        onClick={() => selectImage(image.id)}
+                      >
+                        <span className="file-list-icon"><ImageIcon size={14} aria-hidden="true" /></span>
+                        <span className="file-list-copy">
+                          <strong title={image.file.name}>{image.file.name}</strong>
+                          <small>{image.dimensions.width} × {image.dimensions.height} px · {formatFileSize(image.file.size)}</small>
+                        </span>
+                      </button>
+                      <button className="icon-button file-remove-button" type="button" onClick={() => removeImage(image.id)} aria-label={`移除 ${image.file.name}`} title="移除这张图片">
+                        <X size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
         </div>
@@ -959,7 +1154,7 @@ export default function ImageConverter({
               </div>
               {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}
             </div>
-            <button className="export-button" type="button" disabled={!file || status.kind === "busy" || Boolean(dimensionError) || Boolean(outputLocationError)} aria-busy={status.kind === "busy"} onClick={() => void handleExport()}>
+            <button className="export-button" type="button" disabled={!file || status.kind === "busy" || Boolean(dimensionError) || Boolean(batchOutputLocationError)} aria-busy={status.kind === "busy"} onClick={() => void handleExport()}>
               <Download size={17} aria-hidden="true" />
               {status.kind === "busy" ? "处理中…" : `导出 ${getOutputLabel(outputFormat)}`}
             </button>
