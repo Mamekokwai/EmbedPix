@@ -1,6 +1,6 @@
 [package]
 name = "embedpix"
-version = "0.1.5"
+version = "0.1.6"
 description = "Local image format conversion tool"
 authors = ["ZeroThrax"]
 license = "MIT"
