@@ -918,16 +918,22 @@ export default function ImageConverter({
                     : "目录不存在时会自动创建，支持绝对路径。"}
               </p>
               {outputLocationError ? <p className="error-message output-location-error" role="alert">{outputLocationError}</p> : null}
-              <label className="toggle-row output-action-toggle">
-                <input type="checkbox" checked={overwriteExisting} onChange={(event) => { setOverwriteExisting(event.target.checked); setError(null); }} />
-                <span className="toggle-track" aria-hidden="true"><span /></span>
-                <span>覆盖已有输出（旧文件移入 bak）</span>
-              </label>
-              <label className="toggle-row output-action-toggle">
-                <input type="checkbox" checked={deleteSource} onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
-                <span className="toggle-track" aria-hidden="true"><span /></span>
-                <span>导出成功后删除源图片</span>
-              </label>
+              <div className="output-action">
+                <label className="toggle-row output-action-toggle">
+                  <input type="checkbox" checked={overwriteExisting} aria-describedby="overwrite-output-help" onChange={(event) => { setOverwriteExisting(event.target.checked); setError(null); }} />
+                  <span className="toggle-track" aria-hidden="true"><span /></span>
+                  <span>覆盖已有输出</span>
+                </label>
+                <p className="field-help output-action-help" id="overwrite-output-help">同名文件会先移入输出目录的 bak 文件夹，再写入新文件。</p>
+              </div>
+              <div className="output-action">
+                <label className="toggle-row output-action-toggle">
+                  <input type="checkbox" checked={deleteSource} aria-describedby="delete-source-help" onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
+                  <span className="toggle-track" aria-hidden="true"><span /></span>
+                  <span>导出成功后删除源图片</span>
+                </label>
+                <p className="field-help output-action-help output-action-danger" id="delete-source-help">这是破坏性操作，仅在确认导出文件无误后使用。</p>
+              </div>
             </div>
           </div>
 
