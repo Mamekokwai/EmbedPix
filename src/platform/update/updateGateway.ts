@@ -1,8 +1,8 @@
 import packageJson from "../../../package.json";
 
 export const CURRENT_VERSION = packageJson.version;
-export const RELEASES_API_URL = "https://api.github.com/repos/Mamekokwai/EngiFormat/releases/latest";
-export const RELEASES_PAGE_URL = "https://github.com/Mamekokwai/EngiFormat/releases";
+export const RELEASES_API_URL = "https://api.github.com/repos/Mamekokwai/EmbedPix/releases/latest";
+export const RELEASES_PAGE_URL = "https://github.com/Mamekokwai/EmbedPix/releases";
 
 export interface UpdateInfo {
   currentVersion: string;
@@ -137,7 +137,7 @@ export async function checkForUpdates(
     latestVersion,
     releaseNotes: typeof release.body === "string" && release.body.trim() ? release.body.trim() : null,
     releaseDate: typeof release.published_at === "string" ? release.published_at : null,
-    releaseUrl: typeof release.html_url === "string" && release.html_url.startsWith("https://github.com/Mamekokwai/EngiFormat/")
+    releaseUrl: typeof release.html_url === "string" && release.html_url.startsWith("https://github.com/Mamekokwai/EmbedPix/")
       ? release.html_url
       : RELEASES_PAGE_URL,
     updateAvailable: compareVersions(latestVersion, currentVersion) > 0,

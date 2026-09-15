@@ -24,7 +24,7 @@ describe("update gateway", () => {
         tag_name: "v0.2.0",
         body: "新增 RGB565 导出。",
         published_at: "2026-09-15T00:00:00Z",
-        html_url: "https://github.com/Mamekokwai/EngiFormat/releases/tag/v0.2.0",
+        html_url: "https://github.com/Mamekokwai/EmbedPix/releases/tag/v0.2.0",
       }),
       "0.1.0",
     );
