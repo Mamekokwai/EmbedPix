@@ -5,6 +5,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd -P)"
 failures=0
 
+grep -Eq 'embedpix\)' "$SCRIPT_DIR/stop-project-processes.sh" || { printf 'Linux process allowlist must include embedpix\n' >&2; failures=1; }
+for required in '[[ -L' 'find -P' 'symlink itself'; do
+    grep -Fq -- "$required" "$SCRIPT_DIR/clean-build-artifacts.sh" || { printf 'Linux cleanup is missing symlink safety check: %s\n' "$required" >&2; failures=1; }
+done
+
 for name in stop-project-processes.sh clean-build-artifacts.sh cleanup.sh check-cleanup.sh; do
     path="$SCRIPT_DIR/$name"
     if [[ ! -f "$path" ]]; then

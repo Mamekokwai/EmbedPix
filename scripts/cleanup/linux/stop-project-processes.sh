@@ -18,7 +18,7 @@ names=()
 while read -r pid _ppid comm args; do
     [[ "$pid" =~ ^[0-9]+$ ]] || continue
     case "$comm" in
-        node|npm|npx|pnpm|yarn|bun|cargo|rustc|tauri|vite) ;;
+        node|npm|npx|pnpm|yarn|bun|cargo|rustc|tauri|vite|embedpix) ;;
         *) continue ;;
     esac
     [[ "$pid" -ne "$$" ]] || continue

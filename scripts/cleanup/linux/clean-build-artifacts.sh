@@ -27,6 +27,25 @@ remove_target() {
         return 0
     fi
 
+    if [[ -L "$target" ]]; then
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            printf '[dry-run] would remove symlink itself, not its target: %s (%s)\n' "$label" "$target"
+            return 0
+        fi
+        if rm -f -- "$target"; then
+            printf 'Removed symlink itself: %s (%s)\n' "$label" "$target"
+        else
+            printf 'Failed to remove symlink: %s (%s)\n' "$label" "$target" >&2
+            return 1
+        fi
+        return 0
+    fi
+
+    if [[ -d "$target" ]] && find -P "$target" -type l -print -quit | grep -q .; then
+        printf 'Refusing to recurse through a nested symlink under %s; remove the link first.\n' "$target" >&2
+        return 1
+    fi
+
     if [[ "$DRY_RUN" -eq 1 ]]; then
         printf '[dry-run] would remove %s (%s)\n' "$label" "$target"
         return 0

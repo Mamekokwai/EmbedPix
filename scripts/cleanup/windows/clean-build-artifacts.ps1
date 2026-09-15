@@ -10,6 +10,29 @@ $targets = @(
     [pscustomobject]@{ Label = 'Tauri target'; RelativePath = 'src-tauri\target' }
 )
 
+function Assert-NoReparsePoints {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $reparseAttribute = [IO.FileAttributes]::ReparsePoint
+    $rootItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    $items = @($rootItem)
+    if ($rootItem.PSIsContainer) {
+        $items += @(Get-ChildItem -LiteralPath $Path -Force -Recurse -ErrorAction Stop |
+                Where-Object { $_.Attributes -band $reparseAttribute })
+    }
+
+    foreach ($item in $items) {
+        if (-not ($item.Attributes -band $reparseAttribute)) {
+            continue
+        }
+        $resolvedPath = (Resolve-Path -LiteralPath $item.FullName -ErrorAction Stop).Path
+        if (-not $resolvedPath.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to clean reparse point outside project root: $($item.FullName) -> $resolvedPath"
+        }
+        throw "Refusing to clean reparse point: $($item.FullName); remove the link first so cleanup cannot recurse through it"
+    }
+}
+
 foreach ($target in $targets) {
     $path = [IO.Path]::GetFullPath((Join-Path $repoRoot $target.RelativePath))
     if (-not $path.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
@@ -20,6 +43,13 @@ foreach ($target in $targets) {
     if (-not (Test-Path -LiteralPath $path)) {
         Write-Output "Skip: $($target.Label) is absent ($path)"
         continue
+    }
+
+    try {
+        Assert-NoReparsePoints -Path $path
+    } catch {
+        Write-Error $_.Exception.Message
+        exit 1
     }
 
     if ($PSCmdlet.ShouldProcess($path, "Remove $($target.Label)")) {

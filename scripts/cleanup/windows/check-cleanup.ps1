@@ -9,6 +9,17 @@ $scriptNames = @(
     'cleanup.ps1'
 )
 $failures = [System.Collections.Generic.List[string]]::new()
+$stopContent = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'stop-project-processes.ps1') -Raw
+$cleanContent = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'clean-build-artifacts.ps1') -Raw
+
+if ($stopContent -notmatch 'embedpix\.exe') {
+    $failures.Add('Windows process allowlist must include embedpix.exe')
+}
+foreach ($required in @('ReparsePoint', 'Resolve-Path', 'Refusing to clean reparse point')) {
+    if ($cleanContent -notmatch [regex]::Escape($required)) {
+        $failures.Add("Windows cleanup is missing reparse-point safety check: $required")
+    }
+}
 
 foreach ($name in $scriptNames) {
     $path = Join-Path $PSScriptRoot $name

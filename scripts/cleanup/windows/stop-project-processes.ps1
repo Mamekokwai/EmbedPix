@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path.TrimEnd('\')
 $allowedProcessNames = @(
     'node.exe', 'npm.exe', 'npx.exe', 'pnpm.exe', 'yarn.exe', 'bun.exe',
-    'cargo.exe', 'rustc.exe', 'tauri.exe', 'vite.exe'
+    'cargo.exe', 'rustc.exe', 'tauri.exe', 'vite.exe', 'embedpix.exe'
 )
 
 Write-Output "Project root: $repoRoot"
