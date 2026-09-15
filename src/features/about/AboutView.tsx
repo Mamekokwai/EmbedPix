@@ -1,8 +1,24 @@
 import { Cpu, FileImage, Github, Info, ShieldCheck } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { MouseEvent } from "react";
 import packageJson from "../../../package.json";
 import UpdateView, { type UpdateViewProps } from "../update/UpdateView";
 
 const SUPPORTED_OUTPUTS = ["BMP", "PNG", "JPG", "RGB565 BIN", "C 数组"];
+const AUTHOR_BLOG_URL = "https://blog.nywerya.xyz/";
+const AUTHOR_AVATAR_URL = "https://photo.nywerya.xyz/Obsidian/%E5%A4%B4%E5%83%8F2.jpg";
+const AUTHOR_GITHUB_URL = "https://github.com/Mamekokwai";
+
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined"
+    && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+}
+
+function handleExternalLink(event: MouseEvent<HTMLAnchorElement>, url: string): void {
+  if (!isTauriRuntime()) return;
+  event.preventDefault();
+  void openUrl(url).catch((error) => console.warn("open external author link failed", error));
+}
 
 export default function AboutView(updateProps: UpdateViewProps) {
   return (
@@ -44,16 +60,21 @@ export default function AboutView(updateProps: UpdateViewProps) {
         </div>
 
         <section className="about-author-card" aria-label="作者信息">
-          <div className="about-author-mark" aria-hidden="true">N</div>
+          <img className="about-author-avatar" src={AUTHOR_AVATAR_URL} alt="Nywerya头像" />
           <div className="about-author-copy">
             <p className="about-section-eyebrow">MADE BY NYWERYA</p>
             <h2>Nywerya · XUNCHANG WANG</h2>
             <p>EmbedPix 的作者与维护者，专注于嵌入式界面和本地工具。</p>
           </div>
-          <a className="about-author-link" href="https://github.com/Mamekokwai" target="_blank" rel="noreferrer">
-            <Github size={15} aria-hidden="true" />
-            @Mamekokwai
-          </a>
+          <div className="about-author-links">
+            <a className="about-author-link" href={AUTHOR_BLOG_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, AUTHOR_BLOG_URL)}>
+              博客
+            </a>
+            <a className="about-author-link" href={AUTHOR_GITHUB_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, AUTHOR_GITHUB_URL)}>
+              <Github size={15} aria-hidden="true" />
+              @Mamekokwai
+            </a>
+          </div>
         </section>
 
         <UpdateView {...updateProps} embedded />

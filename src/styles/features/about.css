@@ -14,11 +14,12 @@
 .about-info-card h3 { margin: 0; color: var(--qp-text-primary); font-size: 12px; font-weight: 650; }
 .about-info-card p { margin: 6px 0 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.55; }
 .about-author-card { display: flex; min-width: 0; align-items: center; gap: 12px; border: 1px solid color-mix(in srgb, var(--qp-accent-default) 28%, var(--qp-border-subtle)); border-radius: var(--qp-radius-panel); background: color-mix(in srgb, var(--qp-accent-muted) 42%, var(--qp-bg-panel)); padding: 14px 16px; }
-.about-author-mark { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: var(--qp-radius-button); background: var(--qp-accent-default); color: white; font-family: var(--font-mono); font-size: 16px; font-weight: 700; }
+.about-author-avatar { display: block; width: 42px; height: 42px; flex: 0 0 auto; border: 1px solid var(--qp-border-subtle); border-radius: 50%; background: var(--qp-bg-elevated); object-fit: cover; }
 .about-author-copy { min-width: 0; flex: 1 1 auto; }
 .about-section-eyebrow { margin: 0 0 4px; color: var(--qp-accent-default); font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .1em; }
 .about-author-copy h2 { margin: 0; color: var(--qp-text-primary); font-size: 13px; font-weight: 700; }
 .about-author-copy > p:last-child { margin: 4px 0 0; color: var(--qp-text-tertiary); font-size: 10px; line-height: 1.45; }
+.about-author-links { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; }
 .about-author-link { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; color: var(--qp-accent-default); font-family: var(--font-mono); font-size: 10px; text-decoration: none; }
 .about-author-link:hover { text-decoration: underline; }
 .about-footnote { margin: 4px 0 0; color: var(--qp-text-tertiary); font-size: 11px; text-align: center; }
@@ -26,7 +27,7 @@
   .about-hero { align-items: flex-start; flex-direction: column; }
   .about-info-grid { grid-template-columns: 1fr; }
   .about-author-card { align-items: flex-start; flex-wrap: wrap; }
-  .about-author-link { margin-left: 46px; }
+  .about-author-links { width: 100%; margin-left: 51px; }
 }
 
 @media (max-height: 760px) {
@@ -40,7 +41,7 @@
   .about-info-card { gap: 8px; padding: 10px; }
   .about-info-card p { margin-top: 4px; font-size: 10px; }
   .about-author-card { gap: 9px; padding: 10px 12px; }
-  .about-author-mark { width: 30px; height: 30px; font-size: 14px; }
+  .about-author-avatar { width: 34px; height: 34px; }
   .about-author-copy > p:last-child { margin-top: 2px; }
   .update-view-embedded { margin-top: 8px; }
 }
