@@ -14,6 +14,7 @@ use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 
 mod dither;
+mod sequence;
 mod storage;
 #[cfg(test)]
 mod tests;
@@ -134,6 +135,18 @@ pub async fn estimate_gif_size(
     tauri::async_runtime::spawn_blocking(move || estimate_gif_size_blocking(request))
         .await
         .map_err(|error| format!("GIF 体积测量任务失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn pick_gif_sequence_output() -> Result<Option<String>, String> {
+    sequence::pick_gif_sequence_output().await
+}
+
+#[tauri::command]
+pub async fn export_png_sequence(
+    request: sequence::PngSequenceExportRequest,
+) -> Result<Vec<String>, String> {
+    sequence::export_png_sequence(request).await
 }
 
 fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {

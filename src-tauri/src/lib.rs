@@ -9,6 +9,8 @@ pub fn run() {
             commands::gif::pick_gif_output,
             commands::gif::export_gif,
             commands::gif::estimate_gif_size,
+            commands::gif::pick_gif_sequence_output,
+            commands::gif::export_png_sequence,
             commands::export_image::export_image,
             commands::export_image::pick_image,
             commands::export_image::pick_images,

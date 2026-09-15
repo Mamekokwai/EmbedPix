@@ -34,6 +34,13 @@ export interface GifSizeEstimateResult {
   bytes: number;
 }
 
+export interface PngSequenceExportRequest {
+  outputDir: string;
+  baseName: string;
+  frames: GifExportFrame[];
+  overwriteExisting?: boolean;
+}
+
 function isTauriEnvironment(): boolean {
   return typeof window !== "undefined"
     && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
@@ -103,6 +110,35 @@ export async function estimateGifSize(request: GifSizeEstimateRequest): Promise<
   try {
     return await invoke<GifSizeEstimateResult>("estimate_gif_size", {
       request: serializeGifSizeRequest(request),
+    });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function pickGifSequenceOutput(): Promise<string | null> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持选择 PNG 帧序列目录，请在桌面应用中执行导出。");
+  }
+  try {
+    return await invoke<string | null>("pick_gif_sequence_output");
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function exportPngSequence(request: PngSequenceExportRequest): Promise<string[]> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持 PNG 帧序列导出，请在桌面应用中执行导出。");
+  }
+  try {
+    return await invoke<string[]>("export_png_sequence", {
+      request: {
+        outputDir: request.outputDir,
+        baseName: request.baseName,
+        overwriteExisting: request.overwriteExisting ?? false,
+        frames: serializeGifFrames(request.frames),
+      },
     });
   } catch (error) {
     throw new Error(getErrorMessage(error));

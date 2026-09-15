@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { estimateGifSize, exportGif, pickGifOutput } from "./gifGateway";
+import { estimateGifSize, exportGif, exportPngSequence, pickGifOutput, pickGifSequenceOutput } from "./gifGateway";
 import type { GifExportRequest } from "./gifGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -57,6 +57,40 @@ describe("GIF desktop gateway", () => {
         ],
       },
     });
+  });
+
+  it("opens the PNG sequence directory picker without adding a file argument", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("E:\\导出");
+    await expect(pickGifSequenceOutput()).resolves.toBe("E:\\导出");
+    expect(invoke).toHaveBeenCalledWith("pick_gif_sequence_output");
+  });
+
+  it("serializes PNG sequence frames and defaults to non-overwrite output", async () => {
+    const input = {
+      outputDir: "E:\\导出",
+      baseName: "screen",
+      frames: request().frames,
+    };
+    vi.mocked(invoke).mockResolvedValueOnce(["E:\\导出\\screen-001.png"]);
+    await expect(exportPngSequence(input)).resolves.toEqual(["E:\\导出\\screen-001.png"]);
+    expect(invoke).toHaveBeenCalledWith("export_png_sequence", {
+      request: {
+        outputDir: input.outputDir,
+        baseName: input.baseName,
+        overwriteExisting: false,
+        frames: [
+          { data: [0, 127, 128, 255], durationMs: 19 },
+          { data: [255, 1], durationMs: 25 },
+        ],
+      },
+    });
+  });
+
+  it("passes explicit PNG sequence overwrite preference", async () => {
+    const input = { outputDir: "E:\\导出", baseName: "screen", frames: request().frames, overwriteExisting: true };
+    vi.mocked(invoke).mockResolvedValueOnce([]);
+    await expect(exportPngSequence(input)).resolves.toEqual([]);
+    expect(invoke).toHaveBeenCalledWith("export_png_sequence", { request: expect.objectContaining({ overwriteExisting: true }) });
   });
 
   it.each([false, true])("passes explicit overwriteExisting=%s", async (overwriteExisting) => {
