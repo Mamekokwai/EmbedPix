@@ -16,7 +16,16 @@
 .gif-maker-header .page-header-copy > p:last-child { display: none; }
 .gif-header-note { margin-left: auto; color: var(--qp-text-secondary); font-size: 11px; white-space: nowrap; }
 .gif-header-note .status-dot { margin-right: 6px; }
+.gif-source-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.gif-source-tab { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); padding: 3px 8px; background: var(--qp-bg-panel); color: var(--qp-text-secondary); font-size: 11px; }
+.gif-source-tab:hover { border-color: var(--qp-border-strong); background: var(--qp-bg-elevated); }
+.gif-source-tab-active { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); color: var(--qp-accent-default); }
 .gif-maker-content.page-content { display: flex; flex: 1; min-height: 0; min-width: 0; gap: 10px; padding: 0; margin: 0; border: 0; }
+.gif-coming-soon { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; flex-direction: column; gap: 8px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-text-secondary); text-align: center; }
+.gif-coming-soon-icon { display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-accent-default); }
+.gif-coming-soon h2 { margin: 2px 0 0; color: var(--qp-text-primary); font-size: 16px; }
+.gif-coming-soon p, .gif-coming-soon span { max-width: 360px; margin: 0; font-size: 11px; }
+.gif-coming-soon span { color: var(--qp-text-tertiary); }
 .gif-hidden-input { display: none; }
 .gif-maker-toolbar, .gif-frame-toolbar, .gif-frame-toolbar > div, .gif-card-heading, .gif-playback-controls, .gif-export-footer, .gif-group-tabs { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .gif-maker-toolbar { flex: 0 0 auto; }
@@ -36,6 +45,7 @@
 .gif-drop-zone { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; border: 1px dashed var(--qp-border-strong); border-radius: var(--qp-radius-button); padding: 12px 5px; color: var(--qp-text-secondary); cursor: pointer; }
 .gif-drop-zone span { font-size: 10px; }
 .gif-drop-zone-active { background: var(--qp-accent-muted); border-color: var(--qp-accent-default); }
+.gif-drop-label-compact { display: none; }
 .gif-frame-toolbar { justify-content: space-between; }
 .gif-frame-toolbar > span { color: var(--qp-text-secondary); }
 .gif-frame-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; }
@@ -92,8 +102,11 @@
   .gif-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: 136px minmax(0, 1fr); gap: 8px; }
   .gif-assets-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 28px minmax(0, 1fr); gap: 4px 8px; padding: 6px; }
   .gif-assets-card > .gif-card-heading { grid-column: 1; grid-row: 1; }
-  .gif-assets-card > .gif-drop-zone { grid-column: 1; grid-row: 1; margin-left: 88px; justify-self: end; padding: 3px 6px; }
+  .gif-assets-card > .gif-drop-zone { grid-column: 1; grid-row: 1; width: min(145px, 100%); min-width: 0; margin-left: 88px; justify-self: end; padding: 3px 6px; }
   .gif-drop-zone > span, .gif-drop-zone > svg { display: none; }
+  .gif-drop-zone > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gif-drop-label-full { display: none; }
+  .gif-drop-label-compact { display: inline; }
   .gif-frame-toolbar { grid-column: 2; grid-row: 1; }
   .gif-frame-toolbar > span { display: none; }
   .gif-frame-list { grid-column: 1 / -1; grid-row: 2; display: flex; gap: 5px; overflow-x: auto; overflow-y: hidden; }
@@ -109,6 +122,8 @@
   .gif-maker-header.page-header { padding-bottom: 5px; }
   .gif-settings-card { padding: 7px; }
   .gif-settings-grid, .gif-export-grid { gap: 6px 8px; }
+  .gif-source-tabs { gap: 4px; margin-top: 5px; }
+  .gif-source-tab { min-height: 24px; padding-inline: 7px; font-size: 10px; }
 }
 @media (max-width: 560px) {
   .gif-group-tabs > span { display: none; }

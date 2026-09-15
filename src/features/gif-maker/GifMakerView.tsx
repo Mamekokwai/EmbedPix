@@ -7,11 +7,13 @@ import {
   ArrowUp,
   Film,
   ImagePlus,
+  Images,
   Pause,
   Play,
   RotateCcw,
   Trash2,
   Upload,
+  Video,
   X,
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
@@ -23,6 +25,7 @@ import "../../styles/features/gif-maker.css";
 export type GifFitMode = "contain" | "stretch";
 export type GifBackground = "transparent" | "white" | "black";
 export type GifLoopMode = "infinite" | "finite";
+type GifSourceMode = "image" | "video";
 
 export interface GifFrameModel {
   id: string;
@@ -165,6 +168,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [sourceMode, setSourceMode] = useState<GifSourceMode>("image");
   const [status, setStatus] = useState<GifStatus>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const [group, setGroup] = useState<"timing" | "canvas" | "export" | null>("timing");
@@ -469,12 +473,42 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         <div className="page-header-copy">
           <p className="page-eyebrow">GIF MAKER</p>
           <h1>GIF 制作</h1>
+          <div className="gif-source-tabs" role="tablist" aria-label="GIF 来源">
+            <button
+              className={`gif-source-tab${sourceMode === "image" ? " gif-source-tab-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={sourceMode === "image"}
+              onClick={() => setSourceMode("image")}
+            >
+              <Images size={14} aria-hidden="true" />图生 GIF
+            </button>
+            <button
+              className={`gif-source-tab${sourceMode === "video" ? " gif-source-tab-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={sourceMode === "video"}
+              onClick={() => { setIsPlaying(false); setSourceMode("video"); }}
+            >
+              <Video size={14} aria-hidden="true" />视频生 GIF
+            </button>
+          </div>
           <p>把图片序列整理成适合界面演示和嵌入式资源预览的轻量动画。</p>
         </div>
         <div className="gif-header-note"><span className="status-dot" />仅支持图片序列</div>
       </header>
 
       <fieldset className="page-content gif-maker-content" disabled={locked} aria-label="GIF 制作工作区" aria-busy={locked || pendingImports > 0}>
+        {sourceMode === "video" ? (
+          <div className="gif-coming-soon" role="tabpanel" aria-label="视频生 GIF">
+            <div className="gif-coming-soon-icon"><Video size={30} aria-hidden="true" /></div>
+            <h2>视频生 GIF</h2>
+            <p>视频导入、时间裁剪和帧率设置正在规划中。</p>
+            <span>当前版本先支持“图生 GIF”，已导入的图片帧和设置会保留。</span>
+            <button className="quiet-button" type="button" onClick={() => setSourceMode("image")}>返回图生 GIF</button>
+          </div>
+        ) : (
+        <>
         <div className="gif-maker-toolbar">
           <button className="primary-button" type="button" onClick={() => openFileDialog()}>
             <Upload size={16} aria-hidden="true" />导入图片序列
@@ -504,7 +538,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               aria-label="拖放图片或选择图片"
             >
               <Upload size={20} aria-hidden="true" />
-              <strong>{isDragging ? "松开以添加图片" : "拖放图片到这里"}</strong>
+              <strong>
+                <span className="gif-drop-label-full">{isDragging ? "松开以添加图片" : "拖放图片到这里"}</span>
+                <span className="gif-drop-label-compact">添加图片</span>
+              </strong>
               <span>或点击选择多个文件</span>
             </div>
             {frames.length ? (
@@ -591,11 +628,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           <p className="gif-help-text">桌面端保存；默认不覆盖同名文件，请选择新文件名。</p>
           </div> : null}
         </section>
+        </>
+        )}
       </fieldset>
-      <div className="gif-export-footer">
+      {sourceMode === "image" ? <div className="gif-export-footer">
         {error ? <p className="gif-error-message" role="alert">{error}</p> : <p className={`gif-status gif-status-${status.kind}`} role="status">{status.text}</p>}
         <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!outputPath) { setGroup("export"); void chooseOutput(); } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputPath ? "导出 GIF" : "选择保存位置"}</button>
-      </div>
+      </div> : null}
     </div>
   );
 }
