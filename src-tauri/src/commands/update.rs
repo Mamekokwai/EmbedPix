@@ -250,6 +250,7 @@ async fn download_update_inner(
     tokio::fs::create_dir_all(&cache_dir)
         .await
         .map_err(|error| format!("无法创建更新缓存目录：{error}"))?;
+    validate_update_cache_dir(&cache_dir)?;
     let path = cache_dir.join(update_file_name(version)?);
     let part_path = PathBuf::from(format!("{}.part", path.to_string_lossy()));
     let mut file = tokio::fs::OpenOptions::new()
@@ -600,8 +601,7 @@ fn validate_cached_package(
     version: &str,
 ) -> Result<PathBuf, String> {
     let cache_dir = update_cache_dir(app)?;
-    let canonical_cache =
-        std::fs::canonicalize(&cache_dir).map_err(|_| "更新缓存目录不可用。".to_string())?;
+    let canonical_cache = validate_update_cache_dir(&cache_dir)?;
     let metadata = std::fs::symlink_metadata(package_path)
         .map_err(|_| "更新安装包不存在，请重新下载。".to_string())?;
     if metadata.file_type().is_symlink() || !metadata.is_file() || has_reparse_point(&metadata) {
@@ -620,6 +620,15 @@ fn validate_cached_package(
         return Err("更新安装包路径不安全。".to_string());
     }
     Ok(canonical_package)
+}
+
+fn validate_update_cache_dir(cache_dir: &Path) -> Result<PathBuf, String> {
+    let metadata =
+        std::fs::symlink_metadata(cache_dir).map_err(|_| "更新缓存目录不可用。".to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() || has_reparse_point(&metadata) {
+        return Err("更新缓存目录路径不安全。".to_string());
+    }
+    std::fs::canonicalize(cache_dir).map_err(|_| "更新缓存目录不可用。".to_string())
 }
 
 #[cfg(windows)]
@@ -711,7 +720,7 @@ fn parse_sha256(value: &str) -> Result<Vec<u8>, String> {
 mod tests {
     use super::{
         compare_versions, is_trusted_release_page_url, normalize_version, parse_sha256,
-        select_trusted_asset, validate_asset_url, ReleaseAsset,
+        select_trusted_asset, validate_asset_url, validate_update_cache_dir, ReleaseAsset,
     };
 
     #[test]
@@ -786,5 +795,15 @@ mod tests {
         );
         assert!(parse_sha256("not-a-digest").is_err());
         assert_eq!(compare_versions("1.10.0", "1.2.0"), 1);
+    }
+
+    #[test]
+    fn rejects_a_file_as_the_update_cache_directory() {
+        let path =
+            std::env::temp_dir().join(format!("embedpix-update-cache-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::write(&path, b"not a directory").expect("test cache marker");
+        assert!(validate_update_cache_dir(&path).is_err());
+        std::fs::remove_file(path).expect("remove test cache marker");
     }
 }
