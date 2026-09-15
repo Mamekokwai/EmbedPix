@@ -56,3 +56,13 @@ select:disabled,
 input:disabled {
   cursor: not-allowed;
 }
+
+.app-kept-view { min-width: 0; min-height: 0; }
+.app-kept-view[hidden] { display: none; }
+.app-main.app-main-gif { overflow: hidden; }
+.app-kept-gif { height: 100%; }
+
+@media (max-width: 560px) {
+  .app-shell:has(.app-main-gif) { grid-template-columns: 48px minmax(0, 1fr); gap: 6px; padding: 6px; }
+  .app-shell:has(.app-main-gif) .app-sidebar { min-height: 0; padding-inline: 3px; }
+}

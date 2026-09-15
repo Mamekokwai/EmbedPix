@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Film,
   Info,
   Images,
   Menu,
@@ -7,6 +8,7 @@ import {
 } from "lucide-react";
 import AppTitleBar from "./AppTitleBar";
 import ImageConverter from "../features/image-converter/ImageConverter";
+import GifMakerView from "../features/gif-maker/GifMakerView";
 import AboutView from "../features/about/AboutView";
 import SettingsView from "../features/settings/SettingsView";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
@@ -20,10 +22,11 @@ import {
   type ThemeMode,
 } from "../platform/preferences/appPreferences";
 
-type AppView = "converter" | "settings" | "about";
+type AppView = "converter" | "gif" | "settings" | "about";
 
 const NAV_ITEMS: ReadonlyArray<{ id: AppView; label: string; hint: string; icon: typeof Images }> = [
   { id: "converter", label: "图片转换", hint: "导入、调整并导出", icon: Images },
+  { id: "gif", label: "GIF 制作", hint: "图片序列制作动画", icon: Film },
   { id: "settings", label: "设置", hint: "外观与默认参数", icon: Settings2 },
   { id: "about", label: "关于", hint: "版本与项目信息", icon: Info },
 ];
@@ -141,14 +144,18 @@ export default function AppShell() {
           </div>
         </aside>
 
-        <main className="app-main">
-          {view === "converter" ? (
+        <main className={`app-main${view === "gif" ? " app-main-gif" : ""}`}>
+          <div className="app-kept-view" hidden={view !== "converter"}>
             <ImageConverter
               defaultOutputFormat={preferences.defaultOutputFormat}
               defaultJpegQuality={preferences.defaultJpegQuality}
               defaultKeepAspectRatio={preferences.keepAspectRatio}
             />
-          ) : view === "settings" ? (
+          </div>
+          <div className="app-kept-view app-kept-gif" hidden={view !== "gif"}>
+            <GifMakerView active={view === "gif"} />
+          </div>
+          {view === "settings" ? (
             <SettingsView
               preferences={preferences}
               onChange={updatePreferences}

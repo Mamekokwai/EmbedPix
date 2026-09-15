@@ -6,6 +6,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(commands::update::UpdateProgressState::default())
         .invoke_handler(tauri::generate_handler![
+            commands::gif::pick_gif_output,
+            commands::gif::export_gif,
             commands::export_image::export_image,
             commands::export_image::pick_image,
             commands::export_image::pick_images,
