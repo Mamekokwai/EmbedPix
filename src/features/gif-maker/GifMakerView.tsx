@@ -20,7 +20,7 @@ import {
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput } from "../../platform/gif/gifGateway";
 import type { GifExportFrame } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifPlaybackSpeed } from "./gifMakerLogic";
 import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
@@ -119,6 +119,14 @@ interface GifCompressionResult {
   width: number;
   height: number;
   colorCount: GifColorCount;
+  samplingEvery: number;
+  mergedIdenticalFrames: boolean;
+}
+
+function formatGifCompressionSummary(result: GifCompressionResult): string {
+  const sampling = result.samplingEvery === 1 ? "原始采样" : `每 ${result.samplingEvery} 帧采样`;
+  const merged = result.mergedIdenticalFrames ? " · 已合并重复帧" : "";
+  return `尺寸 ${result.width} × ${result.height} · ${result.colorCount} 色 · ${result.frames.length} 帧 · ${sampling}${merged}`;
 }
 
 function parseSizeBytes(value: string): number | undefined {
@@ -409,6 +417,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [maxSizeKiB, setMaxSizeKiB] = useState("");
   const [autoCompress, setAutoCompress] = useState(false);
   const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
+  const [compressionSummary, setCompressionSummary] = useState<string | null>(null);
   const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [sequenceOutputDir, setSequenceOutputDir] = useState<string | null>(null);
@@ -568,6 +577,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const previewUrl = URL.createObjectURL(file);
     setIsPlaying(false);
     setError(null);
+    setCompressionSummary(null);
     setStatus({ kind: "importing", text: "正在读取视频信息…" });
     try {
       const metadata = await loadVideoMetadata(previewUrl);
@@ -970,7 +980,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const baseFrames = await renderExportFrames(canvasSize);
     const shouldMeasure = autoCompress || targetBytes !== undefined || maxBytes !== undefined;
     if (!shouldMeasure) {
-      return { bytes: 0, frames: baseFrames, width: canvasSize.width, height: canvasSize.height, colorCount };
+      return { bytes: 0, frames: baseFrames, width: canvasSize.width, height: canvasSize.height, colorCount, samplingEvery: 1, mergedIdenticalFrames: false };
     }
     const colors = ([256, 128, 64] as GifColorCount[]).filter((value) => value <= colorCount);
     const sizes = [
@@ -978,14 +988,23 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       resolveGifCanvasSize(canvasSize, canvasSize.width * 0.75, canvasSize.height * 0.75, false),
       resolveGifCanvasSize(canvasSize, canvasSize.width * 0.5, canvasSize.height * 0.5, false),
     ].filter((size, index, all) => index === all.findIndex((candidate) => candidate.width === size.width && candidate.height === size.height));
-    const frameVariants = [baseFrames, mergeConsecutiveIdenticalFrames(baseFrames)];
+    const frameVariants = autoCompress
+      ? getGifSamplingCandidates(baseFrames.length).flatMap((samplingEvery) => {
+        const sampled = sampleGifFrames(baseFrames, samplingEvery);
+        const merged = mergeConsecutiveIdenticalFrames(sampled);
+        return [
+          { frames: sampled, samplingEvery, mergedIdenticalFrames: false },
+          { frames: merged, samplingEvery, mergedIdenticalFrames: true },
+        ];
+      })
+      : [{ frames: baseFrames, samplingEvery: 1, mergedIdenticalFrames: false }];
     let best: GifCompressionResult | null = null;
     let attempt = 0;
     const totalAttempts = autoCompress ? colors.length * frameVariants.length * sizes.length : 1;
 
     for (const size of sizes) {
-      for (const candidateFrames of frameVariants) {
-        if (!autoCompress && (size !== canvasSize || candidateFrames !== baseFrames)) continue;
+      for (const candidate of frameVariants) {
+        if (!autoCompress && size !== canvasSize) continue;
         for (const candidateColorCount of colors) {
           attempt += 1;
           setStatus({ kind: "exporting", text: `正在测量 GIF 体积 ${attempt}/${totalAttempts}…` });
@@ -997,9 +1016,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             encodingSpeed: encodingQuality === "high" ? 1 : encodingQuality === "balanced" ? 10 : 30,
             colorCount: candidateColorCount,
             ditherMode,
-            frames: candidateFrames,
+            frames: candidate.frames,
           });
-          const result = { bytes: measured.bytes, frames: candidateFrames, width: size.width, height: size.height, colorCount: candidateColorCount };
+          const result = { bytes: measured.bytes, frames: candidate.frames, width: size.width, height: size.height, colorCount: candidateColorCount, samplingEvery: candidate.samplingEvery, mergedIdenticalFrames: candidate.mergedIdenticalFrames };
           setMeasuredSizeBytes(measured.bytes);
           if (!best || Math.abs(measured.bytes - (targetBytes ?? maxBytes ?? measured.bytes)) < Math.abs(best.bytes - (targetBytes ?? maxBytes ?? best.bytes))) best = result;
           const underMax = maxBytes === undefined || measured.bytes <= maxBytes;
@@ -1070,6 +1089,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       }
       const compression = await measureCompressionCandidates();
       const { frames: exportFrames, width, height } = compression;
+      setMeasuredSizeBytes(compression.bytes || null);
+      setCompressionSummary(formatGifCompressionSummary(compression));
       const result = await exportGif({
         outputPath,
         width,
@@ -1081,7 +1102,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         ditherMode,
         frames: exportFrames,
       });
-      setStatus({ kind: "success", text: `GIF 已导出：${result}` });
+      setStatus({ kind: "success", text: `GIF 已导出：${result} · ${formatGifCompressionSummary(compression)}` });
     } catch (exportError) {
       setError(getErrorMessage(exportError));
       setStatus({ kind: "error", text: "GIF 导出失败" });
@@ -1299,6 +1320,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <strong>导出负载</strong>
             <span>{(workload.totalPixels / 1_000_000).toFixed(1)} MP · 帧缓冲 {formatGifBytes(workload.decodedBytes)} · 调色板 {formatGifBytes(workload.paletteBytes)}</span>
             {measuredSizeBytes !== null ? <span className="gif-measured-size">最近实测 {formatGifBytes(measuredSizeBytes)}</span> : null}
+            {compressionSummary !== null ? <span className="gif-measured-size">采用参数：{compressionSummary}</span> : null}
             <small>{workload.level === "heavy" ? "负载较高，建议缩小画布或减少帧数。" : "实际文件体积取决于画面内容；开启自动压缩后将先实际测量候选参数。"}</small>
           </div> : null}
           <p className="gif-help-text">{outputFormat === "png-sequence" ? "桌面端保存；每帧输出为 PNG，文件名按基础名-001.png 递增。" : "桌面端保存；默认不覆盖同名文件，请选择新文件名。"}</p>

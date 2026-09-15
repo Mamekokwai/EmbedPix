@@ -101,6 +101,39 @@ export function mergeConsecutiveIdenticalFrames(frames: ReadonlyArray<GifByteFra
   return merged;
 }
 
+export function getGifSamplingCandidates(frameCount: number, maxFrames = MAX_FRAMES): number[] {
+  const count = Number.isFinite(frameCount) ? Math.max(0, Math.floor(frameCount)) : 0;
+  if (count <= 1) return [1];
+  const safeMaxFrames = Math.max(2, Math.floor(maxFrames));
+  const minimumStep = Math.max(1, Math.ceil((count - 1) / (safeMaxFrames - 1)));
+  return [1, 2, 4, minimumStep]
+    .map((step) => Math.max(minimumStep, step))
+    .filter((step, index, candidates) => candidates.indexOf(step) === index && step < count);
+}
+
+export function sampleGifFrames<T extends GifByteFrame>(frames: ReadonlyArray<T>, everyNthFrame: number, maxFrames = MAX_FRAMES): T[] {
+  if (!frames.length) return [];
+  const indices = getGifSampleIndices(frames.length, everyNthFrame, maxFrames);
+  return indices.map((index, position) => {
+    const end = position + 1 < indices.length ? indices[position + 1] : frames.length;
+    const durationMs = frames.slice(index, end).reduce((total, frame) => total + frame.durationMs, 0);
+    return { ...frames[index], durationMs };
+  });
+}
+
+function getGifSampleIndices(frameCount: number, everyNthFrame: number, maxFrames: number): number[] {
+  const count = Math.max(0, Math.floor(frameCount));
+  if (!count) return [];
+  if (count === 1) return [0];
+  const safeMaxFrames = Math.max(2, Math.floor(maxFrames));
+  const requestedStep = Number.isFinite(everyNthFrame) ? Math.max(1, Math.floor(everyNthFrame)) : 1;
+  const step = Math.max(requestedStep, Math.ceil((count - 1) / (safeMaxFrames - 1)));
+  const indices = [0];
+  for (let index = step; index < count - 1; index += step) indices.push(index);
+  indices.push(count - 1);
+  return indices;
+}
+
 export function getGifFrameOrder(length: number, index: number, direction: -1 | 1): number {
   return length ? Math.min(length - 1, Math.max(0, index + direction)) : -1;
 }

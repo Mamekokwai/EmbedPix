@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("estimates export workload without pretending to know compressed file size", () => {
@@ -53,6 +53,27 @@ describe("GIF maker logic", () => {
 
   it("returns an empty list for empty frame input", () => {
     expect(mergeConsecutiveIdenticalFrames([])).toEqual([]);
+  });
+
+  it("samples frames while preserving the first and last frame timing", () => {
+    const frames = [100, 200, 300, 400, 500].map((durationMs, index) => ({ data: new Uint8Array([index]), durationMs }));
+    expect(getGifSamplingCandidates(5)).toEqual([1, 2, 4]);
+    expect(sampleGifFrames(frames, 2)).toEqual([
+      { data: new Uint8Array([0]), durationMs: 300 },
+      { data: new Uint8Array([2]), durationMs: 700 },
+      { data: new Uint8Array([4]), durationMs: 500 },
+    ]);
+    expect(sampleGifFrames(frames, 99)).toHaveLength(2);
+    expect(sampleGifFrames(frames, 2).reduce((total, frame) => total + frame.durationMs, 0)).toBe(1500);
+  });
+
+  it("bounds sampled output to the requested maximum frame count", () => {
+    const frames = Array.from({ length: 201 }, (_, index) => ({ data: new Uint8Array([index % 256]), durationMs: 100 }));
+    const sampled = sampleGifFrames(frames, 1, 200);
+    expect(sampled.length).toBeLessThanOrEqual(200);
+    expect(sampled[0].data[0]).toBe(frames[0].data[0]);
+    expect(sampled[sampled.length - 1]?.data[0]).toBe(frames[frames.length - 1]?.data[0]);
+    expect(sampled.reduce((total, frame) => total + frame.durationMs, 0)).toBe(20100);
   });
 
   it("calculates safe first and last frame hold durations", () => {
