@@ -85,6 +85,9 @@
 .gif-canvas-stage { position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background-color: var(--qp-bg-canvas); background-image: conic-gradient(var(--qp-bg-elevated) 25%, transparent 0 50%, var(--qp-bg-elevated) 0 75%, transparent 0); background-size: 16px 16px; }
 .gif-preview-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .gif-preview-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--qp-text-tertiary); }
+.gif-timeline { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--qp-text-secondary); font-size: 10px; }
+.gif-timeline input { flex: 1; min-width: 0; accent-color: var(--qp-accent-default); }
+.gif-timeline span { flex: 0 0 auto; white-space: nowrap; }
 .gif-preview-footer { display: flex; justify-content: space-between; gap: 4px; flex-wrap: wrap; color: var(--qp-text-secondary); font-size: 10px; }
 .gif-settings-card { flex: 0 0 auto; }
 .gif-group-tabs { gap: 6px; }

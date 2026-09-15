@@ -150,6 +150,11 @@ function parseSizeBytes(value: string): number | undefined {
   return Math.round(parsed * 1024);
 }
 
+function formatGifTimelineTime(milliseconds: number): string {
+  const seconds = Math.max(0, milliseconds) / 1000;
+  return seconds >= 60 ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}` : `${seconds.toFixed(2)} 秒`;
+}
+
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -504,6 +509,18 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     () => estimateGifWorkload(canvasSize, frames.length, colorCount),
     [canvasSize, colorCount, frames.length],
   );
+  const timeline = useMemo(() => {
+    const durations = frames.map((frame, index) => calculateBoundaryFrameDuration(
+      frame.durationMs,
+      frames.length === 1
+        ? firstFrameHoldDuration + lastFrameHoldDuration
+        : index === 0 ? firstFrameHoldDuration : index === frames.length - 1 ? lastFrameHoldDuration : 0,
+    ));
+    return {
+      currentMs: durations.slice(0, selectedIndex).reduce((total, duration) => total + duration, 0),
+      totalMs: durations.reduce((total, duration) => total + duration, 0),
+    };
+  }, [firstFrameHoldDuration, frames, lastFrameHoldDuration, selectedIndex]);
 
   useEffect(() => { if (!active) setIsPlaying(false); }, [active]);
 
@@ -801,6 +818,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       selectionAnchorRef.current = index;
     }
     setSelectedIndex(index);
+  };
+
+  const seekPreviewFrame = (value: number) => {
+    if (!frames.length) return;
+    const index = Math.min(frames.length - 1, Math.max(0, Math.floor(value)));
+    setIsPlaying(false);
+    setSelectedIndex(index);
+    setSelectedFrameIndices(new Set([index]));
+    selectionAnchorRef.current = index;
   };
 
   const copySelectedFrame = () => {
@@ -1354,6 +1380,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <div className={`gif-canvas-stage gif-background-${background}`}>
                 {selectedFrame ? <canvas ref={canvasRef} className="gif-preview-canvas" aria-label={`第 ${selectedIndex + 1} 帧预览`} /> : <div className="gif-preview-empty"><Film size={28} aria-hidden="true" /><span>导入图片后预览动画</span></div>}
               </div>
+              {frames.length ? <div className="gif-timeline"><input type="range" min="0" max={Math.max(0, frames.length - 1)} step="1" value={selectedIndex} aria-label="动画时间轴" onChange={(event) => seekPreviewFrame(Number(event.target.value))} /><span>{formatGifTimelineTime(timeline.currentMs)} / {formatGifTimelineTime(timeline.totalMs)}</span></div> : null}
               <div className="gif-preview-footer"><span>{frames.length ? `第 ${selectedIndex + 1} / ${frames.length} 帧` : "未选择帧"}</span><span>{sourceHint}</span><span>{canvasSize.width} × {canvasSize.height} px 画布</span></div>
             </section>
 
