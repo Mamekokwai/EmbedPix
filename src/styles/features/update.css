@@ -1,5 +1,7 @@
 .update-view { min-width: 0; }
+.update-view-embedded { margin-top: 16px; }
 .update-content { width: min(760px, 100%); max-width: 760px; }
+.update-content-embedded { width: 100%; max-width: none; padding-top: 0; }
 .update-card,
 .update-release-card { border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
 .update-card-header,
@@ -28,8 +30,10 @@
 .update-status-icon-spinning { animation: update-spin .9s linear infinite; }
 .update-release-heading { align-items: center; padding-bottom: 14px; }
 .update-section-eyebrow { margin: 0 0 4px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
-.update-release-link { display: inline-flex; align-items: center; gap: 5px; color: var(--qp-accent-default); font-size: 11px; font-weight: 600; text-decoration: none; }
+.update-release-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 0; color: var(--qp-accent-default); cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; text-decoration: none; }
 .update-release-link:hover { text-decoration: underline; }
+.update-release-link:disabled { opacity: .55; cursor: not-allowed; text-decoration: none; }
+.update-release-open-error { margin: -4px 22px 12px; color: var(--qp-danger); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .update-release-notes { margin: 0; border-top: 1px solid var(--qp-border-subtle); padding: 16px 22px 18px; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.65; }
 .update-status-detail { margin: 0; border-top: 1px solid var(--qp-border-subtle); padding: 12px 22px 0; color: var(--qp-text-secondary); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
 .update-progress { border-top: 1px solid var(--qp-border-subtle); padding: 14px 22px 18px; }
@@ -50,6 +54,14 @@
 @keyframes update-progress-slide { from { transform: translateX(-125%); } to { transform: translateX(325%); } }
 @keyframes update-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .update-status-icon-spinning, .update-progress-indeterminate { animation: none; } }
+@media (max-height: 760px) {
+  .update-card-header, .update-release-heading { padding: 12px 14px 10px; }
+  .update-version-item { min-height: 52px; gap: 4px; padding: 9px 14px; }
+  .update-version-item strong { font-size: 13px; }
+  .update-status { min-height: 34px; padding: 8px 14px; }
+  .update-status-detail { padding: 8px 14px 0; }
+  .update-release-notes { padding: 10px 14px 12px; }
+}
 @media (max-width: 560px) {
   .update-card-header,
   .update-release-heading { flex-direction: column; }

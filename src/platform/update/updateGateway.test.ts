@@ -1,9 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   checkForUpdates,
   compareVersions,
   isTrustedReleaseAssetUrl,
+  isTrustedReleasePageUrl,
+  openReleasePage,
 } from "./updateGateway";
+
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
 
 function response(payload: unknown, ok = true, status = 200): Response {
   return { ok, status, json: async () => payload } as Response;
@@ -60,6 +70,44 @@ describe("update gateway", () => {
       "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.2.1/EmbedPix_0.2.1_x64-setup.exe?download=1",
       "0.2.0",
     )).toBe(false);
+  });
+
+  it("accepts only the EmbedPix release page and version tag URLs", () => {
+    expect(isTrustedReleasePageUrl("https://github.com/Mamekokwai/EmbedPix/releases")).toBe(true);
+    expect(isTrustedReleasePageUrl("https://github.com/Mamekokwai/EmbedPix/releases/tag/v0.2.0")).toBe(true);
+    expect(isTrustedReleasePageUrl("https://github.com/other/repo/releases/tag/v0.2.0")).toBe(false);
+    expect(isTrustedReleasePageUrl("https://github.com/Mamekokwai/EmbedPix/releases?redirect=https://evil.example")).toBe(false);
+    expect(isTrustedReleasePageUrl("javascript:window.alert(1)")).toBe(false);
+  });
+
+  it("opens a trusted release page in a browser tab", async () => {
+    const open = vi.fn().mockReturnValue({ closed: false });
+    vi.stubGlobal("window", { open });
+
+    await openReleasePage(" https://github.com/Mamekokwai/EmbedPix/releases/tag/v0.2.0 ");
+
+    expect(open).toHaveBeenCalledWith(
+      "https://github.com/Mamekokwai/EmbedPix/releases/tag/v0.2.0",
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+
+  it("reports missing or blocked release page openings", async () => {
+    await expect(openReleasePage(null)).rejects.toThrow("发布页地址不可用");
+
+    vi.stubGlobal("window", { open: vi.fn().mockReturnValue(null) });
+    await expect(openReleasePage("https://github.com/Mamekokwai/EmbedPix/releases"))
+      .rejects.toThrow("检查浏览器弹窗权限");
+  });
+
+  it("uses the Tauri opener in the desktop runtime", async () => {
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+    vi.mocked(openUrl).mockResolvedValueOnce(undefined);
+
+    await openReleasePage("https://github.com/Mamekokwai/EmbedPix/releases");
+
+    expect(openUrl).toHaveBeenCalledWith("https://github.com/Mamekokwai/EmbedPix/releases");
   });
 
   it("rejects invalid payloads and server failures with stable error kinds", async () => {

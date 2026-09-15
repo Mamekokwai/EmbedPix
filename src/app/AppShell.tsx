@@ -75,6 +75,7 @@ export default function AppShell() {
     runCheck: checkForUpdates,
     runDownload: downloadUpdate,
     runInstall: installUpdate,
+    openReleasePage,
   } = useUpdateCheck();
   const activeTheme = useMemo(() => resolveTheme(preferences.themeMode, prefersDark), [preferences.themeMode, prefersDark]);
 
@@ -164,6 +165,7 @@ export default function AppShell() {
               onCheckForUpdates={async () => { await checkForUpdates(); }}
               onDownloadUpdate={async () => { await downloadUpdate(); }}
               onInstallUpdate={async () => { await installUpdate(); }}
+              onOpenReleasePage={() => openReleasePage(updateState.info?.releaseUrl)}
             />
           )}
         </main>

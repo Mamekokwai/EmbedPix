@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   checkForUpdates,
   CURRENT_VERSION,
+  openReleasePage as openReleasePageInBrowser,
   type UpdateInfo,
 } from "../../platform/update/updateGateway";
 import {
@@ -250,5 +251,9 @@ export function useUpdateCheck() {
     }
   }, []);
 
-  return { state, runCheck, runDownload, runInstall };
+  const runOpenReleasePage = useCallback(async (releaseUrl: string | null | undefined) => {
+    await openReleasePageInBrowser(releaseUrl);
+  }, []);
+
+  return { state, runCheck, runDownload, runInstall, openReleasePage: runOpenReleasePage };
 }

@@ -26,7 +26,7 @@ export interface UpdateViewProps {
   latestVersion?: string;
   status: UpdateStatus;
   releaseNotes?: string;
-  releaseUrl?: string;
+  releaseUrl?: string | null;
   assetAvailable?: boolean;
   errorStage?: UpdateErrorStage;
   downloadedBytes?: number | null;
@@ -35,6 +35,8 @@ export interface UpdateViewProps {
   onCheckForUpdates: () => void | Promise<void>;
   onDownloadUpdate: () => void | Promise<void>;
   onInstallUpdate: () => void | Promise<void>;
+  onOpenReleasePage: () => void | Promise<void>;
+  embedded?: boolean;
   className?: string;
 }
 
@@ -157,14 +159,17 @@ export default function UpdateView({
   onCheckForUpdates,
   onDownloadUpdate,
   onInstallUpdate,
+  onOpenReleasePage,
+  embedded = false,
   className,
 }: UpdateViewProps) {
   const [confirmAction, setConfirmAction] = useState<"download" | "install" | null>(null);
+  const [releaseOpenError, setReleaseOpenError] = useState<string | null>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const meta = STATUS_META[status];
   const progress = resolveUpdateProgress(status, downloadedBytes, totalBytes);
   const busy = status === "checking" || status === "downloading" || status === "installing";
-  const viewClassName = ["update-view", "page-view", className].filter(Boolean).join(" ");
+  const viewClassName = ["update-view", embedded ? "update-view-embedded" : "page-view", className].filter(Boolean).join(" ");
 
   useEffect(() => {
     if (!confirmAction) return undefined;
@@ -204,6 +209,19 @@ export default function UpdateView({
     if (action === "install") void onInstallUpdate();
   };
 
+  const handleOpenReleasePage = async () => {
+    if (!releaseUrl) {
+      setReleaseOpenError("当前没有可用的发布页地址。");
+      return;
+    }
+    try {
+      await onOpenReleasePage();
+      setReleaseOpenError(null);
+    } catch (error) {
+      setReleaseOpenError(error instanceof Error ? error.message : "无法打开发布页，请稍后重试。");
+    }
+  };
+
   const actionLabel = status === "checking"
     ? "检查中…"
     : status === "downloading" || status === "installing"
@@ -236,16 +254,18 @@ export default function UpdateView({
 
   return (
     <div className={viewClassName}>
-      <header className="page-header">
-        <div className="page-header-icon"><RefreshCw size={19} aria-hidden="true" /></div>
-        <div className="page-header-copy">
-          <p className="page-eyebrow">UPDATES</p>
-          <h1>检查更新</h1>
-          <p>查看 EmbedPix 是否有可用的新版本。</p>
-        </div>
-      </header>
+      {!embedded ? (
+        <header className="page-header">
+          <div className="page-header-icon"><RefreshCw size={19} aria-hidden="true" /></div>
+          <div className="page-header-copy">
+            <p className="page-eyebrow">UPDATES</p>
+            <h1>检查更新</h1>
+            <p>查看 EmbedPix 是否有可用的新版本。</p>
+          </div>
+        </header>
+      ) : null}
 
-      <div className="page-content update-content">
+      <div className={`page-content update-content${embedded ? " update-content-embedded" : ""}`}>
         <section className="update-card" aria-labelledby="update-card-title">
           <div className="update-card-header">
             <div>
@@ -279,19 +299,24 @@ export default function UpdateView({
           {progress ? <UpdateProgressBar progress={progress} /> : null}
         </section>
 
-        {(releaseNotes || releaseUrl) && (
+        {(releaseNotes || releaseUrl || releaseOpenError) && (
           <section className="update-release-card" aria-labelledby="release-notes-title">
             <div className="update-release-heading">
               <div>
                 <p className="update-section-eyebrow">RELEASE</p>
                 <h2 id="release-notes-title">发布说明</h2>
               </div>
-              {releaseUrl ? (
-                <a className="update-release-link" href={releaseUrl} target="_blank" rel="noreferrer">
-                  查看发布页 <ExternalLink size={14} aria-hidden="true" />
-                </a>
-              ) : null}
+              <button
+                className="update-release-link"
+                type="button"
+                disabled={!releaseUrl}
+                aria-describedby={releaseOpenError ? "release-open-error" : undefined}
+                onClick={() => void handleOpenReleasePage()}
+              >
+                {releaseUrl ? "查看发布页" : "发布页不可用"} <ExternalLink size={14} aria-hidden="true" />
+              </button>
             </div>
+            {releaseOpenError ? <p className="update-release-open-error" id="release-open-error" role="alert">{releaseOpenError}</p> : null}
             {releaseNotes ? <p className="update-release-notes">{releaseNotes}</p> : null}
           </section>
         )}

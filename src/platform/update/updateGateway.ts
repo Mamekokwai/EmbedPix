@@ -1,4 +1,5 @@
 import packageJson from "../../../package.json";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 export const CURRENT_VERSION = packageJson.version;
 export const RELEASES_API_URL = "https://api.github.com/repos/Mamekokwai/EmbedPix/releases/latest";
@@ -10,7 +11,7 @@ export interface UpdateInfo {
   latestVersion: string;
   releaseNotes: string | null;
   releaseDate: string | null;
-  releaseUrl: string;
+  releaseUrl: string | null;
   assetDownloadUrl: string | null;
   assetSha256: string | null;
   assetSizeBytes: number | null;
@@ -154,6 +155,52 @@ export function isTrustedReleaseAssetUrl(value: string, version: string): boolea
   }
 }
 
+export function isTrustedReleasePageUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const shared = url.protocol === "https:"
+      && url.hostname === "github.com"
+      && !url.username
+      && !url.password
+      && !url.search
+      && !url.hash
+      && segments[0] === "Mamekokwai"
+      && segments[1] === "EmbedPix"
+      && segments[2] === "releases";
+    if (!shared) return false;
+    if (segments.length === 3) return true;
+    return segments.length === 5
+      && segments[3] === "tag"
+      && parseVersion(segments[4]) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined"
+    && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+}
+
+export async function openReleasePage(releaseUrl: string | null | undefined): Promise<void> {
+  const url = typeof releaseUrl === "string" ? releaseUrl.trim() : "";
+  if (!url || !isTrustedReleasePageUrl(url)) {
+    throw new Error("发布页地址不可用。");
+  }
+  if (isTauriRuntime()) {
+    await openUrl(url);
+    return;
+  }
+  if (typeof window === "undefined") {
+    throw new Error("当前环境无法打开发布页。");
+  }
+  const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+  if (!openedWindow) {
+    throw new Error("无法打开发布页，请检查浏览器弹窗权限。");
+  }
+}
+
 function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; dispose: () => void } {
   const controller = new AbortController();
   const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
@@ -196,7 +243,7 @@ export async function checkForUpdates(
     latestVersion,
     releaseNotes: typeof release.body === "string" && release.body.trim() ? release.body.trim() : null,
     releaseDate: typeof release.published_at === "string" ? release.published_at : null,
-    releaseUrl: typeof release.html_url === "string" && release.html_url.startsWith("https://github.com/Mamekokwai/EmbedPix/")
+    releaseUrl: typeof release.html_url === "string" && isTrustedReleasePageUrl(release.html_url)
       ? release.html_url
       : RELEASES_PAGE_URL,
     assetDownloadUrl: asset?.url ?? null,

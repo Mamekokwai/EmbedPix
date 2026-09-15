@@ -49,6 +49,13 @@ describe("update runtime DTO", () => {
     expect(() => parseUpdateCheckResult({ ...validResult, latestVersion: 2 })).toThrow("完整的版本信息");
     expect(() => parseUpdateCheckResult({ ...validResult, assetSizeBytes: -1 })).toThrow("安装包大小");
   });
+
+  it("does not pass an untrusted release page URL to the UI", () => {
+    expect(parseUpdateCheckResult({
+      ...validResult,
+      releaseUrl: "https://example.com/releases/tag/v0.2.0",
+    }).releaseUrl).toBeNull();
+  });
 });
 
 describe("update runtime commands", () => {

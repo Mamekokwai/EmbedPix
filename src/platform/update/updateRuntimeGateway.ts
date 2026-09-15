@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event } from "@tauri-apps/api/event";
-import type { UpdateInfo } from "./updateGateway";
+import { isTrustedReleasePageUrl, type UpdateInfo } from "./updateGateway";
 
 const UPDATE_PROGRESS_EVENT = "update-download-progress";
 const UPDATE_PROGRESS_SNAPSHOT_COMMAND = "get_update_download_progress";
@@ -39,7 +39,7 @@ export function parseUpdateCheckResult(value: unknown): UpdateInfo {
     latestVersion: result.latestVersion,
     releaseNotes: nullableString("releaseNotes"),
     releaseDate: nullableString("releaseDate"),
-    releaseUrl: result.releaseUrl,
+    releaseUrl: isTrustedReleasePageUrl(result.releaseUrl) ? result.releaseUrl : null,
     assetDownloadUrl: nullableString("assetDownloadUrl"),
     assetSha256: nullableString("assetSha256"),
     assetSizeBytes: nullableSize === undefined ? null : nullableSize as number | null,
