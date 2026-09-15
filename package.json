@@ -1,7 +1,7 @@
 {
   "name": "embedpix",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "面向嵌入式 UI 开发的本地图片格式转换工具",
   "scripts": {
