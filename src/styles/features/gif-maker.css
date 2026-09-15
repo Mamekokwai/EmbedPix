@@ -121,6 +121,7 @@
 .gif-workload-summary span { min-width: 0; overflow-wrap: anywhere; }
 .gif-measured-size { color: var(--qp-accent-default); font-weight: 600; }
 .gif-workload-summary small { flex-basis: 100%; color: var(--qp-text-tertiary); font-size: 9px; }
+.gif-estimate-button { margin-left: auto; min-height: 24px; padding-inline: 8px; font-size: 10px; }
 .gif-workload-heavy { border-color: color-mix(in srgb, var(--qp-danger) 55%, var(--qp-border-subtle)); }
 .gif-workload-heavy small { color: var(--qp-danger); }
 .gif-output-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--qp-text-secondary); }

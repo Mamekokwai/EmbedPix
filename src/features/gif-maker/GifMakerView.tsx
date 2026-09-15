@@ -1095,7 +1095,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
   };
 
-  const measureCompressionCandidates = async (): Promise<GifCompressionResult> => {
+  const measureCompressionCandidates = async (forceMeasure = false): Promise<GifCompressionResult> => {
     const targetBytes = parseSizeBytes(targetSizeKiB);
     const maxBytes = parseSizeBytes(maxSizeKiB);
     if (targetSizeKiB.trim() && targetBytes === undefined) throw new Error("目标文件大小必须是大于 0 的数字。");
@@ -1106,7 +1106,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
     setStatus({ kind: "exporting", text: `正在准备 GIF 帧 ${frames.length} 帧…` });
     const baseFrames = await renderExportFrames(canvasSize);
-    const shouldMeasure = autoCompress || targetBytes !== undefined || maxBytes !== undefined;
+    const shouldMeasure = forceMeasure || autoCompress || targetBytes !== undefined || maxBytes !== undefined;
     if (!shouldMeasure) {
       return { bytes: 0, frames: baseFrames, width: canvasSize.width, height: canvasSize.height, colorCount, samplingEvery: 1, mergedIdenticalFrames: false };
     }
@@ -1165,6 +1165,26 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
     if (!best) throw new Error("无法测量 GIF 文件体积。");
     return best;
+  };
+
+  const estimateGifSizeBeforeExport = async () => {
+    if (lockedRef.current || !frames.length || outputFormat !== "gif") return;
+    lockedRef.current = true;
+    setLocked(true);
+    setIsPlaying(false);
+    setError(null);
+    try {
+      const result = await measureCompressionCandidates(true);
+      setMeasuredSizeBytes(result.bytes);
+      setCompressionSummary(formatGifCompressionSummary(result));
+      setStatus({ kind: "ready", text: `预计 GIF 体积：${formatGifBytes(result.bytes)}` });
+    } catch (estimateError) {
+      setError(getErrorMessage(estimateError));
+      setStatus({ kind: "error", text: "GIF 体积估算失败" });
+    } finally {
+      lockedRef.current = false;
+      setLocked(false);
+    }
   };
 
   const exportAnimation = async () => {
@@ -1454,6 +1474,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             {measuredSizeBytes !== null ? <span className="gif-measured-size">最近实测 {formatGifBytes(measuredSizeBytes)}</span> : null}
             {compressionSummary !== null ? <span className="gif-measured-size">采用参数：{compressionSummary}</span> : null}
             <small>{workload.level === "heavy" ? "负载较高，建议缩小画布或减少帧数。" : "实际文件体积取决于画面内容；开启自动压缩后将先实际测量候选参数。"}</small>
+            <button className="quiet-button gif-estimate-button" type="button" disabled={!frames.length || locked} onClick={() => void estimateGifSizeBeforeExport()}>{measuredSizeBytes === null ? "估算体积" : "重新估算"}</button>
           </div> : null}
           <p className="gif-help-text">{outputFormat === "png-sequence" ? "桌面端保存；每帧输出为 PNG，文件名按基础名-001.png 递增。" : "桌面端保存；默认不覆盖同名文件，请选择新文件名。"}</p>
           </div> : null}
