@@ -21,7 +21,7 @@ import ThemeSelect from "../../shared/components/ThemeSelect";
 import { exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize } from "./gifMakerLogic";
-import { clampVideoFps, formatVideoTime, planVideoFrames } from "./videoGifLogic";
+import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
 
@@ -52,6 +52,7 @@ const DEFAULT_DURATION = 100;
 const DEFAULT_FILE_NAME = "embedpix-animation.gif";
 const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/bmp,.png,.jpg,.jpeg,.webp,.bmp";
 const VIDEO_ACCEPT = "video/mp4,video/webm,video/ogg,.mp4,.webm,.ogv";
+const MAX_VIDEO_FRAME_LIMIT = 200;
 
 interface VideoSourceModel {
   file: File;
@@ -315,6 +316,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [videoStart, setVideoStart] = useState(0);
   const [videoEnd, setVideoEnd] = useState(0);
   const [videoFps, setVideoFps] = useState(10);
+  const [videoEveryNthFrame, setVideoEveryNthFrame] = useState(1);
+  const [videoMaxFrames, setVideoMaxFrames] = useState(MAX_VIDEO_FRAME_LIMIT);
   const [status, setStatus] = useState<GifStatus>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const [group, setGroup] = useState<"timing" | "canvas" | "export" | null>("timing");
@@ -413,6 +416,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setVideoSource(nextSource);
       setVideoStart(0);
       setVideoEnd(metadata.duration);
+      setVideoEveryNthFrame(1);
+      setVideoMaxFrames(MAX_VIDEO_FRAME_LIMIT);
       setFrames((current) => {
         current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
         return [];
@@ -444,7 +449,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setError("视频时间范围至少需要 0.01 秒。");
       return;
     }
-    const plan = planVideoFrames(start, end, videoSource.duration, videoFps);
+    const plan = planVideoFramesWithSampling(start, end, videoSource.duration, videoFps, {
+      everyNthFrame: videoEveryNthFrame,
+      maxFrames: videoMaxFrames,
+    });
     setIsPlaying(false);
     lockedRef.current = true;
     setLocked(true);
@@ -833,7 +841,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                   <label className="gif-field"><span>开始时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoStart} onChange={(event) => setVideoStart(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0)))} /></label>
                   <label className="gif-field"><span>结束时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoEnd} onChange={(event) => setVideoEnd(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0)))} /></label>
                   <label className="gif-field"><span>帧率 · FPS</span><input type="number" min="1" max="30" step="1" value={videoFps} onChange={(event) => setVideoFps(clampVideoFps(Number(event.target.value)))} /></label>
-                  <div className="gif-video-summary"><span>当前范围</span><strong>{formatVideoTime(videoStart)} – {formatVideoTime(videoEnd)}</strong><small>预计最多 {planVideoFrames(videoStart, videoEnd, videoSource.duration, videoFps).times.length} 帧</small></div>
+                  <label className="gif-field"><span>每隔 N 帧</span><input type="number" min="1" max="200" step="1" value={videoEveryNthFrame} onChange={(event) => setVideoEveryNthFrame(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value)) || 1)))} /></label>
+                  <label className="gif-field"><span>最大帧数</span><input type="number" min="1" max={MAX_VIDEO_FRAME_LIMIT} step="1" value={videoMaxFrames} onChange={(event) => setVideoMaxFrames(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value)) || 1)))} /></label>
+                  <div className="gif-video-summary"><span>当前范围</span><strong>{formatVideoTime(videoStart)} – {formatVideoTime(videoEnd)}</strong><small>预计 {planVideoFramesWithSampling(videoStart, videoEnd, videoSource.duration, videoFps, { everyNthFrame: videoEveryNthFrame, maxFrames: videoMaxFrames }).times.length} 帧（最多 {MAX_VIDEO_FRAME_LIMIT} 帧）</small></div>
                 </div>
                 <div className="gif-video-actions">
                   <span>{videoSource.name} · {videoSource.width} × {videoSource.height} px</span>
