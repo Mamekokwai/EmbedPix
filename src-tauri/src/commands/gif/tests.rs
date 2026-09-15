@@ -77,6 +77,7 @@ fn request(path: &Path) -> GifExportRequest {
         height: 2,
         loop_mode: "infinite".into(),
         loop_count: 0,
+        encoding_speed: 1,
         overwrite_existing: false,
         frames: vec![
             frame([255, 0, 0, 255], 19),

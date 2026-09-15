@@ -12,6 +12,7 @@ export interface GifExportRequest {
   loopMode: "infinite" | "finite";
   // GIF 保存首次播放后的重复次数，因此 finite 时总播放次数为 loopCount + 1。
   loopCount: number;
+  encodingSpeed?: number;
   frames: GifExportFrame[];
   overwriteExisting?: boolean;
 }
@@ -47,6 +48,7 @@ export async function exportGif(request: GifExportRequest): Promise<string> {
       request: {
         ...request,
         overwriteExisting: request.overwriteExisting ?? false,
+        encodingSpeed: request.encodingSpeed ?? 1,
         frames: request.frames.map((frame) => ({
           data: Array.from(frame.data),
           durationMs: frame.durationMs,

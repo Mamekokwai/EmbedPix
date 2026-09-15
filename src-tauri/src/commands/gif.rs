@@ -27,6 +27,8 @@ const MAX_TOTAL_GIF_PIXELS: u64 = 64 * 1024 * 1024;
 const MAX_DECODE_BYTES: u64 = 128 * 1024 * 1024;
 const MIN_FRAME_DURATION_MS: u32 = 10;
 const MAX_FRAME_DURATION_MS: u32 = 60_000;
+const MIN_ENCODING_SPEED: i32 = 1;
+const MAX_ENCODING_SPEED: i32 = 30;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,9 +38,15 @@ pub struct GifExportRequest {
     height: u32,
     loop_mode: String,
     loop_count: u16,
+    #[serde(default = "default_encoding_speed")]
+    encoding_speed: i32,
     frames: Vec<GifFrameRequest>,
     #[serde(default)]
     overwrite_existing: bool,
+}
+
+fn default_encoding_speed() -> i32 {
+    MIN_ENCODING_SPEED
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,7 +85,7 @@ fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
 fn encode_gif(writer: impl Write, request: &GifExportRequest) -> Result<(), String> {
     let mut writer = storage::CheckedWriter::new(writer);
     {
-        let mut encoder = GifEncoder::new(&mut writer);
+        let mut encoder = GifEncoder::new_with_speed(&mut writer, request.encoding_speed);
         let repeat = if request.loop_mode == "finite" {
             // NETSCAPE 的值是首次播放后的重复次数，保持与 gateway 契约一致。
             Repeat::Finite(request.loop_count)
@@ -194,6 +202,9 @@ fn validate_request(request: &GifExportRequest) -> Result<(), String> {
     }
     if request.frames.is_empty() || request.frames.len() > MAX_GIF_FRAMES {
         return Err(format!("GIF 帧数必须在 1 到 {MAX_GIF_FRAMES} 之间。"));
+    }
+    if !(MIN_ENCODING_SPEED..=MAX_ENCODING_SPEED).contains(&request.encoding_speed) {
+        return Err("GIF 编码速度必须在 1–30 之间。".to_string());
     }
     let canvas_pixels = u64::from(request.width).saturating_mul(u64::from(request.height));
     if canvas_pixels.saturating_mul(request.frames.len() as u64) > MAX_TOTAL_GIF_PIXELS {

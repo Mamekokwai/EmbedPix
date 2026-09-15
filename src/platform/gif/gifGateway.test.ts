@@ -28,7 +28,7 @@ describe("GIF desktop gateway", () => {
     vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
     await expect(exportGif(input)).resolves.toBe(input.outputPath);
     expect(invoke).toHaveBeenCalledWith("export_gif", {
-      request: { ...input, overwriteExisting: false, frames: [
+      request: { ...input, overwriteExisting: false, encodingSpeed: 1, frames: [
         { data: [0, 127, 128, 255], durationMs: 19 },
         { data: [255, 1], durationMs: 25 },
       ] },
