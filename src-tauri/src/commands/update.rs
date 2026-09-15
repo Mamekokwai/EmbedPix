@@ -253,6 +253,8 @@ async fn download_update_inner(
     validate_update_cache_dir(&cache_dir)?;
     let path = cache_dir.join(update_file_name(version)?);
     let part_path = PathBuf::from(format!("{}.part", path.to_string_lossy()));
+    // A previous process can leave only the temporary download marker behind; it is safe to replace it because downloads are serialized by the app state.
+    let _ = tokio::fs::remove_file(&part_path).await;
     let mut file = tokio::fs::OpenOptions::new()
         .write(true)
         .create_new(true)

@@ -33,15 +33,16 @@ function isTauriRuntime(): boolean {
 
 function errorText(error: unknown, stage: UpdateErrorStage): string {
   console.error(`[update] ${stage} operation failed`, error);
+  const detail = error instanceof Error
+    ? error.message.trim()
+    : typeof error === "string"
+      ? error.trim()
+      : "";
   if (stage === "check") {
-    return error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "无法检查更新，请稍后重试。";
+    return detail || "无法检查更新，请稍后重试。";
   }
-  if (stage === "download") return "更新下载安装包失败，请重试。";
-  return "启动更新安装程序失败，请重试。";
+  if (stage === "download") return detail ? `更新下载安装包失败：${detail}` : "更新下载安装包失败，请重试。";
+  return detail ? `启动更新安装程序失败：${detail}` : "启动更新安装程序失败，请重试。";
 }
 
 function makeIdleState(): UpdateCheckState {
