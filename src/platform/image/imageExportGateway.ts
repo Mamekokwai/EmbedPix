@@ -36,6 +36,8 @@ function getExportMetadata(request: ExportImageRequest) {
     ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
     ...(request.outputSubdirectory ? { outputSubdirectory: request.outputSubdirectory } : {}),
     ...(request.outputDirectory ? { outputDirectory: request.outputDirectory } : {}),
+    ...(request.overwriteExisting ? { overwriteExisting: true } : {}),
+    ...(request.deleteSource ? { deleteSource: true } : {}),
   };
 }
 

@@ -223,6 +223,8 @@ export default function ImageConverter({
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
+  const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const [deleteSource, setDeleteSource] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
@@ -548,6 +550,14 @@ export default function ImageConverter({
     setError(null);
   };
 
+  const handleDeleteSourceChange = (checked: boolean) => {
+    if (checked && !window.confirm("导出成功后将删除源图片，仅保留导出的文件。确定启用吗？")) {
+      return;
+    }
+    setDeleteSource(checked);
+    setError(null);
+  };
+
   const handleKeepAspectRatioChange = (checked: boolean) => {
     setKeepAspectRatio(checked);
     let nextWidthInput = widthInput;
@@ -602,6 +612,8 @@ export default function ImageConverter({
         sourcePath,
         outputSubdirectory: outputSubdirectory.trim() || undefined,
         outputDirectory: outputDirectory.trim() || undefined,
+        overwriteExisting,
+        deleteSource,
       };
       const outputPath = await exportImage(request);
       setStatus({
@@ -906,6 +918,16 @@ export default function ImageConverter({
                     : "目录不存在时会自动创建，支持绝对路径。"}
               </p>
               {outputLocationError ? <p className="error-message output-location-error" role="alert">{outputLocationError}</p> : null}
+              <label className="toggle-row output-action-toggle">
+                <input type="checkbox" checked={overwriteExisting} onChange={(event) => { setOverwriteExisting(event.target.checked); setError(null); }} />
+                <span className="toggle-track" aria-hidden="true"><span /></span>
+                <span>覆盖已有输出（旧文件移入 bak）</span>
+              </label>
+              <label className="toggle-row output-action-toggle">
+                <input type="checkbox" checked={deleteSource} onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
+                <span className="toggle-track" aria-hidden="true"><span /></span>
+                <span>导出成功后删除源图片</span>
+              </label>
             </div>
           </div>
 
