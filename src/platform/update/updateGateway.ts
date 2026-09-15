@@ -3,6 +3,7 @@ import packageJson from "../../../package.json";
 export const CURRENT_VERSION = packageJson.version;
 export const RELEASES_API_URL = "https://api.github.com/repos/Mamekokwai/EmbedPix/releases/latest";
 export const RELEASES_PAGE_URL = "https://github.com/Mamekokwai/EmbedPix/releases";
+const RELEASE_ASSET_PREFIX = "https://github.com/Mamekokwai/EmbedPix/releases/download/";
 
 export interface UpdateInfo {
   currentVersion: string;
@@ -10,6 +11,9 @@ export interface UpdateInfo {
   releaseNotes: string | null;
   releaseDate: string | null;
   releaseUrl: string;
+  assetDownloadUrl: string | null;
+  assetSha256: string | null;
+  assetSizeBytes: number | null;
   updateAvailable: boolean;
 }
 
@@ -30,6 +34,14 @@ interface ReleaseResponse {
   body?: unknown;
   published_at?: unknown;
   html_url?: unknown;
+  assets?: unknown;
+}
+
+interface ReleaseAsset {
+  name?: unknown;
+  browser_download_url?: unknown;
+  digest?: unknown;
+  size?: unknown;
 }
 
 function normalizeVersion(value: string): string {
@@ -96,6 +108,52 @@ function parseReleasePayload(payload: unknown): ReleaseResponse & { tag_name: st
   return release as ReleaseResponse & { tag_name: string };
 }
 
+function parseReleaseAsset(release: ReleaseResponse, latestVersion: string): {
+  url: string;
+  sha256: string;
+  sizeBytes: number | null;
+} | null {
+  if (!Array.isArray(release.assets)) return null;
+  const expectedName = `EmbedPix_${latestVersion}_x64-setup.exe`;
+  for (const candidate of release.assets) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const asset = candidate as ReleaseAsset;
+    if (asset.name !== expectedName || typeof asset.browser_download_url !== "string") continue;
+    if (!isTrustedReleaseAssetUrl(asset.browser_download_url, latestVersion)) continue;
+    if (typeof asset.digest !== "string" || !/^sha256:[0-9a-f]{64}$/iu.test(asset.digest)) continue;
+    const sizeBytes = typeof asset.size === "number" && Number.isSafeInteger(asset.size) && asset.size >= 0
+      ? asset.size
+      : null;
+    return {
+      url: asset.browser_download_url,
+      sha256: asset.digest.toLowerCase(),
+      sizeBytes,
+    };
+  }
+  return null;
+}
+
+export function isTrustedReleaseAssetUrl(value: string, version: string): boolean {
+  try {
+    const url = new URL(value);
+    const segments = url.pathname.split("/").filter(Boolean);
+    return url.protocol === "https:"
+      && url.hostname === "github.com"
+      && !url.search
+      && !url.hash
+      && segments.length === 6
+      && segments[0] === "Mamekokwai"
+      && segments[1] === "EmbedPix"
+      && segments[2] === "releases"
+      && segments[3] === "download"
+      && compareVersions(segments[4], version) === 0
+      && segments[5] === `EmbedPix_${normalizeVersion(version)}_x64-setup.exe`
+      && value.startsWith(RELEASE_ASSET_PREFIX);
+  } catch {
+    return false;
+  }
+}
+
 function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; dispose: () => void } {
   const controller = new AbortController();
   const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
@@ -132,6 +190,7 @@ export async function checkForUpdates(
 
   const release = parseReleasePayload(payload);
   const latestVersion = normalizeVersion(release.tag_name);
+  const asset = parseReleaseAsset(release, latestVersion);
   return {
     currentVersion,
     latestVersion,
@@ -140,6 +199,9 @@ export async function checkForUpdates(
     releaseUrl: typeof release.html_url === "string" && release.html_url.startsWith("https://github.com/Mamekokwai/EmbedPix/")
       ? release.html_url
       : RELEASES_PAGE_URL,
+    assetDownloadUrl: asset?.url ?? null,
+    assetSha256: asset?.sha256 ?? null,
+    assetSizeBytes: asset?.sizeBytes ?? null,
     updateAvailable: compareVersions(latestVersion, currentVersion) > 0,
   };
 }

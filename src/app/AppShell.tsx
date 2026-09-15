@@ -32,12 +32,18 @@ const NAV_ITEMS: ReadonlyArray<{ id: AppView; label: string; hint: string; icon:
 ];
 
 function toUpdateViewProps(state: UpdateCheckState) {
-  const info = state.status === "complete" ? state.info : null;
+  const info = "info" in state ? state.info : null;
   return {
     currentVersion: state.currentVersion,
     latestVersion: info?.latestVersion,
     status: state.status === "checking"
       ? "checking" as const
+      : state.status === "downloading"
+        ? "downloading" as const
+        : state.status === "downloaded"
+          ? "downloaded" as const
+          : state.status === "installing"
+            ? "installing" as const
       : state.status === "error"
         ? "error" as const
         : info?.updateAvailable
@@ -47,6 +53,10 @@ function toUpdateViewProps(state: UpdateCheckState) {
             : "idle" as const,
     releaseNotes: info?.releaseNotes ?? undefined,
     releaseUrl: info?.releaseUrl,
+    assetAvailable: Boolean(info?.assetDownloadUrl && info.assetSha256),
+    errorStage: state.status === "error" ? state.errorStage : undefined,
+    downloadedBytes: "downloadedBytes" in state ? state.downloadedBytes : null,
+    totalBytes: "totalBytes" in state ? state.totalBytes : null,
     errorMessage: state.status === "error" ? state.error : undefined,
   };
 }
@@ -60,7 +70,12 @@ export default function AppShell() {
   const [sidebarMode, setSidebarMode] = useState<"icon" | "labeled">("icon");
   const [preferences, setPreferences] = useState<AppPreferences>(() => loadAppPreferences());
   const [prefersDark, setPrefersDark] = useState(getPrefersDark);
-  const { state: updateState, runCheck: checkForUpdates } = useUpdateCheck();
+  const {
+    state: updateState,
+    runCheck: checkForUpdates,
+    runDownload: downloadUpdate,
+    runInstall: installUpdate,
+  } = useUpdateCheck();
   const activeTheme = useMemo(() => resolveTheme(preferences.themeMode, prefersDark), [preferences.themeMode, prefersDark]);
 
   useEffect(() => {
@@ -144,7 +159,12 @@ export default function AppShell() {
           ) : view === "about" ? (
             <AboutView />
           ) : (
-            <UpdateView {...toUpdateViewProps(updateState)} onCheckForUpdates={checkForUpdates} />
+            <UpdateView
+              {...toUpdateViewProps(updateState)}
+              onCheckForUpdates={async () => { await checkForUpdates(); }}
+              onDownloadUpdate={async () => { await downloadUpdate(); }}
+              onInstallUpdate={async () => { await installUpdate(); }}
+            />
           )}
         </main>
       </div>
