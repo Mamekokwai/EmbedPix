@@ -64,6 +64,42 @@ interface VideoSourceModel {
   duration: number;
 }
 
+type VideoCropPreset = "original" | "center16x9" | "center1x1";
+type VideoRotation = 0 | 90 | 180 | 270;
+
+interface VideoCropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function resolveVideoCrop(width: number, height: number, preset: VideoCropPreset): VideoCropRect {
+  const safeWidth = Math.max(1, Math.floor(width));
+  const safeHeight = Math.max(1, Math.floor(height));
+  if (preset === "original") return { x: 0, y: 0, width: safeWidth, height: safeHeight };
+  if (preset === "center1x1") {
+    const size = Math.min(safeWidth, safeHeight);
+    return { x: Math.floor((safeWidth - size) / 2), y: Math.floor((safeHeight - size) / 2), width: size, height: size };
+  }
+  const targetRatio = 16 / 9;
+  const currentRatio = safeWidth / safeHeight;
+  const cropWidth = currentRatio >= targetRatio ? Math.floor(safeHeight * targetRatio) : safeWidth;
+  const cropHeight = currentRatio >= targetRatio ? safeHeight : Math.floor(safeWidth / targetRatio);
+  return {
+    x: Math.floor((safeWidth - cropWidth) / 2),
+    y: Math.floor((safeHeight - cropHeight) / 2),
+    width: Math.max(1, cropWidth),
+    height: Math.max(1, cropHeight),
+  };
+}
+
+function resolveVideoOutputSize(crop: VideoCropRect, rotation: VideoRotation): GifCanvasSize {
+  return rotation === 90 || rotation === 270
+    ? { width: crop.height, height: crop.width }
+    : { width: crop.width, height: crop.height };
+}
+
 function isImageFile(file: File): boolean {
   return /\.(bmp|jpe?g|png|webp)$/iu.test(file.name) && !file.type.startsWith("video/");
 }
@@ -187,6 +223,8 @@ function seekVideo(video: HTMLVideoElement, time: number, signal?: AbortSignal):
 async function extractVideoFrames(
   source: VideoSourceModel,
   plan: VideoFramePlan,
+  crop: VideoCropRect,
+  rotation: VideoRotation,
   onProgress: (current: number, total: number) => void,
   signal?: AbortSignal,
 ): Promise<GifFrameModel[]> {
@@ -211,8 +249,9 @@ async function extractVideoFrames(
     video.addEventListener("error", handleError, { once: true });
   });
   const canvas = document.createElement("canvas");
-  canvas.width = source.width;
-  canvas.height = source.height;
+  const outputSize = resolveVideoOutputSize(crop, rotation);
+  canvas.width = outputSize.width;
+  canvas.height = outputSize.height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("当前环境无法创建视频帧画布。");
   const frames: GifFrameModel[] = [];
@@ -221,7 +260,7 @@ async function extractVideoFrames(
       if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
       await seekVideo(video, time, signal);
       if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
-      drawGifFrame(context, video, { width: source.width, height: source.height }, "stretch", "transparent");
+      drawVideoFrame(context, video, crop, rotation, outputSize);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob) throw new Error("无法生成视频帧，请重试。");
       const file = new File([blob], `${source.name.replace(/\.[^.]+$/u, "")}-${String(index + 1).padStart(3, "0")}.png`, { type: "image/png" });
@@ -230,8 +269,8 @@ async function extractVideoFrames(
         file,
         previewUrl: URL.createObjectURL(blob),
         name: file.name,
-        width: source.width,
-        height: source.height,
+        width: outputSize.width,
+        height: outputSize.height,
         durationMs: plan.durationMs,
       });
       onProgress(index + 1, plan.times.length);
@@ -296,6 +335,29 @@ function drawGifFrame(
     drawWidth,
     drawHeight,
   );
+}
+
+function drawVideoFrame(
+  context: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  crop: VideoCropRect,
+  rotation: VideoRotation,
+  outputSize: GifCanvasSize,
+) {
+  context.clearRect(0, 0, outputSize.width, outputSize.height);
+  context.save();
+  if (rotation === 90) {
+    context.translate(outputSize.width, 0);
+    context.rotate(Math.PI / 2);
+  } else if (rotation === 180) {
+    context.translate(outputSize.width, outputSize.height);
+    context.rotate(Math.PI);
+  } else if (rotation === 270) {
+    context.translate(0, outputSize.height);
+    context.rotate(-Math.PI / 2);
+  }
+  context.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  context.restore();
 }
 
 async function canvasToBytes(canvas: HTMLCanvasElement): Promise<Uint8Array> {
@@ -370,6 +432,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [videoFps, setVideoFps] = useState(10);
   const [videoEveryNthFrame, setVideoEveryNthFrame] = useState(1);
   const [videoMaxFrames, setVideoMaxFrames] = useState(MAX_VIDEO_FRAME_LIMIT);
+  const [videoCropPreset, setVideoCropPreset] = useState<VideoCropPreset>("original");
+  const [videoRotation, setVideoRotation] = useState<VideoRotation>(0);
+  const [videoReverse, setVideoReverse] = useState(false);
   const [status, setStatus] = useState<GifStatus>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const [group, setGroup] = useState<"timing" | "canvas" | "export" | null>("timing");
@@ -453,6 +518,32 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     fileInputRef.current?.click();
   };
 
+  const invalidateVideoFrames = () => {
+    framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
+    framesRef.current = [];
+    setFrames([]);
+    setSelectedIndex(0);
+    setSelectedFrameIndices(new Set());
+    setIsPlaying(false);
+    setOutputPath(null);
+  };
+
+  const updateVideoTransform = (cropPreset: VideoCropPreset, rotation: VideoRotation) => {
+    setVideoCropPreset(cropPreset);
+    setVideoRotation(rotation);
+    if (!videoSource) return;
+    const crop = resolveVideoCrop(videoSource.width, videoSource.height, cropPreset);
+    const outputSize = resolveVideoOutputSize(crop, rotation);
+    setCanvasWidth(outputSize.width);
+    setCanvasHeight(outputSize.height);
+    setCanvasPreset(cropPreset === "original" && rotation === 0 ? "source" : "custom");
+    ratioRef.current = outputSize;
+    if (framesRef.current.length) {
+      invalidateVideoFrames();
+      setStatus({ kind: "ready", text: "视频参数已更新，请重新提取帧" });
+    }
+  };
+
   const importVideo = async (file: File) => {
     if (lockedRef.current || !isVideoFile(file)) {
       setError("请选择 MP4、WebM 或 OGG 视频文件。");
@@ -472,6 +563,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setVideoEnd(metadata.duration);
       setVideoEveryNthFrame(1);
       setVideoMaxFrames(MAX_VIDEO_FRAME_LIMIT);
+      setVideoCropPreset("original");
+      setVideoRotation(0);
+      setVideoReverse(false);
       setFrames((current) => {
         current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
         return [];
@@ -507,15 +601,18 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       everyNthFrame: videoEveryNthFrame,
       maxFrames: videoMaxFrames,
     });
+    const crop = resolveVideoCrop(videoSource.width, videoSource.height, videoCropPreset);
+    const outputSize = resolveVideoOutputSize(crop, videoRotation);
+    const extractionPlan = videoReverse ? { ...plan, times: [...plan.times].reverse() } : plan;
     setIsPlaying(false);
     lockedRef.current = true;
     setLocked(true);
     setError(null);
-    setStatus({ kind: "importing", text: `正在提取视频帧 0/${plan.times.length}…` });
+    setStatus({ kind: "importing", text: `正在提取视频帧 0/${extractionPlan.times.length}…` });
     const controller = new AbortController();
     videoExtractControllerRef.current = controller;
     try {
-      const nextFrames = await extractVideoFrames(videoSource, plan, (current, total) => {
+      const nextFrames = await extractVideoFrames(videoSource, extractionPlan, crop, videoRotation, (current, total) => {
         setStatus({ kind: "importing", text: `正在提取视频帧 ${current}/${total}…` });
       }, controller.signal);
       framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
@@ -524,6 +621,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setSelectedIndex(0);
       setSelectedFrameIndices(nextFrames.length ? new Set([0]) : new Set());
       setOutputPath(null);
+      setCanvasWidth(outputSize.width);
+      setCanvasHeight(outputSize.height);
       setStatus({ kind: "ready", text: `已提取 ${nextFrames.length} 帧，可以预览或导出` });
     } catch (extractError) {
       if (controller.signal.aborted) {
@@ -983,6 +1082,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                   <label className="gif-field"><span>帧率 · FPS</span><input type="number" min="1" max="30" step="1" value={videoFps} onChange={(event) => setVideoFps(clampVideoFps(Number(event.target.value)))} /></label>
                   <label className="gif-field"><span>每隔 N 帧</span><input type="number" min="1" max="200" step="1" value={videoEveryNthFrame} onChange={(event) => setVideoEveryNthFrame(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value)) || 1)))} /></label>
                   <label className="gif-field"><span>最大帧数</span><input type="number" min="1" max={MAX_VIDEO_FRAME_LIMIT} step="1" value={videoMaxFrames} onChange={(event) => setVideoMaxFrames(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value)) || 1)))} /></label>
+                  <SelectField id="gif-video-crop" label="裁剪区域" value={videoCropPreset} options={[{ value: "original" as const, label: "原始画面" }, { value: "center16x9" as const, label: "居中 16:9" }, { value: "center1x1" as const, label: "居中 1:1" }]} onChange={(value) => updateVideoTransform(value, videoRotation)} />
+                  <SelectField id="gif-video-rotation" label="旋转" value={videoRotation} options={[{ value: 0 as const, label: "0°" }, { value: 90 as const, label: "90°" }, { value: 180 as const, label: "180°" }, { value: 270 as const, label: "270°" }]} onChange={(value) => updateVideoTransform(videoCropPreset, value)} />
+                  <label className="gif-check-row gif-video-reverse"><input type="checkbox" checked={videoReverse} onChange={(event) => { setVideoReverse(event.target.checked); if (framesRef.current.length) { invalidateVideoFrames(); setStatus({ kind: "ready", text: "视频参数已更新，请重新提取帧" }); } }} /><span><strong>视频倒放</strong><small>按反向时间顺序抽帧</small></span></label>
                   <div className="gif-video-summary"><span>当前范围</span><strong>{formatVideoTime(videoStart)} – {formatVideoTime(videoEnd)}</strong><small>预计 {planVideoFramesWithSampling(videoStart, videoEnd, videoSource.duration, videoFps, { everyNthFrame: videoEveryNthFrame, maxFrames: videoMaxFrames }).times.length} 帧（最多 {MAX_VIDEO_FRAME_LIMIT} 帧）</small></div>
                 </div>
                 <div className="gif-video-actions">
