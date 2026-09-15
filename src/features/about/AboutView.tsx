@@ -1,4 +1,5 @@
 import { Cpu, FileImage, Info, ShieldCheck } from "lucide-react";
+import packageJson from "../../../package.json";
 
 const SUPPORTED_OUTPUTS = ["BMP", "PNG", "JPG", "RGB565 BIN", "C 数组"];
 
@@ -18,7 +19,7 @@ export default function AboutView() {
         <section className="about-hero">
           <div className="about-logo-shell"><img src="/embedpix-icon.png" alt="嵌图匠图标" /></div>
           <div className="about-hero-copy">
-            <div className="about-title-line"><h2>嵌图匠</h2><span>v0.1.0</span></div>
+            <div className="about-title-line"><h2>嵌图匠</h2><span>v{packageJson.version}</span></div>
             <p>EmbedPix 把常见图片处理和单片机资源导出集中在一个轻量工作区里。</p>
             <div className="about-output-list" aria-label="支持的输出格式">
               {SUPPORTED_OUTPUTS.map((format) => <span key={format}>{format}</span>)}
