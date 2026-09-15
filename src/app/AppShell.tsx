@@ -147,6 +147,7 @@ export default function AppShell() {
         <main className={`app-main${view === "gif" ? " app-main-gif" : ""}`}>
           <div className="app-kept-view" hidden={view !== "converter"}>
             <ImageConverter
+              active={view === "converter"}
               defaultOutputFormat={preferences.defaultOutputFormat}
               defaultJpegQuality={preferences.defaultJpegQuality}
               defaultKeepAspectRatio={preferences.keepAspectRatio}

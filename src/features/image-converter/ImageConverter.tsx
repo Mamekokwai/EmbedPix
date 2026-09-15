@@ -71,6 +71,7 @@ interface ImageConverterProps {
   defaultOutputFormat?: OutputFormat;
   defaultJpegQuality?: number;
   defaultKeepAspectRatio?: boolean;
+  active?: boolean;
 }
 
 type Status =
@@ -202,6 +203,7 @@ export default function ImageConverter({
   defaultOutputFormat = "bmp",
   defaultJpegQuality = DEFAULT_JPEG_QUALITY,
   defaultKeepAspectRatio = true,
+  active = true,
 }: ImageConverterProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -434,7 +436,8 @@ export default function ImageConverter({
   };
 
   useEffect(() => {
-    if (!isTauriEnvironment()) {
+    if (!active || !isTauriEnvironment()) {
+      setIsDragging(false);
       return;
     }
 
@@ -458,7 +461,7 @@ export default function ImageConverter({
       return undefined;
     }
     return () => unlisten?.();
-  }, []);
+  }, [active]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextFiles = Array.from(event.target.files ?? []);
