@@ -17,6 +17,8 @@
   --qp-radius-control: 10px;
   --qp-radius-button: 8px;
   --qp-shadow-overlay: 0 10px 24px rgb(17 24 39 / 8%);
+  --qp-titlebar-height: 36px;
+  --qp-window-corner-radius: 8px;
   --font-sans: "IBM Plex Sans", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", Consolas, monospace;
   color-scheme: light;
