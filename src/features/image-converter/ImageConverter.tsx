@@ -1143,7 +1143,7 @@ export default function ImageConverter({
                       <span className="toggle-track" aria-hidden="true"><span /></span>
                       <span>覆盖同名输出文件</span>
                     </label>
-                    <p className="field-help output-action-help" id="overwrite-same-name-help">已有文件会先移入同目录的 bak 文件夹，再写入新的导出结果。</p>
+                    <p className="field-help output-action-help" id="overwrite-same-name-help">已有同名输出会直接覆盖，不移动到 bak 文件夹。</p>
                   </div>
                   <div className="output-action">
                     <label className="toggle-row output-action-toggle">
