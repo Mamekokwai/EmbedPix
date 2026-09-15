@@ -56,6 +56,12 @@ import type {
   RowOrder,
 } from "./types";
 
+interface ImageConverterProps {
+  defaultOutputFormat?: OutputFormat;
+  defaultJpegQuality?: number;
+  defaultKeepAspectRatio?: boolean;
+}
+
 type Status =
   | { kind: "idle"; text: string }
   | { kind: "ready"; text: string }
@@ -156,7 +162,11 @@ function SelectField<T extends string | number>({
   );
 }
 
-export default function ImageConverter() {
+export default function ImageConverter({
+  defaultOutputFormat = "bmp",
+  defaultJpegQuality = DEFAULT_JPEG_QUALITY,
+  defaultKeepAspectRatio = true,
+}: ImageConverterProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
@@ -164,15 +174,15 @@ export default function ImageConverter() {
   const [height, setHeight] = useState(0);
   const [widthInput, setWidthInput] = useState("");
   const [heightInput, setHeightInput] = useState("");
-  const [outputFormat, setOutputFormat] = useState<OutputFormat>("bmp");
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>(defaultOutputFormat);
   const [bitDepth, setBitDepth] = useState<BmpBitDepth>(24);
-  const [jpegQuality, setJpegQuality] = useState(DEFAULT_JPEG_QUALITY);
+  const [jpegQuality, setJpegQuality] = useState(defaultJpegQuality);
   const [byteOrder, setByteOrder] = useState<ByteOrder>("little");
   const [channelOrder, setChannelOrder] = useState<ChannelOrder>("rgb");
   const [rowOrder, setRowOrder] = useState<RowOrder>("top-down");
   const [rowAlignment, setRowAlignment] = useState<RowAlignment>(1);
   const [cArrayName, setCArrayName] = useState(DEFAULT_C_ARRAY_NAME);
-  const [keepAspectRatio, setKeepAspectRatio] = useState(true);
+  const [keepAspectRatio, setKeepAspectRatio] = useState(defaultKeepAspectRatio);
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });

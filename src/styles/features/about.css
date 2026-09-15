@@ -1,0 +1,20 @@
+.about-content { max-width: 760px; }
+.about-hero { display: flex; align-items: center; gap: 20px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); padding: 26px; }
+.about-logo-shell { display: grid; width: 82px; height: 82px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); }
+.about-logo-shell img { width: 66px; height: 66px; border-radius: 12px; }
+.about-hero-copy { min-width: 0; }
+.about-title-line { display: flex; align-items: center; gap: 10px; }
+.about-title-line h2 { margin: 0; color: var(--qp-text-primary); font-size: 20px; font-weight: 700; }
+.about-title-line span { border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-chip); background: var(--qp-bg-elevated); padding: 3px 7px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; }
+.about-hero-copy > p { margin: 9px 0 14px; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.6; }
+.about-output-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.about-output-list span { border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-chip); background: var(--qp-bg-elevated); padding: 4px 7px; color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 10px; }
+.about-info-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.about-info-card { display: flex; min-width: 0; gap: 11px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); padding: 16px; color: var(--qp-accent-default); }
+.about-info-card h3 { margin: 0; color: var(--qp-text-primary); font-size: 12px; font-weight: 650; }
+.about-info-card p { margin: 6px 0 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.55; }
+.about-footnote { margin: 4px 0 0; color: var(--qp-text-tertiary); font-size: 11px; text-align: center; }
+@media (max-width: 680px) {
+  .about-hero { align-items: flex-start; flex-direction: column; }
+  .about-info-grid { grid-template-columns: 1fr; }
+}

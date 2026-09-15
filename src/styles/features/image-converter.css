@@ -1,6 +1,6 @@
 .converter-app {
   width: min(1180px, 100%);
-  min-height: 100vh;
+  min-height: 100%;
   margin: 0 auto;
   padding: 20px 28px 18px;
 }

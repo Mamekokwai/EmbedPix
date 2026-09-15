@@ -1,6 +1,6 @@
 import "./App.css";
-import ImageConverter from "./features/image-converter/ImageConverter";
+import AppShell from "./app/AppShell";
 
 export default function App() {
-  return <ImageConverter />;
+  return <AppShell />;
 }
