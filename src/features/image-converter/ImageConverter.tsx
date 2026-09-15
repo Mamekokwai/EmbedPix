@@ -10,7 +10,6 @@ import {
   Check,
   Download,
   Image as ImageIcon,
-  Info,
   Plus,
   Upload,
   X,
@@ -803,10 +802,6 @@ export default function ImageConverter({
           <h2 id="workspace-title">转换图片，适配你的嵌入式界面</h2>
           <p className="intro-copy">导入一张或多张图片，统一调整尺寸与输出规格，然后导出到本地文件。</p>
         </div>
-        <div className="intro-note">
-          <Info size={16} aria-hidden="true" />
-          <span>文件仅在本地处理</span>
-        </div>
       </section>
 
       <section className="workspace-grid" aria-label="图片转换工作区">
@@ -1178,7 +1173,6 @@ export default function ImageConverter({
 
       <footer className="converter-footer">
         <span>EmbedPix · 嵌图匠</span>
-        <span className="footer-contract">输出由桌面端 <code>export_image</code> 命令处理</span>
       </footer>
     </main>
   );

@@ -1,4 +1,4 @@
-import { Cpu, FileImage, Github, Info, ShieldCheck } from "lucide-react";
+import { Github, Info } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
 import packageJson from "../../../package.json";
@@ -43,21 +43,6 @@ export default function AboutView(updateProps: UpdateViewProps) {
             </div>
           </div>
         </section>
-
-        <div className="about-info-grid">
-          <article className="about-info-card">
-            <ShieldCheck size={18} aria-hidden="true" />
-            <div><h3>本地优先</h3><p>图片只在本机处理，不上传到网络服务。</p></div>
-          </article>
-          <article className="about-info-card">
-            <Cpu size={18} aria-hidden="true" />
-            <div><h3>面向硬件</h3><p>支持 RGB565、通道顺序、端序、行序和对齐参数。</p></div>
-          </article>
-          <article className="about-info-card">
-            <FileImage size={18} aria-hidden="true" />
-            <div><h3>轻量工作流</h3><p>拖入图片、调整尺寸与参数，直接导出可用资源。</p></div>
-          </article>
-        </div>
 
         <section className="about-author-card" aria-label="作者信息">
           <img className="about-author-avatar" src={AUTHOR_AVATAR_URL} alt="Nywerya头像" />
