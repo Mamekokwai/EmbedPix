@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, DragEvent } from "react";
+import type { ChangeEvent, DragEvent, MouseEvent } from "react";
 import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Copy,
   Film,
   ImagePlus,
   Images,
@@ -29,6 +30,7 @@ export type GifBackground = "transparent" | "white" | "black";
 export type GifLoopMode = "infinite" | "finite";
 export type GifEncodingQuality = "high" | "balanced" | "fast";
 export type GifColorCount = 64 | 128 | 256;
+export type GifDitherMode = "none" | "floydSteinberg" | "atkinson";
 type GifSourceMode = "image" | "video";
 
 export interface GifFrameModel {
@@ -290,6 +292,8 @@ function EmptyFrames({ onImport, sourceMode }: { onImport: () => void; sourceMod
 export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [frames, setFrames] = useState<GifFrameModel[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedFrameIndices, setSelectedFrameIndices] = useState<Set<number>>(new Set());
+  const selectionAnchorRef = useRef(0);
   const [canvasWidth, setCanvasWidth] = useState(320);
   const [canvasHeight, setCanvasHeight] = useState(240);
   const [canvasPreset, setCanvasPreset] = useState<GifCanvasPreset>("custom");
@@ -301,6 +305,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [loopCount, setLoopCount] = useState(3);
   const [encodingQuality, setEncodingQuality] = useState<GifEncodingQuality>("high");
   const [colorCount, setColorCount] = useState<GifColorCount>(256);
+  const [ditherMode, setDitherMode] = useState<GifDitherMode>("none");
   const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -350,10 +355,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   useEffect(() => {
     if (!frames.length) {
       setSelectedIndex(0);
+      setSelectedFrameIndices(new Set());
       setIsPlaying(false);
       return;
     }
     setSelectedIndex((current) => Math.min(current, frames.length - 1));
+    setSelectedFrameIndices((current) => new Set([...current].filter((index) => index < frames.length)));
   }, [frames.length]);
 
   useEffect(() => {
@@ -451,6 +458,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       framesRef.current = nextFrames;
       setFrames(nextFrames);
       setSelectedIndex(0);
+      setSelectedFrameIndices(nextFrames.length ? new Set([0]) : new Set());
       setOutputPath(null);
       setStatus({ kind: "ready", text: `已提取 ${nextFrames.length} 帧，可以预览或导出` });
     } catch (extractError) {
@@ -509,6 +517,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         framesRef.current = next;
         setFrames(next);
         setSelectedIndex(replaceFrameId ? index : current.length);
+        setSelectedFrameIndices(new Set([replaceFrameId ? index : current.length]));
         setStatus({ kind: "ready", text: `已加入 ${loadedFrames.length} 张图片` });
       });
     } catch (loadError) {
@@ -553,6 +562,51 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setFrames(framesRef.current);
     setSelectedIndex((current) => Math.max(0, Math.min(current - (index < current ? 1 : 0), frames.length - 2)));
     setStatus({ kind: "ready", text: "已移除一帧" });
+  };
+
+  const selectFrame = (index: number, event: MouseEvent<HTMLButtonElement>) => {
+    setIsPlaying(false);
+    if (event.shiftKey) {
+      const start = Math.min(selectionAnchorRef.current, index);
+      const end = Math.max(selectionAnchorRef.current, index);
+      setSelectedFrameIndices(new Set(Array.from({ length: end - start + 1 }, (_, offset) => start + offset)));
+    } else if (event.ctrlKey || event.metaKey) {
+      setSelectedFrameIndices((current) => {
+        const next = new Set(current);
+        if (next.has(index)) next.delete(index); else next.add(index);
+        return next;
+      });
+      selectionAnchorRef.current = index;
+    } else {
+      setSelectedFrameIndices(new Set([index]));
+      selectionAnchorRef.current = index;
+    }
+    setSelectedIndex(index);
+  };
+
+  const copySelectedFrame = () => {
+    if (lockedRef.current || !selectedFrame) return;
+    const insertAt = selectedIndex + 1;
+    const copy = { ...selectedFrame, id: `gif-frame-${++frameIdRef.current}`, previewUrl: URL.createObjectURL(selectedFrame.file), name: `${selectedFrame.name.replace(/(\.[^.]+)$/u, "")}-copy$1` };
+    const next = [...frames.slice(0, insertAt), copy, ...frames.slice(insertAt)];
+    framesRef.current = next;
+    setFrames(next);
+    setSelectedIndex(insertAt);
+    setSelectedFrameIndices(new Set([insertAt]));
+    selectionAnchorRef.current = insertAt;
+    setStatus({ kind: "ready", text: "已复制当前帧" });
+  };
+
+  const removeSelectedFrames = () => {
+    if (lockedRef.current || !selectedFrameIndices.size) return;
+    selectedFrameIndices.forEach((index) => { const frame = frames[index]; if (frame) URL.revokeObjectURL(frame.previewUrl); });
+    const next = frames.filter((_, index) => !selectedFrameIndices.has(index));
+    framesRef.current = next;
+    setFrames(next);
+    const nextIndex = next.length ? Math.min(selectedIndex, next.length - 1) : 0;
+    setSelectedIndex(nextIndex);
+    setSelectedFrameIndices(next.length ? new Set([nextIndex]) : new Set());
+    setStatus({ kind: "ready", text: `已移除 ${selectedFrameIndices.size} 帧` });
   };
 
   const moveFrame = (index: number, direction: -1 | 1) => {
@@ -696,6 +750,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
         encodingSpeed: encodingQuality === "high" ? 1 : encodingQuality === "balanced" ? 10 : 30,
         colorCount,
+        ditherMode,
         frames: exportFrames,
       });
       setStatus({ kind: "success", text: `GIF 已导出：${result}` });
@@ -810,16 +865,18 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             {frames.length ? (
               <>
                 <div className="gif-frame-toolbar">
-                  <span>帧顺序</span>
+                  <span>帧顺序 · 已选 {selectedFrameIndices.size}</span>
                   <div>
+                    <button className="icon-button" type="button" aria-label="复制当前帧" title="复制当前帧" disabled={!selectedFrame || locked} onClick={copySelectedFrame}><Copy size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="删除选中帧" title="删除选中帧" disabled={!selectedFrameIndices.size || locked} onClick={removeSelectedFrames}><Trash2 size={15} aria-hidden="true" /></button>
                     <button className="icon-button" type="button" aria-label="倒序" title="倒序" onClick={reverseFrames}><RotateCcw size={15} aria-hidden="true" /></button>
                     <button className="icon-button" type="button" aria-label="清空帧" title="清空帧" onClick={clearFrames}><Trash2 size={15} aria-hidden="true" /></button>
                   </div>
                 </div>
                 <div className="gif-frame-list" aria-label="GIF 帧列表">
                   {frames.map((frame, index) => (
-                    <div className={`gif-frame-row${selectedIndex === index ? " gif-frame-row-selected" : ""}`} key={frame.id}>
-                      <button className="gif-frame-select" type="button" onClick={() => { setIsPlaying(false); setSelectedIndex(index); }} aria-pressed={selectedIndex === index} aria-label={`选择第 ${index + 1} 帧：${frame.name}`}>
+                    <div className={`gif-frame-row${selectedFrameIndices.has(index) ? " gif-frame-row-selected" : ""}`} key={frame.id}>
+                      <button className="gif-frame-select" type="button" onClick={(event) => selectFrame(index, event)} aria-pressed={selectedFrameIndices.has(index)} aria-label={`选择第 ${index + 1} 帧：${frame.name}`}>
                         <span className="gif-frame-number">{String(index + 1).padStart(2, "0")}</span>
                         <img src={frame.previewUrl} alt="" />
                         <span className="gif-frame-meta"><strong>{frame.name}</strong><small>{frame.width} × {frame.height} · {frame.durationMs} ms</small></span>
@@ -890,6 +947,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); }} /><small>次</small></div></label>
             <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={setEncodingQuality} />
             <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={setColorCount} />
+            <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={setDitherMode} />
             <div className="gif-output-picker"><span className="gif-field-label">保存位置</span><div className="gif-output-row"><span title={outputPath ?? undefined}>{outputPath ?? "尚未选择保存位置"}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>选择位置</button></div></div>
           </div>
           <div className={`gif-workload-summary gif-workload-${workload.level}`}>
