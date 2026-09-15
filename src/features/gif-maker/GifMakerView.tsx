@@ -28,6 +28,7 @@ export type GifFitMode = "contain" | "stretch";
 export type GifBackground = "transparent" | "white" | "black";
 export type GifLoopMode = "infinite" | "finite";
 export type GifEncodingQuality = "high" | "balanced" | "fast";
+export type GifColorCount = 64 | 128 | 256;
 type GifSourceMode = "image" | "video";
 
 export interface GifFrameModel {
@@ -299,6 +300,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [loopMode, setLoopMode] = useState<GifLoopMode>("infinite");
   const [loopCount, setLoopCount] = useState(3);
   const [encodingQuality, setEncodingQuality] = useState<GifEncodingQuality>("high");
+  const [colorCount, setColorCount] = useState<GifColorCount>(256);
   const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -689,6 +691,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         loopMode,
         loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
         encodingSpeed: encodingQuality === "high" ? 1 : encodingQuality === "balanced" ? 10 : 30,
+        colorCount,
         frames: exportFrames,
       });
       setStatus({ kind: "success", text: `GIF 已导出：${result}` });
@@ -882,6 +885,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); }} />
             <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); }} /><small>次</small></div></label>
             <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={setEncodingQuality} />
+            <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={setColorCount} />
             <div className="gif-output-picker"><span className="gif-field-label">保存位置</span><div className="gif-output-row"><span title={outputPath ?? undefined}>{outputPath ?? "尚未选择保存位置"}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>选择位置</button></div></div>
           </div>
           <p className="gif-help-text">桌面端保存；默认不覆盖同名文件，请选择新文件名。</p>

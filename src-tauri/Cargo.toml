@@ -22,4 +22,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 sha2 = "0.10"
 tokio = { version = "1", features = ["fs", "io-util"] }
 image = { version = "0.24", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
+gif = "0.13"
+color_quant = "1.1"
 rfd = "0.15.4"

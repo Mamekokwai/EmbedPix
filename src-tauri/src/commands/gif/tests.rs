@@ -1,6 +1,7 @@
 use super::*;
 use image::{
-    codecs::gif::GifDecoder, AnimationDecoder, DynamicImage, ImageOutputFormat, Rgba, RgbaImage,
+    codecs::gif::GifDecoder, AnimationDecoder, DynamicImage, Frame, ImageOutputFormat, Rgba,
+    RgbaImage,
 };
 use std::{
     fs, io,
@@ -78,6 +79,7 @@ fn request(path: &Path) -> GifExportRequest {
         loop_mode: "infinite".into(),
         loop_count: 0,
         encoding_speed: 1,
+        color_count: 256,
         overwrite_existing: false,
         frames: vec![
             frame([255, 0, 0, 255], 19),
@@ -181,7 +183,9 @@ fn transparent_frame_clears_previous_pixels() {
     export_gif_blocking(req).unwrap();
     let frames = decode(&fs::read(dir.output()).unwrap());
     assert_eq!(frames[1].buffer().get_pixel(0, 0)[3], 0);
-    assert_eq!(frames[1].buffer().get_pixel(1, 0).0, [0, 0, 255, 255]);
+    let blue = frames[1].buffer().get_pixel(1, 0).0;
+    assert_eq!(blue[3], 255);
+    assert!(blue[0] <= 8 && blue[1] <= 8 && blue[2] >= 247);
 }
 
 #[test]
@@ -378,6 +382,16 @@ fn rejects_output_extension_invalid_durations_loop_and_canvas_limits() {
         req.width = size.0;
         req.height = size.1;
         assert!(export_gif_blocking(req).unwrap_err().contains("画布尺寸"));
+    }
+    for speed in [0, 31] {
+        let mut req = request(&dir.output());
+        req.encoding_speed = speed;
+        assert!(export_gif_blocking(req).unwrap_err().contains("编码速度"));
+    }
+    for color_count in [16, 32, 63, 65, 129, 255] {
+        let mut req = request(&dir.output());
+        req.color_count = color_count;
+        assert!(export_gif_blocking(req).unwrap_err().contains("颜色数量"));
     }
     let mut req = request(&dir.output());
     req.output_path = dir.0.join("bad.png").to_string_lossy().into_owned();

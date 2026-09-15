@@ -1,14 +1,14 @@
 use std::{
     io::{Cursor, Write},
     path::{Path, PathBuf},
-    time::Duration,
 };
 
+use color_quant::NeuQuant;
+use gif::{DisposalMethod, Encoder, Frame as GifFrame, Repeat};
 use image::{
-    codecs::gif::{GifEncoder, Repeat},
     imageops::FilterType,
     io::{Limits, Reader as ImageReader},
-    Delay, Frame, ImageFormat,
+    ImageFormat,
 };
 use rfd::FileDialog;
 use serde::Deserialize;
@@ -29,6 +29,8 @@ const MIN_FRAME_DURATION_MS: u32 = 10;
 const MAX_FRAME_DURATION_MS: u32 = 60_000;
 const MIN_ENCODING_SPEED: i32 = 1;
 const MAX_ENCODING_SPEED: i32 = 30;
+const MIN_COLOR_COUNT: u16 = 64;
+const MAX_COLOR_COUNT: u16 = 256;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +42,8 @@ pub struct GifExportRequest {
     loop_count: u16,
     #[serde(default = "default_encoding_speed")]
     encoding_speed: i32,
+    #[serde(default = "default_color_count")]
+    color_count: u16,
     frames: Vec<GifFrameRequest>,
     #[serde(default)]
     overwrite_existing: bool,
@@ -47,6 +51,10 @@ pub struct GifExportRequest {
 
 fn default_encoding_speed() -> i32 {
     MIN_ENCODING_SPEED
+}
+
+fn default_color_count() -> u16 {
+    MAX_COLOR_COUNT
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,7 +93,13 @@ fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
 fn encode_gif(writer: impl Write, request: &GifExportRequest) -> Result<(), String> {
     let mut writer = storage::CheckedWriter::new(writer);
     {
-        let mut encoder = GifEncoder::new_with_speed(&mut writer, request.encoding_speed);
+        let mut encoder = Encoder::new(
+            &mut writer,
+            request.width as u16,
+            request.height as u16,
+            &[],
+        )
+        .map_err(|error| format!("无法创建 GIF 编码器：{error}"))?;
         let repeat = if request.loop_mode == "finite" {
             // NETSCAPE 的值是首次播放后的重复次数，保持与 gateway 契约一致。
             Repeat::Finite(request.loop_count)
@@ -110,16 +124,37 @@ fn encode_gif(writer: impl Write, request: &GifExportRequest) -> Result<(), Stri
                     .resize_exact(request.width, request.height, FilterType::Lanczos3)
                     .into_rgba8()
             };
+            let mut pixels = image.into_raw();
+            let transparent_pixel = pixels
+                .chunks_exact(4)
+                .find(|pixel| pixel[3] == 0)
+                .map(|pixel| [pixel[0], pixel[1], pixel[2], pixel[3]]);
+            for pixel in pixels.chunks_exact_mut(4) {
+                if pixel[3] != 0 {
+                    pixel[3] = 255;
+                }
+            }
+            let quantizer = NeuQuant::new(
+                request.encoding_speed,
+                request.color_count as usize,
+                &pixels,
+            );
+            let indexed = pixels
+                .chunks_exact(4)
+                .map(|pixel| quantizer.index_of(pixel) as u8)
+                .collect::<Vec<_>>();
+            let mut gif_frame = GifFrame::from_palette_pixels(
+                request.width as u16,
+                request.height as u16,
+                indexed,
+                quantizer.color_map_rgb(),
+                transparent_pixel.map(|pixel| quantizer.index_of(&pixel) as u8),
+            );
+            // 每帧从透明画布开始，避免透明像素被解码器与上一帧合成。
+            gif_frame.dispose = DisposalMethod::Background;
+            gif_frame.delay = (quantize_duration_ms(frame.duration_ms) / 10) as u16;
             encoder
-                .encode_frame(Frame::from_parts(
-                    image,
-                    0,
-                    0,
-                    Delay::from_saturating_duration(Duration::from_millis(quantize_duration_ms(
-                        frame.duration_ms,
-                    )
-                        as u64)),
-                ))
+                .write_frame(&gif_frame)
                 .map_err(|error| format!("无法写入 GIF 帧：{error}"))?;
         }
     }
@@ -205,6 +240,11 @@ fn validate_request(request: &GifExportRequest) -> Result<(), String> {
     }
     if !(MIN_ENCODING_SPEED..=MAX_ENCODING_SPEED).contains(&request.encoding_speed) {
         return Err("GIF 编码速度必须在 1–30 之间。".to_string());
+    }
+    if !matches!(request.color_count, 64 | 128 | 256)
+        || !(MIN_COLOR_COUNT..=MAX_COLOR_COUNT).contains(&request.color_count)
+    {
+        return Err("GIF 颜色数量必须为 64、128 或 256。".to_string());
     }
     let canvas_pixels = u64::from(request.width).saturating_mul(u64::from(request.height));
     if canvas_pixels.saturating_mul(request.frames.len() as u64) > MAX_TOTAL_GIF_PIXELS {
