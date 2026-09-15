@@ -36,7 +36,13 @@ function getExportMetadata(request: ExportImageRequest) {
     ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
     ...(request.outputSubdirectory ? { outputSubdirectory: request.outputSubdirectory } : {}),
     ...(request.outputDirectory ? { outputDirectory: request.outputDirectory } : {}),
-    ...(request.overwriteExisting ? { overwriteExisting: true } : {}),
+    ...(request.overwriteSameName ? { overwriteSameName: true } : {}),
+    ...(request.watermarkText?.trim() ? {
+      watermarkText: request.watermarkText.trim(),
+      watermarkPosition: request.watermarkPosition ?? "bottom-right",
+      watermarkOpacity: request.watermarkOpacity ?? 60,
+      watermarkFontSize: request.watermarkFontSize ?? 16,
+    } : {}),
     ...(request.deleteSource ? { deleteSource: true } : {}),
   };
 }

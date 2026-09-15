@@ -82,20 +82,47 @@ describe("image export raw IPC envelope", () => {
     });
   });
 
-  it("serializes overwriteExisting only when same-name replacement is enabled", () => {
+  it("serializes overwriteSameName only when direct same-name replacement is enabled", () => {
     const enabledPayload = encodeExportEnvelope(createRequest(new Uint8Array([9]), {
-      overwriteExisting: true,
+      overwriteSameName: true,
     }));
     const enabledLength = new DataView(enabledPayload.buffer, enabledPayload.byteOffset, enabledPayload.byteLength).getUint32(4, true);
     const enabledMetadata = JSON.parse(new TextDecoder().decode(enabledPayload.subarray(8, 8 + enabledLength)));
-    expect(enabledMetadata.overwriteExisting).toBe(true);
+    expect(enabledMetadata.overwriteSameName).toBe(true);
 
     const disabledPayload = encodeExportEnvelope(createRequest(new Uint8Array([9]), {
-      overwriteExisting: false,
+      overwriteSameName: false,
     }));
     const disabledLength = new DataView(disabledPayload.buffer, disabledPayload.byteOffset, disabledPayload.byteLength).getUint32(4, true);
     const disabledMetadata = JSON.parse(new TextDecoder().decode(disabledPayload.subarray(8, 8 + disabledLength)));
+    expect(disabledMetadata).not.toHaveProperty("overwriteSameName");
     expect(disabledMetadata).not.toHaveProperty("overwriteExisting");
+  });
+
+  it("serializes author watermark settings only when text is enabled", () => {
+    const enabledPayload = encodeExportEnvelope(createRequest(new Uint8Array([9]), {
+      watermarkText: "XUNCHANG WANG · EmbedPix",
+      watermarkPosition: "top-left",
+      watermarkOpacity: 65,
+      watermarkFontSize: 18,
+    }));
+    const enabledLength = new DataView(enabledPayload.buffer, enabledPayload.byteOffset, enabledPayload.byteLength).getUint32(4, true);
+    const enabledMetadata = JSON.parse(new TextDecoder().decode(enabledPayload.subarray(8, 8 + enabledLength)));
+    expect(enabledMetadata).toMatchObject({
+      watermarkText: "XUNCHANG WANG · EmbedPix",
+      watermarkPosition: "top-left",
+      watermarkOpacity: 65,
+      watermarkFontSize: 18,
+    });
+
+    const disabledPayload = encodeExportEnvelope(createRequest(new Uint8Array([9]), {
+      watermarkText: "   ",
+      watermarkPosition: "top-left",
+    }));
+    const disabledLength = new DataView(disabledPayload.buffer, disabledPayload.byteOffset, disabledPayload.byteLength).getUint32(4, true);
+    const disabledMetadata = JSON.parse(new TextDecoder().decode(disabledPayload.subarray(8, 8 + disabledLength)));
+    expect(disabledMetadata).not.toHaveProperty("watermarkText");
+    expect(disabledMetadata).not.toHaveProperty("watermarkPosition");
   });
 
   it("rejects empty and oversized image data before allocating an envelope", () => {

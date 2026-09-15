@@ -5,6 +5,7 @@ export type ChannelOrder = "rgb" | "bgr";
 export type RowOrder = "top-down" | "bottom-up";
 export type RowAlignment = 1 | 2 | 4;
 export type OutputLocation = "source" | "subfolder" | "directory" | "original";
+export type WatermarkPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export type BmpBitDepth = 1 | 4 | 8 | 16 | 24 | 32;
 
@@ -27,7 +28,11 @@ export interface ExportImageRequest {
   sourcePath?: string | null;
   outputSubdirectory?: string;
   outputDirectory?: string;
-  overwriteExisting?: boolean;
+  overwriteSameName?: boolean;
+  watermarkText?: string;
+  watermarkPosition?: WatermarkPosition;
+  watermarkOpacity?: number;
+  watermarkFontSize?: number;
   deleteSource?: boolean;
 }
 

@@ -599,6 +599,21 @@
   margin-top: 2px;
 }
 
+.watermark-options {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 2px;
+}
+
+.watermark-select-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(88px, 0.55fr);
+}
+
+.watermark-opacity-label {
+  margin-top: 1px;
+}
+
 .range-input {
   width: 100%;
   accent-color: var(--qp-accent-default);
