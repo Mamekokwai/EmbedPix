@@ -3,11 +3,16 @@ mod commands;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(commands::update::UpdateProgressState::default())
         .invoke_handler(tauri::generate_handler![
             commands::export_image::export_image,
             commands::export_image::pick_image,
             commands::export_image::pick_images,
-            commands::export_image::read_image_file
+            commands::export_image::read_image_file,
+            commands::update::check_update,
+            commands::update::get_update_download_progress,
+            commands::update::download_update,
+            commands::update::install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running EmbedPix");
