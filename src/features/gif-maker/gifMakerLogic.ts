@@ -39,7 +39,7 @@ export function clampGifPlaybackSpeed(value: number): GifPlaybackSpeed {
   return GIF_PLAYBACK_SPEEDS.reduce((closest, speed) => Math.abs(speed - value) < Math.abs(closest - value) ? speed : closest, 1 as GifPlaybackSpeed);
 }
 
-// 预览速度只换算显示时序，导出仍使用原始帧时长，避免改变导出契约。
+// 预览速度只换算显示时序，避免把播放倍率写入导出帧时长。
 export function previewFrameDurationAtSpeed(frameDuration: number, speed: number): number {
   return clampFrameDuration(clampFrameDuration(frameDuration) / clampGifPlaybackSpeed(speed));
 }

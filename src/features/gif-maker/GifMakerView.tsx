@@ -1036,7 +1036,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     if (!context) throw new Error("当前环境无法创建 GIF 画布。");
     const rendered: GifExportFrame[] = [];
     try {
-      for (const frame of frames) {
+      for (const [index, frame] of frames.entries()) {
         let data: Uint8Array;
         if (fitMode === "stretch" && background === "transparent") {
           data = new Uint8Array(await frame.file.arrayBuffer());
@@ -1045,7 +1045,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           drawGifFrame(context, image, size, fitMode, background);
           data = await canvasToBytes(exportCanvas);
         }
-        rendered.push({ data, durationMs: clampFrameDuration(frame.durationMs) });
+        const holdDuration = frames.length === 1
+          ? firstFrameHoldDuration + lastFrameHoldDuration
+          : index === 0 ? firstFrameHoldDuration : index === frames.length - 1 ? lastFrameHoldDuration : 0;
+        rendered.push({ data, durationMs: calculateBoundaryFrameDuration(frame.durationMs, holdDuration) });
       }
       validateGifFiles(rendered.map((entry) => ({ size: entry.data.byteLength })));
       return rendered;
@@ -1370,11 +1373,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <label className="gif-field"><span>动画帧率 · 应用全部帧</span><div className="gif-input-with-suffix"><input type="number" min="1" max="100" step="0.01" value={fpsFromFrameDuration(globalDuration)} onChange={(event) => updateAnimationFps(Number(event.target.value))} /><small>FPS</small></div></label>
                 <label className="gif-field"><span>当前帧时长</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={selectedFrame?.durationMs ?? DEFAULT_DURATION} disabled={!selectedFrame} onChange={(event) => updateSelectedDuration(Number(event.target.value))} /><small>ms</small></div></label>
                 <label className="gif-field"><span>批量设置选中帧时长 · {selectedFrameIndices.size} 帧</span><div className="gif-batch-duration-row"><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={batchDuration} disabled={!selectedFrameIndices.size} onChange={(event) => setBatchDuration(clampFrameDuration(Number(event.target.value)))} /><small>ms</small></div><button className="quiet-button" type="button" disabled={!selectedFrameIndices.size || locked} onClick={updateSelectedFramesDuration}>应用</button></div></label>
-                <label className="gif-field"><span>首帧停留时间 · 仅预览</span><div className="gif-input-with-suffix"><input type="number" min="0" max="60000" step="10" value={firstFrameHoldDuration} onChange={(event) => setFirstFrameHoldDuration(clampHoldDuration(Number(event.target.value)))} /><small>ms</small></div></label>
-                <label className="gif-field"><span>尾帧停留时间 · 仅预览</span><div className="gif-input-with-suffix"><input type="number" min="0" max="60000" step="10" value={lastFrameHoldDuration} onChange={(event) => setLastFrameHoldDuration(clampHoldDuration(Number(event.target.value)))} /><small>ms</small></div></label>
+                <label className="gif-field"><span>首帧停留时间</span><div className="gif-input-with-suffix"><input type="number" min="0" max="60000" step="10" value={firstFrameHoldDuration} onChange={(event) => setFirstFrameHoldDuration(clampHoldDuration(Number(event.target.value)))} /><small>ms</small></div></label>
+                <label className="gif-field"><span>尾帧停留时间</span><div className="gif-input-with-suffix"><input type="number" min="0" max="60000" step="10" value={lastFrameHoldDuration} onChange={(event) => setLastFrameHoldDuration(clampHoldDuration(Number(event.target.value)))} /><small>ms</small></div></label>
                 <SelectField id="gif-playback-speed" label="预览速度" value={playbackSpeed} options={[{ value: 0.25 as const, label: "0.25x" }, { value: 0.5 as const, label: "0.5x" }, { value: 1 as const, label: "1x" }, { value: 2 as const, label: "2x" }]} onChange={setPlaybackSpeed} />
               </div>
-              <p className="gif-help-text">10–60000 ms，向下取整到 10 ms；总时长 {(frames.reduce((sum, frame) => sum + frame.durationMs, 0) / 1000).toFixed(2)} 秒 / 轮。首尾停留和预览速度不改变导出时长。</p>
+              <p className="gif-help-text">10–60000 ms，向下取整到 10 ms；总时长 {(frames.reduce((sum, frame) => sum + frame.durationMs, 0) / 1000).toFixed(2)} 秒 / 轮。首尾停留会写入导出时长，预览速度仅影响预览。</p>
           </div> : null}
           {group === "canvas" ? <div id="gif-panel-canvas" role="region" aria-labelledby="gif-group-canvas">
               <div className="gif-settings-grid">
