@@ -45,6 +45,8 @@
 .gif-maker-view :is(button, input, [tabindex]):focus-visible { outline: 2px solid var(--qp-accent-default); outline-offset: -2px; }
 .gif-maker-view :is(button, input):disabled { opacity: .5; }
 .gif-workspace-grid { display: grid; flex: 1; min-height: 0; min-width: 0; grid-template-columns: minmax(260px, .95fr) minmax(0, 1.4fr); gap: 10px; }
+.gif-source-video .gif-workspace-grid { flex: 1 1 180px; min-height: 180px; }
+.gif-source-video .gif-assets-card, .gif-source-video .gif-main-column, .gif-source-video .gif-preview-card { min-height: 180px; }
 .gif-card { min-width: 0; min-height: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); padding: 10px; background: var(--qp-bg-panel); }
 .gif-card-heading { justify-content: space-between; flex: 0 0 auto; }
 .gif-card-heading h2 { font-size: 13px; margin: 0; }
@@ -68,7 +70,8 @@
 .gif-frame-meta small { color: var(--qp-text-secondary); font-size: 10px; white-space: nowrap; }
 .gif-frame-actions { display: grid; grid-template-columns: repeat(2, 26px); flex: 0 0 auto; }
 .gif-frame-actions .icon-button { width: 26px; height: 26px; }
-.gif-empty-frames { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; min-inline-size: 0; min-block-size: 0; overflow: hidden; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--qp-text-secondary); }
+.gif-empty-frames { display: flex; flex: 0 1 auto; min-width: 0; min-height: 0; min-inline-size: 0; min-block-size: 0; overflow: hidden; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px 0; color: var(--qp-text-secondary); }
+.gif-empty-frames > svg, .gif-empty-frames > button { display: none; }
 .gif-empty-frames > strong, .gif-empty-frames > span { max-width: 100%; min-width: 0; overflow-wrap: anywhere; text-align: center; }
 .gif-empty-frames > span { font-size: 11px; }
 .gif-empty-frames > button { flex: 0 0 auto; }
@@ -111,6 +114,7 @@
 }
 @media (max-width: 760px) {
   .gif-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: 136px minmax(0, 1fr); gap: 8px; }
+  .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(160px, auto) minmax(160px, 1fr); }
   .gif-assets-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 28px minmax(0, 1fr); gap: 4px 8px; padding: 6px; }
   .gif-assets-card > .gif-card-heading { grid-column: 1; grid-row: 1; }
   .gif-assets-card > .gif-drop-zone { grid-column: 1; grid-row: 1; width: min(145px, 100%); min-width: 0; margin-left: 88px; justify-self: end; padding: 3px 6px; }

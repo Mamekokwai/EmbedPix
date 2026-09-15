@@ -685,7 +685,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const canMoveRight = selectedIndex >= 0 && selectedIndex < frames.length - 1;
 
   return (
-    <div className="gif-maker-view page-view">
+    <div className={`gif-maker-view page-view gif-source-${sourceMode}`}>
       <header className="page-header gif-maker-header">
         <div className="page-header-icon"><Film size={19} aria-hidden="true" /></div>
         <div className="page-header-copy">
