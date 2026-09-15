@@ -5,6 +5,7 @@ import {
   type UpdateInfo,
 } from "../../platform/update/updateGateway";
 import {
+  checkUpdate,
   downloadUpdate,
   installUpdate,
   onUpdateDownloadProgress,
@@ -31,7 +32,13 @@ function isTauriRuntime(): boolean {
 
 function errorText(error: unknown, stage: UpdateErrorStage): string {
   console.error(`[update] ${stage} operation failed`, error);
-  if (stage === "check" && error instanceof Error) return error.message;
+  if (stage === "check") {
+    return error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "无法检查更新，请稍后重试。";
+  }
   if (stage === "download") return "更新下载安装包失败，请重试。";
   return "启动更新安装程序失败，请重试。";
 }
@@ -123,7 +130,9 @@ export function useUpdateCheck() {
     stateRef.current = checking;
     setState(checking);
     try {
-      const info = await checkForUpdates();
+      const info = isTauriRuntime()
+        ? await checkUpdate(current.currentVersion)
+        : await checkForUpdates();
       const complete: UpdateCheckState = { status: "complete", currentVersion: info.currentVersion, info, error: null, errorStage: null, downloadPath: null, downloadedBytes: null, totalBytes: null };
       stateRef.current = complete;
       setState(complete);
