@@ -45,10 +45,10 @@
 .update-progress-indeterminate { display: block; height: 100%; border-radius: inherit; background: var(--qp-accent-default); transition: width 220ms ease-out; }
 .update-progress-indeterminate { width: 32%; animation: update-progress-slide 1.2s ease-in-out infinite; }
 .update-confirm-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--qp-bg-app) 62%, transparent); padding: 20px; }
-.update-confirm-dialog { width: min(460px, 100%); max-height: min(520px, 100%); overflow: auto; border: 1px solid var(--qp-border-strong); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); padding: 22px; box-shadow: var(--qp-shadow-overlay); }
+.update-confirm-dialog { width: min(460px, calc(100vw - 32px)); max-height: min(520px, calc(100vh - 32px)); min-width: 0; overflow-x: hidden; overflow-y: auto; border: 1px solid var(--qp-border-strong); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); padding: 22px; box-shadow: var(--qp-shadow-overlay); }
 .update-confirm-dialog h2 { margin: 0; color: var(--qp-text-primary); font-size: 16px; font-weight: 700; }
 .update-confirm-dialog > p:not(.update-section-eyebrow) { margin: 9px 0 0; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.65; }
-.update-confirm-notes { max-height: 140px; margin-top: 14px; overflow: auto; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); padding: 10px; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+.update-confirm-notes { width: 100%; max-width: 100%; max-height: min(180px, 32vh); min-width: 0; margin-top: 14px; overflow-x: hidden; overflow-y: auto; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); padding: 10px; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; }
 .update-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .update-confirm-primary { border-color: color-mix(in srgb, var(--qp-accent-default) 55%, var(--qp-border-subtle)); background: var(--qp-accent-muted); color: var(--qp-accent-default); }
 @keyframes update-progress-slide { from { transform: translateX(-125%); } to { transform: translateX(325%); } }
