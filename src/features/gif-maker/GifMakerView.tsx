@@ -18,7 +18,8 @@ import {
   X,
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
-import { exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
+import { estimateGifSize, exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
+import type { GifExportFrame } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize } from "./gifMakerLogic";
 import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
@@ -75,6 +76,37 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "操作失败，请检查图片和参数后重试。";
 }
 
+interface GifCompressionResult {
+  bytes: number;
+  frames: GifExportFrame[];
+  width: number;
+  height: number;
+  colorCount: GifColorCount;
+}
+
+function parseSizeBytes(value: string): number | undefined {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return Math.round(parsed * 1024);
+}
+
+function mergeEverySecondFrame(frames: GifExportFrame[]): GifExportFrame[] {
+  const merged: GifExportFrame[] = [];
+  for (let index = 0; index < frames.length; index += 2) {
+    const first = frames[index];
+    const second = frames[index + 1];
+    if (second && first.durationMs + second.durationMs > 60_000) {
+      merged.push(first, second);
+      continue;
+    }
+    merged.push({
+      data: first.data,
+      durationMs: first.durationMs + (second?.durationMs ?? 0),
+    });
+  }
+  return merged;
+}
+
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -117,8 +149,12 @@ function loadVideoMetadata(url: string): Promise<{ width: number; height: number
   });
 }
 
-function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
+function seekVideo(video: HTMLVideoElement, time: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("抽帧已取消", "AbortError"));
+      return;
+    }
     const timeout = window.setTimeout(() => {
       cleanup();
       reject(new Error("视频帧读取超时，请尝试缩短时间范围或更换视频。"));
@@ -127,6 +163,7 @@ function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
       window.clearTimeout(timeout);
       video.removeEventListener("seeked", handleSeeked);
       video.removeEventListener("error", handleError);
+      signal?.removeEventListener("abort", handleAbort);
     };
     const handleSeeked = () => {
       cleanup();
@@ -136,8 +173,13 @@ function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
       cleanup();
       reject(new Error("视频帧读取失败，请尝试更换视频。"));
     };
+    const handleAbort = () => {
+      cleanup();
+      reject(new DOMException("抽帧已取消", "AbortError"));
+    };
     video.addEventListener("seeked", handleSeeked, { once: true });
     video.addEventListener("error", handleError, { once: true });
+    signal?.addEventListener("abort", handleAbort, { once: true });
     video.currentTime = time;
   });
 }
@@ -146,7 +188,9 @@ async function extractVideoFrames(
   source: VideoSourceModel,
   plan: VideoFramePlan,
   onProgress: (current: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<GifFrameModel[]> {
+  if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
   const video = document.createElement("video");
   video.preload = "auto";
   video.muted = true;
@@ -174,7 +218,9 @@ async function extractVideoFrames(
   const frames: GifFrameModel[] = [];
   try {
     for (const [index, time] of plan.times.entries()) {
-      await seekVideo(video, time);
+      if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
+      await seekVideo(video, time, signal);
+      if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
       drawGifFrame(context, video, { width: source.width, height: source.height }, "stretch", "transparent");
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob) throw new Error("无法生成视频帧，请重试。");
@@ -195,6 +241,8 @@ async function extractVideoFrames(
     frames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
     throw error;
   } finally {
+    canvas.width = 0;
+    canvas.height = 0;
     video.removeAttribute("src");
     video.load();
   }
@@ -307,6 +355,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [encodingQuality, setEncodingQuality] = useState<GifEncodingQuality>("high");
   const [colorCount, setColorCount] = useState<GifColorCount>(256);
   const [ditherMode, setDitherMode] = useState<GifDitherMode>("none");
+  const [targetSizeKiB, setTargetSizeKiB] = useState("");
+  const [maxSizeKiB, setMaxSizeKiB] = useState("");
+  const [autoCompress, setAutoCompress] = useState(false);
+  const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
   const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -330,6 +382,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const lockedRef = useRef(false);
   const pendingRef = useRef(0);
   const initializedRef = useRef(false);
+  const videoExtractControllerRef = useRef<AbortController | null>(null);
   const ratioRef = useRef<GifCanvasSize>({ width: 320, height: 240 });
   const repeatRef = useRef(0);
   const framesRef = useRef<GifFrameModel[]>([]);
@@ -339,6 +392,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   useEffect(() => () => {
     importQueueRef.current.cancel();
+    videoExtractControllerRef.current?.abort();
     framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
     if (videoSource) URL.revokeObjectURL(videoSource.previewUrl);
   }, [videoSource]);
@@ -458,10 +512,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setLocked(true);
     setError(null);
     setStatus({ kind: "importing", text: `正在提取视频帧 0/${plan.times.length}…` });
+    const controller = new AbortController();
+    videoExtractControllerRef.current = controller;
     try {
       const nextFrames = await extractVideoFrames(videoSource, plan, (current, total) => {
         setStatus({ kind: "importing", text: `正在提取视频帧 ${current}/${total}…` });
-      });
+      }, controller.signal);
       framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
       framesRef.current = nextFrames;
       setFrames(nextFrames);
@@ -470,12 +526,22 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setOutputPath(null);
       setStatus({ kind: "ready", text: `已提取 ${nextFrames.length} 帧，可以预览或导出` });
     } catch (extractError) {
-      setError(getErrorMessage(extractError));
-      setStatus({ kind: "error", text: "视频抽帧失败" });
+      if (controller.signal.aborted) {
+        setError(null);
+        setStatus({ kind: "ready", text: "已取消视频抽帧" });
+      } else {
+        setError(getErrorMessage(extractError));
+        setStatus({ kind: "error", text: "视频抽帧失败" });
+      }
     } finally {
+      if (videoExtractControllerRef.current === controller) videoExtractControllerRef.current = null;
       lockedRef.current = false;
       setLocked(false);
     }
+  };
+
+  const cancelVideoExtraction = () => {
+    videoExtractControllerRef.current?.abort();
   };
 
   const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null) => {
@@ -721,6 +787,97 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
   };
 
+  const renderExportFrames = async (size: GifCanvasSize): Promise<GifExportFrame[]> => {
+    validateGifPixels(size, frames.length);
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = size.width;
+    exportCanvas.height = size.height;
+    const context = exportCanvas.getContext("2d");
+    if (!context) throw new Error("当前环境无法创建 GIF 画布。");
+    const rendered: GifExportFrame[] = [];
+    try {
+      for (const frame of frames) {
+        let data: Uint8Array;
+        if (fitMode === "stretch" && background === "transparent") {
+          data = new Uint8Array(await frame.file.arrayBuffer());
+        } else {
+          const image = await loadImage(frame.previewUrl);
+          drawGifFrame(context, image, size, fitMode, background);
+          data = await canvasToBytes(exportCanvas);
+        }
+        rendered.push({ data, durationMs: clampFrameDuration(frame.durationMs) });
+      }
+      validateGifFiles(rendered.map((entry) => ({ size: entry.data.byteLength })));
+      return rendered;
+    } finally {
+      exportCanvas.width = 0;
+      exportCanvas.height = 0;
+    }
+  };
+
+  const measureCompressionCandidates = async (): Promise<GifCompressionResult> => {
+    const targetBytes = parseSizeBytes(targetSizeKiB);
+    const maxBytes = parseSizeBytes(maxSizeKiB);
+    if (targetSizeKiB.trim() && targetBytes === undefined) throw new Error("目标文件大小必须是大于 0 的数字。");
+    if (maxSizeKiB.trim() && maxBytes === undefined) throw new Error("最大文件大小必须是大于 0 的数字。");
+    if (targetBytes !== undefined && maxBytes !== undefined && targetBytes > maxBytes) {
+      throw new Error("目标文件大小不能大于最大文件大小。");
+    }
+
+    setStatus({ kind: "exporting", text: `正在准备 GIF 帧 ${frames.length} 帧…` });
+    const baseFrames = await renderExportFrames(canvasSize);
+    const shouldMeasure = autoCompress || targetBytes !== undefined || maxBytes !== undefined;
+    if (!shouldMeasure) {
+      return { bytes: 0, frames: baseFrames, width: canvasSize.width, height: canvasSize.height, colorCount };
+    }
+    const colors = ([256, 128, 64] as GifColorCount[]).filter((value) => value <= colorCount);
+    const sizes = [
+      canvasSize,
+      resolveGifCanvasSize(canvasSize, canvasSize.width * 0.75, canvasSize.height * 0.75, false),
+      resolveGifCanvasSize(canvasSize, canvasSize.width * 0.5, canvasSize.height * 0.5, false),
+    ].filter((size, index, all) => index === all.findIndex((candidate) => candidate.width === size.width && candidate.height === size.height));
+    const frameVariants = [baseFrames, mergeEverySecondFrame(baseFrames)];
+    let best: GifCompressionResult | null = null;
+    let attempt = 0;
+    const totalAttempts = autoCompress ? colors.length * frameVariants.length * sizes.length : 1;
+
+    for (const size of sizes) {
+      for (const candidateFrames of frameVariants) {
+        if (!autoCompress && (size !== canvasSize || candidateFrames !== baseFrames)) continue;
+        for (const candidateColorCount of colors) {
+          attempt += 1;
+          setStatus({ kind: "exporting", text: `正在测量 GIF 体积 ${attempt}/${totalAttempts}…` });
+          const measured = await estimateGifSize({
+            width: size.width,
+            height: size.height,
+            loopMode,
+            loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
+            encodingSpeed: encodingQuality === "high" ? 1 : encodingQuality === "balanced" ? 10 : 30,
+            colorCount: candidateColorCount,
+            ditherMode,
+            frames: candidateFrames,
+          });
+          const result = { bytes: measured.bytes, frames: candidateFrames, width: size.width, height: size.height, colorCount: candidateColorCount };
+          setMeasuredSizeBytes(measured.bytes);
+          if (!best || Math.abs(measured.bytes - (targetBytes ?? maxBytes ?? measured.bytes)) < Math.abs(best.bytes - (targetBytes ?? maxBytes ?? best.bytes))) best = result;
+          const underMax = maxBytes === undefined || measured.bytes <= maxBytes;
+          const reachesTarget = targetBytes === undefined || measured.bytes <= targetBytes;
+          if (underMax && reachesTarget) return result;
+          if (!autoCompress) {
+            if (!underMax) throw new Error(`当前 GIF 预计为 ${formatGifBytes(measured.bytes)}，超过最大文件大小 ${formatGifBytes(maxBytes ?? 0)}。请开启自动压缩或调整参数。`);
+            return result;
+          }
+        }
+      }
+    }
+
+    if (maxBytes !== undefined && (!best || best.bytes > maxBytes)) {
+      throw new Error(`自动压缩后 GIF 仍为 ${formatGifBytes(best?.bytes ?? 0)}，超过最大文件大小 ${formatGifBytes(maxBytes)}。请降低画布尺寸或减少帧数。`);
+    }
+    if (!best) throw new Error("无法测量 GIF 文件体积。");
+    return best;
+  };
+
   const exportAnimation = async () => {
     if (lockedRef.current || pendingRef.current) return;
     if (!frames.length) {
@@ -739,35 +896,18 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     lockedRef.current = true;
     setLocked(true);
     setIsPlaying(false);
-    setStatus({ kind: "exporting", text: `正在渲染 ${frames.length} 帧…` });
+    setStatus({ kind: "exporting", text: `正在准备 ${frames.length} 帧…` });
     try {
-      validateGifPixels(canvasSize, frames.length);
-      const exportCanvas = document.createElement("canvas");
-      exportCanvas.width = canvasSize.width;
-      exportCanvas.height = canvasSize.height;
-      const context = exportCanvas.getContext("2d");
-      if (!context) throw new Error("当前环境无法创建 GIF 画布。");
-      const exportFrames = [];
-      for (const frame of frames) {
-        let data: Uint8Array;
-        if (fitMode === "stretch" && background === "transparent") {
-          data = new Uint8Array(await frame.file.arrayBuffer());
-        } else {
-          const image = await loadImage(frame.previewUrl);
-          drawGifFrame(context, image, canvasSize, fitMode, background);
-          data = await canvasToBytes(exportCanvas);
-        }
-        exportFrames.push({ data, durationMs: clampFrameDuration(frame.durationMs) });
-        validateGifFiles(exportFrames.map((entry) => ({ size: entry.data.byteLength })));
-      }
+      const compression = await measureCompressionCandidates();
+      const { frames: exportFrames, width, height } = compression;
       const result = await exportGif({
         outputPath,
-        width: canvasSize.width,
-        height: canvasSize.height,
+        width,
+        height,
         loopMode,
         loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
         encodingSpeed: encodingQuality === "high" ? 1 : encodingQuality === "balanced" ? 10 : 30,
-        colorCount,
+        colorCount: compression.colorCount,
         ditherMode,
         frames: exportFrames,
       });
@@ -968,12 +1108,16 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={setEncodingQuality} />
             <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={setColorCount} />
             <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={setDitherMode} />
+            <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="可选" /><small>KiB</small></div></label>
+            <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => setMaxSizeKiB(event.target.value)} placeholder="可选" /><small>KiB</small></div></label>
+            <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => setAutoCompress(event.target.checked)} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
             <div className="gif-output-picker"><span className="gif-field-label">保存位置</span><div className="gif-output-row"><span title={outputPath ?? undefined}>{outputPath ?? "尚未选择保存位置"}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>选择位置</button></div></div>
           </div>
           <div className={`gif-workload-summary gif-workload-${workload.level}`}>
             <strong>导出负载</strong>
             <span>{(workload.totalPixels / 1_000_000).toFixed(1)} MP · 帧缓冲 {formatGifBytes(workload.decodedBytes)} · 调色板 {formatGifBytes(workload.paletteBytes)}</span>
-            <small>{workload.level === "heavy" ? "负载较高，建议缩小画布或减少帧数。" : "实际文件体积取决于画面内容；降低颜色数量可进一步减小体积。"}</small>
+            {measuredSizeBytes !== null ? <span className="gif-measured-size">最近实测 {formatGifBytes(measuredSizeBytes)}</span> : null}
+            <small>{workload.level === "heavy" ? "负载较高，建议缩小画布或减少帧数。" : "实际文件体积取决于画面内容；开启自动压缩后将先实际测量候选参数。"}</small>
           </div>
           <p className="gif-help-text">桌面端保存；默认不覆盖同名文件，请选择新文件名。</p>
           </div> : null}
@@ -982,6 +1126,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       </fieldset>
       <div className="gif-export-footer">
         {error ? <p className="gif-error-message" role="alert">{error}</p> : <p className={`gif-status gif-status-${status.kind}`} role="status">{status.text}</p>}
+        {sourceMode === "video" && locked ? <button className="quiet-button" type="button" onClick={cancelVideoExtraction}>取消抽帧</button> : null}
         <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!outputPath) { setGroup("export"); void chooseOutput(); } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputPath ? "导出 GIF" : "选择保存位置"}</button>
       </div>
     </div>

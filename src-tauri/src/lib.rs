@@ -8,6 +8,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::gif::pick_gif_output,
             commands::gif::export_gif,
+            commands::gif::estimate_gif_size,
             commands::export_image::export_image,
             commands::export_image::pick_image,
             commands::export_image::pick_images,

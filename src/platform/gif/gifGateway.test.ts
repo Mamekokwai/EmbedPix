@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { exportGif, pickGifOutput } from "./gifGateway";
+import { estimateGifSize, exportGif, pickGifOutput } from "./gifGateway";
 import type { GifExportRequest } from "./gifGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -36,6 +36,27 @@ describe("GIF desktop gateway", () => {
     expect(input.frames[0].data).toEqual(new Uint8Array([0, 127, 128, 255]));
     expect(input.frames[1].data).toBeInstanceOf(Uint8Array);
     expect(input).not.toHaveProperty("overwriteExisting");
+  });
+
+  it("serializes a GIF size estimate without an output path or overwrite flag", async () => {
+    const input = request();
+    vi.mocked(invoke).mockResolvedValueOnce({ bytes: 1234 });
+    await expect(estimateGifSize(input)).resolves.toEqual({ bytes: 1234 });
+    expect(invoke).toHaveBeenCalledWith("estimate_gif_size", {
+      request: {
+        width: input.width,
+        height: input.height,
+        loopMode: input.loopMode,
+        loopCount: input.loopCount,
+        encodingSpeed: 1,
+        colorCount: 256,
+        ditherMode: "none",
+        frames: [
+          { data: [0, 127, 128, 255], durationMs: 19 },
+          { data: [255, 1], durationMs: 25 },
+        ],
+      },
+    });
   });
 
   it.each([false, true])("passes explicit overwriteExisting=%s", async (overwriteExisting) => {

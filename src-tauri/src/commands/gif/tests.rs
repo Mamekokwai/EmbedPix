@@ -169,6 +169,64 @@ fn round_trip_preserves_order_canvas_quantized_delays_and_loop_extension() {
 }
 
 #[test]
+fn estimated_size_matches_actual_encoded_length_without_writing_output() {
+    let dir = TestDirectory::new();
+    let mut encoded = Vec::new();
+    let actual_request = request(&dir.output());
+    encode_gif(&mut encoded, &actual_request).unwrap();
+
+    let measured_request: GifSizeEstimateRequest = serde_json::from_value(serde_json::json!({
+        "width": 3,
+        "height": 2,
+        "loopMode": "infinite",
+        "loopCount": 0,
+        "frames": actual_request.frames.iter().map(|frame| serde_json::json!({
+            "data": &frame.data,
+            "durationMs": frame.duration_ms,
+        })).collect::<Vec<_>>(),
+    }))
+    .unwrap();
+    let measured = estimate_gif_size_blocking(measured_request).unwrap();
+
+    assert_eq!(measured.bytes, encoded.len() as u64);
+    assert_eq!(
+        serde_json::to_value(measured).unwrap(),
+        serde_json::json!({ "bytes": encoded.len() })
+    );
+    dir.assert_files(0);
+}
+
+#[test]
+fn size_estimate_request_has_no_output_side_effect_fields_and_uses_defaults() {
+    let request: GifSizeEstimateRequest = serde_json::from_value(serde_json::json!({
+        "width": 1,
+        "height": 1,
+        "loopMode": "infinite",
+        "loopCount": 0,
+        "frames": [{ "data": [1, 2], "durationMs": 10 }]
+    }))
+    .unwrap();
+
+    assert_eq!(request.encoding_speed, 1);
+    assert_eq!(request.color_count, 256);
+    assert_eq!(request.dither_mode, "none");
+    let internal: GifExportRequest = request.into();
+    assert_eq!(internal.output_path, "estimate.gif");
+    assert!(!internal.overwrite_existing);
+
+    let with_output_fields = serde_json::json!({
+        "width": 1,
+        "height": 1,
+        "loopMode": "infinite",
+        "loopCount": 0,
+        "outputPath": "should-not-be-accepted.gif",
+        "overwriteExisting": true,
+        "frames": [{ "data": [1, 2], "durationMs": 10 }]
+    });
+    assert!(serde_json::from_value::<GifSizeEstimateRequest>(with_output_fields).is_err());
+}
+
+#[test]
 fn transparent_frame_clears_previous_pixels() {
     let dir = TestDirectory::new();
     let mut req = request(&dir.output());

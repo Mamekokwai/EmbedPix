@@ -11,7 +11,7 @@ use image::{
     ImageFormat,
 };
 use rfd::FileDialog;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 mod dither;
 mod storage;
@@ -52,6 +52,40 @@ pub struct GifExportRequest {
     overwrite_existing: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct GifSizeEstimateRequest {
+    width: u32,
+    height: u32,
+    loop_mode: String,
+    loop_count: u16,
+    #[serde(default = "default_encoding_speed")]
+    encoding_speed: i32,
+    #[serde(default = "default_color_count")]
+    color_count: u16,
+    #[serde(default = "default_dither_mode")]
+    dither_mode: String,
+    frames: Vec<GifFrameRequest>,
+}
+
+impl From<GifSizeEstimateRequest> for GifExportRequest {
+    fn from(request: GifSizeEstimateRequest) -> Self {
+        Self {
+            output_path: "estimate.gif".to_string(),
+            width: request.width,
+            height: request.height,
+            loop_mode: request.loop_mode,
+            loop_count: request.loop_count,
+            encoding_speed: request.encoding_speed,
+            color_count: request.color_count,
+            dither_mode: request.dither_mode,
+            frames: request.frames,
+            overwrite_existing: false,
+        }
+    }
+}
+
 fn default_encoding_speed() -> i32 {
     MIN_ENCODING_SPEED
 }
@@ -71,6 +105,11 @@ pub struct GifFrameRequest {
     duration_ms: u32,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GifSizeEstimateResult {
+    pub bytes: u64,
+}
+
 #[tauri::command]
 pub async fn pick_gif_output(suggested_name: String) -> Result<Option<String>, String> {
     let file_name = normalize_suggested_name(&suggested_name);
@@ -88,6 +127,15 @@ pub async fn export_gif(request: GifExportRequest) -> Result<String, String> {
         .map_err(|error| format!("GIF 导出任务失败：{error}"))?
 }
 
+#[tauri::command]
+pub async fn estimate_gif_size(
+    request: GifSizeEstimateRequest,
+) -> Result<GifSizeEstimateResult, String> {
+    tauri::async_runtime::spawn_blocking(move || estimate_gif_size_blocking(request))
+        .await
+        .map_err(|error| format!("GIF 体积测量任务失败：{error}"))?
+}
+
 fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
     validate_request(&request)?;
     let output_path = normalize_output_path(&request.output_path)?;
@@ -95,6 +143,18 @@ fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
         encode_gif(file, &request)
     })?;
     Ok(output_path.to_string_lossy().into_owned())
+}
+
+fn estimate_gif_size_blocking(
+    request: GifSizeEstimateRequest,
+) -> Result<GifSizeEstimateResult, String> {
+    let request = request.into();
+    validate_request(&request)?;
+    let mut output = Vec::new();
+    encode_gif(&mut output, &request)?;
+    Ok(GifSizeEstimateResult {
+        bytes: output.len() as u64,
+    })
 }
 
 fn encode_gif(writer: impl Write, request: &GifExportRequest) -> Result<(), String> {
