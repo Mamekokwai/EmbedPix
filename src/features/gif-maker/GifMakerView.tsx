@@ -523,6 +523,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       totalMs: durations.reduce((total, duration) => total + duration, 0),
     };
   }, [firstFrameHoldDuration, frames, lastFrameHoldDuration, selectedIndex]);
+  const exportParameterSummary = useMemo(() => {
+    const format = outputFormat === "png-sequence" ? "PNG 帧序列" : outputFormat === "webp" ? "WebP 动图" : outputFormat === "apng" ? "APNG 动图" : "GIF 动图";
+    const details = [`${canvasSize.width} × ${canvasSize.height} px`, `${frames.length} 帧`, `总时长 ${formatGifTimelineTime(timeline.totalMs)}`];
+    if (outputFormat === "gif") {
+      const dither = ditherMode === "none" ? "无抖动" : ditherMode === "atkinson" ? "Atkinson" : "Floyd-Steinberg";
+      details.push(`${colorCount} 色`, dither, loopMode === "infinite" ? "无限循环" : `重复 ${loopCount} 次`);
+    }
+    return `${format} · ${details.join(" · ")}`;
+  }, [canvasSize, colorCount, ditherMode, frames.length, loopCount, loopMode, outputFormat, timeline.totalMs]);
 
   useEffect(() => { if (!active) setIsPlaying(false); }, [active]);
 
@@ -1438,6 +1447,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             </> : <p className="gif-format-note">PNG 帧序列按当前画布逐帧导出，不使用 GIF 的循环、颜色、抖动和体积压缩参数。</p>}
             <div className="gif-output-picker"><span className="gif-field-label">{outputFormat === "png-sequence" ? "输出目录" : "保存位置"}</span><div className="gif-output-row"><span title={(outputFormat === "png-sequence" ? sequenceOutputDir : outputPath) ?? undefined}>{(outputFormat === "png-sequence" ? sequenceOutputDir : outputPath) ?? (outputFormat === "png-sequence" ? "尚未选择输出目录" : "尚未选择保存位置")}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>{outputFormat === "png-sequence" ? "选择目录" : "选择位置"}</button></div></div>
           </div>
+          <div className="gif-parameter-summary" aria-label="导出参数摘要"><strong>导出参数摘要</strong><span>{exportParameterSummary}</span></div>
           {outputFormat === "gif" ? <div className={`gif-workload-summary gif-workload-${workload.level}`}>
             <strong>导出负载</strong>
             <span>{(workload.totalPixels / 1_000_000).toFixed(1)} MP · 帧缓冲 {formatGifBytes(workload.decodedBytes)} · 调色板 {formatGifBytes(workload.paletteBytes)}</span>
