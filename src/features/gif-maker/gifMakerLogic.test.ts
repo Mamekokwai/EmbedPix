@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, clampFrameDuration, clampGifFps, durationFromGifFps, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, clampFrameDuration, clampGifFps, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
+  it("estimates export workload without pretending to know compressed file size", () => {
+    expect(estimateGifWorkload({ width: 320, height: 240 }, 10, 256)).toEqual({
+      totalPixels: 768000,
+      decodedBytes: 3072000,
+      paletteBytes: 7680,
+      level: "light",
+    });
+    expect(estimateGifWorkload({ width: 1920, height: 1080 }, 20, 64).level).toBe("heavy");
+    expect(formatGifBytes(3072000)).toBe("2.9 MiB");
+  });
+
   it("clamps frame durations to a safe animation range", () => {
     expect(clampFrameDuration(0)).toBe(10);
     expect(clampFrameDuration(123.6)).toBe(120);

@@ -1,5 +1,12 @@
 export interface GifCanvasSize { width: number; height: number }
 export type GifCanvasPreset = "source" | "75" | "50" | "custom";
+export type GifWorkloadLevel = "light" | "moderate" | "heavy";
+export interface GifWorkloadEstimate {
+  totalPixels: number;
+  decodedBytes: number;
+  paletteBytes: number;
+  level: GifWorkloadLevel;
+}
 export const MAX_FRAMES = 200;
 export const MAX_FRAME_BYTES = 32 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
@@ -35,6 +42,21 @@ export function resolveGifCanvasSize(source: GifCanvasSize, width: number, heigh
 export function resolveGifCanvasPreset(source: GifCanvasSize, preset: Exclude<GifCanvasPreset, "custom">): GifCanvasSize {
   const scale = preset === "source" ? 1 : preset === "75" ? 0.75 : 0.5;
   return resolveGifCanvasSize(source, source.width * scale, source.height * scale, false);
+}
+
+export function estimateGifWorkload(size: GifCanvasSize, frameCount: number, colorCount: number): GifWorkloadEstimate {
+  const totalPixels = Math.max(0, Math.round(size.width) * Math.round(size.height) * Math.max(0, Math.round(frameCount)));
+  const safeColorCount = Math.min(256, Math.max(64, Math.round(colorCount)));
+  const decodedBytes = totalPixels * 4;
+  const paletteBytes = Math.max(0, Math.round(frameCount)) * safeColorCount * 3;
+  const level = totalPixels > 24_000_000 || decodedBytes > 96 * 1024 * 1024 ? "heavy" : totalPixels > 8_000_000 ? "moderate" : "light";
+  return { totalPixels, decodedBytes, paletteBytes, level };
+}
+
+export function formatGifBytes(bytes: number): string {
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 export function getGifFrameOrder(length: number, index: number, direction: -1 | 1): number {

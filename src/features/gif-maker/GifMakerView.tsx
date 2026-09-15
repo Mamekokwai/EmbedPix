@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, clampFrameDuration, durationFromGifFps, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize } from "./gifMakerLogic";
 import { clampVideoFps, formatVideoTime, planVideoFrames } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
@@ -339,6 +339,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const canvasSize = useMemo(
     () => ({ width: canvasWidth, height: canvasHeight }),
     [canvasHeight, canvasWidth],
+  );
+  const workload = useMemo(
+    () => estimateGifWorkload(canvasSize, frames.length, colorCount),
+    [canvasSize, colorCount, frames.length],
   );
 
   useEffect(() => { if (!active) setIsPlaying(false); }, [active]);
@@ -887,6 +891,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={setEncodingQuality} />
             <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={setColorCount} />
             <div className="gif-output-picker"><span className="gif-field-label">保存位置</span><div className="gif-output-row"><span title={outputPath ?? undefined}>{outputPath ?? "尚未选择保存位置"}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>选择位置</button></div></div>
+          </div>
+          <div className={`gif-workload-summary gif-workload-${workload.level}`}>
+            <strong>导出负载</strong>
+            <span>{(workload.totalPixels / 1_000_000).toFixed(1)} MP · 帧缓冲 {formatGifBytes(workload.decodedBytes)} · 调色板 {formatGifBytes(workload.paletteBytes)}</span>
+            <small>{workload.level === "heavy" ? "负载较高，建议缩小画布或减少帧数。" : "实际文件体积取决于画面内容；降低颜色数量可进一步减小体积。"}</small>
           </div>
           <p className="gif-help-text">桌面端保存；默认不覆盖同名文件，请选择新文件名。</p>
           </div> : null}
