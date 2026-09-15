@@ -192,7 +192,12 @@ export function useUpdateCheck() {
     stateRef.current = downloading;
     setState(downloading);
     try {
-      const packageInfo = await downloadUpdate(current.info.assetDownloadUrl, current.info.assetSha256, current.info.latestVersion);
+      const packageInfo = await downloadUpdate(
+        current.info.assetDownloadUrl,
+        current.info.assetSha256,
+        current.info.latestVersion,
+        current.info.assetSizeBytes,
+      );
       const downloaded: UpdateCheckState = { ...downloading, status: "downloaded", downloadPath: packageInfo.path, downloadedBytes: packageInfo.sizeBytes, totalBytes: packageInfo.sizeBytes };
       stateRef.current = downloaded;
       setState(downloaded);
@@ -229,7 +234,13 @@ export function useUpdateCheck() {
     stateRef.current = installing;
     setState(installing);
     try {
-      await installUpdate(packagePath, expectedSha256, updateInfo.latestVersion);
+      await installUpdate(
+        packagePath,
+        expectedSha256,
+        updateInfo.latestVersion,
+        updateInfo.assetSizeBytes,
+        true,
+      );
       return installing;
     } catch (error) {
       const failed: UpdateCheckState = { ...installing, status: "error", error: errorText(error, "install"), errorStage: "install" };

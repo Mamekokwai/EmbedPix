@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event } from "@tauri-apps/api/event";
 import type { UpdateInfo } from "./updateGateway";
 
+const UPDATE_PROGRESS_EVENT = "update-download-progress";
+const UPDATE_PROGRESS_SNAPSHOT_COMMAND = "get_update_download_progress";
+
 export class UpdateRuntimeError extends Error {
   constructor(message: string) {
     super(message);
@@ -50,8 +53,10 @@ export async function checkUpdate(currentVersion: string): Promise<UpdateInfo> {
 }
 
 export interface UpdateDownloadProgress {
+  status: string;
   downloadedBytes: number;
   totalBytes: number | null;
+  error: string | null;
 }
 
 export interface DownloadedUpdate {
@@ -63,11 +68,13 @@ export async function downloadUpdate(
   assetUrl: string,
   expectedSha256: string,
   version: string,
+  expectedSize: number | null,
 ): Promise<DownloadedUpdate> {
   return invoke<DownloadedUpdate>("download_update", {
     assetUrl,
     expectedSha256,
     version,
+    expectedSize,
   });
 }
 
@@ -75,14 +82,26 @@ export async function installUpdate(
   packagePath: string,
   expectedSha256: string,
   version: string,
+  expectedSize: number | null,
+  userConfirmed: boolean,
 ): Promise<void> {
-  await invoke("install_update", { packagePath, expectedSha256, version });
+  await invoke("install_update", {
+    packagePath,
+    expectedSha256,
+    version,
+    expectedSize,
+    userConfirmed,
+  });
+}
+
+export async function getUpdateDownloadProgress(): Promise<UpdateDownloadProgress> {
+  return invoke<UpdateDownloadProgress>(UPDATE_PROGRESS_SNAPSHOT_COMMAND);
 }
 
 export async function onUpdateDownloadProgress(
   handler: (progress: UpdateDownloadProgress) => void,
 ): Promise<() => void> {
-  return listen<unknown>("update-download-progress", (event: Event<unknown>) => {
+  return listen<unknown>(UPDATE_PROGRESS_EVENT, (event: Event<unknown>) => {
     if (!isUpdateDownloadProgress(event.payload)) {
       console.warn("Ignored invalid update download progress payload", event.payload);
       return;
@@ -94,11 +113,13 @@ export async function onUpdateDownloadProgress(
 function isUpdateDownloadProgress(value: unknown): value is UpdateDownloadProgress {
   if (!value || typeof value !== "object") return false;
   const progress = value as Partial<UpdateDownloadProgress>;
-  return typeof progress.downloadedBytes === "number"
+  return typeof progress.status === "string"
+    && typeof progress.downloadedBytes === "number"
     && Number.isSafeInteger(progress.downloadedBytes)
     && progress.downloadedBytes >= 0
     && (progress.totalBytes === null
       || (typeof progress.totalBytes === "number"
         && Number.isSafeInteger(progress.totalBytes)
-        && progress.totalBytes >= 0));
+        && progress.totalBytes >= 0))
+    && (progress.error === null || typeof progress.error === "string");
 }
