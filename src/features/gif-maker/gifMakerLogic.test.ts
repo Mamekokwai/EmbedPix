@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, clampFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, readGifBatch, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, clampFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("clamps frame durations to a safe animation range", () => {
@@ -13,6 +13,13 @@ describe("GIF maker logic", () => {
   it("keeps the source ratio when requested", () => {
     expect(resolveGifCanvasSize({ width: 1920, height: 1080 }, 320, 240, true)).toEqual({ width: 320, height: 180 });
     expect(resolveGifCanvasSize({ width: 1920, height: 1080 }, 320, 240, false)).toEqual({ width: 320, height: 240 });
+  });
+
+  it("resolves common output size presets from the source canvas", () => {
+    const source = { width: 1920, height: 1080 };
+    expect(resolveGifCanvasPreset(source, "source")).toEqual(source);
+    expect(resolveGifCanvasPreset(source, "75")).toEqual({ width: 1440, height: 810 });
+    expect(resolveGifCanvasPreset(source, "50")).toEqual({ width: 960, height: 540 });
   });
 
   it("prevents frame movement beyond the list edges", () => {

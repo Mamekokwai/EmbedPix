@@ -1,4 +1,5 @@
 export interface GifCanvasSize { width: number; height: number }
+export type GifCanvasPreset = "source" | "75" | "50" | "custom";
 export const MAX_FRAMES = 200;
 export const MAX_FRAME_BYTES = 32 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
@@ -17,6 +18,11 @@ export function resolveGifCanvasSize(source: GifCanvasSize, width: number, heigh
     if (h > 4096) { w *= 4096 / h; h = 4096; }
   }
   return { width: safe(w), height: safe(h) };
+}
+
+export function resolveGifCanvasPreset(source: GifCanvasSize, preset: Exclude<GifCanvasPreset, "custom">): GifCanvasSize {
+  const scale = preset === "source" ? 1 : preset === "75" ? 0.75 : 0.5;
+  return resolveGifCanvasSize(source, source.width * scale, source.height * scale, false);
 }
 
 export function getGifFrameOrder(length: number, index: number, direction: -1 | 1): number {

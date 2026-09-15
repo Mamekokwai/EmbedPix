@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, clampFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
-import type { GifCanvasSize } from "./gifMakerLogic";
+import { advanceGifPlayback, clampFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import type { GifCanvasPreset, GifCanvasSize } from "./gifMakerLogic";
 import { clampVideoFps, formatVideoTime, planVideoFrames } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
@@ -290,6 +290,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [canvasWidth, setCanvasWidth] = useState(320);
   const [canvasHeight, setCanvasHeight] = useState(240);
+  const [canvasPreset, setCanvasPreset] = useState<GifCanvasPreset>("custom");
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
   const [fitMode, setFitMode] = useState<GifFitMode>("contain");
   const [background, setBackground] = useState<GifBackground>("transparent");
@@ -406,6 +407,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setOutputPath(null);
       setCanvasWidth(metadata.width);
       setCanvasHeight(metadata.height);
+      setCanvasPreset("source");
       ratioRef.current = metadata;
       initializedRef.current = true;
       setStatus({ kind: "ready", text: `已载入视频：${formatVideoTime(metadata.duration)}` });
@@ -492,6 +494,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           ratioRef.current = loadedFrames[0];
           setCanvasWidth(loadedFrames[0].width);
           setCanvasHeight(loadedFrames[0].height);
+          setCanvasPreset("source");
         }
         const next = replaceFrameId ? current.map((frame, i) => i === index ? { ...loadedFrames[0], durationMs: frame.durationMs } : frame) : [...current, ...loadedFrames];
         if (index >= 0) URL.revokeObjectURL(current[index].previewUrl);
@@ -579,6 +582,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const updateCanvasWidth = (value: number) => {
     initializedRef.current = true;
+    setCanvasPreset("custom");
     const next = resolveGifCanvasSize(ratioRef.current, value, canvasHeight, keepAspectRatio);
     setCanvasWidth(next.width);
     setCanvasHeight(next.height);
@@ -586,9 +590,19 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const updateCanvasHeight = (value: number) => {
     initializedRef.current = true;
+    setCanvasPreset("custom");
     const next = resolveGifCanvasSize({ width: ratioRef.current.height, height: ratioRef.current.width }, value, canvasWidth, keepAspectRatio);
     setCanvasHeight(next.width);
     setCanvasWidth(next.height);
+  };
+
+  const applyCanvasPreset = (preset: GifCanvasPreset) => {
+    setCanvasPreset(preset);
+    if (preset === "custom") return;
+    const next = resolveGifCanvasPreset(ratioRef.current, preset);
+    setCanvasWidth(next.width);
+    setCanvasHeight(next.height);
+    setKeepAspectRatio(true);
   };
 
   const updateAllDurations = (value: number) => {
@@ -846,7 +860,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           </div> : null}
           {group === "canvas" ? <div id="gif-panel-canvas" role="region" aria-labelledby="gif-group-canvas">
               <div className="gif-settings-grid">
-                <div className="gif-field"><span>画布尺寸</span><div className="gif-dimensions-row"><label><span className="sr-only">宽度</span><input aria-label="画布宽度" type="number" min="1" max="4096" value={canvasWidth} onChange={(event) => updateCanvasWidth(Number(event.target.value))} /></label><span>×</span><label><span className="sr-only">高度</span><input aria-label="画布高度" type="number" min="1" max="4096" value={canvasHeight} onChange={(event) => updateCanvasHeight(Number(event.target.value))} /></label></div></div>
+                <SelectField id="gif-size-preset" label="输出尺寸" value={canvasPreset} options={[{ value: "source" as const, label: "原始尺寸" }, { value: "75" as const, label: "缩小到 75%" }, { value: "50" as const, label: "缩小到 50%" }, { value: "custom" as const, label: "自定义尺寸" }]} onChange={applyCanvasPreset} />
+                <div className="gif-field"><span>画布尺寸 · {canvasPreset === "custom" ? "自定义" : "预设"}</span><div className="gif-dimensions-row"><label><span className="sr-only">宽度</span><input aria-label="画布宽度" type="number" min="1" max="4096" value={canvasWidth} onChange={(event) => updateCanvasWidth(Number(event.target.value))} /></label><span>×</span><label><span className="sr-only">高度</span><input aria-label="画布高度" type="number" min="1" max="4096" value={canvasHeight} onChange={(event) => updateCanvasHeight(Number(event.target.value))} /></label></div></div>
                 <label className="gif-check-row"><input type="checkbox" checked={keepAspectRatio} onChange={(event) => { ratioRef.current = canvasSize; setKeepAspectRatio(event.target.checked); }} /><span><strong>保持画布比例</strong><small>锁定当前画布，与选帧无关</small></span></label>
                 <SelectField id="gif-fit-mode" label="缩放方式" value={fitMode} options={[{ value: "contain" as const, label: "适应画布（保持比例）" }, { value: "stretch" as const, label: "拉伸填满画布" }]} onChange={setFitMode} />
                 <SelectField id="gif-background" label="背景" value={background} options={[{ value: "transparent" as const, label: "透明" }, { value: "white" as const, label: "白色" }, { value: "black" as const, label: "黑色" }]} onChange={setBackground} />
