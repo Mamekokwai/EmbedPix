@@ -9,6 +9,18 @@ export function clampFrameDuration(value: number): number {
   return Number.isFinite(value) ? Math.min(60_000, Math.max(10, Math.floor(value / 10) * 10)) : 100;
 }
 
+export function clampGifFps(value: number): number {
+  return Number.isFinite(value) ? Math.min(100, Math.max(1, Math.round(value * 100) / 100)) : 10;
+}
+
+export function durationFromGifFps(value: number): number {
+  return clampFrameDuration(1000 / clampGifFps(value));
+}
+
+export function fpsFromFrameDuration(value: number): number {
+  return Math.round((1000 / clampFrameDuration(value)) * 100) / 100;
+}
+
 export function resolveGifCanvasSize(source: GifCanvasSize, width: number, height: number, keepRatio: boolean): GifCanvasSize {
   const safe = (value: number) => Number.isFinite(value) ? Math.min(4096, Math.max(1, Math.round(value))) : 1;
   let w = safe(width);

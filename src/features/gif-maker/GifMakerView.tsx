@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { exportGif, pickGifOutput } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, clampFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, clampFrameDuration, durationFromGifFps, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_TOTAL_PIXELS, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize } from "./gifMakerLogic";
 import { clampVideoFps, formatVideoTime, planVideoFrames } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
@@ -611,6 +611,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setFrames((current) => current.map((frame) => ({ ...frame, durationMs: duration })));
   };
 
+  const updateAnimationFps = (value: number) => {
+    updateAllDurations(durationFromGifFps(value));
+  };
+
   const updateSelectedDuration = (value: number) => {
     const duration = clampFrameDuration(value);
     setFrames((current) => current.map((frame, index) => index === selectedIndex ? { ...frame, durationMs: duration } : frame));
@@ -854,6 +858,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           {group === "timing" ? <div id="gif-panel-timing" role="region" aria-labelledby="gif-group-timing">
               <div className="gif-settings-grid">
                 <label className="gif-field"><span>全局帧时长 · 应用全部帧</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={globalDuration} onChange={(event) => updateAllDurations(Number(event.target.value))} /><small>ms</small></div></label>
+                <label className="gif-field"><span>动画帧率 · 应用全部帧</span><div className="gif-input-with-suffix"><input type="number" min="1" max="100" step="0.01" value={fpsFromFrameDuration(globalDuration)} onChange={(event) => updateAnimationFps(Number(event.target.value))} /><small>FPS</small></div></label>
                 <label className="gif-field"><span>当前帧时长</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={selectedFrame?.durationMs ?? DEFAULT_DURATION} disabled={!selectedFrame} onChange={(event) => updateSelectedDuration(Number(event.target.value))} /><small>ms</small></div></label>
               </div>
               <p className="gif-help-text">10–60000 ms，向下取整到 10 ms；总时长 {(frames.reduce((sum, frame) => sum + frame.durationMs, 0) / 1000).toFixed(2)} 秒 / 轮。</p>

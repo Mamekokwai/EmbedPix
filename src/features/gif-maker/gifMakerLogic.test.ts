@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, clampFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, clampFrameDuration, clampGifFps, durationFromGifFps, fpsFromFrameDuration, getGifFrameOrder, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("clamps frame durations to a safe animation range", () => {
@@ -8,6 +8,14 @@ describe("GIF maker logic", () => {
     expect(clampFrameDuration(Number.NaN)).toBe(100);
     expect(clampFrameDuration(60_001)).toBe(60_000);
     expect(clampFrameDuration(19)).toBe(10);
+  });
+
+  it("converts animation FPS and frame duration safely", () => {
+    expect(clampGifFps(0)).toBe(1);
+    expect(clampGifFps(120.456)).toBe(100);
+    expect(durationFromGifFps(20)).toBe(50);
+    expect(durationFromGifFps(29.97)).toBe(30);
+    expect(fpsFromFrameDuration(50)).toBe(20);
   });
 
   it("keeps the source ratio when requested", () => {
