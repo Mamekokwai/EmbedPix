@@ -32,6 +32,21 @@ export type GifLoopMode = "infinite" | "finite";
 export type GifEncodingQuality = "high" | "balanced" | "fast";
 export type GifColorCount = 64 | 128 | 256;
 export type GifDitherMode = "none" | "floydSteinberg" | "atkinson";
+export type GifPreset = "custom" | "high" | "balanced" | "small";
+
+export interface GifPresetConfig {
+  label: string;
+  encodingQuality: GifEncodingQuality;
+  colorCount: GifColorCount;
+  ditherMode: GifDitherMode;
+  canvasPreset: Exclude<GifCanvasPreset, "custom">;
+}
+
+export const GIF_PRESETS: Record<Exclude<GifPreset, "custom">, GifPresetConfig> = {
+  high: { label: "高质量", encodingQuality: "high", colorCount: 256, ditherMode: "none", canvasPreset: "source" },
+  balanced: { label: "平衡", encodingQuality: "balanced", colorCount: 128, ditherMode: "floydSteinberg", canvasPreset: "75" },
+  small: { label: "小体积", encodingQuality: "fast", colorCount: 64, ditherMode: "none", canvasPreset: "50" },
+};
 type GifOutputFormat = "gif" | "png-sequence" | "webp" | "apng";
 type GifSourceMode = "image" | "video";
 
@@ -413,6 +428,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [encodingQuality, setEncodingQuality] = useState<GifEncodingQuality>("high");
   const [colorCount, setColorCount] = useState<GifColorCount>(256);
   const [ditherMode, setDitherMode] = useState<GifDitherMode>("none");
+  const [gifPreset, setGifPreset] = useState<GifPreset>("high");
   const [targetSizeKiB, setTargetSizeKiB] = useState("");
   const [maxSizeKiB, setMaxSizeKiB] = useState("");
   const [autoCompress, setAutoCompress] = useState(false);
@@ -853,6 +869,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const updateCanvasWidth = (value: number) => {
     initializedRef.current = true;
     setCanvasPreset("custom");
+    setGifPreset("custom");
+    setMeasuredSizeBytes(null);
     const next = resolveGifCanvasSize(ratioRef.current, value, canvasHeight, keepAspectRatio);
     setCanvasWidth(next.width);
     setCanvasHeight(next.height);
@@ -861,18 +879,52 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const updateCanvasHeight = (value: number) => {
     initializedRef.current = true;
     setCanvasPreset("custom");
+    setGifPreset("custom");
+    setMeasuredSizeBytes(null);
     const next = resolveGifCanvasSize({ width: ratioRef.current.height, height: ratioRef.current.width }, value, canvasWidth, keepAspectRatio);
     setCanvasHeight(next.width);
     setCanvasWidth(next.height);
   };
 
-  const applyCanvasPreset = (preset: GifCanvasPreset) => {
+  const applyCanvasPreset = (preset: GifCanvasPreset, fromGifPreset = false) => {
     setCanvasPreset(preset);
+    if (!fromGifPreset) {
+      setGifPreset("custom");
+      setMeasuredSizeBytes(null);
+    }
     if (preset === "custom") return;
     const next = resolveGifCanvasPreset(ratioRef.current, preset);
     setCanvasWidth(next.width);
     setCanvasHeight(next.height);
     setKeepAspectRatio(true);
+  };
+
+  const applyGifPreset = (preset: Exclude<GifPreset, "custom">) => {
+    const config = GIF_PRESETS[preset];
+    setGifPreset(preset);
+    setEncodingQuality(config.encodingQuality);
+    setColorCount(config.colorCount);
+    setDitherMode(config.ditherMode);
+    setMeasuredSizeBytes(null);
+    applyCanvasPreset(config.canvasPreset, true);
+  };
+
+  const updateGifEncodingQuality = (value: GifEncodingQuality) => {
+    setEncodingQuality(value);
+    setGifPreset("custom");
+    setMeasuredSizeBytes(null);
+  };
+
+  const updateGifColorCount = (value: GifColorCount) => {
+    setColorCount(value);
+    setGifPreset("custom");
+    setMeasuredSizeBytes(null);
+  };
+
+  const updateGifDitherMode = (value: GifDitherMode) => {
+    setDitherMode(value);
+    setGifPreset("custom");
+    setMeasuredSizeBytes(null);
   };
 
   const updateAllDurations = (value: number) => {
@@ -1292,9 +1344,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <div className="gif-settings-grid">
                 <SelectField id="gif-size-preset" label="输出尺寸" value={canvasPreset} options={[{ value: "source" as const, label: "原始尺寸" }, { value: "75" as const, label: "缩小到 75%" }, { value: "50" as const, label: "缩小到 50%" }, { value: "custom" as const, label: "自定义尺寸" }]} onChange={applyCanvasPreset} />
                 <div className="gif-field"><span>画布尺寸 · {canvasPreset === "custom" ? "自定义" : "预设"}</span><div className="gif-dimensions-row"><label><span className="sr-only">宽度</span><input aria-label="画布宽度" type="number" min="1" max="4096" value={canvasWidth} onChange={(event) => updateCanvasWidth(Number(event.target.value))} /></label><span>×</span><label><span className="sr-only">高度</span><input aria-label="画布高度" type="number" min="1" max="4096" value={canvasHeight} onChange={(event) => updateCanvasHeight(Number(event.target.value))} /></label></div></div>
-                <label className="gif-check-row"><input type="checkbox" checked={keepAspectRatio} onChange={(event) => { ratioRef.current = canvasSize; setKeepAspectRatio(event.target.checked); }} /><span><strong>保持画布比例</strong><small>锁定当前画布，与选帧无关</small></span></label>
-                <SelectField id="gif-fit-mode" label="缩放方式" value={fitMode} options={[{ value: "contain" as const, label: "适应画布（保持比例）" }, { value: "stretch" as const, label: "拉伸填满画布" }]} onChange={setFitMode} />
-                <SelectField id="gif-background" label="背景" value={background} options={[{ value: "transparent" as const, label: "透明" }, { value: "white" as const, label: "白色" }, { value: "black" as const, label: "黑色" }]} onChange={setBackground} />
+                <label className="gif-check-row"><input type="checkbox" checked={keepAspectRatio} onChange={(event) => { ratioRef.current = canvasSize; setKeepAspectRatio(event.target.checked); setGifPreset("custom"); setMeasuredSizeBytes(null); }} /><span><strong>保持画布比例</strong><small>锁定当前画布，与选帧无关</small></span></label>
+                <SelectField id="gif-fit-mode" label="缩放方式" value={fitMode} options={[{ value: "contain" as const, label: "适应画布（保持比例）" }, { value: "stretch" as const, label: "拉伸填满画布" }]} onChange={(value) => { setFitMode(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
+                <SelectField id="gif-background" label="背景" value={background} options={[{ value: "transparent" as const, label: "透明" }, { value: "white" as const, label: "白色" }, { value: "black" as const, label: "黑色" }]} onChange={(value) => { setBackground(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
               </div>
               <p className="gif-help-text">{fitMode === "contain" ? "等比居中并按所选背景补边，转为 PNG 帧后导出。" : background === "transparent" ? "原图交由后端拉伸至画布尺寸，预览同样拉伸。" : "拉伸并合成所选背景，转为 PNG 帧后导出。"}</p>
           </div> : null}
@@ -1303,15 +1355,16 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <SelectField id="gif-output-format" label="输出格式" value={outputFormat} options={[{ value: "gif" as const, label: "GIF 动图" }, { value: "webp" as const, label: "WebP 动图" }, { value: "apng" as const, label: "APNG 动图" }, { value: "png-sequence" as const, label: "PNG 帧序列" }]} onChange={changeOutputFormat} />
             <label className="gif-field"><span>{outputFormat === "png-sequence" ? "序列基础名" : "文件名"}</span><input value={fileName} maxLength={120} onChange={(event) => { setFileName(event.target.value); clearOutputSelection(); }} placeholder={outputFormat === "png-sequence" ? "embedpix-animation" : `embedpix-animation.${outputFormat}`} /></label>
             {outputFormat !== "png-sequence" ? <>
-              <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); }} />
-              <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); }} /><small>次</small></div></label>
+              <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); setGifPreset("custom"); }} />
+              <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); setGifPreset("custom"); }} /><small>次</small></div></label>
               {outputFormat === "gif" ? <>
-                <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={setEncodingQuality} />
-                <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={setColorCount} />
-                <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={setDitherMode} />
-                <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="可选" /><small>KiB</small></div></label>
-                <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => setMaxSizeKiB(event.target.value)} placeholder="可选" /><small>KiB</small></div></label>
-                <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => setAutoCompress(event.target.checked)} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
+                <SelectField id="gif-preset" label="常用预设" value={gifPreset} options={[{ value: "high" as const, label: GIF_PRESETS.high.label }, { value: "balanced" as const, label: GIF_PRESETS.balanced.label }, { value: "small" as const, label: GIF_PRESETS.small.label }, { value: "custom" as const, label: "自定义" }]} onChange={(value) => { if (value === "custom") setGifPreset(value); else applyGifPreset(value); }} />
+                <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={updateGifEncodingQuality} />
+                <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={updateGifColorCount} />
+                <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={updateGifDitherMode} />
+                <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => { setTargetSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
+                <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => { setMaxSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
+                <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => { setAutoCompress(event.target.checked); setGifPreset("custom"); }} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
               </> : <p className="gif-format-note">WebP/APNG 动图使用当前画布和帧时长导出；GIF 专属颜色、抖动和目标体积参数不适用。</p>}
             </> : <p className="gif-format-note">PNG 帧序列按当前画布逐帧导出，不使用 GIF 的循环、颜色、抖动和体积压缩参数。</p>}
             <div className="gif-output-picker"><span className="gif-field-label">{outputFormat === "png-sequence" ? "输出目录" : "保存位置"}</span><div className="gif-output-row"><span title={(outputFormat === "png-sequence" ? sequenceOutputDir : outputPath) ?? undefined}>{(outputFormat === "png-sequence" ? sequenceOutputDir : outputPath) ?? (outputFormat === "png-sequence" ? "尚未选择输出目录" : "尚未选择保存位置")}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>{outputFormat === "png-sequence" ? "选择目录" : "选择位置"}</button></div></div>
