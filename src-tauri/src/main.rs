@@ -1,3 +1,3 @@
 fn main() {
-    engiformat_lib::run();
+    embedpix_lib::run();
 }

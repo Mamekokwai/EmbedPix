@@ -44,17 +44,10 @@
 }
 
 .brand-mark {
-  display: grid;
   width: 34px;
   height: 34px;
-  place-items: center;
-  border: 1px solid var(--qp-border-strong);
   border-radius: var(--qp-radius-button);
-  color: var(--qp-accent-default);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -0.08em;
+  object-fit: contain;
 }
 
 .eyebrow,
@@ -366,7 +359,7 @@
 
 .format-selector {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -441,6 +434,65 @@
 .select-wrap select:disabled {
   background: var(--qp-bg-elevated);
   color: var(--qp-text-disabled);
+}
+
+.parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.compact-field,
+.text-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--qp-text-tertiary);
+  font-size: 10px;
+}
+
+.compact-field .select-wrap {
+  width: 100%;
+}
+
+.compact-field select {
+  min-height: 34px;
+  padding-right: 27px;
+  padding-left: 9px;
+  font-size: 11px;
+}
+
+.compact-field .select-wrap svg {
+  right: 8px;
+}
+
+.text-field {
+  margin-top: 2px;
+}
+
+.text-field input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--qp-border-subtle);
+  border-radius: var(--qp-radius-control);
+  outline: 0;
+  background: var(--qp-bg-panel);
+  padding: 0 9px;
+  color: var(--qp-text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.text-field input:focus {
+  border-color: var(--qp-border-strong);
+  outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent);
+  outline-offset: 2px;
+}
+
+.range-input {
+  width: 100%;
+  accent-color: var(--qp-accent-default);
 }
 
 .dimensions-row {
@@ -711,6 +763,12 @@
   }
 }
 
+@media (max-width: 960px) {
+  .format-selector {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 820px) and (max-height: 760px) {
   .settings-panel {
     order: -1;
@@ -727,6 +785,10 @@
 
   .output-summary {
     display: none;
+  }
+
+  .format-selector {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .panel-footer {

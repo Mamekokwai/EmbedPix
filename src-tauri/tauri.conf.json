@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "EngiFormat",
-  "mainBinaryName": "EngiFormat",
+  "productName": "EmbedPix",
+  "mainBinaryName": "EmbedPix",
   "version": "0.1.0",
-  "identifier": "com.engiformat.desktop",
+  "identifier": "io.github.zerothrax.embedpix",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "EngiFormat",
+        "title": "EmbedPix",
         "width": 1100,
         "height": 760,
         "minWidth": 480,
@@ -39,7 +39,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "startMenuFolder": "EngiFormat"
+        "startMenuFolder": "EmbedPix"
       }
     }
   }

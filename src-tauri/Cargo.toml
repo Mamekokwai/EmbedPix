@@ -1,13 +1,13 @@
 [package]
-name = "engiformat"
+name = "embedpix"
 version = "0.1.0"
 description = "Local image format conversion tool"
-authors = ["EngiFormat maintainers"]
+authors = ["ZeroThrax"]
 license = "MIT"
 edition = "2021"
 
 [lib]
-name = "engiformat_lib"
+name = "embedpix_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

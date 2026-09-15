@@ -16,10 +16,13 @@ import {
 } from "lucide-react";
 import { exportImage } from "../../platform/image/imageExportGateway";
 import {
+  DEFAULT_C_ARRAY_NAME,
+  DEFAULT_JPEG_QUALITY,
   MAX_DIMENSION,
   MAX_INPUT_BYTES,
   OUTPUT_FORMATS,
   PNG_BIT_DEPTHS,
+  ROW_ALIGNMENTS,
   SUPPORTED_IMAGE_ACCEPT,
   SUPPORTED_IMAGE_FORMAT_LABEL,
   constrainAspectDimensions,
@@ -33,16 +36,24 @@ import {
   getEffectiveBitDepth,
   getFormatInfo,
   getOutputLabel,
+  getOutputParameterNote,
   getPixelError,
+  isCArrayFormat,
   isImageFile,
+  isRawPixelFormat,
   normalizeDimension,
+  normalizeCArrayName,
   parseDimension,
 } from "./imageConverterLogic";
 import type {
+  ByteOrder,
+  ChannelOrder,
   ExportImageRequest,
   ImageDimensions,
   BmpBitDepth,
   OutputFormat,
+  RowAlignment,
+  RowOrder,
 } from "./types";
 
 type Status =
@@ -114,6 +125,37 @@ function FormatSelector({
   );
 }
 
+function SelectField<T extends string | number>({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <label className="compact-field" htmlFor={id}>
+      <span>{label}</span>
+      <span className="select-wrap">
+        <select id={id} value={value} onChange={(event) => {
+          const next = options.find((option) => String(option.value) === event.target.value)?.value;
+          if (next !== undefined) {
+            onChange(next);
+          }
+        }}>
+          {options.map((option) => <option key={String(option.value)} value={option.value}>{option.label}</option>)}
+        </select>
+        <ChevronDown size={15} aria-hidden="true" />
+      </span>
+    </label>
+  );
+}
+
 export default function ImageConverter() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -124,6 +166,12 @@ export default function ImageConverter() {
   const [heightInput, setHeightInput] = useState("");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("bmp");
   const [bitDepth, setBitDepth] = useState<BmpBitDepth>(24);
+  const [jpegQuality, setJpegQuality] = useState(DEFAULT_JPEG_QUALITY);
+  const [byteOrder, setByteOrder] = useState<ByteOrder>("little");
+  const [channelOrder, setChannelOrder] = useState<ChannelOrder>("rgb");
+  const [rowOrder, setRowOrder] = useState<RowOrder>("top-down");
+  const [rowAlignment, setRowAlignment] = useState<RowAlignment>(1);
+  const [cArrayName, setCArrayName] = useState(DEFAULT_C_ARRAY_NAME);
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
   const [isDragging, setIsDragging] = useState(false);
@@ -350,6 +398,8 @@ export default function ImageConverter() {
     setOutputFormat(nextFormat);
     if (nextFormat === "jpg" || (nextFormat === "png" && !PNG_BIT_DEPTHS.includes(bitDepth))) {
       setBitDepth(24);
+    } else if (isRawPixelFormat(nextFormat)) {
+      setBitDepth(16);
     }
     setError(null);
     setSettingStatus();
@@ -363,6 +413,11 @@ export default function ImageConverter() {
 
   const handleBackgroundColorChange = (nextColor: string) => {
     setBackgroundColor(nextColor.toUpperCase());
+    setError(null);
+    setSettingStatus();
+  };
+
+  const handleOutputParameterChange = () => {
     setError(null);
     setSettingStatus();
   };
@@ -405,6 +460,12 @@ export default function ImageConverter() {
         keepAspectRatio,
         bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
         backgroundColor,
+        jpegQuality,
+        byteOrder,
+        channelOrder,
+        rowOrder,
+        rowAlignment,
+        cArrayName: normalizeCArrayName(cArrayName),
       };
       const outputPath = await exportImage(request);
       setStatus({
@@ -422,9 +483,9 @@ export default function ImageConverter() {
     <main className="converter-app">
       <header className="converter-header">
         <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">EF</div>
+          <img className="brand-mark" src="/embedpix-icon.png" alt="" aria-hidden="true" />
           <div>
-            <p className="eyebrow">ENGIFORMAT</p>
+            <p className="eyebrow">EMBEDPIX</p>
             <h1>图片转换工作区</h1>
           </div>
         </div>
@@ -527,13 +588,13 @@ export default function ImageConverter() {
             <div className="setting-group">
               <div className="label-row">
                 <label className="field-label" htmlFor="bit-depth">位深</label>
-                <span className="field-note">{outputFormat === "jpg" ? "JPG 固定 24 位" : `${getBitDepths(outputFormat).join(" / ")} 位可选`}</span>
+                <span className="field-note">{outputFormat === "jpg" ? "JPG 固定 24 位" : isRawPixelFormat(outputFormat) ? "RGB565 固定 16 位" : `${getBitDepths(outputFormat).join(" / ")} 位可选`}</span>
               </div>
               <div className="select-wrap">
                 <select
                   id="bit-depth"
                   value={bitDepth}
-                  disabled={outputFormat === "jpg"}
+                  disabled={outputFormat === "jpg" || isRawPixelFormat(outputFormat)}
                   aria-describedby="bit-depth-description"
                   onChange={(event) => handleBitDepthChange(Number(event.target.value) as BmpBitDepth)}
                 >
@@ -543,6 +604,86 @@ export default function ImageConverter() {
               </div>
               <p className="field-help" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>
             </div>
+
+            {outputFormat === "jpg" ? (
+              <div className="setting-group">
+                <div className="label-row">
+                  <label className="field-label" htmlFor="jpeg-quality">JPEG 质量</label>
+                  <span className="field-note">{jpegQuality} / 100</span>
+                </div>
+                <input
+                  className="range-input"
+                  id="jpeg-quality"
+                  type="range"
+                  min="1"
+                  max="100"
+                  step="1"
+                  value={jpegQuality}
+                  onChange={(event) => {
+                    setJpegQuality(Number(event.target.value));
+                    handleOutputParameterChange();
+                  }}
+                  aria-describedby="jpeg-quality-description"
+                />
+                <p className="field-help" id="jpeg-quality-description">数值越高画质越好，文件也会更大。</p>
+              </div>
+            ) : null}
+
+            {isRawPixelFormat(outputFormat) ? (
+              <div className="setting-group">
+                <div className="label-row">
+                  <span className="field-label">像素排列</span>
+                  <span className="field-note">RGB565 / 16 位固定</span>
+                </div>
+                <div className="parameter-grid">
+                  <SelectField
+                    id="byte-order"
+                    label="字节序"
+                    value={byteOrder}
+                    options={[{ value: "little", label: "小端" }, { value: "big", label: "大端" }]}
+                    onChange={(value) => { setByteOrder(value); handleOutputParameterChange(); }}
+                  />
+                  <SelectField
+                    id="channel-order"
+                    label="通道"
+                    value={channelOrder}
+                    options={[{ value: "rgb", label: "RGB" }, { value: "bgr", label: "BGR" }]}
+                    onChange={(value) => { setChannelOrder(value); handleOutputParameterChange(); }}
+                  />
+                  <SelectField
+                    id="row-order"
+                    label="行顺序"
+                    value={rowOrder}
+                    options={[{ value: "top-down", label: "从上到下" }, { value: "bottom-up", label: "从下到上" }]}
+                    onChange={(value) => { setRowOrder(value); handleOutputParameterChange(); }}
+                  />
+                  <SelectField
+                    id="row-alignment"
+                    label="行对齐"
+                    value={rowAlignment}
+                    options={ROW_ALIGNMENTS.map((alignment) => ({ value: alignment, label: `${alignment} 字节` }))}
+                    onChange={(value) => { setRowAlignment(value); handleOutputParameterChange(); }}
+                  />
+                </div>
+                {isCArrayFormat(outputFormat) ? (
+                  <label className="text-field" htmlFor="c-array-name">
+                    <span>变量名</span>
+                    <input
+                      id="c-array-name"
+                      value={cArrayName}
+                      onChange={(event) => {
+                        setCArrayName(event.target.value);
+                        handleOutputParameterChange();
+                      }}
+                      onBlur={() => setCArrayName(normalizeCArrayName(cArrayName))}
+                      placeholder={DEFAULT_C_ARRAY_NAME}
+                      spellCheck={false}
+                    />
+                  </label>
+                ) : null}
+                <p className="field-help">{getOutputParameterNote(outputFormat)}</p>
+              </div>
+            ) : null}
 
             <div className="setting-group">
               <div className="label-row">
@@ -598,7 +739,7 @@ export default function ImageConverter() {
       </section>
 
       <footer className="converter-footer">
-        <span>EngiFormat · 图片转换工具</span>
+        <span>EmbedPix · 嵌图匠</span>
         <span className="footer-contract">输出由桌面端 <code>export_image</code> 命令处理</span>
       </footer>
     </main>

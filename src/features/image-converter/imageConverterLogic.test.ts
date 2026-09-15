@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   BMP_BIT_DEPTHS,
+  DEFAULT_C_ARRAY_NAME,
   MAX_DIMENSION,
   MAX_IMAGE_PIXELS,
   OUTPUT_FORMATS,
   PNG_BIT_DEPTHS,
+  ROW_ALIGNMENTS,
   SUPPORTED_IMAGE_ACCEPT,
   SUPPORTED_IMAGE_FORMAT_LABEL,
   constrainAspectDimensions,
@@ -15,9 +17,11 @@ import {
   getBitDepths,
   getDimensionError,
   getEffectiveBitDepth,
+  getOutputLabel,
   getPixelError,
   isImageFile,
   normalizeDimension,
+  normalizeCArrayName,
   parseDimension,
 } from "./imageConverterLogic";
 
@@ -69,14 +73,29 @@ describe("image converter output rules", () => {
     expect(getBitDepths("bmp")).toEqual(BMP_BIT_DEPTHS);
     expect(getBitDepths("png")).toEqual(PNG_BIT_DEPTHS);
     expect(getBitDepths("jpg")).toEqual([24]);
+    expect(getBitDepths("rgb565")).toEqual([16]);
+    expect(getBitDepths("c-array")).toEqual([16]);
     expect(getEffectiveBitDepth("jpg", 32)).toBe(24);
+    expect(getEffectiveBitDepth("rgb565", 24)).toBe(16);
     expect(getEffectiveBitDepth("bmp", 16)).toBe(16);
+    expect(getOutputLabel("rgb565")).toBe("RGB565 BIN");
+    expect(getOutputLabel("c-array")).toBe("C 数组");
   });
 
   it("keeps format descriptions tied to every selectable format", () => {
-    expect(OUTPUT_FORMATS.map(({ value }) => value)).toEqual(["bmp", "png", "jpg"]);
+    expect(OUTPUT_FORMATS.map(({ value }) => value)).toEqual(["bmp", "png", "jpg", "rgb565", "c-array"]);
     expect(OUTPUT_FORMATS.every(({ description }) => description.length > 0)).toBe(true);
     expect(OUTPUT_FORMATS.find(({ value }) => value === "jpg")?.description).toContain("固定 24 位");
+    expect(OUTPUT_FORMATS.find(({ value }) => value === "rgb565")?.label).toBe("RGB565 BIN");
+    expect(OUTPUT_FORMATS.find(({ value }) => value === "c-array")?.description).toContain("C 数组");
+  });
+
+  it("normalizes C identifiers and exposes compact raw-output defaults", () => {
+    expect(DEFAULT_C_ARRAY_NAME).toBe("image_data");
+    expect(ROW_ALIGNMENTS).toEqual([1, 2, 4]);
+    expect(normalizeCArrayName("screen-logo")).toBe("screen_logo");
+    expect(normalizeCArrayName("123logo")).toBe("image_123logo");
+    expect(normalizeCArrayName("  ")).toBe(DEFAULT_C_ARRAY_NAME);
   });
 
   it("explains transparency and background behavior at the bit-depth boundary", () => {

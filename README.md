@@ -1,12 +1,12 @@
-# EngiFormat
+# EmbedPix · 嵌图匠
 
-EngiFormat 是一个面向嵌入式 UI 开发者的本地图片格式转换工具。
+EmbedPix 是一个面向嵌入式 UI 开发者的本地图片格式转换工具。
 
 当前目标：
 
 - 图片预览、缩放与保持比例导出
-- PNG、JPG、BMP 格式转换
-- BMP 位深与嵌入式像素格式控制
+- PNG、JPG、BMP、RGB565 BIN 与 C 数组导出
+- BMP 位深、JPEG 质量、RGB/BGR、大小端、扫描方向与行对齐控制
 - Windows、macOS、Linux 桌面 GUI
 
 ## 开发

@@ -17,6 +17,12 @@ function createRequest(inputData: Uint8Array, overrides: Partial<ExportImageRequ
     keepAspectRatio: true,
     backgroundColor: "#FFFFFF",
     bitDepth: 24,
+    jpegQuality: 85,
+    byteOrder: "little",
+    channelOrder: "rgb",
+    rowOrder: "top-down",
+    rowAlignment: 1,
+    cArrayName: "image_data",
     ...overrides,
   };
 }
@@ -41,9 +47,39 @@ describe("image export raw IPC envelope", () => {
       keepAspectRatio: true,
       backgroundColor: "#FFFFFF",
       bitDepth: 24,
+      jpegQuality: 85,
+      byteOrder: "little",
+      channelOrder: "rgb",
+      rowOrder: "top-down",
+      rowAlignment: 1,
+      cArrayName: "image_data",
     });
     expect(Array.from(payload.subarray(metadataEnd))).toEqual(Array.from(inputData));
     expect(Array.from(inputData)).toEqual([0, 1, 127, 128, 254, 255]);
+  });
+
+  it("serializes the embedded display parameters in metadata", () => {
+    const payload = encodeExportEnvelope(createRequest(new Uint8Array([9]), {
+      outputFormat: "c-array",
+      jpegQuality: 67,
+      byteOrder: "big",
+      channelOrder: "bgr",
+      rowOrder: "bottom-up",
+      rowAlignment: 4,
+      cArrayName: "screen_logo",
+    }));
+    const metadataLength = new DataView(payload.buffer, payload.byteOffset, payload.byteLength).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(payload.subarray(8, 8 + metadataLength)));
+
+    expect(metadata).toMatchObject({
+      outputFormat: "c-array",
+      jpegQuality: 67,
+      byteOrder: "big",
+      channelOrder: "bgr",
+      rowOrder: "bottom-up",
+      rowAlignment: 4,
+      cArrayName: "screen_logo",
+    });
   });
 
   it("rejects empty and oversized image data before allocating an envelope", () => {

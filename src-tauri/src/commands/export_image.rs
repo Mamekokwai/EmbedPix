@@ -5,13 +5,14 @@ use std::{
 };
 
 use image::{
-    imageops::FilterType, io::Reader as ImageReader, DynamicImage, GenericImage, ImageFormat, Rgba,
-    RgbaImage,
+    codecs::jpeg::JpegEncoder, imageops::FilterType, io::Reader as ImageReader, DynamicImage,
+    GenericImage, ImageFormat, Rgba, RgbaImage,
 };
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{InvokeBody, Request};
 
 mod bmp;
+mod raw;
 
 const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 64 * 1024;
@@ -27,6 +28,8 @@ enum OutputFormat {
     Png,
     Jpg,
     Bmp,
+    Rgb565,
+    CArray,
 }
 
 impl OutputFormat {
@@ -35,8 +38,10 @@ impl OutputFormat {
             "png" => Ok(Self::Png),
             "jpg" | "jpeg" => Ok(Self::Jpg),
             "bmp" => Ok(Self::Bmp),
+            "rgb565" => Ok(Self::Rgb565),
+            "c-array" | "c_array" => Ok(Self::CArray),
             other => Err(format!(
-                "unsupported output format `{other}`; expected png, jpg, or bmp"
+                "unsupported output format `{other}`; expected png, jpg, bmp, rgb565, or c-array"
             )),
         }
     }
@@ -46,11 +51,19 @@ impl OutputFormat {
             Self::Png => "png",
             Self::Jpg => "jpg",
             Self::Bmp => "bmp",
+            Self::Rgb565 => "bin",
+            Self::CArray => "h",
         }
     }
 
     fn name(self) -> &'static str {
-        self.extension()
+        match self {
+            Self::Png => "png",
+            Self::Jpg => "jpg",
+            Self::Bmp => "bmp",
+            Self::Rgb565 => "rgb565",
+            Self::CArray => "c-array",
+        }
     }
 }
 
@@ -64,6 +77,9 @@ struct ExportRequest {
     keep_aspect_ratio: bool,
     background_color: Rgba<u8>,
     bit_depth: u16,
+    jpeg_quality: u8,
+    raw_options: raw::RawOptions,
+    c_array_name: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -77,20 +93,55 @@ struct ExportMetadata {
     keep_aspect_ratio: bool,
     background_color: Option<String>,
     bit_depth: Option<u16>,
+    #[serde(default)]
+    jpeg_quality: Option<u8>,
+    #[serde(default)]
+    byte_order: Option<String>,
+    #[serde(default)]
+    channel_order: Option<String>,
+    #[serde(default)]
+    row_order: Option<String>,
+    #[serde(default)]
+    row_alignment: Option<u8>,
+    #[serde(default)]
+    c_array_name: Option<String>,
 }
 
 impl ExportMetadata {
     fn into_request(self, input_data: Vec<u8>) -> Result<ExportRequest, String> {
-        validate_source_file_name(&self.file_name)?;
+        let source_file_name = self.file_name;
+        validate_source_file_name(&source_file_name)?;
+        validate_input_size(&input_data)?;
+        let output_format = OutputFormat::parse(&self.output_format)?;
+        let bit_depth = self.bit_depth.unwrap_or(match output_format {
+            OutputFormat::Rgb565 | OutputFormat::CArray => 16,
+            _ => 24,
+        });
+        let jpeg_quality = self.jpeg_quality.unwrap_or(85);
+        if !(1..=100).contains(&jpeg_quality) {
+            return Err("jpegQuality must be between 1 and 100".to_string());
+        }
         Ok(ExportRequest {
             input_data,
-            source_file_name: self.file_name,
-            output_format: OutputFormat::parse(&self.output_format)?,
+            source_file_name: source_file_name.clone(),
+            output_format,
             width: self.width,
             height: self.height,
             keep_aspect_ratio: self.keep_aspect_ratio,
             background_color: parse_background_color(self.background_color.as_deref())?,
-            bit_depth: self.bit_depth.unwrap_or(24),
+            bit_depth,
+            jpeg_quality,
+            raw_options: raw::RawOptions::parse(
+                self.byte_order.as_deref(),
+                self.channel_order.as_deref(),
+                self.row_order.as_deref(),
+                self.row_alignment,
+            )?,
+            c_array_name: self
+                .c_array_name
+                .as_deref()
+                .map(raw::sanitize_c_array_name)
+                .unwrap_or_else(|| raw::default_c_array_name(&source_file_name)),
         })
     }
 }
@@ -153,8 +204,16 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
 
     match request.output_format {
         OutputFormat::Png => encode_png(image, request.bit_depth, request.background_color),
-        OutputFormat::Jpg => encode_jpg(image, request.background_color),
+        OutputFormat::Jpg => encode_jpg(image, request.background_color, request.jpeg_quality),
         OutputFormat::Bmp => bmp::encode(&image, request.bit_depth, request.background_color),
+        OutputFormat::Rgb565 => {
+            raw::encode_rgb565(&image, request.background_color, request.raw_options)
+        }
+        OutputFormat::CArray => {
+            let (bytes, _) =
+                raw::encode_rgb565(&image, request.background_color, request.raw_options)?;
+            raw::encode_c_array(&bytes, image.width(), image.height(), &request.c_array_name)
+        }
     }
 }
 
@@ -305,6 +364,7 @@ fn validate_bit_depth(format: OutputFormat, bit_depth: u16) -> Result<(), String
         OutputFormat::Png => (matches!(bit_depth, 24 | 32), "24 or 32"),
         OutputFormat::Jpg => (bit_depth == 24, "24"),
         OutputFormat::Bmp => return bmp::validate_bit_depth(bit_depth),
+        OutputFormat::Rgb565 | OutputFormat::CArray => (bit_depth == 16, "16"),
     };
     if supported {
         return Ok(());
@@ -395,10 +455,16 @@ fn encode_png(
     Ok((bytes.into_inner(), bit_depth))
 }
 
-fn encode_jpg(image: RgbaImage, background_color: Rgba<u8>) -> Result<(Vec<u8>, u16), String> {
+fn encode_jpg(
+    image: RgbaImage,
+    background_color: Rgba<u8>,
+    quality: u8,
+) -> Result<(Vec<u8>, u16), String> {
     let mut bytes = LimitedCursor::new(MAX_OUTPUT_BYTES);
-    DynamicImage::ImageRgba8(composite_over_background(image, background_color))
-        .write_to(&mut bytes, ImageFormat::Jpeg)
+    let image = DynamicImage::ImageRgba8(composite_over_background(image, background_color));
+    let mut encoder = JpegEncoder::new_with_quality(&mut bytes, quality);
+    encoder
+        .encode_image(&image)
         .map_err(|error| format!("failed to encode jpg: {error}"))?;
     Ok((bytes.into_inner(), 24))
 }
@@ -558,7 +624,90 @@ mod tests {
         assert_eq!(request.input_data, vec![1, 2, 3]);
         assert_eq!(request.source_file_name, "source.png");
         assert_eq!(request.bit_depth, 24);
+        assert_eq!(request.jpeg_quality, 85);
+        assert_eq!(
+            request.raw_options,
+            raw::RawOptions::parse(None, None, None, None).unwrap()
+        );
         assert_eq!(request.background_color, Rgba([16, 32, 48, 255]));
+    }
+
+    #[test]
+    fn raw_metadata_parses_new_output_options_and_raw_defaults() {
+        let metadata: ExportMetadata = serde_json::from_str(
+            r##"{
+                "fileName": "screen.png",
+                "outputFormat": "rgb565",
+                "width": 2,
+                "height": 1,
+                "keepAspectRatio": false,
+                "backgroundColor": "#000000",
+                "jpegQuality": 42,
+                "byteOrder": "big",
+                "channelOrder": "bgr",
+                "rowOrder": "bottom-up",
+                "rowAlignment": 4,
+                "cArrayName": "screen_pixels"
+            }"##,
+        )
+        .unwrap();
+        let request = metadata.into_request(vec![1]).unwrap();
+
+        assert_eq!(request.output_format, OutputFormat::Rgb565);
+        assert_eq!(request.bit_depth, 16);
+        assert_eq!(request.jpeg_quality, 42);
+        assert_eq!(request.raw_options.byte_order, raw::ByteOrder::Big);
+        assert_eq!(request.raw_options.channel_order, raw::ChannelOrder::Bgr);
+        assert_eq!(request.raw_options.row_order, raw::RowOrder::BottomUp);
+        assert_eq!(request.raw_options.row_alignment, 4);
+        assert_eq!(request.c_array_name, "screen_pixels");
+
+        let c_array_metadata: ExportMetadata = serde_json::from_str(
+            r##"{
+                "fileName": "screen.png",
+                "outputFormat": "c-array",
+                "width": 1,
+                "height": 1,
+                "keepAspectRatio": false,
+                "backgroundColor": null
+            }"##,
+        )
+        .unwrap();
+        let c_array_request = c_array_metadata.into_request(vec![1]).unwrap();
+        assert_eq!(c_array_request.bit_depth, 16);
+        assert_eq!(c_array_request.c_array_name, "screen");
+    }
+
+    #[test]
+    fn jpeg_quality_and_raw_output_parameters_reject_invalid_values() {
+        let metadata: ExportMetadata = serde_json::from_str(
+            r##"{
+                "fileName": "screen.png",
+                "outputFormat": "jpg",
+                "width": 1,
+                "height": 1,
+                "keepAspectRatio": false,
+                "backgroundColor": null,
+                "jpegQuality": 0
+            }"##,
+        )
+        .unwrap();
+        assert!(metadata
+            .into_request(vec![1])
+            .unwrap_err()
+            .contains("jpegQuality"));
+        assert!(validate_bit_depth(OutputFormat::Rgb565, 24)
+            .unwrap_err()
+            .contains("supported bit depths are 16"));
+    }
+
+    #[test]
+    fn jpeg_quality_changes_encoded_output() {
+        let (low_quality, _) = encode_jpg(sample_image(), Rgba([255, 255, 255, 255]), 10).unwrap();
+        let (high_quality, _) =
+            encode_jpg(sample_image(), Rgba([255, 255, 255, 255]), 100).unwrap();
+
+        assert_ne!(low_quality, high_quality);
     }
 
     #[test]
@@ -590,6 +739,12 @@ mod tests {
             keep_aspect_ratio: false,
             background_color: None,
             bit_depth: None,
+            jpeg_quality: None,
+            byte_order: None,
+            channel_order: None,
+            row_order: None,
+            row_alignment: None,
+            c_array_name: None,
         };
         let payload = raw_payload(&metadata, &[0x89, 0x50, 0x4e, 0x47]);
         let request = parse_raw_payload(&payload).unwrap();
@@ -608,6 +763,12 @@ mod tests {
             keep_aspect_ratio: false,
             background_color: Some("#102030".to_string()),
             bit_depth: Some(16),
+            jpeg_quality: None,
+            byte_order: None,
+            channel_order: None,
+            row_order: None,
+            row_alignment: None,
+            c_array_name: None,
         };
         let request = parse_raw_payload(&raw_payload(&metadata, &[1, 2, 3])).unwrap();
 
@@ -664,6 +825,12 @@ mod tests {
             keep_aspect_ratio: false,
             background_color: None,
             bit_depth: None,
+            jpeg_quality: None,
+            byte_order: None,
+            channel_order: None,
+            row_order: None,
+            row_alignment: None,
+            c_array_name: None,
         };
         assert!(parse_raw_payload(&raw_payload(&metadata, &[]))
             .unwrap_err()
@@ -683,6 +850,12 @@ mod tests {
             keep_aspect_ratio: false,
             background_color: None,
             bit_depth: None,
+            jpeg_quality: None,
+            byte_order: None,
+            channel_order: None,
+            row_order: None,
+            row_alignment: None,
+            c_array_name: None,
         };
 
         assert!(create_metadata(String::new())
@@ -716,6 +889,14 @@ mod tests {
         assert_eq!(
             default_output_name("...png", OutputFormat::Bmp),
             "image.bmp"
+        );
+        assert_eq!(
+            default_output_name("screen.png", OutputFormat::Rgb565),
+            "screen.bin"
+        );
+        assert_eq!(
+            default_output_name("screen.png", OutputFormat::CArray),
+            "screen.h"
         );
 
         let output = default_output_name(&format!("{}.png", "x".repeat(200)), OutputFormat::Png);
@@ -768,7 +949,8 @@ mod tests {
     #[test]
     fn png_and_jpg_outputs_have_expected_signatures() {
         let (png, bit_depth) = encode_png(sample_image(), 24, Rgba([255, 255, 255, 255])).unwrap();
-        let (jpg, jpg_bit_depth) = encode_jpg(sample_image(), Rgba([255, 255, 255, 255])).unwrap();
+        let (jpg, jpg_bit_depth) =
+            encode_jpg(sample_image(), Rgba([255, 255, 255, 255]), 85).unwrap();
 
         assert_eq!(bit_depth, 24);
         assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");

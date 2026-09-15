@@ -7,5 +7,5 @@ pub fn run() {
             commands::export_image::export_image
         ])
         .run(tauri::generate_context!())
-        .expect("error while running EngiFormat");
+        .expect("error while running EmbedPix");
 }

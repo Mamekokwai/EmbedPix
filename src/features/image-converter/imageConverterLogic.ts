@@ -1,8 +1,11 @@
-import type { BmpBitDepth, ImageDimensions, OutputFormat } from "./types";
+import type { BmpBitDepth, ImageDimensions, OutputFormat, RowAlignment } from "./types";
 
 export const MAX_DIMENSION = 8192;
 export const MAX_IMAGE_PIXELS = 16_777_216;
 export const MAX_INPUT_BYTES = 32 * 1024 * 1024;
+export const DEFAULT_JPEG_QUALITY = 85;
+export const DEFAULT_C_ARRAY_NAME = "image_data";
+export const ROW_ALIGNMENTS: ReadonlyArray<RowAlignment> = [1, 2, 4];
 
 export const OUTPUT_FORMATS: ReadonlyArray<{
   value: OutputFormat;
@@ -12,7 +15,9 @@ export const OUTPUT_FORMATS: ReadonlyArray<{
 }> = [
   { value: "bmp", label: "BMP", hint: "1–32 位", description: "支持 1、4、8、16、24、32 位；仅 32 位保留透明度。" },
   { value: "png", label: "PNG", hint: "24 / 32 位", description: "24 位不含透明度；32 位保留透明度，适合无损资源。" },
-  { value: "jpg", label: "JPG", hint: "固定 24 位", description: "固定 24 位，不支持透明度；透明区域使用背景色。" },
+  { value: "jpg", label: "JPG", hint: "24 位 · 有损", description: "固定 24 位，不支持透明度；透明区域使用背景色。" },
+  { value: "rgb565", label: "RGB565 BIN", hint: "16 位 · 原始", description: "输出适合 MCU 屏幕的 RGB565 原始二进制数据。" },
+  { value: "c-array", label: "C 数组", hint: "RGB565 · 源码", description: "输出可直接加入固件工程的 RGB565 C 数组源码。" },
 ];
 
 export const BMP_BIT_DEPTHS: ReadonlyArray<BmpBitDepth> = [1, 4, 8, 16, 24, 32];
@@ -116,11 +121,21 @@ export function getBitDepths(format: OutputFormat): ReadonlyArray<BmpBitDepth> {
     return [24];
   }
 
+  if (format === "rgb565" || format === "c-array") {
+    return [16];
+  }
+
   return BMP_BIT_DEPTHS;
 }
 
 export function getEffectiveBitDepth(format: OutputFormat, bitDepth: BmpBitDepth) {
-  return format === "jpg" ? 24 : bitDepth;
+  if (format === "jpg") {
+    return 24;
+  }
+  if (format === "rgb565" || format === "c-array") {
+    return 16;
+  }
+  return bitDepth;
 }
 
 export function getFormatInfo(format: OutputFormat) {
@@ -144,11 +159,43 @@ export function getBitDepthNote(format: OutputFormat, bitDepth: BmpBitDepth) {
   return `${bitDepth} 位输出不含透明度，透明区域使用背景色。`;
 }
 
+export function isRawPixelFormat(format: OutputFormat) {
+  return format === "rgb565" || format === "c-array";
+}
+
+export function isCArrayFormat(format: OutputFormat) {
+  return format === "c-array";
+}
+
+export function normalizeCArrayName(value: string) {
+  const normalized = value.trim().replace(/[^a-zA-Z0-9_]/g, "_");
+  if (/^[a-zA-Z_]/.test(normalized)) {
+    return normalized;
+  }
+  return normalized ? `image_${normalized}` : DEFAULT_C_ARRAY_NAME;
+}
+
+export function getOutputParameterNote(format: OutputFormat) {
+  if (format === "rgb565") {
+    return "固定 RGB565 / 16 位像素数据。";
+  }
+  if (format === "c-array") {
+    return "固定 RGB565 / 16 位，生成可复制的 C 源码。";
+  }
+  return null;
+}
+
 export function isImageFile(file: { type: string; name: string }) {
   const hasSupportedMime = file.type.length === 0 || SUPPORTED_IMAGE_MIME_TYPES.has(file.type.toLowerCase());
   return hasSupportedMime && SUPPORTED_IMAGE_EXTENSION_PATTERN.test(file.name);
 }
 
 export function getOutputLabel(format: OutputFormat) {
+  if (format === "rgb565") {
+    return "RGB565 BIN";
+  }
+  if (format === "c-array") {
+    return "C 数组";
+  }
   return format.toUpperCase();
 }

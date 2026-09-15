@@ -20,6 +20,12 @@ function getExportMetadata(request: ExportImageRequest) {
     keepAspectRatio: request.keepAspectRatio,
     backgroundColor: request.backgroundColor,
     bitDepth: request.bitDepth,
+    jpegQuality: request.jpegQuality,
+    byteOrder: request.byteOrder,
+    channelOrder: request.channelOrder,
+    rowOrder: request.rowOrder,
+    rowAlignment: request.rowAlignment,
+    cArrayName: request.cArrayName,
   };
 }
 
