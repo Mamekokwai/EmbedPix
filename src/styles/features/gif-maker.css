@@ -83,6 +83,7 @@
 .gif-empty-frames > button { flex: 0 0 auto; }
 .gif-preview-card { flex: 1; }
 .gif-canvas-stage { position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background-color: var(--qp-bg-canvas); background-image: conic-gradient(var(--qp-bg-elevated) 25%, transparent 0 50%, var(--qp-bg-elevated) 0 75%, transparent 0); background-size: 16px 16px; }
+.gif-canvas-stage.gif-background-custom { background-image: none; }
 .gif-preview-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .gif-preview-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--qp-text-tertiary); }
 .gif-timeline { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--qp-text-secondary); font-size: 10px; }

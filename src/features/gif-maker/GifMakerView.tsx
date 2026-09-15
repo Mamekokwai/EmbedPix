@@ -27,7 +27,7 @@ import type { VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
 
 export type GifFitMode = "contain" | "stretch";
-export type GifBackground = "transparent" | "white" | "black";
+export type GifBackground = "transparent" | "white" | "black" | "custom";
 export type GifLoopMode = "infinite" | "finite";
 export type GifEncodingQuality = "high" | "balanced" | "fast";
 export type GifColorCount = 64 | 128 | 256;
@@ -323,10 +323,11 @@ function drawGifFrame(
   canvasSize: GifCanvasSize,
   fitMode: GifFitMode,
   background: GifBackground,
+  customBackgroundColor: string,
 ) {
   context.clearRect(0, 0, canvasSize.width, canvasSize.height);
   if (background !== "transparent") {
-    context.fillStyle = background === "black" ? "#000000" : "#ffffff";
+    context.fillStyle = background === "black" ? "#000000" : background === "white" ? "#ffffff" : customBackgroundColor;
     context.fillRect(0, 0, canvasSize.width, canvasSize.height);
   }
 
@@ -423,6 +424,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
   const [fitMode, setFitMode] = useState<GifFitMode>("contain");
   const [background, setBackground] = useState<GifBackground>("transparent");
+  const [customBackgroundColor, setCustomBackgroundColor] = useState("#ffffff");
   const [globalDuration, setGlobalDuration] = useState(DEFAULT_DURATION);
   const [batchDuration, setBatchDuration] = useState(DEFAULT_DURATION);
   const [firstFrameHoldDuration, setFirstFrameHoldDuration] = useState(0);
@@ -563,12 +565,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     void loadImage(selectedFrame.previewUrl).then((image) => {
       if (cancelled) return;
       const context = canvas.getContext("2d");
-      if (context) drawGifFrame(context, image, canvasSize, fitMode, background);
+      if (context) drawGifFrame(context, image, canvasSize, fitMode, background, customBackgroundColor);
     }).catch(() => {
       if (!cancelled) setError("预览帧读取失败，请重新导入图片。");
     });
     return () => { cancelled = true; };
-  }, [active, background, canvasSize, fitMode, selectedFrame]);
+  }, [active, background, canvasSize, customBackgroundColor, fitMode, selectedFrame]);
 
   const openFileDialog = (frameId: string | null = null) => {
     if (lockedRef.current) return;
@@ -1068,7 +1070,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           data = new Uint8Array(await frame.file.arrayBuffer());
         } else {
           const image = await loadImage(frame.previewUrl);
-          drawGifFrame(context, image, size, fitMode, background);
+          drawGifFrame(context, image, size, fitMode, background, customBackgroundColor);
           data = await canvasToBytes(exportCanvas);
         }
         const holdDuration = frames.length === 1
@@ -1377,7 +1379,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <button className="icon-button" type="button" aria-label="下一帧" disabled={!canMoveRight} onClick={() => { setIsPlaying(false); setSelectedIndex(selectedIndex + 1); }}><ArrowRight size={15} /></button>
                 </div>
               </div>
-              <div className={`gif-canvas-stage gif-background-${background}`}>
+              <div className={`gif-canvas-stage gif-background-${background}`} style={background === "custom" ? { backgroundColor: customBackgroundColor } : undefined}>
                 {selectedFrame ? <canvas ref={canvasRef} className="gif-preview-canvas" aria-label={`第 ${selectedIndex + 1} 帧预览`} /> : <div className="gif-preview-empty"><Film size={28} aria-hidden="true" /><span>导入图片后预览动画</span></div>}
               </div>
               {frames.length ? <div className="gif-timeline"><input type="range" min="0" max={Math.max(0, frames.length - 1)} step="1" value={selectedIndex} aria-label="动画时间轴" onChange={(event) => seekPreviewFrame(Number(event.target.value))} /><span>{formatGifTimelineTime(timeline.currentMs)} / {formatGifTimelineTime(timeline.totalMs)}</span></div> : null}
@@ -1412,7 +1414,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <div className="gif-field"><span>画布尺寸 · {canvasPreset === "custom" ? "自定义" : "预设"}</span><div className="gif-dimensions-row"><label><span className="sr-only">宽度</span><input aria-label="画布宽度" type="number" min="1" max="4096" value={canvasWidth} onChange={(event) => updateCanvasWidth(Number(event.target.value))} /></label><span>×</span><label><span className="sr-only">高度</span><input aria-label="画布高度" type="number" min="1" max="4096" value={canvasHeight} onChange={(event) => updateCanvasHeight(Number(event.target.value))} /></label></div></div>
                 <label className="gif-check-row"><input type="checkbox" checked={keepAspectRatio} onChange={(event) => { ratioRef.current = canvasSize; setKeepAspectRatio(event.target.checked); setGifPreset("custom"); setMeasuredSizeBytes(null); }} /><span><strong>保持画布比例</strong><small>锁定当前画布，与选帧无关</small></span></label>
                 <SelectField id="gif-fit-mode" label="缩放方式" value={fitMode} options={[{ value: "contain" as const, label: "适应画布（保持比例）" }, { value: "stretch" as const, label: "拉伸填满画布" }]} onChange={(value) => { setFitMode(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
-                <SelectField id="gif-background" label="背景" value={background} options={[{ value: "transparent" as const, label: "透明" }, { value: "white" as const, label: "白色" }, { value: "black" as const, label: "黑色" }]} onChange={(value) => { setBackground(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
+                <SelectField id="gif-background" label="背景" value={background} options={[{ value: "transparent" as const, label: "透明" }, { value: "white" as const, label: "白色" }, { value: "black" as const, label: "黑色" }, { value: "custom" as const, label: "自定义颜色" }]} onChange={(value) => { setBackground(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
+                {background === "custom" ? <label className="gif-field"><span>自定义背景色</span><input aria-label="自定义背景色" type="color" value={customBackgroundColor} onChange={(event) => { setCustomBackgroundColor(event.target.value); setMeasuredSizeBytes(null); }} /></label> : null}
               </div>
               <p className="gif-help-text">{fitMode === "contain" ? "等比居中并按所选背景补边，转为 PNG 帧后导出。" : background === "transparent" ? "原图交由后端拉伸至画布尺寸，预览同样拉伸。" : "拉伸并合成所选背景，转为 PNG 帧后导出。"}</p>
           </div> : null}
