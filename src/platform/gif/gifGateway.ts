@@ -6,8 +6,18 @@ export interface GifExportFrame {
   durationMs: number;
 }
 
-export interface GifExportRequest {
-  outputPath: string;
+export type GifOutputLocation = "path" | "source" | "subfolder" | "directory";
+
+export interface GifOutputLocationRequest {
+  outputPath?: string;
+  outputLocation?: GifOutputLocation;
+  fileName?: string;
+  sourcePath?: string | null;
+  outputSubdirectory?: string;
+  outputDirectory?: string;
+}
+
+export interface GifExportRequest extends GifOutputLocationRequest {
   width: number;
   height: number;
   loopMode: "infinite" | "finite";
@@ -42,8 +52,7 @@ export interface PngSequenceExportRequest {
   overwriteExisting?: boolean;
 }
 
-export interface AnimationExportRequest {
-  outputPath: string;
+export interface AnimationExportRequest extends GifOutputLocationRequest {
   width: number;
   height: number;
   loopMode: "infinite" | "finite";
@@ -52,7 +61,7 @@ export interface AnimationExportRequest {
   overwriteExisting?: boolean;
 }
 
-function isTauriEnvironment(): boolean {
+export function isTauriEnvironment(): boolean {
   return typeof window !== "undefined"
     && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 }
@@ -68,6 +77,17 @@ function serializeGifFrames(frames: GifExportFrame[]) {
     data: Array.from(frame.data),
     durationMs: frame.durationMs,
   }));
+}
+
+function serializeOutputLocation(request: GifOutputLocationRequest) {
+  return {
+    ...(request.outputPath?.trim() ? { outputPath: request.outputPath.trim() } : {}),
+    ...(request.outputLocation ? { outputLocation: request.outputLocation } : {}),
+    ...(request.fileName?.trim() ? { fileName: request.fileName.trim() } : {}),
+    ...(request.sourcePath?.trim() ? { sourcePath: request.sourcePath.trim() } : {}),
+    ...(request.outputSubdirectory?.trim() ? { outputSubdirectory: request.outputSubdirectory.trim() } : {}),
+    ...(request.outputDirectory?.trim() ? { outputDirectory: request.outputDirectory.trim() } : {}),
+  };
 }
 
 function serializeGifSizeRequest(request: GifSizeEstimateRequest) {
@@ -114,7 +134,11 @@ export async function exportGif(request: GifExportRequest): Promise<string> {
   try {
     return await invoke<string>("export_gif", {
       request: {
-        ...request,
+        ...serializeOutputLocation(request),
+        width: request.width,
+        height: request.height,
+        loopMode: request.loopMode,
+        loopCount: request.loopCount,
         overwriteExisting: request.overwriteExisting ?? false,
         encodingSpeed: request.encodingSpeed ?? 1,
         colorCount: request.colorCount ?? 256,
@@ -193,7 +217,11 @@ async function exportAnimation(
   try {
     return await invoke<string>(command, {
       request: {
-        ...request,
+        ...serializeOutputLocation(request),
+        width: request.width,
+        height: request.height,
+        loopMode: request.loopMode,
+        loopCount: request.loopCount,
         overwriteExisting: request.overwriteExisting ?? false,
         frames: serializeGifFrames(request.frames),
       },

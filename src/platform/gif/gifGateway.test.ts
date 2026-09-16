@@ -110,6 +110,17 @@ describe("GIF desktop gateway", () => {
     }) });
   });
 
+  it("passes secure source-folder output metadata without deriving an output path", async () => {
+    const input = { ...request(), outputPath: undefined, outputLocation: "source" as const, sourcePath: "E:\\源素材\\第一帧.png" };
+    vi.mocked(invoke).mockResolvedValueOnce("E:\\源素材\\动画.gif");
+    await expect(exportGif(input)).resolves.toBe("E:\\源素材\\动画.gif");
+    expect(invoke).toHaveBeenCalledWith("export_gif", { request: expect.objectContaining({
+      outputLocation: "source",
+      sourcePath: "E:\\源素材\\第一帧.png",
+    }) });
+    expect(vi.mocked(invoke).mock.calls[0]?.[1]).not.toHaveProperty("request.outputPath", undefined);
+  });
+
   it.each([2, 16, 32] as const)("preserves %s color GIF settings", async (colorCount) => {
     const input = { ...request(), colorCount };
     vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
