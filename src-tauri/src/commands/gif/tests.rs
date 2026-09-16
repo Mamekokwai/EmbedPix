@@ -4,6 +4,7 @@ use image::{
     RgbaImage,
 };
 use std::{
+    collections::HashSet,
     fs, io,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -171,17 +172,46 @@ fn round_trip_preserves_order_canvas_quantized_delays_and_loop_extension() {
 #[test]
 fn all_supported_color_counts_encode_decodable_gifs_with_each_dither_mode() {
     let dir = TestDirectory::new();
-    for color_count in [16, 32, 64, 128, 256] {
+    for color_count in [2, 16, 32, 64, 128, 256] {
         for dither_mode in ["none", "floydSteinberg", "atkinson"] {
             let mut req = request(&dir.output());
+            req.width = 4;
+            req.height = 1;
+            req.frames = (0..3).map(|_| colorful_frame(100)).collect();
             req.color_count = color_count;
             req.dither_mode = dither_mode.into();
             req.overwrite_existing = true;
             export_gif_blocking(req).unwrap();
-            assert_eq!(decode(&fs::read(dir.output()).unwrap()).len(), 3);
+            let decoded = decode(&fs::read(dir.output()).unwrap());
+            assert_eq!(decoded.len(), 3);
+            for frame in decoded {
+                let colors = frame
+                    .buffer()
+                    .pixels()
+                    .map(|pixel| pixel.0)
+                    .collect::<HashSet<_>>();
+                assert!(colors.len() <= usize::from(color_count));
+            }
         }
     }
     dir.assert_files(1);
+}
+
+fn colorful_frame(duration_ms: u32) -> GifFrameRequest {
+    GifFrameRequest {
+        data: encoded_image(
+            RgbaImage::from_raw(
+                4,
+                1,
+                vec![
+                    255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+                ],
+            )
+            .unwrap(),
+            ImageOutputFormat::Png,
+        ),
+        duration_ms,
+    }
 }
 
 #[test]
@@ -463,7 +493,7 @@ fn rejects_output_extension_invalid_durations_loop_and_canvas_limits() {
         req.encoding_speed = speed;
         assert!(export_gif_blocking(req).unwrap_err().contains("编码速度"));
     }
-    for color_count in [1, 8, 15, 17, 31, 33, 63, 65, 129, 255] {
+    for color_count in [1, 3, 8, 15, 17, 31, 33, 63, 65, 129, 255] {
         let mut req = request(&dir.output());
         req.color_count = color_count;
         assert!(export_gif_blocking(req).unwrap_err().contains("颜色数量"));
