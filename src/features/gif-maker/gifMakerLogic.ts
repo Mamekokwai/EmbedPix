@@ -60,6 +60,10 @@ export function calculateBoundaryFrameDuration(frameDuration: number, holdDurati
   return clampFrameDuration(clampFrameDuration(frameDuration) + safeHold);
 }
 
+export function clampGifHoldDuration(value: number): number {
+  return Number.isFinite(value) ? Math.min(60_000, Math.max(0, Math.floor(value))) : 0;
+}
+
 export function resolveGifCanvasSize(source: GifCanvasSize, width: number, height: number, keepRatio: boolean): GifCanvasSize {
   const safe = (value: number) => Number.isFinite(value) ? Math.min(4096, Math.max(1, Math.round(value))) : 1;
   let w = safe(width);
