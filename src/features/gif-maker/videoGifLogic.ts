@@ -1,6 +1,7 @@
 export const MAX_VIDEO_FRAMES = 200;
 export const MIN_VIDEO_FPS = 1;
 export const MAX_VIDEO_FPS = 30;
+export const MAX_VIDEO_FRAME_DURATION_MS = 60_000;
 
 export interface VideoFramePlan {
   times: number[];
@@ -39,17 +40,24 @@ export function planVideoFramesWithSampling(
   fps: number,
   options: VideoFrameSamplingOptions = {},
 ): VideoFramePlan {
-  const safeDuration = Math.max(0, duration);
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
   const safeStart = clampVideoRange(start, safeDuration);
   const safeEnd = Math.min(safeDuration, Math.max(safeStart, Number.isFinite(end) ? end : safeStart));
   const safeFps = clampVideoFps(fps);
-  const everyNthFrame = Math.max(1, Math.floor(options.everyNthFrame ?? 1));
-  const maxFrames = Math.min(MAX_VIDEO_FRAMES, Math.max(1, Math.floor(options.maxFrames ?? MAX_VIDEO_FRAMES)));
-  const frameDurationMs = Math.max(10, Math.round(1000 / safeFps / 10) * 10);
+  const requestedEveryNthFrame = options.everyNthFrame ?? 1;
+  const requestedMaxFrames = options.maxFrames ?? MAX_VIDEO_FRAMES;
+  const everyNthFrame = Math.max(1, Number.isFinite(requestedEveryNthFrame) ? Math.floor(requestedEveryNthFrame) : 1);
+  const maxFrames = Math.min(MAX_VIDEO_FRAMES, Math.max(1, Number.isFinite(requestedMaxFrames) ? Math.floor(requestedMaxFrames) : MAX_VIDEO_FRAMES));
   const sourceFrameCount = Math.max(1, Math.ceil((safeEnd - safeStart) * safeFps));
-  const frameCount = Math.min(maxFrames, Math.ceil(sourceFrameCount / everyNthFrame));
-  const times = Array.from({ length: frameCount }, (_, index) => Math.min(safeEnd, safeStart + (index * everyNthFrame) / safeFps));
-  return { times, durationMs: frameDurationMs };
+  const requestedFrameCount = Math.max(1, Math.ceil(sourceFrameCount / everyNthFrame));
+  const frameCount = Math.min(maxFrames, requestedFrameCount);
+  const capped = requestedFrameCount > maxFrames;
+  const times = capped
+    ? Array.from({ length: frameCount }, (_, index) => safeStart + ((safeEnd - safeStart) * index) / frameCount)
+    : Array.from({ length: frameCount }, (_, index) => Math.min(safeEnd, safeStart + (index * everyNthFrame) / safeFps));
+  const intervalMs = capped ? ((safeEnd - safeStart) * 1000) / frameCount : (everyNthFrame * 1000) / safeFps;
+  const durationMs = Math.min(MAX_VIDEO_FRAME_DURATION_MS, Math.max(10, Math.floor(intervalMs / 10) * 10));
+  return { times, durationMs };
 }
 
 export function formatVideoTime(seconds: number): string {
