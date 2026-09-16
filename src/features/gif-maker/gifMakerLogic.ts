@@ -150,16 +150,41 @@ function hasSameBytes(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 export function mergeConsecutiveIdenticalFrames(frames: ReadonlyArray<GifByteFrame>): GifByteFrame[] {
+  if (!Array.isArray(frames) || !frames.length) return [];
   const merged: GifByteFrame[] = [];
-  for (const frame of frames) {
-    const previous = merged[merged.length - 1];
-    if (previous && hasSameBytes(previous.data, frame.data)
-      && previous.durationMs + frame.durationMs <= MAX_FRAME_DURATION_MS) {
-      merged[merged.length - 1] = { ...previous, durationMs: previous.durationMs + frame.durationMs };
-    } else {
-      merged.push(frame);
+  let group: GifByteFrame | null = null;
+  let groupDuration = 0;
+  let groupFrameCount = 0;
+  const flush = () => {
+    if (!group) return;
+    if (groupFrameCount === 1 && groupDuration === group.durationMs) {
+      merged.push(group);
+      group = null;
+      groupDuration = 0;
+      groupFrameCount = 0;
+      return;
     }
+    let remaining = groupDuration;
+    while (remaining > 0) {
+      const durationMs = Math.min(MAX_FRAME_DURATION_MS, remaining);
+      merged.push({ ...group, durationMs });
+      remaining -= durationMs;
+    }
+    group = null;
+    groupDuration = 0;
+    groupFrameCount = 0;
+  };
+  for (const frame of frames) {
+    if (!frame || !(frame.data instanceof Uint8Array) || !frame.data.byteLength) continue;
+    const durationMs = clampFrameDuration(frame.durationMs);
+    if (!group || !hasSameBytes(group.data, frame.data)) {
+      flush();
+      group = frame;
+    }
+    groupDuration += durationMs;
+    groupFrameCount += 1;
   }
+  flush();
   return merged;
 }
 
