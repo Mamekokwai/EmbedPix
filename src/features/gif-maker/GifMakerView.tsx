@@ -51,6 +51,8 @@ export const GIF_PRESETS: Record<Exclude<GifPreset, "custom">, GifPresetConfig> 
   balanced: { label: "平衡", encodingQuality: "balanced", colorCount: 128, ditherMode: "floydSteinberg", canvasPreset: "75" },
   small: { label: "小体积", encodingQuality: "fast", colorCount: 64, ditherMode: "none", canvasPreset: "50" },
 };
+export type GifSettingsGroup = "timing" | "canvas" | "export";
+export const DEFAULT_GIF_SETTINGS_GROUP: GifSettingsGroup | null = null;
 type GifOutputFormat = GifMakerOutputFormat;
 type GifSourceMode = "image" | "video";
 
@@ -476,7 +478,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [videoReverse, setVideoReverse] = useState(savedPreferences.videoReverse);
   const [status, setStatus] = useState<GifStatus>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
-  const [group, setGroup] = useState<"timing" | "canvas" | "export" | null>("timing");
+  const [group, setGroup] = useState<GifSettingsGroup | null>(DEFAULT_GIF_SETTINGS_GROUP);
   const [locked, setLocked] = useState(false);
   const [pendingImports, setPendingImports] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);

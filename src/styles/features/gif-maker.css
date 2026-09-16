@@ -260,7 +260,13 @@
 
 @media (max-height: 620px) {
   .gif-maker-content.page-content { gap: 5px; }
-  .gif-maker-content > .gif-settings-card { max-height: 178px; overflow-y: auto; scrollbar-width: thin; }
+  .gif-maker-content > .gif-settings-card {
+    max-height: clamp(104px, 30vh, 178px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+  .gif-maker-content > .gif-settings-card::-webkit-scrollbar { display: none; }
   .gif-maker-view > .gif-export-footer { align-items: stretch; gap: 5px; min-height: 0; }
   .gif-maker-view > .gif-export-footer .gif-export-button { min-height: 30px; }
 }
