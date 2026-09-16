@@ -1,5 +1,9 @@
 export interface GifCanvasSize { width: number; height: number }
 export type GifCanvasPreset = "source" | "75" | "50" | "custom";
+export type GifContentFit = "contain" | "cover" | "stretch";
+export type GifContentAlignment = "center" | "top" | "bottom";
+export interface GifContentMargins { top: number; right: number; bottom: number; left: number }
+export interface GifContentRect { x: number; y: number; width: number; height: number }
 export type GifWorkloadLevel = "light" | "moderate" | "heavy";
 export interface GifWorkloadEstimate {
   totalPixels: number;
@@ -65,6 +69,36 @@ export function resolveGifCanvasSize(source: GifCanvasSize, width: number, heigh
     if (h > 4096) { w *= 4096 / h; h = 4096; }
   }
   return { width: safe(w), height: safe(h) };
+}
+
+export function resolveGifContentRect(
+  canvas: GifCanvasSize,
+  source: GifCanvasSize,
+  fit: GifContentFit,
+  alignment: GifContentAlignment,
+  margins: GifContentMargins,
+): GifContentRect {
+  const canvasWidth = Math.max(1, Math.round(canvas.width));
+  const canvasHeight = Math.max(1, Math.round(canvas.height));
+  const left = Math.min(canvasWidth - 1, Math.max(0, Math.round(margins.left)));
+  const right = Math.min(canvasWidth - left - 1, Math.max(0, Math.round(margins.right)));
+  const top = Math.min(canvasHeight - 1, Math.max(0, Math.round(margins.top)));
+  const bottom = Math.min(canvasHeight - top - 1, Math.max(0, Math.round(margins.bottom)));
+  const area = { x: left, y: top, width: canvasWidth - left - right, height: canvasHeight - top - bottom };
+  if (fit === "stretch" || source.width <= 0 || source.height <= 0) return area;
+
+  const scale = fit === "cover"
+    ? Math.max(area.width / source.width, area.height / source.height)
+    : Math.min(area.width / source.width, area.height / source.height);
+  const width = Math.max(1, Math.round(source.width * scale));
+  const height = Math.max(1, Math.round(source.height * scale));
+  const x = area.x + Math.round((area.width - width) / 2);
+  const y = alignment === "top"
+    ? area.y
+    : alignment === "bottom"
+      ? area.y + area.height - height
+      : area.y + Math.round((area.height - height) / 2);
+  return { x, y, width, height };
 }
 
 export function resolveGifCanvasPreset(source: GifCanvasSize, preset: Exclude<GifCanvasPreset, "custom">): GifCanvasSize {

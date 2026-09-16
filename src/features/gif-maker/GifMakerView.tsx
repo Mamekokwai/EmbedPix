@@ -20,13 +20,13 @@ import {
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput } from "../../platform/gif/gifGateway";
 import type { GifExportFrame } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
-import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifPlaybackSpeed } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed } from "./gifMakerLogic";
 import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
 
-export type GifFitMode = "contain" | "stretch";
+export type GifFitMode = GifContentFit;
 export type GifBackground = "transparent" | "white" | "black" | "custom";
 export type GifLoopMode = "infinite" | "finite";
 export type GifEncodingQuality = "high" | "balanced" | "fast";
@@ -321,6 +321,8 @@ function drawGifFrame(
   image: HTMLImageElement | HTMLVideoElement,
   canvasSize: GifCanvasSize,
   fitMode: GifFitMode,
+  alignment: GifContentAlignment,
+  margins: GifContentMargins,
   background: GifBackground,
   customBackgroundColor: string,
 ) {
@@ -330,23 +332,21 @@ function drawGifFrame(
     context.fillRect(0, 0, canvasSize.width, canvasSize.height);
   }
 
-  if (fitMode === "stretch") {
-    context.drawImage(image, 0, 0, canvasSize.width, canvasSize.height);
-    return;
-  }
-
   const sourceWidth = image instanceof HTMLVideoElement ? image.videoWidth : image.naturalWidth;
   const sourceHeight = image instanceof HTMLVideoElement ? image.videoHeight : image.naturalHeight;
-  const scale = Math.min(canvasSize.width / sourceWidth, canvasSize.height / sourceHeight);
-  const drawWidth = Math.max(1, Math.round(sourceWidth * scale));
-  const drawHeight = Math.max(1, Math.round(sourceHeight * scale));
-  context.drawImage(
-    image,
-    Math.round((canvasSize.width - drawWidth) / 2),
-    Math.round((canvasSize.height - drawHeight) / 2),
-    drawWidth,
-    drawHeight,
-  );
+  const rect = resolveGifContentRect(canvasSize, { width: sourceWidth, height: sourceHeight }, fitMode, alignment, margins);
+  const width = Math.max(1, Math.round(canvasSize.width));
+  const height = Math.max(1, Math.round(canvasSize.height));
+  const left = Math.min(width - 1, Math.max(0, Math.round(margins.left)));
+  const top = Math.min(height - 1, Math.max(0, Math.round(margins.top)));
+  const right = Math.min(width - left - 1, Math.max(0, Math.round(margins.right)));
+  const bottom = Math.min(height - top - 1, Math.max(0, Math.round(margins.bottom)));
+  context.save();
+  context.beginPath();
+  context.rect(left, top, width - left - right, height - top - bottom);
+  context.clip();
+  context.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+  context.restore();
 }
 
 function drawVideoFrame(
@@ -422,6 +422,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [canvasPreset, setCanvasPreset] = useState<GifCanvasPreset>("custom");
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
   const [fitMode, setFitMode] = useState<GifFitMode>("contain");
+  const [contentAlignment, setContentAlignment] = useState<GifContentAlignment>("center");
+  const [contentMargins, setContentMargins] = useState<GifContentMargins>({ top: 0, right: 0, bottom: 0, left: 0 });
   const [background, setBackground] = useState<GifBackground>("transparent");
   const [customBackgroundColor, setCustomBackgroundColor] = useState("#ffffff");
   const [globalDuration, setGlobalDuration] = useState(DEFAULT_DURATION);
@@ -524,7 +526,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   }, [firstFrameHoldDuration, frames, lastFrameHoldDuration, selectedIndex]);
   const exportParameterSummary = useMemo(() => {
     const format = outputFormat === "png-sequence" ? "PNG 帧序列" : outputFormat === "webp" ? "WebP 动图" : outputFormat === "apng" ? "APNG 动图" : "GIF 动图";
-    const details = [`${canvasSize.width} × ${canvasSize.height} px`, `${frames.length} 帧`, `总时长 ${formatGifTimelineTime(timeline.totalMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`];
+    const fit = fitMode === "contain" ? "适应画布" : fitMode === "cover" ? "裁剪填充" : "拉伸填满";
+    const alignment = contentAlignment === "top" ? "上对齐" : contentAlignment === "bottom" ? "下对齐" : "居中";
+    const margins = `${contentMargins.top}/${contentMargins.right}/${contentMargins.bottom}/${contentMargins.left}`;
+    const details = [`${canvasSize.width} × ${canvasSize.height} px`, `${frames.length} 帧`, `总时长 ${formatGifTimelineTime(timeline.totalMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`, `${fit} · ${alignment}`, `边距 ${margins} px`];
     if (outputFormat === "gif") {
       const dither = ditherMode === "none" ? "无抖动" : ditherMode === "atkinson" ? "Atkinson" : "Floyd-Steinberg";
       const quality = encodingQuality === "high" ? "高质量编码" : encodingQuality === "balanced" ? "平衡编码" : "快速编码";
@@ -534,7 +539,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       if (maxSizeKiB.trim()) details.push(`上限 ≤ ${maxSizeKiB.trim()} KiB`);
     }
     return `${format} · ${details.join(" · ")}`;
-  }, [autoCompress, canvasSize, colorCount, ditherMode, encodingQuality, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, outputFormat, targetSizeKiB, timeline.totalMs]);
+  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, outputFormat, targetSizeKiB, timeline.totalMs]);
 
   useEffect(() => { if (!active) setIsPlaying(false); }, [active]);
 
@@ -577,12 +582,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     void loadImage(selectedFrame.previewUrl).then((image) => {
       if (cancelled) return;
       const context = canvas.getContext("2d");
-      if (context) drawGifFrame(context, image, canvasSize, fitMode, background, customBackgroundColor);
+      if (context) drawGifFrame(context, image, canvasSize, fitMode, contentAlignment, contentMargins, background, customBackgroundColor);
     }).catch(() => {
       if (!cancelled) setError("预览帧读取失败，请重新导入图片。");
     });
     return () => { cancelled = true; };
-  }, [active, background, canvasSize, customBackgroundColor, fitMode, selectedFrame]);
+  }, [active, background, canvasSize, contentAlignment, contentMargins, customBackgroundColor, fitMode, selectedFrame]);
 
   const openFileDialog = (frameId: string | null = null) => {
     if (lockedRef.current) return;
@@ -1078,13 +1083,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     try {
       for (const [index, frame] of frames.entries()) {
         let data: Uint8Array;
-        if (fitMode === "stretch" && background === "transparent") {
-          data = new Uint8Array(await frame.file.arrayBuffer());
-        } else {
-          const image = await loadImage(frame.previewUrl);
-          drawGifFrame(context, image, size, fitMode, background, customBackgroundColor);
-          data = await canvasToBytes(exportCanvas);
-        }
+        const image = await loadImage(frame.previewUrl);
+        drawGifFrame(context, image, size, fitMode, contentAlignment, contentMargins, background, customBackgroundColor);
+        data = await canvasToBytes(exportCanvas);
         const holdDuration = frames.length === 1
           ? firstFrameHoldDuration + lastFrameHoldDuration
           : index === 0 ? firstFrameHoldDuration : index === frames.length - 1 ? lastFrameHoldDuration : 0;
@@ -1261,6 +1262,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       lockedRef.current = false;
       setLocked(false);
     }
+  };
+
+  const updateContentMargin = (side: keyof GifContentMargins, value: number) => {
+    const margin = Math.min(4096, Math.max(0, Math.floor(Number.isFinite(value) ? value : 0)));
+    setContentMargins((current) => ({ ...current, [side]: margin }));
+    setGifPreset("custom");
+    setMeasuredSizeBytes(null);
   };
 
   const sourceHint = selectedFrame ? `${selectedFrame.width} × ${selectedFrame.height} px` : "导入后自动读取尺寸";
@@ -1445,11 +1453,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <SelectField id="gif-size-preset" label="输出尺寸" value={canvasPreset} options={[{ value: "source" as const, label: "原始尺寸" }, { value: "75" as const, label: "缩小到 75%" }, { value: "50" as const, label: "缩小到 50%" }, { value: "custom" as const, label: "自定义尺寸" }]} onChange={applyCanvasPreset} />
                 <div className="gif-field"><span>画布尺寸 · {canvasPreset === "custom" ? "自定义" : "预设"}</span><div className="gif-dimensions-row"><label><span className="sr-only">宽度</span><input aria-label="画布宽度" type="number" min="1" max="4096" value={canvasWidth} onChange={(event) => updateCanvasWidth(Number(event.target.value))} /></label><span>×</span><label><span className="sr-only">高度</span><input aria-label="画布高度" type="number" min="1" max="4096" value={canvasHeight} onChange={(event) => updateCanvasHeight(Number(event.target.value))} /></label></div></div>
                 <label className="gif-check-row"><input type="checkbox" checked={keepAspectRatio} onChange={(event) => { ratioRef.current = canvasSize; setKeepAspectRatio(event.target.checked); setGifPreset("custom"); setMeasuredSizeBytes(null); }} /><span><strong>保持画布比例</strong><small>锁定当前画布，与选帧无关</small></span></label>
-                <SelectField id="gif-fit-mode" label="缩放方式" value={fitMode} options={[{ value: "contain" as const, label: "适应画布（保持比例）" }, { value: "stretch" as const, label: "拉伸填满画布" }]} onChange={(value) => { setFitMode(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
+                <SelectField id="gif-fit-mode" label="缩放方式" value={fitMode} options={[{ value: "contain" as const, label: "适应画布（保持比例）" }, { value: "cover" as const, label: "裁剪填充（铺满）" }, { value: "stretch" as const, label: "拉伸填满画布" }]} onChange={(value) => { setFitMode(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
+                <SelectField id="gif-content-alignment" label="内容对齐" value={contentAlignment} options={[{ value: "center" as const, label: "居中" }, { value: "top" as const, label: "上对齐" }, { value: "bottom" as const, label: "下对齐" }]} onChange={(value) => { setContentAlignment(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
                 <SelectField id="gif-background" label="背景" value={background} options={[{ value: "transparent" as const, label: "透明" }, { value: "white" as const, label: "白色" }, { value: "black" as const, label: "黑色" }, { value: "custom" as const, label: "自定义颜色" }]} onChange={(value) => { setBackground(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
                 {background === "custom" ? <label className="gif-field"><span>自定义背景色</span><input aria-label="自定义背景色" type="color" value={customBackgroundColor} onChange={(event) => { setCustomBackgroundColor(event.target.value); setMeasuredSizeBytes(null); }} /></label> : null}
+                <div className="gif-field gif-margin-field"><span>自定义边距 · 上 / 右 / 下 / 左</span><div className="gif-margin-grid">
+                  {([['top', '上'], ['right', '右'], ['bottom', '下'], ['left', '左']] as const).map(([side, label]) => <label key={side}><span className="sr-only">{label}边距</span><input aria-label={`${label}边距`} type="number" min="0" max="4096" step="1" value={contentMargins[side]} onChange={(event) => updateContentMargin(side, Number(event.target.value))} /><small>{label}</small></label>)}
+                </div></div>
               </div>
-              <p className="gif-help-text">{fitMode === "contain" ? "等比居中并按所选背景补边，转为 PNG 帧后导出。" : background === "transparent" ? "原图交由后端拉伸至画布尺寸，预览同样拉伸。" : "拉伸并合成所选背景，转为 PNG 帧后导出。"}</p>
+              <p className="gif-help-text">{fitMode === "contain" ? "等比缩放并在内容区内留白，按所选背景补边。" : fitMode === "cover" ? "等比放大铺满内容区，超出部分按上/下对齐裁剪。" : "拉伸图片填满内容区；边距区域保留所选背景。"} 预览和导出使用相同规则。</p>
           </div> : null}
           {group === "export" ? <div id="gif-panel-export" role="region" aria-labelledby="gif-group-export">
           <div className="gif-export-grid">

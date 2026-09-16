@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("estimates export workload without pretending to know compressed file size", () => {
@@ -100,6 +100,27 @@ describe("GIF maker logic", () => {
     expect(resolveGifCanvasPreset(source, "source")).toEqual(source);
     expect(resolveGifCanvasPreset(source, "75")).toEqual({ width: 1440, height: 810 });
     expect(resolveGifCanvasPreset(source, "50")).toEqual({ width: 960, height: 540 });
+  });
+
+  it("computes contain, cover alignment, and custom margin rectangles consistently", () => {
+    const canvas = { width: 400, height: 300 };
+    const source = { width: 200, height: 100 };
+    const margins = { top: 10, right: 20, bottom: 30, left: 40 };
+    expect(resolveGifContentRect(canvas, source, "contain", "center", margins)).toEqual({
+      x: 40, y: 55, width: 340, height: 170,
+    });
+    expect(resolveGifContentRect(canvas, source, "stretch", "bottom", margins)).toEqual({
+      x: 40, y: 10, width: 340, height: 260,
+    });
+    expect(resolveGifContentRect({ width: 300, height: 300 }, { width: 100, height: 200 }, "cover", "top", { top: 0, right: 0, bottom: 0, left: 0 })).toEqual({
+      x: 0, y: 0, width: 300, height: 600,
+    });
+    expect(resolveGifContentRect({ width: 300, height: 300 }, { width: 100, height: 200 }, "cover", "bottom", { top: 0, right: 0, bottom: 0, left: 0 })).toEqual({
+      x: 0, y: -300, width: 300, height: 600,
+    });
+    expect(resolveGifContentRect(canvas, source, "contain", "center", { top: 9999, right: 9999, bottom: 9999, left: 9999 })).toEqual({
+      x: 399, y: 299, width: 1, height: 1,
+    });
   });
 
   it("prevents frame movement beyond the list edges", () => {
