@@ -75,6 +75,11 @@ fn frame(color: [u8; 4], duration_ms: u32) -> GifFrameRequest {
 fn request(path: &Path) -> GifExportRequest {
     GifExportRequest {
         output_path: path.to_string_lossy().into_owned(),
+        output_location: None,
+        source_path: None,
+        output_subdirectory: None,
+        output_directory: None,
+        file_name: None,
         width: 3,
         height: 2,
         loop_mode: "infinite".into(),
@@ -195,6 +200,102 @@ fn all_supported_color_counts_encode_decodable_gifs_with_each_dither_mode() {
         }
     }
     dir.assert_files(1);
+}
+
+#[test]
+fn resolves_source_subfolder_and_directory_output_locations_safely() {
+    let dir = TestDirectory::new();
+    let source = dir.0.join("source.png");
+    fs::write(&source, b"source marker").unwrap();
+
+    let mut req = request(&dir.output());
+    req.output_path.clear();
+    req.output_location = Some("source".into());
+    req.source_path = Some(source.to_string_lossy().into_owned());
+    assert_eq!(resolve_output_path(&req).unwrap(), dir.0.join("source.gif"));
+
+    req.output_location = Some("subfolder".into());
+    req.output_subdirectory = Some("exports".into());
+    req.file_name = Some("custom".into());
+    assert_eq!(
+        resolve_output_path(&req).unwrap(),
+        dir.0.join("exports").join("custom.gif")
+    );
+
+    req.output_location = Some("directory".into());
+    req.output_directory = Some(dir.0.to_string_lossy().into_owned());
+    req.output_subdirectory = None;
+    req.file_name = Some("named.GIF".into());
+    assert_eq!(resolve_output_path(&req).unwrap(), dir.0.join("named.GIF"));
+}
+
+#[test]
+fn exports_gif_to_a_source_subfolder_with_a_safe_file_name() {
+    let dir = TestDirectory::new();
+    let source = dir.0.join("source.png");
+    fs::write(&source, b"source marker").unwrap();
+    let mut req = request(&dir.output());
+    req.output_path.clear();
+    req.output_location = Some("subfolder".into());
+    req.source_path = Some(source.to_string_lossy().into_owned());
+    req.output_subdirectory = Some("exports".into());
+    req.file_name = Some("animation".into());
+
+    let output = export_gif_blocking(req).unwrap();
+    assert_eq!(
+        PathBuf::from(output),
+        dir.0.join("exports").join("animation.gif")
+    );
+    assert_eq!(
+        decode(&fs::read(dir.0.join("exports/animation.gif")).unwrap()).len(),
+        3
+    );
+}
+
+#[test]
+fn rejects_unsafe_gif_output_location_inputs() {
+    let dir = TestDirectory::new();
+    let source = dir.0.join("source.png");
+    fs::write(&source, b"source marker").unwrap();
+    let mut req = request(&dir.output());
+    req.output_path.clear();
+    req.output_location = Some("subfolder".into());
+    req.source_path = Some(source.to_string_lossy().into_owned());
+
+    for subdirectory in ["..", ".", "nested\\folder", "nested/folder"] {
+        req.output_subdirectory = Some(subdirectory.to_string());
+        assert!(resolve_output_path(&req).is_err(), "{subdirectory}");
+    }
+    req.output_subdirectory = Some("exports".into());
+    req.source_path = Some(dir.0.to_string_lossy().into_owned());
+    assert!(resolve_output_path(&req).is_err());
+    req.source_path = Some(dir.0.join("missing.png").to_string_lossy().into_owned());
+    assert!(resolve_output_path(&req).is_err());
+
+    let file = dir.0.join("not-a-directory");
+    fs::write(&file, b"not a directory").unwrap();
+    req.output_location = Some("directory".into());
+    req.source_path = None;
+    req.output_directory = Some(file.join("child").to_string_lossy().into_owned());
+    assert!(resolve_output_path(&req).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_symlinked_source_path_components() {
+    use std::os::unix::fs::symlink;
+
+    let dir = TestDirectory::new();
+    let real_source = dir.0.join("source.png");
+    let linked_source = dir.0.join("linked.png");
+    fs::write(&real_source, b"source marker").unwrap();
+    symlink(&real_source, &linked_source).unwrap();
+
+    let mut req = request(&dir.output());
+    req.output_path.clear();
+    req.output_location = Some("source".into());
+    req.source_path = Some(linked_source.to_string_lossy().into_owned());
+    assert!(resolve_output_path(&req).is_err());
 }
 
 fn colorful_frame(duration_ms: u32) -> GifFrameRequest {
@@ -579,4 +680,24 @@ fn camel_case_request_defaults_to_no_overwrite_and_normalizes_suggested_name() {
     assert_eq!(normalize_suggested_name(""), "animation.gif");
     assert_eq!(normalize_suggested_name("picture"), "picture.gif");
     assert_eq!(normalize_suggested_name(" picture.GIF "), "picture.GIF");
+}
+
+#[test]
+fn parses_safe_gif_output_location_fields_in_the_camel_case_contract() {
+    let req: GifExportRequest = serde_json::from_value(serde_json::json!({
+        "outputLocation": "subfolder",
+        "sourcePath": "C:\\Images\\source.png",
+        "outputSubdirectory": "exports",
+        "fileName": "animation.gif",
+        "width": 1,
+        "height": 1,
+        "loopMode": "infinite",
+        "loopCount": 0,
+        "frames": [{ "data": [1, 2], "durationMs": 10 }]
+    }))
+    .unwrap();
+    assert_eq!(req.output_location.as_deref(), Some("subfolder"));
+    assert_eq!(req.source_path.as_deref(), Some("C:\\Images\\source.png"));
+    assert_eq!(req.output_subdirectory.as_deref(), Some("exports"));
+    assert_eq!(req.file_name.as_deref(), Some("animation.gif"));
 }

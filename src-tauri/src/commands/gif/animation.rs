@@ -15,7 +15,18 @@ use super::{decode_limits, detect_format, inspect_frame_dimensions, GifFrameRequ
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnimationExportRequest {
+    #[serde(default)]
     output_path: String,
+    #[serde(default)]
+    output_location: Option<String>,
+    #[serde(default)]
+    source_path: Option<String>,
+    #[serde(default)]
+    output_subdirectory: Option<String>,
+    #[serde(default)]
+    output_directory: Option<String>,
+    #[serde(default)]
+    file_name: Option<String>,
     width: u32,
     height: u32,
     loop_mode: String,
@@ -64,7 +75,7 @@ fn export_animation_blocking(
     format: &str,
 ) -> Result<String, String> {
     validate_request(&request, format)?;
-    let output_path = normalize_output_path(&request.output_path, format)?;
+    let output_path = resolve_output_path(&request, format)?;
     storage::write_output(&output_path, request.overwrite_existing, |file| {
         if format == "webp" {
             encode_webp(file, &request)
@@ -178,7 +189,7 @@ fn encode_apng<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Re
 }
 
 fn validate_request(request: &AnimationExportRequest, format: &str) -> Result<(), String> {
-    normalize_output_path(&request.output_path, format)?;
+    resolve_output_path(request, format)?;
     if request.width == 0
         || request.height == 0
         || request.width > super::MAX_GIF_DIMENSION
@@ -238,22 +249,16 @@ fn normalize_format(value: &str) -> Result<&'static str, String> {
     }
 }
 
-fn normalize_output_path(value: &str, format: &str) -> Result<PathBuf, String> {
-    let extension = normalize_format(format)?;
-    let path = PathBuf::from(value.trim());
-    let file_name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| "动图输出路径无效。".to_string())?;
-    if !file_name
-        .to_ascii_lowercase()
-        .ends_with(&format!(".{extension}"))
-    {
-        return Err(format!(
-            "{extension} 动图输出文件必须使用 .{extension} 扩展名。"
-        ));
-    }
-    Ok(path)
+fn resolve_output_path(request: &AnimationExportRequest, format: &str) -> Result<PathBuf, String> {
+    storage::resolve_output_file_path(
+        &request.output_path,
+        request.output_location.as_deref(),
+        request.source_path.as_deref(),
+        request.output_subdirectory.as_deref(),
+        request.output_directory.as_deref(),
+        request.file_name.as_deref(),
+        normalize_format(format)?,
+    )
 }
 
 fn normalize_suggested_name(value: &str, extension: &str) -> String {
@@ -308,6 +313,11 @@ mod tests {
                 .join(format!("animation.{format}"))
                 .to_string_lossy()
                 .into_owned();
+            request.output_location = None;
+            request.source_path = None;
+            request.output_subdirectory = None;
+            request.output_directory = None;
+            request.file_name = None;
             request
         }
     }
@@ -331,6 +341,11 @@ mod tests {
     fn request() -> AnimationExportRequest {
         AnimationExportRequest {
             output_path: "animation.webp".to_string(),
+            output_location: None,
+            source_path: None,
+            output_subdirectory: None,
+            output_directory: None,
+            file_name: None,
             width: 2,
             height: 1,
             loop_mode: "infinite".to_string(),

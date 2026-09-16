@@ -38,7 +38,18 @@ const MAX_COLOR_COUNT: u16 = 256;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GifExportRequest {
+    #[serde(default)]
     output_path: String,
+    #[serde(default)]
+    output_location: Option<String>,
+    #[serde(default)]
+    source_path: Option<String>,
+    #[serde(default)]
+    output_subdirectory: Option<String>,
+    #[serde(default)]
+    output_directory: Option<String>,
+    #[serde(default)]
+    file_name: Option<String>,
     width: u32,
     height: u32,
     loop_mode: String,
@@ -75,6 +86,11 @@ impl From<GifSizeEstimateRequest> for GifExportRequest {
     fn from(request: GifSizeEstimateRequest) -> Self {
         Self {
             output_path: "estimate.gif".to_string(),
+            output_location: None,
+            source_path: None,
+            output_subdirectory: None,
+            output_directory: None,
+            file_name: None,
             width: request.width,
             height: request.height,
             loop_mode: request.loop_mode,
@@ -172,7 +188,7 @@ pub async fn export_apng(request: animation::AnimationExportRequest) -> Result<S
 
 fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
     validate_request(&request)?;
-    let output_path = normalize_output_path(&request.output_path)?;
+    let output_path = resolve_output_path(&request)?;
     storage::write_output(&output_path, request.overwrite_existing, |file| {
         encode_gif(file, &request)
     })?;
@@ -284,16 +300,16 @@ fn decode_limits() -> Limits {
     limits
 }
 
-fn normalize_output_path(value: &str) -> Result<PathBuf, String> {
-    let path = PathBuf::from(value.trim());
-    let file_name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| "GIF 输出路径无效。".to_string())?;
-    if !file_name.to_ascii_lowercase().ends_with(".gif") {
-        return Err("GIF 输出文件必须使用 .gif 扩展名。".to_string());
-    }
-    Ok(path)
+fn resolve_output_path(request: &GifExportRequest) -> Result<PathBuf, String> {
+    storage::resolve_output_file_path(
+        &request.output_path,
+        request.output_location.as_deref(),
+        request.source_path.as_deref(),
+        request.output_subdirectory.as_deref(),
+        request.output_directory.as_deref(),
+        request.file_name.as_deref(),
+        "gif",
+    )
 }
 
 fn inspect_frame_dimensions(data: &[u8]) -> Result<(u32, u32), String> {
@@ -329,17 +345,7 @@ fn quantize_duration_ms(duration_ms: u32) -> u32 {
 }
 
 fn validate_request(request: &GifExportRequest) -> Result<(), String> {
-    if request.output_path.trim().is_empty() {
-        return Err("GIF 输出路径不能为空。".to_string());
-    }
-    if !request
-        .output_path
-        .trim()
-        .to_ascii_lowercase()
-        .ends_with(".gif")
-    {
-        return Err("GIF 输出文件必须使用 .gif 扩展名。".to_string());
-    }
+    resolve_output_path(request)?;
     if request.width == 0
         || request.height == 0
         || request.width > MAX_GIF_DIMENSION

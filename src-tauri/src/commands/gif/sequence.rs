@@ -21,7 +21,16 @@ const MAX_PREFIX_ATTEMPTS: usize = 10_000;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PngSequenceExportRequest {
+    #[serde(default)]
     output_dir: String,
+    #[serde(default)]
+    output_location: Option<String>,
+    #[serde(default)]
+    source_path: Option<String>,
+    #[serde(default)]
+    output_subdirectory: Option<String>,
+    #[serde(default)]
+    output_directory: Option<String>,
     base_name: String,
     frames: Vec<PngSequenceFrameRequest>,
     #[serde(default)]
@@ -88,7 +97,18 @@ pub async fn export_png_sequence(request: PngSequenceExportRequest) -> Result<Ve
 }
 
 fn export_png_sequence_blocking(request: PngSequenceExportRequest) -> Result<Vec<String>, String> {
-    let directory = validate_output_directory(&request.output_dir)?;
+    let directory = storage::resolve_output_directory(
+        &request.output_dir,
+        request.output_location.as_deref(),
+        request.source_path.as_deref(),
+        request.output_subdirectory.as_deref(),
+        request.output_directory.as_deref(),
+    )?;
+    if !directory.exists() {
+        fs::create_dir_all(&directory)
+            .map_err(|error| format!("无法创建 PNG 帧序列输出目录：{error}"))?;
+        storage::validate_output_directory(&directory)?;
+    }
     let base_name = normalize_base_name(&request.base_name)?;
     validate_frames(&request.frames)?;
     let output_paths = choose_output_paths(
@@ -123,18 +143,6 @@ fn export_png_sequence_blocking(request: PngSequenceExportRequest) -> Result<Vec
         .into_iter()
         .map(|path| path.to_string_lossy().into_owned())
         .collect())
-}
-
-fn validate_output_directory(value: &str) -> Result<PathBuf, String> {
-    let directory = PathBuf::from(value.trim());
-    if directory.as_os_str().is_empty() {
-        return Err("PNG 帧序列输出目录不能为空。".to_string());
-    }
-    storage::validate_output_directory(&directory)?;
-    if !directory.is_dir() {
-        return Err("PNG 帧序列输出路径必须是普通目录。".to_string());
-    }
-    Ok(directory)
 }
 
 fn normalize_base_name(value: &str) -> Result<String, String> {
@@ -343,6 +351,10 @@ mod tests {
         fn request(&self, frames: Vec<Vec<u8>>) -> PngSequenceExportRequest {
             PngSequenceExportRequest {
                 output_dir: self.0.to_string_lossy().into_owned(),
+                output_location: None,
+                source_path: None,
+                output_subdirectory: None,
+                output_directory: None,
                 base_name: "frame".to_string(),
                 frames: frames
                     .into_iter()
@@ -417,6 +429,33 @@ mod tests {
             Rgba([8, 9, 10, 255])
         );
         assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn source_subfolder_location_creates_a_safe_sequence_directory() {
+        let directory = TestDirectory::new();
+        let source = directory.0.join("source.png");
+        fs::write(&source, b"source marker").unwrap();
+        let mut request = directory.request(vec![png([11, 12, 13, 255])]);
+        request.output_dir.clear();
+        request.output_location = Some("subfolder".to_string());
+        request.source_path = Some(source.to_string_lossy().into_owned());
+        request.output_subdirectory = Some("exports".to_string());
+
+        let paths = export_png_sequence_blocking(request).unwrap();
+        assert_eq!(
+            paths,
+            vec![directory
+                .0
+                .join("exports")
+                .join("frame-001.png")
+                .to_string_lossy()
+                .into_owned()]
+        );
+        assert_eq!(
+            fs::read_dir(directory.0.join("exports")).unwrap().count(),
+            1
+        );
     }
 
     #[test]

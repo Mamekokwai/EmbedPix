@@ -4,6 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const MAX_OUTPUT_PATH_BYTES: usize = 4096;
+const MAX_OUTPUT_NAME_CHARS: usize = 120;
+const MAX_OUTPUT_SUBDIRECTORY_BYTES: usize = 255;
+
 struct TemporaryOutput {
     path: PathBuf,
     file: Option<File>,
@@ -65,6 +69,255 @@ fn check_target(output: &Path, overwrite: bool) -> Result<(), String> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OutputLocation {
+    Dialog,
+    Source,
+    Subfolder,
+    Directory,
+}
+
+impl OutputLocation {
+    fn parse(value: Option<&str>) -> Result<Self, String> {
+        match value
+            .unwrap_or("dialog")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "dialog" | "path" => Ok(Self::Dialog),
+            "source" => Ok(Self::Source),
+            "subfolder" => Ok(Self::Subfolder),
+            "directory" => Ok(Self::Directory),
+            other => Err(format!(
+                "GIF 输出位置 `{other}` 无效，应为 dialog、source、subfolder 或 directory。"
+            )),
+        }
+    }
+}
+
+pub(super) fn resolve_output_file_path(
+    output_path: &str,
+    output_location: Option<&str>,
+    source_path: Option<&str>,
+    output_subdirectory: Option<&str>,
+    output_directory: Option<&str>,
+    file_name: Option<&str>,
+    extension: &str,
+) -> Result<PathBuf, String> {
+    match OutputLocation::parse(output_location)? {
+        OutputLocation::Dialog => {
+            let path = normalize_path(output_path, "GIF 输出路径")?;
+            ensure_extension(&path, extension)?;
+            Ok(path)
+        }
+        OutputLocation::Source | OutputLocation::Subfolder => {
+            let source = validate_source_file(source_path)?;
+            let parent = source
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            let directory = if OutputLocation::Subfolder == OutputLocation::parse(output_location)?
+            {
+                parent.join(
+                    normalize_subdirectory(output_subdirectory)?
+                        .ok_or_else(|| "GIF 源文件夹子目录不能为空。".to_string())?,
+                )
+            } else {
+                parent.to_path_buf()
+            };
+            validate_output_directory(&directory)?;
+            let default_stem = source.file_stem().and_then(|value| value.to_str());
+            Ok(directory.join(normalize_output_name(file_name, default_stem, extension)?))
+        }
+        OutputLocation::Directory => {
+            let directory = normalize_path(
+                output_directory.ok_or_else(|| "GIF 输出目录不能为空。".to_string())?,
+                "GIF 输出目录",
+            )?;
+            validate_output_directory(&directory)?;
+            Ok(directory.join(normalize_output_name(file_name, None, extension)?))
+        }
+    }
+}
+
+pub(super) fn resolve_output_directory(
+    output_directory: &str,
+    output_location: Option<&str>,
+    source_path: Option<&str>,
+    output_subdirectory: Option<&str>,
+    specified_directory: Option<&str>,
+) -> Result<PathBuf, String> {
+    let directory = match OutputLocation::parse(output_location)? {
+        OutputLocation::Dialog => normalize_path(output_directory, "PNG 帧序列输出目录")?,
+        OutputLocation::Source | OutputLocation::Subfolder => {
+            let source = validate_source_file(source_path)?;
+            let parent = source
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            if OutputLocation::Subfolder == OutputLocation::parse(output_location)? {
+                parent.join(
+                    normalize_subdirectory(output_subdirectory)?
+                        .ok_or_else(|| "PNG 帧序列源文件夹子目录不能为空。".to_string())?,
+                )
+            } else {
+                parent.to_path_buf()
+            }
+        }
+        OutputLocation::Directory => normalize_path(
+            specified_directory.ok_or_else(|| "PNG 帧序列输出目录不能为空。".to_string())?,
+            "PNG 帧序列输出目录",
+        )?,
+    };
+    validate_output_directory(&directory)?;
+    Ok(directory)
+}
+
+fn normalize_path(value: &str, label: &str) -> Result<PathBuf, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(format!("{label}不能为空。"));
+    }
+    if value.len() > MAX_OUTPUT_PATH_BYTES {
+        return Err(format!("{label}过长。"));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(format!("{label}不能包含控制字符。"));
+    }
+    Ok(PathBuf::from(value))
+}
+
+fn ensure_extension(path: &Path, extension: &str) -> Result<(), String> {
+    let expected = format!(".{extension}");
+    if path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase().ends_with(&expected))
+        != Some(true)
+    {
+        return Err(format!("GIF 输出文件必须使用 {expected} 扩展名。"));
+    }
+    Ok(())
+}
+
+fn normalize_output_name(
+    value: Option<&str>,
+    default_stem: Option<&str>,
+    extension: &str,
+) -> Result<String, String> {
+    let supplied = value.is_some();
+    let mut name = value
+        .unwrap_or(default_stem.unwrap_or("animation"))
+        .trim()
+        .to_string();
+    if name.is_empty() {
+        if supplied {
+            return Err("GIF 输出文件名不能为空。".to_string());
+        }
+        name = "animation".to_string();
+    }
+    if name.chars().any(char::is_control)
+        || name.chars().any(|character| {
+            matches!(
+                character,
+                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
+            )
+        })
+        || name == "."
+        || name == ".."
+        || name.ends_with('.')
+        || name.ends_with(' ')
+    {
+        return Err("GIF 输出文件名包含无效字符。".to_string());
+    }
+    if name.chars().count() > MAX_OUTPUT_NAME_CHARS {
+        return Err("GIF 输出文件名过长。".to_string());
+    }
+    let suffix = format!(".{extension}");
+    let has_wrong_extension = Path::new(&name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|existing| !existing.eq_ignore_ascii_case(extension));
+    if has_wrong_extension {
+        return Err(format!("GIF 输出文件必须使用 {suffix} 扩展名。"));
+    }
+    if name.to_ascii_lowercase().ends_with(&suffix) {
+        Ok(name)
+    } else {
+        name.push_str(&suffix);
+        Ok(name)
+    }
+}
+
+fn normalize_subdirectory(value: Option<&str>) -> Result<Option<String>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    if value.len() > MAX_OUTPUT_SUBDIRECTORY_BYTES
+        || value == "."
+        || value == ".."
+        || value.ends_with('.')
+        || value.ends_with(' ')
+        || value.chars().any(|character| {
+            character.is_control()
+                || matches!(
+                    character,
+                    '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
+                )
+        })
+    {
+        return Err("GIF 输出子目录名称包含无效字符或路径越界。".to_string());
+    }
+    Ok(Some(value.to_string()))
+}
+
+fn validate_source_file(value: Option<&str>) -> Result<PathBuf, String> {
+    let path = normalize_path(
+        value.ok_or_else(|| "GIF 源文件路径不能为空。".to_string())?,
+        "GIF 源文件路径",
+    )?;
+    validate_path_chain(&path, true)?;
+    Ok(path)
+}
+
+fn validate_path_chain(path: &Path, require_final: bool) -> Result<(), String> {
+    let mut ancestors = path
+        .ancestors()
+        .filter(|ancestor| !ancestor.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .collect::<Vec<_>>();
+    ancestors.reverse();
+    for (index, ancestor) in ancestors.iter().enumerate() {
+        let is_final = index + 1 == ancestors.len();
+        match fs::symlink_metadata(ancestor) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || has_reparse_point(&metadata) {
+                    return Err("GIF 路径目录组件不能是 symlink 或 junction。".to_string());
+                }
+                if !is_final && !metadata.is_dir() {
+                    return Err("GIF 路径目录组件必须是普通目录。".to_string());
+                }
+                if is_final && !metadata.is_file() {
+                    return Err("GIF 路径末端类型不正确。".to_string());
+                }
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound && !require_final => {
+                return Ok(())
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Err("GIF 路径不存在。".to_string())
+            }
+            Err(error) => return Err(format!("无法检查 GIF 路径：{error}")),
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn write_output(
     output: &Path,
     overwrite: bool,
@@ -105,11 +358,14 @@ pub(super) fn validate_output_directory(directory: &Path) -> Result<(), String> 
     if directory.as_os_str().is_empty() {
         return Err("输出目录路径无效。".to_string());
     }
-    let mut current = PathBuf::new();
-    for component in directory.components() {
-        current.push(component.as_os_str());
-        match fs::symlink_metadata(&current) {
-            Ok(_) => validate_directory_metadata(&current)?,
+    let mut ancestors = directory
+        .ancestors()
+        .filter(|ancestor| !ancestor.as_os_str().is_empty())
+        .collect::<Vec<_>>();
+    ancestors.reverse();
+    for ancestor in ancestors {
+        match fs::symlink_metadata(ancestor) {
+            Ok(_) => validate_directory_metadata(ancestor)?,
             Err(error) if error.kind() == io::ErrorKind::NotFound => break,
             Err(error) => return Err(format!("无法检查输出目录：{error}")),
         }
