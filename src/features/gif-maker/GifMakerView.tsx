@@ -9,6 +9,7 @@ import {
   ChevronsRight,
   Copy,
   Film,
+  FolderOpen,
   ImagePlus,
   Images,
   Pause,
@@ -20,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
-import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput } from "../../platform/gif/gifGateway";
+import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
 import type { GifExportFrame } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed } from "./gifMakerLogic";
@@ -449,11 +450,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [targetSizeKiB, setTargetSizeKiB] = useState(savedPreferences.targetSizeKiB);
   const [maxSizeKiB, setMaxSizeKiB] = useState(savedPreferences.maxSizeKiB);
   const [autoCompress, setAutoCompress] = useState(savedPreferences.autoCompress);
+  const [overwriteExisting, setOverwriteExisting] = useState(savedPreferences.overwriteExisting);
   const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
   const [compressionSummary, setCompressionSummary] = useState<string | null>(null);
   const [fileName, setFileName] = useState(() => defaultGifFileName(savedPreferences.outputFormat));
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [sequenceOutputDir, setSequenceOutputDir] = useState<string | null>(null);
+  const [lastExportPath, setLastExportPath] = useState<string | null>(null);
   const [outputFormat, setOutputFormat] = useState<GifOutputFormat>(savedPreferences.outputFormat);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -489,6 +492,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const clearOutputSelection = () => {
     setOutputPath(null);
     setSequenceOutputDir(null);
+    setLastExportPath(null);
   };
 
   const changeOutputFormat = (format: GifOutputFormat) => {
@@ -537,6 +541,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       targetSizeKiB,
       maxSizeKiB,
       autoCompress,
+      overwriteExisting,
       outputFormat,
       videoFps,
       videoEveryNthFrame,
@@ -545,7 +550,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       videoRotation,
       videoReverse,
     });
-  }, [autoCompress, background, batchDuration, canvasHeight, canvasPreset, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, fitMode, firstFrameHoldDuration, gifPreset, globalDuration, keepAspectRatio, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, outputFormat, playbackSpeed, targetSizeKiB, videoCropPreset, videoEveryNthFrame, videoFps, videoMaxFrames, videoReverse, videoRotation]);
+  }, [autoCompress, background, batchDuration, canvasHeight, canvasPreset, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, fitMode, firstFrameHoldDuration, gifPreset, globalDuration, keepAspectRatio, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, outputFormat, overwriteExisting, playbackSpeed, targetSizeKiB, videoCropPreset, videoEveryNthFrame, videoFps, videoMaxFrames, videoReverse, videoRotation]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
   const canvasSize = useMemo(
@@ -573,7 +578,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const fit = fitMode === "contain" ? "适应画布" : fitMode === "cover" ? "裁剪填充" : "拉伸填满";
     const alignment = contentAlignment === "top" ? "上对齐" : contentAlignment === "bottom" ? "下对齐" : "居中";
     const margins = `${contentMargins.top}/${contentMargins.right}/${contentMargins.bottom}/${contentMargins.left}`;
-    const details = [`${canvasSize.width} × ${canvasSize.height} px`, `${frames.length} 帧`, `总时长 ${formatGifTimelineTime(timeline.totalMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`, `${fit} · ${alignment}`, `边距 ${margins} px`];
+    const details = [`${canvasSize.width} × ${canvasSize.height} px`, `${frames.length} 帧`, `总时长 ${formatGifTimelineTime(timeline.totalMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`, `${fit} · ${alignment}`, `边距 ${margins} px`, overwriteExisting ? "覆盖同名" : outputFormat === "png-sequence" ? "自动序号" : "拒绝同名"];
     if (outputFormat === "gif") {
       const dither = ditherMode === "none" ? "无抖动" : ditherMode === "atkinson" ? "Atkinson" : "Floyd-Steinberg";
       const quality = encodingQuality === "high" ? "高质量编码" : encodingQuality === "balanced" ? "平衡编码" : "快速编码";
@@ -583,7 +588,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       if (maxSizeKiB.trim()) details.push(`上限 ≤ ${maxSizeKiB.trim()} KiB`);
     }
     return `${format} · ${details.join(" · ")}`;
-  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, outputFormat, targetSizeKiB, timeline.totalMs]);
+  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, outputFormat, overwriteExisting, targetSizeKiB, timeline.totalMs]);
 
   useEffect(() => { if (!active) setIsPlaying(false); }, [active]);
 
@@ -1087,6 +1092,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         if (chosen) {
           setOutputPath(chosen);
           setSequenceOutputDir(null);
+          setLastExportPath(null);
           setError(null);
           setStatus({ kind: "ready", text: "已选择 GIF 保存位置" });
         }
@@ -1095,6 +1101,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         if (chosen) {
           setSequenceOutputDir(chosen);
           setOutputPath(null);
+          setLastExportPath(null);
           setError(null);
           setStatus({ kind: "ready", text: "已选择 PNG 帧序列输出目录" });
         }
@@ -1103,6 +1110,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         if (chosen) {
           setOutputPath(chosen);
           setSequenceOutputDir(null);
+          setLastExportPath(null);
           setError(null);
           setStatus({ kind: "ready", text: `已选择 ${outputFormat.toUpperCase()} 动图保存位置` });
         }
@@ -1262,7 +1270,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           outputDir: sequenceOutputDir as string,
           baseName: fileName.trim().replace(/\.[^.]+$/u, "") || "embedpix-animation",
           frames: exportFrames,
+          overwriteExisting,
         });
+        setLastExportPath(result[0] ?? sequenceOutputDir);
         setStatus({ kind: "success", text: `PNG 帧序列已导出：${result.length} 帧` });
         return;
       }
@@ -1276,10 +1286,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           loopMode,
           loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
           frames: exportFrames,
+          overwriteExisting,
         };
         const result = outputFormat === "webp"
           ? await exportWebpAnimation(request)
           : await exportApng(request);
+        setLastExportPath(result);
         setStatus({ kind: "success", text: `${outputFormat.toUpperCase()} 动图已导出：${result}` });
         return;
       }
@@ -1297,7 +1309,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         colorCount: compression.colorCount,
         ditherMode,
         frames: exportFrames,
+        overwriteExisting,
       });
+      setLastExportPath(result);
       setStatus({ kind: "success", text: `GIF 已导出：${result} · ${formatGifCompressionSummary(compression)}` });
     } catch (exportError) {
       setError(getErrorMessage(exportError));
@@ -1313,6 +1327,29 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setContentMargins((current) => ({ ...current, [side]: margin }));
     setGifPreset("custom");
     setMeasuredSizeBytes(null);
+  };
+
+  const openLastExportFolder = async () => {
+    if (!lastExportPath) return;
+    try {
+      await revealGifOutput(lastExportPath);
+      setStatus({ kind: "success", text: "已打开导出文件夹" });
+    } catch (openError) {
+      setError(getErrorMessage(openError));
+      setStatus({ kind: "error", text: "无法打开导出文件夹" });
+    }
+  };
+
+  const copyLastExportPath = async () => {
+    if (!lastExportPath) return;
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制路径，请手动复制。");
+      await navigator.clipboard.writeText(lastExportPath);
+      setStatus({ kind: "success", text: "导出路径已复制" });
+    } catch (copyError) {
+      setError(getErrorMessage(copyError));
+      setStatus({ kind: "error", text: "无法复制导出路径" });
+    }
   };
 
   const sourceHint = selectedFrame ? `${selectedFrame.width} × ${selectedFrame.height} px` : "导入后自动读取尺寸";
@@ -1526,7 +1563,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => { setAutoCompress(event.target.checked); setGifPreset("custom"); }} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
               </> : <p className="gif-format-note">WebP/APNG 动图使用当前画布和帧时长导出；GIF 专属颜色、抖动和目标体积参数不适用。</p>}
             </> : <p className="gif-format-note">PNG 帧序列按当前画布逐帧导出，不使用 GIF 的循环、颜色、抖动和体积压缩参数。</p>}
-            <div className="gif-output-picker"><span className="gif-field-label">{outputFormat === "png-sequence" ? "输出目录" : "保存位置"}</span><div className="gif-output-row"><span title={(outputFormat === "png-sequence" ? sequenceOutputDir : outputPath) ?? undefined}>{(outputFormat === "png-sequence" ? sequenceOutputDir : outputPath) ?? (outputFormat === "png-sequence" ? "尚未选择输出目录" : "尚未选择保存位置")}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>{outputFormat === "png-sequence" ? "选择目录" : "选择位置"}</button></div></div>
+            <div className="gif-output-picker"><span className="gif-field-label">{outputFormat === "png-sequence" ? "输出目录" : "保存位置"}</span><div className="gif-output-row"><span title={(outputFormat === "png-sequence" ? sequenceOutputDir : outputPath) ?? undefined}>{(outputFormat === "png-sequence" ? sequenceOutputDir : outputPath) ?? (outputFormat === "png-sequence" ? "尚未选择输出目录" : "尚未选择保存位置")}</span><button className="quiet-button" type="button" onClick={() => void chooseOutput()}>{outputFormat === "png-sequence" ? "选择目录" : "选择位置"}</button></div><label className="gif-check-row gif-output-overwrite"><input type="checkbox" checked={overwriteExisting} onChange={(event) => setOverwriteExisting(event.target.checked)} /><span><strong>{outputFormat === "png-sequence" ? "覆盖同名帧序列" : "覆盖同名文件"}</strong><small>{outputFormat === "png-sequence" ? "关闭时自动使用新序号前缀" : "关闭时同名文件会拒绝写入"}</small></span></label>{lastExportPath ? <div className="gif-output-actions"><button className="quiet-button" type="button" onClick={() => void openLastExportFolder()}><FolderOpen size={14} aria-hidden="true" />打开文件夹</button><button className="quiet-button" type="button" onClick={() => void copyLastExportPath()}><Copy size={14} aria-hidden="true" />复制路径</button></div> : null}</div>
           </div>
           <div className="gif-parameter-summary" aria-label="导出参数摘要"><strong>导出参数摘要</strong><span>{exportParameterSummary}</span></div>
           {outputFormat === "gif" ? <div className={`gif-workload-summary gif-workload-${workload.level}`}>
@@ -1537,7 +1574,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <small>{workload.level === "heavy" ? "负载较高，建议缩小画布或减少帧数。" : "实际文件体积取决于画面内容；开启自动压缩后将先实际测量候选参数。"}</small>
             <button className="quiet-button gif-estimate-button" type="button" disabled={!frames.length || locked} onClick={() => void estimateGifSizeBeforeExport()}>{measuredSizeBytes === null ? "估算体积" : "重新估算"}</button>
           </div> : null}
-          <p className="gif-help-text">{outputFormat === "png-sequence" ? "桌面端保存；每帧输出为 PNG，文件名按基础名-001.png 递增。" : "桌面端保存；默认不覆盖同名文件，请选择新文件名。"}</p>
+          <p className="gif-help-text">{outputFormat === "png-sequence" ? "桌面端保存；每帧输出为 PNG。关闭覆盖时会自动选择不冲突的序号前缀。" : "桌面端保存；输出目录由原生保存对话框选择，关闭覆盖时同名文件会安全拒绝写入。"}</p>
           </div> : null}
         </section>
         </>

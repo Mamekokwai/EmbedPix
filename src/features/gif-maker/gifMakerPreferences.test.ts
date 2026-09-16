@@ -43,6 +43,7 @@ describe("GIF maker preferences", () => {
       targetSizeKiB: "96",
       maxSizeKiB: "128.5",
       autoCompress: true,
+      overwriteExisting: true,
       outputFormat: "apng" as const,
       videoFps: 24,
       videoEveryNthFrame: 2,

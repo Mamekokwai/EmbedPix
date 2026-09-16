@@ -135,6 +135,9 @@
 .gif-workload-heavy { border-color: color-mix(in srgb, var(--qp-danger) 55%, var(--qp-border-subtle)); }
 .gif-workload-heavy small { color: var(--qp-danger); }
 .gif-output-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--qp-text-secondary); }
+.gif-output-overwrite { margin-top: 6px; }
+.gif-output-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.gif-output-actions .quiet-button { min-height: 26px; padding-inline: 7px; font-size: 10px; }
 .gif-maker-view .theme-select-trigger { min-height: 30px; }
 .gif-maker-view .theme-select-list { top: auto; bottom: calc(100% + 4px); max-height: 180px; }
 .gif-export-footer { flex: 0 0 auto; justify-content: space-between; min-height: 36px; }

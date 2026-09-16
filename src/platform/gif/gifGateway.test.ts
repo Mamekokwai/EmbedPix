@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput } from "./gifGateway";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
 import type { GifExportRequest } from "./gifGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: vi.fn() }));
 
 function request(): GifExportRequest {
   return {
@@ -63,6 +65,12 @@ describe("GIF desktop gateway", () => {
     vi.mocked(invoke).mockResolvedValueOnce("E:\\导出");
     await expect(pickGifSequenceOutput()).resolves.toBe("E:\\导出");
     expect(invoke).toHaveBeenCalledWith("pick_gif_sequence_output");
+  });
+
+  it("reveals a completed export path through the desktop opener", async () => {
+    vi.mocked(revealItemInDir).mockResolvedValueOnce(undefined);
+    await expect(revealGifOutput("E:\\导出\\动画.gif")).resolves.toBeUndefined();
+    expect(revealItemInDir).toHaveBeenCalledWith("E:\\导出\\动画.gif");
   });
 
   it("serializes PNG sequence frames and defaults to non-overwrite output", async () => {
@@ -139,7 +147,13 @@ describe("GIF desktop gateway", () => {
     vi.stubGlobal("window", browser);
     await expect(exportGif(request())).rejects.toThrow("桌面应用");
     await expect(pickGifOutput("test.gif")).rejects.toThrow("桌面应用");
+    await expect(revealGifOutput("E:\\动画.gif")).rejects.toThrow("桌面应用");
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty paths before invoking the opener", async () => {
+    await expect(revealGifOutput("  ")).rejects.toThrow("导出路径为空");
+    expect(revealItemInDir).not.toHaveBeenCalled();
   });
 
   it.each(["旧文件受保护", new Error("旧文件受保护"), { unknown: true }])("normalizes backend errors: %s", async (error) => {

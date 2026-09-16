@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 export interface GifExportFrame {
   data: Uint8Array;
@@ -88,6 +89,19 @@ export async function pickGifOutput(suggestedName: string): Promise<string | nul
   }
   try {
     return await invoke<string | null>("pick_gif_output", { suggestedName });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function revealGifOutput(path: string): Promise<void> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持打开导出文件夹，请在桌面应用中执行。");
+  }
+  const normalizedPath = path.trim();
+  if (!normalizedPath) throw new Error("导出路径为空，无法打开文件夹。");
+  try {
+    await revealItemInDir(normalizedPath);
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }
