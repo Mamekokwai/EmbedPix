@@ -32,7 +32,7 @@ const MIN_FRAME_DURATION_MS: u32 = 10;
 const MAX_FRAME_DURATION_MS: u32 = 60_000;
 const MIN_ENCODING_SPEED: i32 = 1;
 const MAX_ENCODING_SPEED: i32 = 30;
-const MIN_COLOR_COUNT: u16 = 64;
+const MIN_COLOR_COUNT: u16 = 16;
 const MAX_COLOR_COUNT: u16 = 256;
 
 #[derive(Debug, Deserialize)]
@@ -354,10 +354,10 @@ fn validate_request(request: &GifExportRequest) -> Result<(), String> {
     if !(MIN_ENCODING_SPEED..=MAX_ENCODING_SPEED).contains(&request.encoding_speed) {
         return Err("GIF 编码速度必须在 1–30 之间。".to_string());
     }
-    if !matches!(request.color_count, 64 | 128 | 256)
+    if !matches!(request.color_count, 16 | 32 | 64 | 128 | 256)
         || !(MIN_COLOR_COUNT..=MAX_COLOR_COUNT).contains(&request.color_count)
     {
-        return Err("GIF 颜色数量必须为 64、128 或 256。".to_string());
+        return Err("GIF 颜色数量必须为 16、32、64、128 或 256。".to_string());
     }
     let canvas_pixels = u64::from(request.width).saturating_mul(u64::from(request.height));
     if canvas_pixels.saturating_mul(request.frames.len() as u64) > MAX_TOTAL_GIF_PIXELS {

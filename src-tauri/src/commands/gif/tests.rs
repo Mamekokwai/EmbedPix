@@ -169,6 +169,22 @@ fn round_trip_preserves_order_canvas_quantized_delays_and_loop_extension() {
 }
 
 #[test]
+fn all_supported_color_counts_encode_decodable_gifs_with_each_dither_mode() {
+    let dir = TestDirectory::new();
+    for color_count in [16, 32, 64, 128, 256] {
+        for dither_mode in ["none", "floydSteinberg", "atkinson"] {
+            let mut req = request(&dir.output());
+            req.color_count = color_count;
+            req.dither_mode = dither_mode.into();
+            req.overwrite_existing = true;
+            export_gif_blocking(req).unwrap();
+            assert_eq!(decode(&fs::read(dir.output()).unwrap()).len(), 3);
+        }
+    }
+    dir.assert_files(1);
+}
+
+#[test]
 fn estimated_size_matches_actual_encoded_length_without_writing_output() {
     let dir = TestDirectory::new();
     let mut encoded = Vec::new();
@@ -447,7 +463,7 @@ fn rejects_output_extension_invalid_durations_loop_and_canvas_limits() {
         req.encoding_speed = speed;
         assert!(export_gif_blocking(req).unwrap_err().contains("编码速度"));
     }
-    for color_count in [16, 32, 63, 65, 129, 255] {
+    for color_count in [1, 8, 15, 17, 31, 33, 63, 65, 129, 255] {
         let mut req = request(&dir.output());
         req.color_count = color_count;
         assert!(export_gif_blocking(req).unwrap_err().contains("颜色数量"));
