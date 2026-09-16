@@ -102,23 +102,17 @@ pub(super) fn write_output(
 }
 
 pub(super) fn validate_output_directory(directory: &Path) -> Result<(), String> {
-    let mut existing = directory.to_path_buf();
-    loop {
-        match fs::symlink_metadata(&existing) {
-            Ok(_) => break,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                if !existing.pop() {
-                    return Err("输出目录路径无效。".to_string());
-                }
-            }
+    if directory.as_os_str().is_empty() {
+        return Err("输出目录路径无效。".to_string());
+    }
+    let mut current = PathBuf::new();
+    for component in directory.components() {
+        current.push(component.as_os_str());
+        match fs::symlink_metadata(&current) {
+            Ok(_) => validate_directory_metadata(&current)?,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => break,
             Err(error) => return Err(format!("无法检查输出目录：{error}")),
         }
-    }
-    validate_directory_metadata(&existing)?;
-    match fs::symlink_metadata(directory) {
-        Ok(_) => validate_directory_metadata(directory)?,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(format!("无法检查输出目录：{error}")),
     }
     Ok(())
 }
@@ -200,5 +194,21 @@ mod tests {
         fs::write(&path, b"not a directory").expect("test output marker");
         assert!(validate_output_directory(&path).is_err());
         fs::remove_file(path).expect("remove test output marker");
+    }
+
+    #[test]
+    fn rejects_a_file_in_an_output_directory_path() {
+        let root = std::env::temp_dir().join(format!(
+            "embedpix-output-directory-parent-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("create test root");
+        fs::write(root.join("not-a-directory"), b"test marker").expect("test output marker");
+
+        let nested = root.join("not-a-directory").join("nested");
+        assert!(validate_output_directory(&nested).is_err());
+
+        fs::remove_dir_all(root).expect("remove test root");
     }
 }
