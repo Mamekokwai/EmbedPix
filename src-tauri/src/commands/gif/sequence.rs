@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(image::open(&paths[0]).unwrap().dimensions(), (2, 1));
         assert_eq!(
             image::open(&paths[1]).unwrap().get_pixel(0, 0),
-            Rgba([0, 255, 0, 255]).into()
+            Rgba([0, 255, 0, 255])
         );
     }
 
@@ -394,13 +394,13 @@ mod tests {
             image::open(directory.0.join("frame-001.png"))
                 .unwrap()
                 .get_pixel(0, 0),
-            Rgba([5, 6, 7, 255]).into()
+            Rgba([5, 6, 7, 255])
         );
         assert_eq!(
             image::open(directory.0.join("frame-002.png"))
                 .unwrap()
                 .get_pixel(0, 0),
-            Rgba([8, 9, 10, 255]).into()
+            Rgba([8, 9, 10, 255])
         );
         assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 2);
     }
