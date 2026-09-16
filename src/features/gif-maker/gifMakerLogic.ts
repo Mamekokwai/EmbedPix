@@ -17,6 +17,13 @@ export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 export const MAX_TOTAL_PIXELS = 64 * 1024 * 1024;
 export const GIF_PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2] as const;
 export type GifPlaybackSpeed = typeof GIF_PLAYBACK_SPEEDS[number];
+export const GIF_COLOR_COUNTS = [16, 32, 64, 128, 256] as const;
+export type GifColorCount = typeof GIF_COLOR_COUNTS[number];
+
+export function getGifCompressionColorCandidates(maxColorCount: number): GifColorCount[] {
+  const safeMax = Number.isFinite(maxColorCount) ? Math.round(maxColorCount) : 256;
+  return [...GIF_COLOR_COUNTS].reverse().filter((value) => value <= safeMax);
+}
 
 export function clampFrameDuration(value: number): number {
   return Number.isFinite(value) ? Math.min(60_000, Math.max(10, Math.floor(value / 10) * 10)) : 100;
@@ -67,7 +74,7 @@ export function resolveGifCanvasPreset(source: GifCanvasSize, preset: Exclude<Gi
 
 export function estimateGifWorkload(size: GifCanvasSize, frameCount: number, colorCount: number): GifWorkloadEstimate {
   const totalPixels = Math.max(0, Math.round(size.width) * Math.round(size.height) * Math.max(0, Math.round(frameCount)));
-  const safeColorCount = Math.min(256, Math.max(64, Math.round(colorCount)));
+  const safeColorCount = Math.min(256, Math.max(16, Math.round(colorCount)));
   const decodedBytes = totalPixels * 4;
   const paletteBytes = Math.max(0, Math.round(frameCount)) * safeColorCount * 3;
   const level = totalPixels > 24_000_000 || decodedBytes > 96 * 1024 * 1024 ? "heavy" : totalPixels > 8_000_000 ? "moderate" : "light";

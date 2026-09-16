@@ -102,6 +102,15 @@ describe("GIF desktop gateway", () => {
     }) });
   });
 
+  it.each([16, 32] as const)("preserves %s color GIF settings", async (colorCount) => {
+    const input = { ...request(), colorCount };
+    vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
+
+    await exportGif(input);
+
+    expect(invoke).toHaveBeenCalledWith("export_gif", { request: expect.objectContaining({ colorCount }) });
+  });
+
   it.each(["E:\\动画.gif", null])("returns the selected output or cancellation: %s", async (result) => {
     vi.mocked(invoke).mockResolvedValueOnce(result);
     await expect(pickGifOutput("动画.gif")).resolves.toBe(result);

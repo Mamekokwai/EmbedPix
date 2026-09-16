@@ -20,8 +20,8 @@ import {
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput } from "../../platform/gif/gifGateway";
 import type { GifExportFrame } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
-import type { GifCanvasPreset, GifCanvasSize, GifPlaybackSpeed } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifPlaybackSpeed } from "./gifMakerLogic";
 import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
@@ -30,7 +30,6 @@ export type GifFitMode = "contain" | "stretch";
 export type GifBackground = "transparent" | "white" | "black" | "custom";
 export type GifLoopMode = "infinite" | "finite";
 export type GifEncodingQuality = "high" | "balanced" | "fast";
-export type GifColorCount = 64 | 128 | 256;
 export type GifDitherMode = "none" | "floydSteinberg" | "atkinson";
 export type GifPreset = "custom" | "high" | "balanced" | "small";
 
@@ -525,13 +524,17 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   }, [firstFrameHoldDuration, frames, lastFrameHoldDuration, selectedIndex]);
   const exportParameterSummary = useMemo(() => {
     const format = outputFormat === "png-sequence" ? "PNG 帧序列" : outputFormat === "webp" ? "WebP 动图" : outputFormat === "apng" ? "APNG 动图" : "GIF 动图";
-    const details = [`${canvasSize.width} × ${canvasSize.height} px`, `${frames.length} 帧`, `总时长 ${formatGifTimelineTime(timeline.totalMs)}`];
+    const details = [`${canvasSize.width} × ${canvasSize.height} px`, `${frames.length} 帧`, `总时长 ${formatGifTimelineTime(timeline.totalMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`];
     if (outputFormat === "gif") {
       const dither = ditherMode === "none" ? "无抖动" : ditherMode === "atkinson" ? "Atkinson" : "Floyd-Steinberg";
-      details.push(`${colorCount} 色`, dither, loopMode === "infinite" ? "无限循环" : `重复 ${loopCount} 次`);
+      const quality = encodingQuality === "high" ? "高质量编码" : encodingQuality === "balanced" ? "平衡编码" : "快速编码";
+      details.push(`${colorCount} 色`, dither, quality, loopMode === "infinite" ? "无限循环" : `重复 ${loopCount} 次`);
+      if (autoCompress) details.push("自动压缩");
+      if (targetSizeKiB.trim()) details.push(`目标 ≤ ${targetSizeKiB.trim()} KiB`);
+      if (maxSizeKiB.trim()) details.push(`上限 ≤ ${maxSizeKiB.trim()} KiB`);
     }
     return `${format} · ${details.join(" · ")}`;
-  }, [canvasSize, colorCount, ditherMode, frames.length, loopCount, loopMode, outputFormat, timeline.totalMs]);
+  }, [autoCompress, canvasSize, colorCount, ditherMode, encodingQuality, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, outputFormat, targetSizeKiB, timeline.totalMs]);
 
   useEffect(() => { if (!active) setIsPlaying(false); }, [active]);
 
@@ -1110,7 +1113,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     if (!shouldMeasure) {
       return { bytes: 0, frames: baseFrames, width: canvasSize.width, height: canvasSize.height, colorCount, samplingEvery: 1, mergedIdenticalFrames: false };
     }
-    const colors = ([256, 128, 64] as GifColorCount[]).filter((value) => value <= colorCount);
+    const colors = getGifCompressionColorCandidates(colorCount);
     const sizes = [
       canvasSize,
       resolveGifCanvasSize(canvasSize, canvasSize.width * 0.75, canvasSize.height * 0.75, false),
@@ -1458,7 +1461,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               {outputFormat === "gif" ? <>
                 <SelectField id="gif-preset" label="常用预设" value={gifPreset} options={[{ value: "high" as const, label: GIF_PRESETS.high.label }, { value: "balanced" as const, label: GIF_PRESETS.balanced.label }, { value: "small" as const, label: GIF_PRESETS.small.label }, { value: "custom" as const, label: "自定义" }]} onChange={(value) => { if (value === "custom") setGifPreset(value); else applyGifPreset(value); }} />
                 <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={updateGifEncodingQuality} />
-                <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }]} onChange={updateGifColorCount} />
+                <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }, { value: 32 as const, label: "32 色（更小体积）" }, { value: 16 as const, label: "16 色（极小体积）" }]} onChange={updateGifColorCount} />
                 <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={updateGifDitherMode} />
                 <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => { setTargetSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
                 <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => { setMaxSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>

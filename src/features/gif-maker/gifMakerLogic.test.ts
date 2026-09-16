@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("estimates export workload without pretending to know compressed file size", () => {
@@ -11,6 +11,13 @@ describe("GIF maker logic", () => {
     });
     expect(estimateGifWorkload({ width: 1920, height: 1080 }, 20, 64).level).toBe("heavy");
     expect(formatGifBytes(3072000)).toBe("2.9 MiB");
+    expect(estimateGifWorkload({ width: 64, height: 64 }, 1, 16).paletteBytes).toBe(16 * 3);
+  });
+
+  it("keeps compression candidates at or below the selected color count", () => {
+    expect(getGifCompressionColorCandidates(256)).toEqual([256, 128, 64, 32, 16]);
+    expect(getGifCompressionColorCandidates(32)).toEqual([32, 16]);
+    expect(getGifCompressionColorCandidates(16)).toEqual([16]);
   });
 
   it("clamps frame durations to a safe animation range", () => {
