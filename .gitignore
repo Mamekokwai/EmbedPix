@@ -33,3 +33,5 @@ src-tauri/gen/
 # Agent and System Files
 .agents/
 skills-lock.json
+
+.vscode/settings.json
