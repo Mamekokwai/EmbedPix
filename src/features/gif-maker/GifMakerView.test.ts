@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_GIF_SETTINGS_GROUP, getGifOutputLocationError, getGifSourcePath, GIF_PRESETS } from "./GifMakerView";
+import { DEFAULT_GIF_SETTINGS_GROUP, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_PRESETS } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("defines quality, balanced, and small presets without touching other formats", () => {
@@ -26,5 +26,26 @@ describe("GIF settings layout defaults", () => {
     expect(getGifOutputLocationError("subfolder", "E:\\素材\\a.png", "..", "", true)).toContain("不能是");
     expect(getGifOutputLocationError("directory", null, "", "", true)).toContain("输出目录");
     expect(getGifOutputLocationError("path", null, "", "", true)).toBeNull();
+  });
+
+  it.each([
+    ["path", { outputDir: "E:\\导出", outputLocation: "path" }],
+    ["source", { outputLocation: "source", sourcePath: "E:\\素材\\a.png" }],
+    ["subfolder", { outputLocation: "subfolder", sourcePath: "E:\\素材\\a.png", outputSubdirectory: "导出" }],
+    ["directory", { outputLocation: "directory", outputDirectory: "E:\\导出" }],
+  ] as const)("maps PNG sequence %s output fields without deriving paths", (location, expected) => {
+    expect(getPngSequenceOutputLocationFields(
+      location,
+      "E:\\导出",
+      "E:\\素材\\a.png",
+      " 导出 ",
+      " E:\\导出 ",
+    )).toEqual({
+      outputDir: undefined,
+      sourcePath: undefined,
+      outputSubdirectory: undefined,
+      outputDirectory: undefined,
+      ...expected,
+    });
   });
 });

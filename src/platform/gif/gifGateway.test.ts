@@ -138,6 +138,30 @@ describe("GIF desktop gateway", () => {
     });
   });
 
+  it.each([
+    ["source", { outputLocation: "source" as const, sourcePath: "E:\\源素材\\第一帧.png" }],
+    ["directory", { outputLocation: "directory" as const, outputDirectory: "E:\\导出" }],
+  ] as const)("serializes PNG sequence %s output metadata", async (_location, locationFields) => {
+    const input = {
+      ...locationFields,
+      baseName: "screen",
+      frames: request().frames,
+    };
+    vi.mocked(invoke).mockResolvedValueOnce([`E:\\导出\\screen-001.png`]);
+    await expect(exportPngSequence(input)).resolves.toEqual(["E:\\导出\\screen-001.png"]);
+    expect(invoke).toHaveBeenCalledWith("export_png_sequence", {
+      request: {
+        ...locationFields,
+        baseName: input.baseName,
+        overwriteExisting: false,
+        frames: [
+          { data: [0, 127, 128, 255], durationMs: 19 },
+          { data: [255, 1], durationMs: 25 },
+        ],
+      },
+    });
+  });
+
   it("passes explicit PNG sequence overwrite preference", async () => {
     const input = { outputDir: "E:\\导出", baseName: "screen", frames: request().frames, overwriteExisting: true };
     vi.mocked(invoke).mockResolvedValueOnce([]);

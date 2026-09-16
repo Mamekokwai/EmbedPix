@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { estimateAnimationSize, estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
-import type { AnimationExportRequest, GifExportFrame } from "../../platform/gif/gifGateway";
+import type { AnimationExportRequest, GifExportFrame, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
@@ -126,6 +126,22 @@ export function getGifOutputLocationError(
   if (location === "subfolder") return getSubdirectoryError(subdirectory);
   if (location === "directory" && !directory.trim()) return "请输入输出目录。";
   return null;
+}
+
+export function getPngSequenceOutputLocationFields(
+  location: GifOutputLocation,
+  sequenceOutputDir: string | null,
+  sourcePath: string | null,
+  outputSubdirectory: string,
+  outputDirectory: string,
+): Pick<PngSequenceExportRequest, "outputDir" | "outputLocation" | "sourcePath" | "outputSubdirectory" | "outputDirectory"> {
+  return {
+    outputDir: location === "path" ? sequenceOutputDir ?? undefined : undefined,
+    outputLocation: location,
+    sourcePath: location === "source" || location === "subfolder" ? sourcePath : undefined,
+    outputSubdirectory: location === "subfolder" ? outputSubdirectory.trim() || undefined : undefined,
+    outputDirectory: location === "directory" ? outputDirectory.trim() || undefined : undefined,
+  };
 }
 
 type VideoCropPreset = GifMakerVideoCropPreset;
@@ -669,11 +685,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     () => getGifOutputLocationError(outputLocation, sourcePath, outputSubdirectory, outputDirectory, isTauriEnvironment()),
     [outputDirectory, outputLocation, outputSubdirectory, sourcePath],
   );
-  const singleOutputReady = outputFormat === "png-sequence"
-    ? Boolean(sequenceOutputDir)
-    : outputLocation === "path"
-      ? Boolean(outputPath)
-      : !outputLocationError;
+  const singleOutputReady = outputLocation === "path"
+    ? outputFormat === "png-sequence" ? Boolean(sequenceOutputDir) : Boolean(outputPath)
+    : !outputLocationError;
   const canvasSize = useMemo(
     () => ({ width: canvasWidth, height: canvasHeight }),
     [canvasHeight, canvasWidth],
@@ -1255,7 +1269,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const chooseOutput = async () => {
     if (lockedRef.current) return;
-    if (outputFormat !== "png-sequence" && outputLocation !== "path") {
+    if (outputLocation !== "path") {
       const message = outputLocationError ?? "当前输出位置不需要手动选择文件。";
       setError(message);
       setStatus({ kind: "error", text: "输出位置不可用" });
@@ -1265,16 +1279,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setLocked(true);
     setIsPlaying(false);
     try {
-      if (outputFormat === "gif") {
-        const chosen = await pickGifOutput(fileName.trim() || DEFAULT_FILE_NAME);
-        if (chosen) {
-          setOutputPath(chosen);
-          setSequenceOutputDir(null);
-          setLastExportPath(null);
-          setError(null);
-          setStatus({ kind: "ready", text: "已选择 GIF 保存位置" });
-        }
-      } else if (outputFormat === "png-sequence") {
+      if (outputFormat === "png-sequence") {
         const chosen = await pickGifSequenceOutput();
         if (chosen) {
           setSequenceOutputDir(chosen);
@@ -1282,6 +1287,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           setLastExportPath(null);
           setError(null);
           setStatus({ kind: "ready", text: "已选择 PNG 帧序列输出目录" });
+        }
+      } else if (outputFormat === "gif") {
+        const chosen = await pickGifOutput(fileName.trim() || DEFAULT_FILE_NAME);
+        if (chosen) {
+          setOutputPath(chosen);
+          setSequenceOutputDir(null);
+          setLastExportPath(null);
+          setError(null);
+          setStatus({ kind: "ready", text: "已选择 GIF 保存位置" });
         }
       } else {
         const chosen = await pickAnimationOutput(outputFormat, fileName.trim() || `embedpix-animation.${outputFormat}`);
@@ -1503,7 +1517,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
     const outputReady = singleOutputReady;
     if (!outputReady) {
-      setError(outputFormat === "png-sequence" ? "请先选择 PNG 帧序列输出目录。" : outputLocationError ?? `请先选择 ${outputFormat.toUpperCase()} 保存位置。`);
+      setError(outputLocation === "path"
+        ? `请先选择 ${outputFormat === "png-sequence" ? "PNG 帧序列输出目录" : `${outputFormat.toUpperCase()} 保存位置`}。`
+        : outputLocationError ?? `请先完成 ${outputFormat.toUpperCase()} 输出位置设置。`);
       return;
     }
     setError(null);
@@ -1515,7 +1531,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       if (outputFormat === "png-sequence") {
         const exportFrames = await renderExportFrames(canvasSize);
         const result = await exportPngSequence({
-          outputDir: sequenceOutputDir as string,
+          ...getPngSequenceOutputLocationFields(outputLocation, sequenceOutputDir, sourcePath, outputSubdirectory, outputDirectory),
           baseName: fileName.trim().replace(/\.[^.]+$/u, "") || "embedpix-animation",
           frames: exportFrames,
           overwriteExisting,
@@ -1600,6 +1616,23 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const sourceHint = selectedFrame ? `${selectedFrame.width} × ${selectedFrame.height} px` : "导入后自动读取尺寸";
   const canMoveLeft = selectedIndex > 0;
   const canMoveRight = selectedIndex >= 0 && selectedIndex < frames.length - 1;
+  const outputLocationLabel = outputFormat === "png-sequence" ? "输出目录" : "保存位置";
+  const outputLocationHelp = outputLocationError ?? (
+    outputLocation === "path"
+      ? `使用原生保存对话框选择${outputFormat === "png-sequence" ? "输出目录" : "单文件位置"}。`
+      : outputLocation === "source"
+        ? "由桌面安全命令根据源文件路径解析所在文件夹，不在前端拼接路径。"
+        : outputLocation === "subfolder"
+          ? "子文件夹名称由桌面安全命令校验后创建。"
+          : "目录路径由桌面安全命令校验后创建。"
+  );
+  const outputDisplayPath = outputLocation === "path"
+    ? outputFormat === "png-sequence" ? (sequenceOutputDir ?? "尚未选择输出目录") : (outputPath ?? "尚未选择保存位置")
+    : outputLocation === "source"
+      ? (sourcePath ? "使用首个源文件所在文件夹" : "等待可用源文件路径")
+      : outputLocation === "subfolder"
+        ? (sourcePath ? `源文件夹 / ${outputSubdirectory.trim() || "未填写子文件夹"}` : "等待可用源文件路径")
+        : (outputDirectory.trim() || "尚未填写自定义目录");
 
   return (
     <div className={`gif-maker-view page-view gif-source-${sourceMode}`}>
@@ -1823,41 +1856,28 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => { setAutoCompress(event.target.checked); setGifPreset("custom"); }} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
               </> : <p className="gif-format-note">WebP/APNG 动图使用当前画布和帧时长导出；GIF 专属颜色、抖动和目标体积参数不适用。</p>}
             </> : <p className="gif-format-note">PNG 帧序列按当前画布逐帧导出，不使用 GIF 的循环、颜色、抖动和体积压缩参数。</p>}
-            {outputFormat === "png-sequence" ? (
-              <div className="gif-output-picker">
-                <span className="gif-field-label">输出目录</span>
-                <div className="gif-output-row">
-                  <span title={sequenceOutputDir ?? undefined}>{sequenceOutputDir ?? "尚未选择输出目录"}</span>
-                  <button className="quiet-button" type="button" onClick={() => void chooseOutput()}>选择目录</button>
-                </div>
-                <label className="gif-check-row gif-output-overwrite"><input type="checkbox" checked={overwriteExisting} onChange={(event) => setOverwriteExisting(event.target.checked)} /><span><strong>覆盖同名帧序列</strong><small>关闭时自动选择不冲突的序号前缀</small></span></label>
-              </div>
-            ) : (
-              <div className="gif-output-picker">
-                <span className="gif-field-label">保存位置</span>
-                <ThemeSelect
-                  id="gif-output-location"
-                  value={outputLocation}
-                  options={[
-                    { value: "path" as const, label: "手动选择保存位置" },
-                    { value: "source" as const, label: "源文件夹" },
-                    { value: "subfolder" as const, label: "源文件夹 / 子文件夹" },
-                    { value: "directory" as const, label: "自定义目录" },
-                  ]}
-                  aria-label="GIF 保存位置"
-                  aria-describedby="gif-output-location-help"
-                  aria-invalid={Boolean(outputLocationError)}
-                  onChange={changeOutputLocation}
-                />
-                {outputLocation === "subfolder" ? <label className="gif-field"><span>子文件夹名称</span><input value={outputSubdirectory} aria-describedby="gif-output-location-help" aria-invalid={Boolean(outputLocationError)} onChange={(event) => { setOutputSubdirectory(event.target.value); clearOutputSelection(); setError(null); }} placeholder="例如 export" spellCheck={false} /></label> : null}
-                {outputLocation === "directory" ? <label className="gif-field"><span>自定义目录</span><input value={outputDirectory} aria-describedby="gif-output-location-help" aria-invalid={Boolean(outputLocationError)} onChange={(event) => { setOutputDirectory(event.target.value); clearOutputSelection(); setError(null); }} placeholder="例如 D:\\Images\\Export" spellCheck={false} /></label> : null}
-                <p className={`gif-help-text${outputLocationError ? " gif-output-location-error" : ""}`} id="gif-output-location-help" role={outputLocationError ? "alert" : undefined}>
-                  {outputLocationError ?? (outputLocation === "path" ? "使用原生保存对话框选择单文件位置。" : outputLocation === "source" ? "由桌面安全命令根据源文件路径解析所在文件夹，不在前端拼接路径。" : outputLocation === "subfolder" ? "子文件夹名称由桌面安全命令校验后创建。" : "目录路径由桌面安全命令校验后创建。")}
-                </p>
-                <div className="gif-output-row"><span title={outputPath ?? undefined}>{outputLocation === "path" ? (outputPath ?? "尚未选择保存位置") : outputLocation === "source" ? (sourcePath ? "使用首个源文件所在文件夹" : "等待可用源文件路径") : outputLocation === "subfolder" ? (sourcePath ? `源文件夹 / ${outputSubdirectory.trim() || "未填写子文件夹"}` : "等待可用源文件路径") : (outputDirectory.trim() || "尚未填写自定义目录")}</span>{outputLocation === "path" ? <button className="quiet-button" type="button" onClick={() => void chooseOutput()}>选择位置</button> : null}</div>
-                <label className="gif-check-row gif-output-overwrite"><input type="checkbox" checked={overwriteExisting} onChange={(event) => setOverwriteExisting(event.target.checked)} /><span><strong>覆盖同名文件</strong><small>关闭时同名文件会安全拒绝写入</small></span></label>
-              </div>
-            )}
+            <div className="gif-output-picker">
+              <span className="gif-field-label">{outputLocationLabel}</span>
+              <ThemeSelect
+                id="gif-output-location"
+                value={outputLocation}
+                options={[
+                  { value: "path" as const, label: outputFormat === "png-sequence" ? "手动选择输出目录" : "手动选择保存位置" },
+                  { value: "source" as const, label: "源文件夹" },
+                  { value: "subfolder" as const, label: "源文件夹 / 子文件夹" },
+                  { value: "directory" as const, label: "自定义目录" },
+                ]}
+                aria-label={`${outputFormat === "png-sequence" ? "PNG 帧序列" : "GIF"} 保存位置`}
+                aria-describedby="gif-output-location-help"
+                aria-invalid={Boolean(outputLocationError)}
+                onChange={changeOutputLocation}
+              />
+              {outputLocation === "subfolder" ? <label className="gif-field"><span>子文件夹名称</span><input value={outputSubdirectory} aria-describedby="gif-output-location-help" aria-invalid={Boolean(outputLocationError)} onChange={(event) => { setOutputSubdirectory(event.target.value); clearOutputSelection(); setError(null); }} placeholder="例如 export" spellCheck={false} /></label> : null}
+              {outputLocation === "directory" ? <label className="gif-field"><span>自定义目录</span><input value={outputDirectory} aria-describedby="gif-output-location-help" aria-invalid={Boolean(outputLocationError)} onChange={(event) => { setOutputDirectory(event.target.value); clearOutputSelection(); setError(null); }} placeholder="例如 D:\\Images\\Export" spellCheck={false} /></label> : null}
+              <p className={`gif-help-text${outputLocationError ? " gif-output-location-error" : ""}`} id="gif-output-location-help" role={outputLocationError ? "alert" : undefined}>{outputLocationHelp}</p>
+              <div className="gif-output-row"><span title={outputDisplayPath}>{outputDisplayPath}</span>{outputLocation === "path" ? <button className="quiet-button" type="button" onClick={() => void chooseOutput()}>{outputFormat === "png-sequence" ? "选择目录" : "选择位置"}</button> : null}</div>
+              <label className="gif-check-row gif-output-overwrite"><input type="checkbox" checked={overwriteExisting} onChange={(event) => setOverwriteExisting(event.target.checked)} /><span><strong>{outputFormat === "png-sequence" ? "覆盖同名帧序列" : "覆盖同名文件"}</strong><small>{outputFormat === "png-sequence" ? "关闭时自动选择不冲突的序号前缀" : "关闭时同名文件会安全拒绝写入"}</small></span></label>
+            </div>
             {lastExportPath ? <div className="gif-output-actions"><button className="quiet-button" type="button" onClick={() => void openLastExportFolder()}><FolderOpen size={14} aria-hidden="true" />打开文件夹</button><button className="quiet-button" type="button" onClick={() => void copyLastExportPath()}><Copy size={14} aria-hidden="true" />复制路径</button></div> : null}
           </div>
           <div className="gif-parameter-summary" aria-label="导出参数摘要"><strong>导出参数摘要</strong><span>{exportParameterSummary}</span></div>
@@ -1878,7 +1898,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       <div className="gif-export-footer">
         {error ? <p className="gif-error-message" role="alert">{error}</p> : <p className={`gif-status gif-status-${status.kind}`} role="status">{status.text}</p>}
         {sourceMode === "video" && locked ? <button className="quiet-button" type="button" onClick={cancelVideoExtraction}>取消抽帧</button> : null}
-        <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!singleOutputReady) { setGroup("export"); if (outputFormat === "png-sequence" || outputLocation === "path") void chooseOutput(); else { setError(outputLocationError ?? "请先完成输出位置设置。"); setStatus({ kind: "error", text: "输出位置不可用" }); } } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputFormat === "png-sequence" ? (sequenceOutputDir ? "导出 PNG 帧序列" : "选择输出目录") : outputLocation === "path" ? (outputPath ? `导出 ${outputFormat.toUpperCase()}` : "选择保存位置") : `导出 ${outputFormat.toUpperCase()}`}</button>
+        <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!singleOutputReady) { setGroup("export"); if (outputLocation === "path") void chooseOutput(); else { setError(outputLocationError ?? "请先完成输出位置设置。"); setStatus({ kind: "error", text: "输出位置不可用" }); } } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputFormat === "png-sequence" ? (singleOutputReady ? "导出 PNG 帧序列" : "选择输出目录") : outputLocation === "path" ? (outputPath ? `导出 ${outputFormat.toUpperCase()}` : "选择保存位置") : `导出 ${outputFormat.toUpperCase()}`}</button>
       </div>
     </div>
   );
