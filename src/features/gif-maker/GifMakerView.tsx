@@ -21,8 +21,8 @@ import {
   X,
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
-import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
-import type { GifExportFrame } from "../../platform/gif/gifGateway";
+import { estimateAnimationSize, estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
+import type { AnimationExportRequest, GifExportFrame } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
@@ -1338,6 +1338,21 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return prepared;
   };
 
+  const createAnimationExportRequest = (exportFrames: GifExportFrame[]): AnimationExportRequest => ({
+    outputPath: outputPath ?? undefined,
+    outputLocation,
+    fileName: fileName.trim() || undefined,
+    sourcePath,
+    outputSubdirectory: outputSubdirectory.trim() || undefined,
+    outputDirectory: outputDirectory.trim() || undefined,
+    width: canvasSize.width,
+    height: canvasSize.height,
+    loopMode,
+    loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
+    frames: exportFrames,
+    overwriteExisting,
+  });
+
   const measureCompressionCandidates = async (forceMeasure = false): Promise<GifCompressionResult> => {
     const targetBytes = parseSizeBytes(targetSizeKiB);
     const maxBytes = parseSizeBytes(maxSizeKiB);
@@ -1454,6 +1469,28 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
   };
 
+  const estimateAnimationSizeBeforeExport = async () => {
+    if (lockedRef.current || !frames.length || (outputFormat !== "webp" && outputFormat !== "apng")) return;
+    lockedRef.current = true;
+    setLocked(true);
+    setIsPlaying(false);
+    setError(null);
+    setMeasuredSizeBytes(null);
+    setStatus({ kind: "exporting", text: `正在测量 ${outputFormat.toUpperCase()} 体积…` });
+    try {
+      const exportFrames = prepareAnimatedExportFrames(await renderExportFrames(canvasSize));
+      const result = await estimateAnimationSize(outputFormat, createAnimationExportRequest(exportFrames));
+      setMeasuredSizeBytes(result.bytes);
+      setStatus({ kind: "ready", text: `预计 ${outputFormat.toUpperCase()} 体积：${formatGifBytes(result.bytes)}` });
+    } catch (estimateError) {
+      setError(getErrorMessage(estimateError));
+      setStatus({ kind: "error", text: `${outputFormat.toUpperCase()} 体积测量失败` });
+    } finally {
+      lockedRef.current = false;
+      setLocked(false);
+    }
+  };
+
   const exportAnimation = async () => {
     if (lockedRef.current || pendingRef.current) return;
     if (!frames.length) {
@@ -1490,20 +1527,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       if (outputLocation === "path" && !outputPath) throw new Error(`请先选择 ${outputFormat.toUpperCase()} 保存位置。`);
       if (outputFormat === "webp" || outputFormat === "apng") {
         const exportFrames = prepareAnimatedExportFrames(await renderExportFrames(canvasSize));
-        const request = {
-          outputPath: outputPath ?? undefined,
-          outputLocation,
-          fileName: fileName.trim() || undefined,
-          sourcePath,
-          outputSubdirectory: outputSubdirectory.trim() || undefined,
-          outputDirectory: outputDirectory.trim() || undefined,
-          width: canvasSize.width,
-          height: canvasSize.height,
-          loopMode,
-          loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
-          frames: exportFrames,
-          overwriteExisting,
-        };
+        const request = createAnimationExportRequest(exportFrames);
         const result = outputFormat === "webp"
           ? await exportWebpAnimation(request)
           : await exportApng(request);
@@ -1783,6 +1807,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <label className="gif-field"><span>{outputFormat === "png-sequence" ? "序列基础名" : "文件名"}</span><input value={fileName} maxLength={120} onChange={(event) => { setFileName(event.target.value); clearOutputSelection(); }} placeholder={outputFormat === "png-sequence" ? "embedpix-animation" : `embedpix-animation.${outputFormat}`} /></label>
             {outputFormat !== "png-sequence" ? <>
               <label className="gif-check-row gif-merge-toggle"><input type="checkbox" checked={mergeIdenticalFrames} onChange={(event) => setMergeIdenticalFrames(event.target.checked)} /><span><strong>合并连续相同帧</strong><small>仅影响导出，不修改原始帧列表；会保留累计时长</small></span></label>
+              {outputFormat === "webp" || outputFormat === "apng" ? <div className="gif-animation-measure">
+                <span>{measuredSizeBytes === null ? "尚未测量当前参数" : `预计体积：${formatGifBytes(measuredSizeBytes)}`}</span>
+                <button className="quiet-button gif-estimate-button" type="button" disabled={!frames.length || locked} onClick={() => void estimateAnimationSizeBeforeExport()}>{measuredSizeBytes === null ? "测量体积" : "重新测量"}</button>
+              </div> : null}
               <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); setGifPreset("custom"); }} />
               <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); setGifPreset("custom"); }} /><small>次</small></div></label>
               {outputFormat === "gif" ? <>

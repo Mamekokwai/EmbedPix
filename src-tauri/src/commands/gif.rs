@@ -186,6 +186,14 @@ pub async fn export_apng(request: animation::AnimationExportRequest) -> Result<S
     animation::export_apng(request).await
 }
 
+#[tauri::command]
+pub async fn estimate_animation_size(
+    format: String,
+    request: animation::AnimationExportRequest,
+) -> Result<animation::AnimationSizeEstimateResult, String> {
+    animation::estimate_animation_size(format, request).await
+}
+
 fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
     validate_request(&request)?;
     let output_path = resolve_output_path(&request)?;

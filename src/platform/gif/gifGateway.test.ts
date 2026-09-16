@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
+import { estimateAnimationSize, estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
 import type { GifExportRequest } from "./gifGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -53,6 +53,25 @@ describe("GIF desktop gateway", () => {
         encodingSpeed: 1,
         colorCount: 256,
         ditherMode: "none",
+        frames: [
+          { data: [0, 127, 128, 255], durationMs: 19 },
+          { data: [255, 1], durationMs: 25 },
+        ],
+      },
+    });
+  });
+
+  it.each(["webp", "apng"] as const)("serializes a %s animation size estimate without output metadata", async (format) => {
+    const input = { ...request(), outputPath: "E:\\不应写入\\动画." + format, outputLocation: "directory" as const, outputDirectory: "E:\\不应写入" };
+    vi.mocked(invoke).mockResolvedValueOnce({ bytes: 4321 });
+    await expect(estimateAnimationSize(format, input)).resolves.toEqual({ bytes: 4321 });
+    expect(invoke).toHaveBeenCalledWith("estimate_animation_size", {
+      format,
+      request: {
+        width: input.width,
+        height: input.height,
+        loopMode: input.loopMode,
+        loopCount: input.loopCount,
         frames: [
           { data: [0, 127, 128, 255], durationMs: 19 },
           { data: [255, 1], durationMs: 25 },

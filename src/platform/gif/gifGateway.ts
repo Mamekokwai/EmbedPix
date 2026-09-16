@@ -45,6 +45,10 @@ export interface GifSizeEstimateResult {
   bytes: number;
 }
 
+export interface AnimationSizeEstimateResult {
+  bytes: number;
+}
+
 export interface PngSequenceExportRequest {
   outputDir: string;
   baseName: string;
@@ -103,6 +107,16 @@ function serializeGifSizeRequest(request: GifSizeEstimateRequest) {
   };
 }
 
+function serializeAnimationSizeRequest(request: AnimationExportRequest) {
+  return {
+    width: request.width,
+    height: request.height,
+    loopMode: request.loopMode,
+    loopCount: request.loopCount,
+    frames: serializeGifFrames(request.frames),
+  };
+}
+
 export async function pickGifOutput(suggestedName: string): Promise<string | null> {
   if (!isTauriEnvironment()) {
     throw new Error("当前预览环境不支持 GIF 文件保存，请在桌面应用中执行导出。");
@@ -158,6 +172,23 @@ export async function estimateGifSize(request: GifSizeEstimateRequest): Promise<
   try {
     return await invoke<GifSizeEstimateResult>("estimate_gif_size", {
       request: serializeGifSizeRequest(request),
+    });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function estimateAnimationSize(
+  format: "webp" | "apng",
+  request: AnimationExportRequest,
+): Promise<AnimationSizeEstimateResult> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持动图体积测量，请在桌面应用中执行。");
+  }
+  try {
+    return await invoke<AnimationSizeEstimateResult>("estimate_animation_size", {
+      format,
+      request: serializeAnimationSizeRequest(request),
     });
   } catch (error) {
     throw new Error(getErrorMessage(error));

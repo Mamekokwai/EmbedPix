@@ -7,7 +7,7 @@ use apng::image_png::{BitDepth, ColorType, FilterType};
 use apng::{BlendOp, DisposeOp, Frame as ApngFrame, PNGImage};
 use image::{imageops::FilterType as ResizeFilter, io::Reader as ImageReader};
 use rfd::FileDialog;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use webp_animation::{AnimParams, Encoder as WebpEncoder, EncoderOptions, EncodingConfig};
 
 use super::{decode_limits, detect_format, inspect_frame_dimensions, GifFrameRequest};
@@ -34,6 +34,11 @@ pub struct AnimationExportRequest {
     frames: Vec<GifFrameRequest>,
     #[serde(default)]
     overwrite_existing: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AnimationSizeEstimateResult {
+    pub bytes: u64,
 }
 
 pub(super) async fn pick_animation_output(
@@ -70,6 +75,16 @@ pub(super) async fn export_apng(request: AnimationExportRequest) -> Result<Strin
         .map_err(|error| format!("APNG 导出任务失败：{error}"))?
 }
 
+pub(super) async fn estimate_animation_size(
+    format: String,
+    request: AnimationExportRequest,
+) -> Result<AnimationSizeEstimateResult, String> {
+    let format = normalize_format(&format)?;
+    tauri::async_runtime::spawn_blocking(move || estimate_animation_size_blocking(request, format))
+        .await
+        .map_err(|error| format!("{format} 体积测量任务失败：{error}"))?
+}
+
 fn export_animation_blocking(
     request: AnimationExportRequest,
     format: &str,
@@ -84,6 +99,22 @@ fn export_animation_blocking(
         }
     })?;
     Ok(output_path.to_string_lossy().into_owned())
+}
+
+fn estimate_animation_size_blocking(
+    request: AnimationExportRequest,
+    format: &str,
+) -> Result<AnimationSizeEstimateResult, String> {
+    validate_animation_request(&request, format)?;
+    let mut output = Vec::new();
+    if format == "webp" {
+        encode_webp(&mut output, &request)?;
+    } else {
+        encode_apng(&mut output, &request)?;
+    }
+    Ok(AnimationSizeEstimateResult {
+        bytes: output.len() as u64,
+    })
 }
 
 fn prepare_frame(request: &AnimationExportRequest, index: usize) -> Result<Vec<u8>, String> {
@@ -190,6 +221,14 @@ fn encode_apng<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Re
 
 fn validate_request(request: &AnimationExportRequest, format: &str) -> Result<(), String> {
     resolve_output_path(request, format)?;
+    validate_animation_request(request, format)
+}
+
+fn validate_animation_request(
+    request: &AnimationExportRequest,
+    format: &str,
+) -> Result<(), String> {
+    normalize_format(format)?;
     if request.width == 0
         || request.height == 0
         || request.width > super::MAX_GIF_DIMENSION
@@ -320,6 +359,10 @@ mod tests {
             request.file_name = None;
             request
         }
+
+        fn assert_empty(&self) {
+            assert_eq!(fs::read_dir(self.0.clone()).unwrap().count(), 0);
+        }
     }
 
     impl Drop for TestDirectory {
@@ -390,6 +433,41 @@ mod tests {
             output.windows(4).filter(|chunk| *chunk == b"fdAT").count(),
             1
         );
+    }
+
+    #[test]
+    fn estimates_webp_and_apng_in_memory_without_publishing_output() {
+        let directory = TestDirectory::new();
+        for format in ["webp", "apng"] {
+            let request = directory.request(format);
+            let mut encoded = Vec::new();
+            if format == "webp" {
+                encode_webp(&mut encoded, &request).unwrap();
+            } else {
+                encode_apng(&mut encoded, &request).unwrap();
+            }
+            let measured =
+                estimate_animation_size_blocking(directory.request(format), format).unwrap();
+            assert_eq!(measured.bytes, encoded.len() as u64);
+            assert!(!directory.0.join(format!("animation.{format}")).exists());
+        }
+        directory.assert_empty();
+    }
+
+    #[test]
+    fn size_estimate_reuses_animation_validation_without_accepting_unknown_formats() {
+        let directory = TestDirectory::new();
+        let mut request = directory.request("webp");
+        request.width = 0;
+        assert!(estimate_animation_size_blocking(request, "webp")
+            .unwrap_err()
+            .contains("画布尺寸"));
+        assert!(
+            estimate_animation_size_blocking(directory.request("webp"), "gif")
+                .unwrap_err()
+                .contains("WebP 或 APNG")
+        );
+        directory.assert_empty();
     }
 
     #[test]
