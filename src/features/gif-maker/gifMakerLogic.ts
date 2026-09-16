@@ -21,6 +21,7 @@ export const MAX_FRAMES = 200;
 export const MAX_FRAME_BYTES = 32 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 export const MAX_TOTAL_PIXELS = 64 * 1024 * 1024;
+export const MAX_FRAME_DURATION_MS = 60_000;
 export const GIF_PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2] as const;
 export type GifPlaybackSpeed = typeof GIF_PLAYBACK_SPEEDS[number];
 export const GIF_COLOR_COUNTS = [2, 16, 32, 64, 128, 256] as const;
@@ -32,7 +33,7 @@ export function getGifCompressionColorCandidates(maxColorCount: number): GifColo
 }
 
 export function clampFrameDuration(value: number): number {
-  return Number.isFinite(value) ? Math.min(60_000, Math.max(10, Math.floor(value / 10) * 10)) : 100;
+  return Number.isFinite(value) ? Math.min(MAX_FRAME_DURATION_MS, Math.max(10, Math.floor(value / 10) * 10)) : 100;
 }
 
 export function clampGifFps(value: number): number {
@@ -152,7 +153,8 @@ export function mergeConsecutiveIdenticalFrames(frames: ReadonlyArray<GifByteFra
   const merged: GifByteFrame[] = [];
   for (const frame of frames) {
     const previous = merged[merged.length - 1];
-    if (previous && hasSameBytes(previous.data, frame.data)) {
+    if (previous && hasSameBytes(previous.data, frame.data)
+      && previous.durationMs + frame.durationMs <= MAX_FRAME_DURATION_MS) {
       merged[merged.length - 1] = { ...previous, durationMs: previous.durationMs + frame.durationMs };
     } else {
       merged.push(frame);
@@ -174,10 +176,18 @@ export function getGifSamplingCandidates(frameCount: number, maxFrames = MAX_FRA
 export function sampleGifFrames<T extends GifByteFrame>(frames: ReadonlyArray<T>, everyNthFrame: number, maxFrames = MAX_FRAMES): T[] {
   if (!frames.length) return [];
   const indices = getGifSampleIndices(frames.length, everyNthFrame, maxFrames);
-  return indices.map((index, position) => {
+  return indices.flatMap((index, position) => {
     const end = position + 1 < indices.length ? indices[position + 1] : frames.length;
     const durationMs = frames.slice(index, end).reduce((total, frame) => total + frame.durationMs, 0);
-    return { ...frames[index], durationMs };
+    if (durationMs <= MAX_FRAME_DURATION_MS) return [{ ...frames[index], durationMs }];
+    const chunks: T[] = [];
+    let remaining = durationMs;
+    while (remaining > MAX_FRAME_DURATION_MS) {
+      chunks.push({ ...frames[index], durationMs: MAX_FRAME_DURATION_MS });
+      remaining -= MAX_FRAME_DURATION_MS;
+    }
+    chunks.push({ ...frames[index], durationMs: remaining });
+    return chunks;
   });
 }
 

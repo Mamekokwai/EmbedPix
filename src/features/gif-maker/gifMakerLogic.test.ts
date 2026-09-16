@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("estimates export workload without pretending to know compressed file size", () => {
@@ -70,6 +70,27 @@ describe("GIF maker logic", () => {
     expect(merged[0]).toEqual({ data: first.data, durationMs: 350 });
     expect(merged[1]).toEqual(different);
     expect(merged[2]).toBe(first);
+  });
+
+  it("does not merge identical frames past the backend duration limit", () => {
+    const frames = [
+      { data: new Uint8Array([1]), durationMs: MAX_FRAME_DURATION_MS },
+      { data: new Uint8Array([1]), durationMs: 10 },
+    ];
+    expect(mergeConsecutiveIdenticalFrames(frames)).toEqual(frames);
+  });
+
+  it("splits sampled timing into backend-safe frame durations", () => {
+    const frames = [
+      { data: new Uint8Array([1]), durationMs: MAX_FRAME_DURATION_MS },
+      { data: new Uint8Array([1]), durationMs: 10 },
+      { data: new Uint8Array([2]), durationMs: 10 },
+    ];
+    expect(sampleGifFrames(frames, 2)).toEqual([
+      { data: new Uint8Array([1]), durationMs: MAX_FRAME_DURATION_MS },
+      { data: new Uint8Array([1]), durationMs: 10 },
+      { data: new Uint8Array([2]), durationMs: 10 },
+    ]);
   });
 
   it("returns an empty list for empty frame input", () => {

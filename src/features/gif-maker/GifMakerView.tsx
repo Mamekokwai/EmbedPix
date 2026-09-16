@@ -987,6 +987,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const copySelectedFrame = () => {
     if (lockedRef.current || !selectedFrame) return;
+    try {
+      validateGifFiles([...frames.map((frame) => frame.file), selectedFrame.file]);
+    } catch (copyError) {
+      setError(getErrorMessage(copyError));
+      setStatus({ kind: "error", text: "复制失败" });
+      return;
+    }
     const insertAt = selectedIndex + 1;
     const copy = { ...selectedFrame, id: `gif-frame-${++frameIdRef.current}`, previewUrl: URL.createObjectURL(selectedFrame.file), name: `${selectedFrame.name.replace(/(\.[^.]+)$/u, "")}-copy$1` };
     const next = [...frames.slice(0, insertAt), copy, ...frames.slice(insertAt)];
@@ -1008,6 +1015,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const nextIndex = next.length ? Math.min(selectedIndex, next.length - 1) : 0;
     setSelectedIndex(nextIndex);
     setSelectedFrameIndices(next.length ? new Set([nextIndex]) : new Set());
+    selectionAnchorRef.current = nextIndex;
     setStatus({ kind: "ready", text: `已移除 ${selectedFrameIndices.size} 帧` });
   };
 
