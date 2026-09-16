@@ -11,13 +11,15 @@ describe("GIF maker logic", () => {
     });
     expect(estimateGifWorkload({ width: 1920, height: 1080 }, 20, 64).level).toBe("heavy");
     expect(formatGifBytes(3072000)).toBe("2.9 MiB");
-    expect(estimateGifWorkload({ width: 64, height: 64 }, 1, 16).paletteBytes).toBe(16 * 3);
+    expect(estimateGifWorkload({ width: 64, height: 64 }, 1, 2).paletteBytes).toBe(2 * 3);
+    expect(estimateGifWorkload({ width: 64, height: 64 }, 1, 1).paletteBytes).toBe(2 * 3);
+    expect(estimateGifWorkload({ width: 64, height: 64 }, 1, 257).paletteBytes).toBe(256 * 3);
   });
 
   it("keeps compression candidates at or below the selected color count", () => {
-    expect(getGifCompressionColorCandidates(256)).toEqual([256, 128, 64, 32, 16]);
-    expect(getGifCompressionColorCandidates(32)).toEqual([32, 16]);
-    expect(getGifCompressionColorCandidates(16)).toEqual([16]);
+    expect(getGifCompressionColorCandidates(256)).toEqual([256, 128, 64, 32, 16, 2]);
+    expect(getGifCompressionColorCandidates(32)).toEqual([32, 16, 2]);
+    expect(getGifCompressionColorCandidates(2)).toEqual([2]);
   });
 
   it("clamps frame durations to a safe animation range", () => {

@@ -102,7 +102,7 @@ describe("GIF desktop gateway", () => {
     }) });
   });
 
-  it.each([16, 32] as const)("preserves %s color GIF settings", async (colorCount) => {
+  it.each([2, 16, 32] as const)("preserves %s color GIF settings", async (colorCount) => {
     const input = { ...request(), colorCount };
     vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
 
