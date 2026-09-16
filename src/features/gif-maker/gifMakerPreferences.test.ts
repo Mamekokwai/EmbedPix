@@ -16,6 +16,10 @@ function createStorage(initial: Record<string, string> = {}) {
 }
 
 describe("GIF maker preferences", () => {
+  it("keeps identical-frame merging disabled by default", () => {
+    expect(DEFAULT_GIF_MAKER_PREFERENCES.mergeIdenticalFrames).toBe(false);
+  });
+
   it("round-trips safe animation parameters without storing files or paths", () => {
     const storage = createStorage();
     const preferences = {
@@ -43,6 +47,7 @@ describe("GIF maker preferences", () => {
       targetSizeKiB: "96",
       maxSizeKiB: "128.5",
       autoCompress: true,
+      mergeIdenticalFrames: true,
       overwriteExisting: true,
       outputFormat: "apng" as const,
       videoFps: 24,

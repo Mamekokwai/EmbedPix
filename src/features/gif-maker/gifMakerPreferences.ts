@@ -41,6 +41,7 @@ export interface GifMakerPreferences {
   targetSizeKiB: string;
   maxSizeKiB: string;
   autoCompress: boolean;
+  mergeIdenticalFrames: boolean;
   overwriteExisting: boolean;
   outputFormat: GifMakerOutputFormat;
   videoFps: number;
@@ -78,6 +79,7 @@ export const DEFAULT_GIF_MAKER_PREFERENCES: GifMakerPreferences = {
   targetSizeKiB: "",
   maxSizeKiB: "",
   autoCompress: false,
+  mergeIdenticalFrames: false,
   overwriteExisting: false,
   outputFormat: "gif",
   videoFps: 10,
@@ -181,6 +183,7 @@ function parsePreferences(value: string | null): GifMakerPreferences {
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
       maxSizeKiB: sizeInputValue(record, "maxSizeKiB"),
       autoCompress: typeof record.autoCompress === "boolean" ? record.autoCompress : DEFAULT_GIF_MAKER_PREFERENCES.autoCompress,
+      mergeIdenticalFrames: typeof record.mergeIdenticalFrames === "boolean" ? record.mergeIdenticalFrames : DEFAULT_GIF_MAKER_PREFERENCES.mergeIdenticalFrames,
       overwriteExisting: typeof record.overwriteExisting === "boolean" ? record.overwriteExisting : DEFAULT_GIF_MAKER_PREFERENCES.overwriteExisting,
       outputFormat: enumValue(record, "outputFormat", OUTPUT_FORMATS, DEFAULT_GIF_MAKER_PREFERENCES.outputFormat),
       videoFps: integerValue(record, "videoFps", 1, 30, DEFAULT_GIF_MAKER_PREFERENCES.videoFps),
@@ -235,6 +238,7 @@ export function saveGifMakerPreferences(
       targetSizeKiB: preferences.targetSizeKiB,
       maxSizeKiB: preferences.maxSizeKiB,
       autoCompress: preferences.autoCompress,
+      mergeIdenticalFrames: preferences.mergeIdenticalFrames,
       overwriteExisting: preferences.overwriteExisting,
       outputFormat: preferences.outputFormat,
       videoFps: preferences.videoFps,

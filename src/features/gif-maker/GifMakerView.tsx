@@ -183,6 +183,7 @@ interface GifCompressionResult {
 }
 
 interface GifSizeComparisonState extends GifSizeComparison { autoCompress: boolean }
+interface GifExportFrameSummary { frameCount: number; totalDurationMs: number }
 
 function formatGifCompressionSummary(result: GifCompressionResult): string {
   const sampling = result.samplingEvery === 1 ? "原始采样" : `每 ${result.samplingEvery} 帧采样`;
@@ -537,10 +538,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [targetSizeKiB, setTargetSizeKiB] = useState(savedPreferences.targetSizeKiB);
   const [maxSizeKiB, setMaxSizeKiB] = useState(savedPreferences.maxSizeKiB);
   const [autoCompress, setAutoCompress] = useState(savedPreferences.autoCompress);
+  const [mergeIdenticalFrames, setMergeIdenticalFrames] = useState(savedPreferences.mergeIdenticalFrames);
   const [overwriteExisting, setOverwriteExisting] = useState(savedPreferences.overwriteExisting);
   const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
   const [sizeComparison, setSizeComparison] = useState<GifSizeComparisonState | null>(null);
   const [compressionSummary, setCompressionSummary] = useState<string | null>(null);
+  const [exportFrameSummary, setExportFrameSummary] = useState<GifExportFrameSummary | null>(null);
   const [fileName, setFileName] = useState(() => defaultGifFileName(savedPreferences.outputFormat));
   const [outputLocation, setOutputLocation] = useState<GifOutputLocation>("path");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
@@ -641,6 +644,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       targetSizeKiB,
       maxSizeKiB,
       autoCompress,
+      mergeIdenticalFrames,
       overwriteExisting,
       outputFormat,
       videoFps,
@@ -650,13 +654,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       videoRotation,
       videoReverse,
     });
-  }, [autoCompress, background, batchDuration, canvasHeight, canvasPreset, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, fitMode, firstFrameHoldDuration, gifPreset, globalDuration, keepAspectRatio, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, outputFormat, overwriteExisting, playbackSpeed, targetSizeKiB, videoCropPreset, videoEveryNthFrame, videoFps, videoMaxFrames, videoReverse, videoRotation]);
+  }, [autoCompress, background, batchDuration, canvasHeight, canvasPreset, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, fitMode, firstFrameHoldDuration, gifPreset, globalDuration, keepAspectRatio, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, overwriteExisting, playbackSpeed, targetSizeKiB, videoCropPreset, videoEveryNthFrame, videoFps, videoMaxFrames, videoReverse, videoRotation]);
 
   useEffect(() => {
     setMeasuredSizeBytes(null);
     setSizeComparison(null);
     setCompressionSummary(null);
-  }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, outputFormat, targetSizeKiB]);
+    setExportFrameSummary(null);
+  }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, targetSizeKiB]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
   const sourcePath = useMemo(() => getGifSourcePath(frames), [frames]);
@@ -694,17 +699,24 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const fit = fitMode === "contain" ? "适应画布" : fitMode === "cover" ? "裁剪填充" : "拉伸填满";
     const alignment = contentAlignment === "top" ? "上对齐" : contentAlignment === "bottom" ? "下对齐" : "居中";
     const margins = `${contentMargins.top}/${contentMargins.right}/${contentMargins.bottom}/${contentMargins.left}`;
-    const details = [`${canvasSize.width} × ${canvasSize.height} px`, `${frames.length} 帧`, `总时长 ${formatGifTimelineTime(timeline.totalMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`, `${fit} · ${alignment}`, `边距 ${margins} px`, overwriteExisting ? "覆盖同名" : outputFormat === "png-sequence" ? "自动序号" : "拒绝同名"];
+    const mergeEnabled = mergeIdenticalFrames && outputFormat !== "png-sequence";
+    const frameCount = exportFrameSummary?.frameCount ?? frames.length;
+    const totalDurationMs = exportFrameSummary?.totalDurationMs ?? timeline.totalMs;
+    const frameSummary = mergeEnabled
+      ? exportFrameSummary ? `${frameCount} 帧（已合并）` : `${frames.length} 帧（导出时合并）`
+      : `${frameCount} 帧`;
+    const details = [`${canvasSize.width} × ${canvasSize.height} px`, frameSummary, `总时长 ${formatGifTimelineTime(totalDurationMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`, `${fit} · ${alignment}`, `边距 ${margins} px`, overwriteExisting ? "覆盖同名" : outputFormat === "png-sequence" ? "自动序号" : "拒绝同名"];
     if (outputFormat === "gif") {
       const dither = ditherMode === "none" ? "无抖动" : ditherMode === "atkinson" ? "Atkinson" : "Floyd-Steinberg";
       const quality = encodingQuality === "high" ? "高质量编码" : encodingQuality === "balanced" ? "平衡编码" : "快速编码";
       details.push(`${colorCount} 色`, dither, quality, loopMode === "infinite" ? "无限循环" : `重复 ${loopCount} 次`);
       if (autoCompress) details.push("自动压缩");
+      if (mergeEnabled) details.push("合并连续相同帧");
       if (targetSizeKiB.trim()) details.push(`目标 ≤ ${targetSizeKiB.trim()} KiB`);
       if (maxSizeKiB.trim()) details.push(`上限 ≤ ${maxSizeKiB.trim()} KiB`);
     }
     return `${format} · ${details.join(" · ")}`;
-  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, outputFormat, overwriteExisting, targetSizeKiB, timeline.totalMs]);
+  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, exportFrameSummary, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, overwriteExisting, targetSizeKiB, timeline.totalMs]);
   const compressionComparisonSummary = useMemo(() => {
     if (!sizeComparison) return null;
     const summary = compareGifSizes(sizeComparison);
@@ -1317,6 +1329,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
   };
 
+  const prepareAnimatedExportFrames = (rendered: GifExportFrame[]): GifExportFrame[] => {
+    const prepared = mergeIdenticalFrames ? mergeConsecutiveIdenticalFrames(rendered) : rendered;
+    setExportFrameSummary({
+      frameCount: prepared.length,
+      totalDurationMs: prepared.reduce((total, frame) => total + frame.durationMs, 0),
+    });
+    return prepared;
+  };
+
   const measureCompressionCandidates = async (forceMeasure = false): Promise<GifCompressionResult> => {
     const targetBytes = parseSizeBytes(targetSizeKiB);
     const maxBytes = parseSizeBytes(maxSizeKiB);
@@ -1327,10 +1348,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
 
     setStatus({ kind: "exporting", text: `正在准备 GIF 帧 ${frames.length} 帧…` });
-    const baseFrames = await renderExportFrames(canvasSize);
+    const renderedBaseFrames = await renderExportFrames(canvasSize);
+    const baseFrames = mergeIdenticalFrames ? mergeConsecutiveIdenticalFrames(renderedBaseFrames) : renderedBaseFrames;
     const shouldMeasure = forceMeasure || autoCompress || targetBytes !== undefined || maxBytes !== undefined;
     if (!shouldMeasure) {
-      return { bytes: 0, frames: baseFrames, width: canvasSize.width, height: canvasSize.height, colorCount, samplingEvery: 1, mergedIdenticalFrames: false };
+      return { bytes: 0, frames: baseFrames, width: canvasSize.width, height: canvasSize.height, colorCount, samplingEvery: 1, mergedIdenticalFrames: mergeIdenticalFrames };
     }
     const colors = getGifCompressionColorCandidates(colorCount);
     const sizes = [
@@ -1342,12 +1364,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       ? getGifSamplingCandidates(baseFrames.length).flatMap((samplingEvery) => {
         const sampled = sampleGifFrames(baseFrames, samplingEvery);
         const merged = mergeConsecutiveIdenticalFrames(sampled);
-        return [
-          { frames: sampled, samplingEvery, mergedIdenticalFrames: false },
-          { frames: merged, samplingEvery, mergedIdenticalFrames: true },
-        ];
+        return mergeIdenticalFrames
+          ? [{ frames: merged, samplingEvery, mergedIdenticalFrames: true }]
+          : [
+              { frames: sampled, samplingEvery, mergedIdenticalFrames: false },
+              { frames: merged, samplingEvery, mergedIdenticalFrames: true },
+            ];
       })
-      : [{ frames: baseFrames, samplingEvery: 1, mergedIdenticalFrames: false }];
+      : [{ frames: baseFrames, samplingEvery: 1, mergedIdenticalFrames: mergeIdenticalFrames }];
     let best: GifCompressionResult | null = null;
     let baselineBytes: number | undefined;
     let attempt = 0;
@@ -1391,6 +1415,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const applySizeMeasurement = (result: GifCompressionResult) => {
+    setExportFrameSummary({
+      frameCount: result.frames.length,
+      totalDurationMs: result.frames.reduce((total, frame) => total + frame.durationMs, 0),
+    });
     if (result.baselineBytes === undefined || result.bytes <= 0) {
       setMeasuredSizeBytes(null);
       setSizeComparison(null);
@@ -1461,7 +1489,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       }
       if (outputLocation === "path" && !outputPath) throw new Error(`请先选择 ${outputFormat.toUpperCase()} 保存位置。`);
       if (outputFormat === "webp" || outputFormat === "apng") {
-        const exportFrames = await renderExportFrames(canvasSize);
+        const exportFrames = prepareAnimatedExportFrames(await renderExportFrames(canvasSize));
         const request = {
           outputPath: outputPath ?? undefined,
           outputLocation,
@@ -1754,6 +1782,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <SelectField id="gif-output-format" label="输出格式" value={outputFormat} options={[{ value: "gif" as const, label: "GIF 动图" }, { value: "webp" as const, label: "WebP 动图" }, { value: "apng" as const, label: "APNG 动图" }, { value: "png-sequence" as const, label: "PNG 帧序列" }]} onChange={changeOutputFormat} />
             <label className="gif-field"><span>{outputFormat === "png-sequence" ? "序列基础名" : "文件名"}</span><input value={fileName} maxLength={120} onChange={(event) => { setFileName(event.target.value); clearOutputSelection(); }} placeholder={outputFormat === "png-sequence" ? "embedpix-animation" : `embedpix-animation.${outputFormat}`} /></label>
             {outputFormat !== "png-sequence" ? <>
+              <label className="gif-check-row gif-merge-toggle"><input type="checkbox" checked={mergeIdenticalFrames} onChange={(event) => setMergeIdenticalFrames(event.target.checked)} /><span><strong>合并连续相同帧</strong><small>仅影响导出，不修改原始帧列表；会保留累计时长</small></span></label>
               <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); setGifPreset("custom"); }} />
               <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); setGifPreset("custom"); }} /><small>次</small></div></label>
               {outputFormat === "gif" ? <>
