@@ -237,14 +237,7 @@ fn choose_output_paths(
             .collect::<Vec<_>>();
         if overwrite_existing || paths.iter().all(|path| !path.exists()) {
             for path in &paths {
-                if let Ok(metadata) = fs::symlink_metadata(path) {
-                    if !metadata.is_file() || metadata.file_type().is_symlink() {
-                        return Err(format!(
-                            "PNG 帧序列输出路径已存在但不是普通文件：{}",
-                            path.display()
-                        ));
-                    }
-                }
+                storage::validate_existing_output_file(path)?;
             }
             return Ok(paths);
         }

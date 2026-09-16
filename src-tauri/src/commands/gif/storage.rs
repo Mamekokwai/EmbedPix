@@ -69,6 +69,24 @@ fn check_target(output: &Path, overwrite: bool) -> Result<(), String> {
     }
 }
 
+pub(super) fn validate_existing_output_file(path: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata)
+            if !metadata.is_file()
+                || metadata.file_type().is_symlink()
+                || has_reparse_point(&metadata) =>
+        {
+            Err(format!(
+                "GIF 输出路径已存在但不是普通文件：{}",
+                path.display()
+            ))
+        }
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("无法检查 GIF 输出路径：{error}")),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum OutputLocation {
     Dialog,
@@ -234,6 +252,9 @@ fn normalize_output_name(
     if name.chars().count() > MAX_OUTPUT_NAME_CHARS {
         return Err("GIF 输出文件名过长。".to_string());
     }
+    if is_reserved_windows_name(&name) {
+        return Err("GIF 输出文件名不能使用 Windows 保留设备名。".to_string());
+    }
     let suffix = format!(".{extension}");
     let has_wrong_extension = Path::new(&name)
         .extension()
@@ -273,7 +294,26 @@ fn normalize_subdirectory(value: Option<&str>) -> Result<Option<String>, String>
     {
         return Err("GIF 输出子目录名称包含无效字符或路径越界。".to_string());
     }
+    if is_reserved_windows_name(value) {
+        return Err("GIF 输出子目录不能使用 Windows 保留设备名。".to_string());
+    }
     Ok(Some(value.to_string()))
+}
+
+fn is_reserved_windows_name(value: &str) -> bool {
+    let base = value
+        .split('.')
+        .next()
+        .unwrap_or(value)
+        .trim_end_matches([' ', '.']);
+    let uppercase = base.to_ascii_uppercase();
+    matches!(uppercase.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || uppercase
+            .strip_prefix("COM")
+            .or_else(|| uppercase.strip_prefix("LPT"))
+            .is_some_and(|suffix| {
+                matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+            })
 }
 
 fn validate_source_file(value: Option<&str>) -> Result<PathBuf, String> {
@@ -437,7 +477,7 @@ impl<W: Write> Write for CheckedWriter<W> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_output_directory;
+    use super::{normalize_output_name, normalize_subdirectory, validate_output_directory};
     use std::fs;
 
     #[test]
@@ -466,5 +506,15 @@ mod tests {
         assert!(validate_output_directory(&nested).is_err());
 
         fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn rejects_windows_device_names_for_output_names_and_subdirectories() {
+        for name in ["CON", "NUL", "COM1", "LPT9", "CON.gif"] {
+            assert!(normalize_output_name(Some(name), None, "gif").is_err());
+        }
+        for name in ["CON", "NUL", "COM1", "LPT9", "CON.backup"] {
+            assert!(normalize_subdirectory(Some(name)).is_err());
+        }
     }
 }
