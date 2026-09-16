@@ -22,16 +22,18 @@ import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAn
 import type { GifExportFrame } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed } from "./gifMakerLogic";
+import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
+import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
 import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
 
 export type GifFitMode = GifContentFit;
-export type GifBackground = "transparent" | "white" | "black" | "custom";
-export type GifLoopMode = "infinite" | "finite";
-export type GifEncodingQuality = "high" | "balanced" | "fast";
-export type GifDitherMode = "none" | "floydSteinberg" | "atkinson";
-export type GifPreset = "custom" | "high" | "balanced" | "small";
+export type GifBackground = GifMakerBackground;
+export type GifLoopMode = GifMakerLoopMode;
+export type GifEncodingQuality = GifMakerEncodingQuality;
+export type GifDitherMode = GifMakerDitherMode;
+export type GifPreset = GifMakerPreset;
 
 export interface GifPresetConfig {
   label: string;
@@ -46,8 +48,12 @@ export const GIF_PRESETS: Record<Exclude<GifPreset, "custom">, GifPresetConfig> 
   balanced: { label: "平衡", encodingQuality: "balanced", colorCount: 128, ditherMode: "floydSteinberg", canvasPreset: "75" },
   small: { label: "小体积", encodingQuality: "fast", colorCount: 64, ditherMode: "none", canvasPreset: "50" },
 };
-type GifOutputFormat = "gif" | "png-sequence" | "webp" | "apng";
+type GifOutputFormat = GifMakerOutputFormat;
 type GifSourceMode = "image" | "video";
+
+function defaultGifFileName(format: GifOutputFormat): string {
+  return format === "png-sequence" ? "embedpix-animation" : `embedpix-animation.${format}`;
+}
 
 export interface GifFrameModel {
   id: string;
@@ -79,8 +85,8 @@ interface VideoSourceModel {
   duration: number;
 }
 
-type VideoCropPreset = "original" | "center16x9" | "center1x1";
-type VideoRotation = 0 | 90 | 180 | 270;
+type VideoCropPreset = GifMakerVideoCropPreset;
+type VideoRotation = GifMakerVideoRotation;
 
 interface VideoCropRect {
   x: number;
@@ -413,51 +419,52 @@ function EmptyFrames({ onImport, sourceMode }: { onImport: () => void; sourceMod
 }
 
 export default function GifMakerView({ active = true }: { active?: boolean }) {
+  const [savedPreferences] = useState<GifMakerPreferences>(() => loadGifMakerPreferences());
   const [frames, setFrames] = useState<GifFrameModel[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedFrameIndices, setSelectedFrameIndices] = useState<Set<number>>(new Set());
   const selectionAnchorRef = useRef(0);
-  const [canvasWidth, setCanvasWidth] = useState(320);
-  const [canvasHeight, setCanvasHeight] = useState(240);
-  const [canvasPreset, setCanvasPreset] = useState<GifCanvasPreset>("custom");
-  const [keepAspectRatio, setKeepAspectRatio] = useState(true);
-  const [fitMode, setFitMode] = useState<GifFitMode>("contain");
-  const [contentAlignment, setContentAlignment] = useState<GifContentAlignment>("center");
-  const [contentMargins, setContentMargins] = useState<GifContentMargins>({ top: 0, right: 0, bottom: 0, left: 0 });
-  const [background, setBackground] = useState<GifBackground>("transparent");
-  const [customBackgroundColor, setCustomBackgroundColor] = useState("#ffffff");
-  const [globalDuration, setGlobalDuration] = useState(DEFAULT_DURATION);
-  const [batchDuration, setBatchDuration] = useState(DEFAULT_DURATION);
-  const [firstFrameHoldDuration, setFirstFrameHoldDuration] = useState(0);
-  const [lastFrameHoldDuration, setLastFrameHoldDuration] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState<GifPlaybackSpeed>(1);
-  const [loopMode, setLoopMode] = useState<GifLoopMode>("infinite");
-  const [loopCount, setLoopCount] = useState(3);
-  const [encodingQuality, setEncodingQuality] = useState<GifEncodingQuality>("high");
-  const [colorCount, setColorCount] = useState<GifColorCount>(256);
-  const [ditherMode, setDitherMode] = useState<GifDitherMode>("none");
-  const [gifPreset, setGifPreset] = useState<GifPreset>("high");
-  const [targetSizeKiB, setTargetSizeKiB] = useState("");
-  const [maxSizeKiB, setMaxSizeKiB] = useState("");
-  const [autoCompress, setAutoCompress] = useState(false);
+  const [canvasWidth, setCanvasWidth] = useState(savedPreferences.canvasWidth);
+  const [canvasHeight, setCanvasHeight] = useState(savedPreferences.canvasHeight);
+  const [canvasPreset, setCanvasPreset] = useState<GifCanvasPreset>(savedPreferences.canvasPreset);
+  const [keepAspectRatio, setKeepAspectRatio] = useState(savedPreferences.keepAspectRatio);
+  const [fitMode, setFitMode] = useState<GifFitMode>(savedPreferences.fitMode);
+  const [contentAlignment, setContentAlignment] = useState<GifContentAlignment>(savedPreferences.contentAlignment);
+  const [contentMargins, setContentMargins] = useState<GifContentMargins>(savedPreferences.contentMargins);
+  const [background, setBackground] = useState<GifBackground>(savedPreferences.background);
+  const [customBackgroundColor, setCustomBackgroundColor] = useState(savedPreferences.customBackgroundColor);
+  const [globalDuration, setGlobalDuration] = useState(savedPreferences.globalDuration);
+  const [batchDuration, setBatchDuration] = useState(savedPreferences.batchDuration);
+  const [firstFrameHoldDuration, setFirstFrameHoldDuration] = useState(savedPreferences.firstFrameHoldDuration);
+  const [lastFrameHoldDuration, setLastFrameHoldDuration] = useState(savedPreferences.lastFrameHoldDuration);
+  const [playbackSpeed, setPlaybackSpeed] = useState<GifPlaybackSpeed>(savedPreferences.playbackSpeed);
+  const [loopMode, setLoopMode] = useState<GifLoopMode>(savedPreferences.loopMode);
+  const [loopCount, setLoopCount] = useState(savedPreferences.loopCount);
+  const [encodingQuality, setEncodingQuality] = useState<GifEncodingQuality>(savedPreferences.encodingQuality);
+  const [colorCount, setColorCount] = useState<GifColorCount>(savedPreferences.colorCount);
+  const [ditherMode, setDitherMode] = useState<GifDitherMode>(savedPreferences.ditherMode);
+  const [gifPreset, setGifPreset] = useState<GifPreset>(savedPreferences.gifPreset);
+  const [targetSizeKiB, setTargetSizeKiB] = useState(savedPreferences.targetSizeKiB);
+  const [maxSizeKiB, setMaxSizeKiB] = useState(savedPreferences.maxSizeKiB);
+  const [autoCompress, setAutoCompress] = useState(savedPreferences.autoCompress);
   const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
   const [compressionSummary, setCompressionSummary] = useState<string | null>(null);
-  const [fileName, setFileName] = useState(DEFAULT_FILE_NAME);
+  const [fileName, setFileName] = useState(() => defaultGifFileName(savedPreferences.outputFormat));
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [sequenceOutputDir, setSequenceOutputDir] = useState<string | null>(null);
-  const [outputFormat, setOutputFormat] = useState<GifOutputFormat>("gif");
+  const [outputFormat, setOutputFormat] = useState<GifOutputFormat>(savedPreferences.outputFormat);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [sourceMode, setSourceMode] = useState<GifSourceMode>("image");
   const [videoSource, setVideoSource] = useState<VideoSourceModel | null>(null);
   const [videoStart, setVideoStart] = useState(0);
   const [videoEnd, setVideoEnd] = useState(0);
-  const [videoFps, setVideoFps] = useState(10);
-  const [videoEveryNthFrame, setVideoEveryNthFrame] = useState(1);
-  const [videoMaxFrames, setVideoMaxFrames] = useState(MAX_VIDEO_FRAME_LIMIT);
-  const [videoCropPreset, setVideoCropPreset] = useState<VideoCropPreset>("original");
-  const [videoRotation, setVideoRotation] = useState<VideoRotation>(0);
-  const [videoReverse, setVideoReverse] = useState(false);
+  const [videoFps, setVideoFps] = useState(savedPreferences.videoFps);
+  const [videoEveryNthFrame, setVideoEveryNthFrame] = useState(savedPreferences.videoEveryNthFrame);
+  const [videoMaxFrames, setVideoMaxFrames] = useState(savedPreferences.videoMaxFrames);
+  const [videoCropPreset, setVideoCropPreset] = useState<VideoCropPreset>(savedPreferences.videoCropPreset);
+  const [videoRotation, setVideoRotation] = useState<VideoRotation>(savedPreferences.videoRotation);
+  const [videoReverse, setVideoReverse] = useState(savedPreferences.videoReverse);
   const [status, setStatus] = useState<GifStatus>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const [group, setGroup] = useState<"timing" | "canvas" | "export" | null>("timing");
@@ -472,7 +479,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const pendingRef = useRef(0);
   const initializedRef = useRef(false);
   const videoExtractControllerRef = useRef<AbortController | null>(null);
-  const ratioRef = useRef<GifCanvasSize>({ width: 320, height: 240 });
+  const ratioRef = useRef<GifCanvasSize>({ width: savedPreferences.canvasWidth, height: savedPreferences.canvasHeight });
   const repeatRef = useRef(0);
   const framesRef = useRef<GifFrameModel[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -502,6 +509,41 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
     if (videoSource) URL.revokeObjectURL(videoSource.previewUrl);
   }, [videoSource]);
+
+  useEffect(() => {
+    saveGifMakerPreferences({
+      canvasPreset,
+      canvasWidth,
+      canvasHeight,
+      keepAspectRatio,
+      fitMode,
+      contentAlignment,
+      contentMargins,
+      globalDuration,
+      batchDuration,
+      firstFrameHoldDuration,
+      lastFrameHoldDuration,
+      playbackSpeed,
+      background,
+      customBackgroundColor,
+      loopMode,
+      loopCount,
+      encodingQuality,
+      colorCount,
+      ditherMode,
+      gifPreset,
+      targetSizeKiB,
+      maxSizeKiB,
+      autoCompress,
+      outputFormat,
+      videoFps,
+      videoEveryNthFrame,
+      videoMaxFrames,
+      videoCropPreset,
+      videoRotation,
+      videoReverse,
+    });
+  }, [autoCompress, background, batchDuration, canvasHeight, canvasPreset, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, fitMode, firstFrameHoldDuration, gifPreset, globalDuration, keepAspectRatio, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, outputFormat, playbackSpeed, targetSizeKiB, videoCropPreset, videoEveryNthFrame, videoFps, videoMaxFrames, videoReverse, videoRotation]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
   const canvasSize = useMemo(
