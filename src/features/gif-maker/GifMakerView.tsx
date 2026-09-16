@@ -742,6 +742,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     clearOutputSelection();
   };
 
+  const markVideoFramesStale = () => {
+    if (!framesRef.current.length) return;
+    invalidateVideoFrames();
+    setStatus({ kind: "ready", text: "视频参数已更新，请重新提取帧" });
+  };
+
   const updateVideoTransform = (cropPreset: VideoCropPreset, rotation: VideoRotation) => {
     setVideoCropPreset(cropPreset);
     setVideoRotation(rotation);
@@ -752,10 +758,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setCanvasHeight(outputSize.height);
     setCanvasPreset(cropPreset === "original" && rotation === 0 ? "source" : "custom");
     ratioRef.current = outputSize;
-    if (framesRef.current.length) {
-      invalidateVideoFrames();
-      setStatus({ kind: "ready", text: "视频参数已更新，请重新提取帧" });
-    }
+    markVideoFramesStale();
   };
 
   const importVideo = async (file: File) => {
@@ -1538,14 +1541,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <>
                 <video className="gif-video-preview" src={videoSource.previewUrl} controls preload="metadata" aria-label="视频预览" />
                 <div className="gif-video-grid">
-                  <label className="gif-field"><span>开始时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoStart} onChange={(event) => setVideoStart(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0)))} /></label>
-                  <label className="gif-field"><span>结束时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoEnd} onChange={(event) => setVideoEnd(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0)))} /></label>
-                  <label className="gif-field"><span>帧率 · FPS</span><input type="number" min="1" max="30" step="1" value={videoFps} onChange={(event) => setVideoFps(clampVideoFps(Number(event.target.value)))} /></label>
-                  <label className="gif-field"><span>每隔 N 帧</span><input type="number" min="1" max="200" step="1" value={videoEveryNthFrame} onChange={(event) => setVideoEveryNthFrame(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value)) || 1)))} /></label>
-                  <label className="gif-field"><span>最大帧数</span><input type="number" min="1" max={MAX_VIDEO_FRAME_LIMIT} step="1" value={videoMaxFrames} onChange={(event) => setVideoMaxFrames(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value)) || 1)))} /></label>
+                  <label className="gif-field"><span>开始时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoStart} onChange={(event) => { setVideoStart(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0))); markVideoFramesStale(); }} /></label>
+                  <label className="gif-field"><span>结束时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoEnd} onChange={(event) => { setVideoEnd(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0))); markVideoFramesStale(); }} /></label>
+                  <label className="gif-field"><span>帧率 · FPS</span><input type="number" min="1" max="30" step="1" value={videoFps} onChange={(event) => { setVideoFps(clampVideoFps(Number(event.target.value))); markVideoFramesStale(); }} /></label>
+                  <label className="gif-field"><span>每隔 N 帧</span><input type="number" min="1" max="200" step="1" value={videoEveryNthFrame} onChange={(event) => { setVideoEveryNthFrame(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value) || 1)))); markVideoFramesStale(); }} /></label>
+                  <label className="gif-field"><span>最大帧数</span><input type="number" min="1" max={MAX_VIDEO_FRAME_LIMIT} step="1" value={videoMaxFrames} onChange={(event) => { setVideoMaxFrames(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value) || 1)))); markVideoFramesStale(); }} /></label>
                   <SelectField id="gif-video-crop" label="裁剪区域" value={videoCropPreset} options={[{ value: "original" as const, label: "原始画面" }, { value: "center16x9" as const, label: "居中 16:9" }, { value: "center1x1" as const, label: "居中 1:1" }]} onChange={(value) => updateVideoTransform(value, videoRotation)} />
                   <SelectField id="gif-video-rotation" label="旋转" value={videoRotation} options={[{ value: 0 as const, label: "0°" }, { value: 90 as const, label: "90°" }, { value: 180 as const, label: "180°" }, { value: 270 as const, label: "270°" }]} onChange={(value) => updateVideoTransform(videoCropPreset, value)} />
-                  <label className="gif-check-row gif-video-reverse"><input type="checkbox" checked={videoReverse} onChange={(event) => { setVideoReverse(event.target.checked); if (framesRef.current.length) { invalidateVideoFrames(); setStatus({ kind: "ready", text: "视频参数已更新，请重新提取帧" }); } }} /><span><strong>视频倒放</strong><small>按反向时间顺序抽帧</small></span></label>
+                  <label className="gif-check-row gif-video-reverse"><input type="checkbox" checked={videoReverse} onChange={(event) => { setVideoReverse(event.target.checked); markVideoFramesStale(); }} /><span><strong>视频倒放</strong><small>按反向时间顺序抽帧</small></span></label>
                   <div className="gif-video-summary"><span>当前范围</span><strong>{formatVideoTime(videoStart)} – {formatVideoTime(videoEnd)}</strong><small>预计 {planVideoFramesWithSampling(videoStart, videoEnd, videoSource.duration, videoFps, { everyNthFrame: videoEveryNthFrame, maxFrames: videoMaxFrames }).times.length} 帧（最多 {MAX_VIDEO_FRAME_LIMIT} 帧）</small></div>
                 </div>
                 <div className="gif-video-actions">
