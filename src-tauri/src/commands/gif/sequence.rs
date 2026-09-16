@@ -8,6 +8,10 @@ use image::{io::Reader as ImageReader, ImageOutputFormat};
 use rfd::FileDialog;
 use serde::Deserialize;
 
+use super::{decode_limits, detect_format, inspect_frame_dimensions, validate_frame_dimensions};
+
+use super::storage;
+
 const MAX_SEQUENCE_FRAMES: usize = 200;
 const MAX_FRAME_BYTES: usize = 32 * 1024 * 1024;
 const MAX_TOTAL_FRAME_BYTES: usize = 128 * 1024 * 1024;
@@ -126,9 +130,8 @@ fn validate_output_directory(value: &str) -> Result<PathBuf, String> {
     if directory.as_os_str().is_empty() {
         return Err("PNG 帧序列输出目录不能为空。".to_string());
     }
-    let metadata = fs::symlink_metadata(&directory)
-        .map_err(|error| format!("无法访问 PNG 帧序列输出目录：{error}"))?;
-    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+    storage::validate_output_directory(&directory)?;
+    if !directory.is_dir() {
         return Err("PNG 帧序列输出路径必须是普通目录。".to_string());
     }
     Ok(directory)
@@ -171,22 +174,33 @@ fn validate_frames(frames: &[PngSequenceFrameRequest]) -> Result<(), String> {
             "PNG 帧序列数量必须在 1 到 {MAX_SEQUENCE_FRAMES} 之间。"
         ));
     }
-    frames.iter().try_fold(0usize, |total, frame| {
+    let mut total_bytes = 0usize;
+    let mut source_pixels = 0u64;
+    for (index, frame) in frames.iter().enumerate() {
         if frame.data.is_empty() || frame.data.len() > MAX_FRAME_BYTES {
             return Err("单帧图片不能为空且不能超过 32 MiB。".to_string());
         }
-        total
+        total_bytes = total_bytes
             .checked_add(frame.data.len())
             .filter(|value| *value <= MAX_TOTAL_FRAME_BYTES)
-            .ok_or_else(|| "PNG 帧序列图片数据不能超过 128 MiB。".to_string())
-    })?;
+            .ok_or_else(|| "PNG 帧序列图片数据不能超过 128 MiB。".to_string())?;
+        let dimensions = inspect_frame_dimensions(&frame.data)
+            .map_err(|error| format!("第 {} 帧：{error}", index + 1))?;
+        validate_frame_dimensions(dimensions.0, dimensions.1)?;
+        source_pixels = source_pixels
+            .checked_add(u64::from(dimensions.0).saturating_mul(u64::from(dimensions.1)))
+            .filter(|value| *value <= super::MAX_TOTAL_GIF_PIXELS)
+            .ok_or_else(|| "PNG 帧序列源帧总像素量超出限制。".to_string())?;
+    }
     Ok(())
 }
 
 fn encode_png_frame(writer: &mut File, frame: &PngSequenceFrameRequest) -> Result<(), String> {
-    let reader = ImageReader::new(Cursor::new(&frame.data))
-        .with_guessed_format()
-        .map_err(|error| format!("无法识别 PNG 帧输入格式：{error}"))?;
+    let mut reader = ImageReader::with_format(
+        Cursor::new(&frame.data),
+        detect_format(&frame.data).map_err(|error| format!("无法识别 PNG 帧输入格式：{error}"))?,
+    );
+    reader.limits(decode_limits());
     let image = reader
         .decode()
         .map_err(|error| format!("无法读取 PNG 帧：{error}"))?;
@@ -411,6 +425,21 @@ mod tests {
         let mut request = directory.request(vec![png([1, 2, 3, 255]), b"not an image".to_vec()]);
         request.overwrite_existing = true;
         assert!(export_png_sequence_blocking(request).is_err());
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn rejects_oversized_source_frame_before_creating_outputs() {
+        let directory = TestDirectory::new();
+        let image = RgbaImage::new(super::super::MAX_GIF_DIMENSION + 1, 1);
+        let mut output = Cursor::new(Vec::new());
+        DynamicImage::ImageRgba8(image)
+            .write_to(&mut output, ImageOutputFormat::Png)
+            .unwrap();
+
+        assert!(
+            export_png_sequence_blocking(directory.request(vec![output.into_inner()])).is_err()
+        );
         assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 0);
     }
 

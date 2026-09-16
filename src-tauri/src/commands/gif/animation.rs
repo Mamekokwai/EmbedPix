@@ -66,45 +66,34 @@ fn export_animation_blocking(
     validate_request(&request, format)?;
     let output_path = normalize_output_path(&request.output_path, format)?;
     storage::write_output(&output_path, request.overwrite_existing, |file| {
-        let frames = prepare_frames(&request)?;
         if format == "webp" {
-            encode_webp(file, &request, &frames)
+            encode_webp(file, &request)
         } else {
-            encode_apng(file, &request, &frames)
+            encode_apng(file, &request)
         }
     })?;
     Ok(output_path.to_string_lossy().into_owned())
 }
 
-fn prepare_frames(request: &AnimationExportRequest) -> Result<Vec<Vec<u8>>, String> {
-    request
-        .frames
-        .iter()
-        .enumerate()
-        .map(|(index, frame)| {
-            let mut reader =
-                ImageReader::with_format(Cursor::new(&frame.data), detect_format(&frame.data)?);
-            reader.limits(decode_limits());
-            let image = reader
-                .decode()
-                .map_err(|error| format!("无法读取第 {} 帧：{error}", index + 1))?;
-            let image = if image.width() == request.width && image.height() == request.height {
-                image.into_rgba8()
-            } else {
-                image
-                    .resize_exact(request.width, request.height, ResizeFilter::Lanczos3)
-                    .into_rgba8()
-            };
-            Ok(image.into_raw())
-        })
-        .collect()
+fn prepare_frame(request: &AnimationExportRequest, index: usize) -> Result<Vec<u8>, String> {
+    let frame = &request.frames[index];
+    let mut reader =
+        ImageReader::with_format(Cursor::new(&frame.data), detect_format(&frame.data)?);
+    reader.limits(decode_limits());
+    let image = reader
+        .decode()
+        .map_err(|error| format!("无法读取第 {} 帧：{error}", index + 1))?;
+    let image = if image.width() == request.width && image.height() == request.height {
+        image.into_rgba8()
+    } else {
+        image
+            .resize_exact(request.width, request.height, ResizeFilter::Lanczos3)
+            .into_rgba8()
+    };
+    Ok(image.into_raw())
 }
 
-fn encode_webp<W: Write>(
-    writer: &mut W,
-    request: &AnimationExportRequest,
-    frames: &[Vec<u8>],
-) -> Result<(), String> {
+fn encode_webp<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Result<(), String> {
     let mut options = EncoderOptions {
         anim_params: AnimParams {
             loop_count: if request.loop_mode == "finite" {
@@ -120,11 +109,12 @@ fn encode_webp<W: Write>(
     let mut encoder = WebpEncoder::new_with_options((request.width, request.height), options)
         .map_err(|error| format!("无法创建 WebP 动图编码器：{error}"))?;
     let mut timestamp = 0u64;
-    for (index, (pixels, frame)) in frames.iter().zip(&request.frames).enumerate() {
+    for (index, frame) in request.frames.iter().enumerate() {
+        let pixels = prepare_frame(request, index)?;
         let timestamp_ms =
             i32::try_from(timestamp).map_err(|_| "WebP 动图总时长超出编码器限制。".to_string())?;
         encoder
-            .add_frame(pixels, timestamp_ms)
+            .add_frame(&pixels, timestamp_ms)
             .map_err(|error| format!("无法编码第 {} 帧 WebP 动图：{error}", index + 1))?;
         timestamp = timestamp
             .checked_add(u64::from(super::quantize_duration_ms(frame.duration_ms)))
@@ -143,15 +133,11 @@ fn encode_webp<W: Write>(
         .map_err(|error| format!("无法完成 WebP 动图写入：{error}"))
 }
 
-fn encode_apng<W: Write>(
-    writer: &mut W,
-    request: &AnimationExportRequest,
-    frames: &[Vec<u8>],
-) -> Result<(), String> {
+fn encode_apng<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Result<(), String> {
     let config = apng::Config {
         width: request.width,
         height: request.height,
-        num_frames: frames.len() as u32,
+        num_frames: request.frames.len() as u32,
         num_plays: if request.loop_mode == "finite" {
             request.loop_count as u32
         } else {
@@ -163,11 +149,12 @@ fn encode_apng<W: Write>(
     };
     let mut encoder = apng::Encoder::new(writer, config)
         .map_err(|error| format!("无法创建 APNG 编码器：{error}"))?;
-    for (index, (pixels, frame)) in frames.iter().zip(&request.frames).enumerate() {
+    for (index, frame) in request.frames.iter().enumerate() {
+        let pixels = prepare_frame(request, index)?;
         let image = PNGImage {
             width: request.width,
             height: request.height,
-            data: pixels.clone(),
+            data: pixels,
             color_type: ColorType::Rgba,
             bit_depth: BitDepth::Eight,
         };
@@ -213,7 +200,12 @@ fn validate_request(request: &AnimationExportRequest, format: &str) -> Result<()
     if request.loop_mode == "finite" && request.loop_count == 0 {
         return Err("有限循环次数必须大于 0。".to_string());
     }
+    let canvas_pixels = u64::from(request.width).saturating_mul(u64::from(request.height));
+    if canvas_pixels.saturating_mul(request.frames.len() as u64) > super::MAX_TOTAL_GIF_PIXELS {
+        return Err("动图总像素量超出限制，请减少帧数或画布尺寸。".to_string());
+    }
     let mut total_bytes = 0usize;
+    let mut source_pixels = 0u64;
     for (index, frame) in request.frames.iter().enumerate() {
         if frame.data.is_empty() || frame.data.len() > super::MAX_FRAME_BYTES {
             return Err(format!("第 {} 帧不能为空且不能超过 32 MiB。", index + 1));
@@ -230,6 +222,10 @@ fn validate_request(request: &AnimationExportRequest, format: &str) -> Result<()
         let dimensions = inspect_frame_dimensions(&frame.data)
             .map_err(|error| format!("第 {} 帧：{error}", index + 1))?;
         super::validate_frame_dimensions(dimensions.0, dimensions.1)?;
+        source_pixels = source_pixels
+            .checked_add(u64::from(dimensions.0).saturating_mul(u64::from(dimensions.1)))
+            .filter(|value| *value <= super::MAX_TOTAL_GIF_PIXELS)
+            .ok_or_else(|| "动图源帧总像素量超出限制。".to_string())?;
     }
     Ok(())
 }
@@ -281,6 +277,46 @@ use super::storage;
 mod tests {
     use super::*;
     use image::{DynamicImage, ImageOutputFormat, Rgba, RgbaImage};
+    use std::{
+        fs, io,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            static NEXT: AtomicUsize = AtomicUsize::new(0);
+            loop {
+                let path = std::env::temp_dir().join(format!(
+                    "embedpix-animation-test-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
+                match fs::create_dir(&path) {
+                    Ok(()) => return Self(path),
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                    Err(error) => panic!("{error}"),
+                }
+            }
+        }
+
+        fn request(&self, format: &str) -> AnimationExportRequest {
+            let mut request = request();
+            request.output_path = self
+                .0
+                .join(format!("animation.{format}"))
+                .to_string_lossy()
+                .into_owned();
+            request
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
 
     fn png_frame(color: [u8; 4], duration_ms: u32) -> GifFrameRequest {
         let image = DynamicImage::ImageRgba8(RgbaImage::from_pixel(2, 1, Rgba(color)));
@@ -310,9 +346,8 @@ mod tests {
     #[test]
     fn encodes_decodable_webp_animation_with_frame_timing() {
         let request = request();
-        let frames = prepare_frames(&request).unwrap();
         let mut output = Vec::new();
-        encode_webp(&mut output, &request, &frames).unwrap();
+        encode_webp(&mut output, &request).unwrap();
 
         assert_eq!(&output[..4], b"RIFF");
         assert_eq!(&output[8..12], b"WEBP");
@@ -324,9 +359,8 @@ mod tests {
     #[test]
     fn encodes_apng_with_animation_and_frame_controls() {
         let request = request();
-        let frames = prepare_frames(&request).unwrap();
         let mut output = Vec::new();
-        encode_apng(&mut output, &request, &frames).unwrap();
+        encode_apng(&mut output, &request).unwrap();
 
         assert_eq!(&output[..8], b"\x89PNG\r\n\x1a\n");
         assert_eq!(
@@ -341,5 +375,77 @@ mod tests {
             output.windows(4).filter(|chunk| *chunk == b"fdAT").count(),
             1
         );
+    }
+
+    #[test]
+    fn finite_apng_preserves_loop_count_and_quantized_delays() {
+        let mut request = request();
+        request.loop_mode = "finite".to_string();
+        request.loop_count = 3;
+        request.frames[0].duration_ms = 19;
+        request.frames[1].duration_ms = 25;
+        let mut output = Vec::new();
+        encode_apng(&mut output, &request).unwrap();
+
+        let animation_control = png_chunks(&output, b"acTL").pop().unwrap();
+        assert_eq!(
+            u32::from_be_bytes(animation_control[4..8].try_into().unwrap()),
+            3
+        );
+        let frame_controls = png_chunks(&output, b"fcTL");
+        assert_eq!(frame_controls.len(), 2);
+        assert_eq!(
+            u16::from_be_bytes(frame_controls[0][20..22].try_into().unwrap()),
+            10
+        );
+        assert_eq!(
+            u16::from_be_bytes(frame_controls[1][20..22].try_into().unwrap()),
+            20
+        );
+    }
+
+    #[test]
+    fn default_overwrite_refuses_existing_animation() {
+        let directory = TestDirectory::new();
+        let request = directory.request("apng");
+        let output = PathBuf::from(&request.output_path);
+        fs::write(&output, b"old animation").unwrap();
+
+        assert!(export_animation_blocking(request, "apng").is_err());
+        assert_eq!(fs::read(output).unwrap(), b"old animation");
+        assert_eq!(fs::read_dir(directory.0.clone()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn failed_later_animation_frame_preserves_existing_output_and_cleans_temp() {
+        let directory = TestDirectory::new();
+        let mut request = directory.request("webp");
+        request.overwrite_existing = true;
+        request.frames[1].data = b"not an image".to_vec();
+        let output = PathBuf::from(&request.output_path);
+        fs::write(&output, b"old animation").unwrap();
+
+        assert!(export_animation_blocking(request, "webp").is_err());
+        assert_eq!(fs::read(output).unwrap(), b"old animation");
+        assert_eq!(fs::read_dir(directory.0.clone()).unwrap().count(), 1);
+    }
+
+    fn png_chunks(output: &[u8], wanted: &[u8; 4]) -> Vec<Vec<u8>> {
+        let mut chunks = Vec::new();
+        let mut offset = 8;
+        while offset + 12 <= output.len() {
+            let length =
+                u32::from_be_bytes(output[offset..offset + 4].try_into().unwrap()) as usize;
+            let data_start = offset + 8;
+            let data_end = data_start + length;
+            if data_end + 4 > output.len() {
+                break;
+            }
+            if &output[offset + 4..offset + 8] == wanted {
+                chunks.push(output[data_start..data_end].to_vec());
+            }
+            offset = data_end + 4;
+        }
+        chunks
     }
 }

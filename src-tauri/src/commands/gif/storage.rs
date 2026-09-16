@@ -51,7 +51,11 @@ impl Drop for TemporaryOutput {
 
 fn check_target(output: &Path, overwrite: bool) -> Result<(), String> {
     match fs::symlink_metadata(output) {
-        Ok(metadata) if !metadata.is_file() || metadata.file_type().is_symlink() => {
+        Ok(metadata)
+            if !metadata.is_file()
+                || metadata.file_type().is_symlink()
+                || has_reparse_point(&metadata) =>
+        {
             Err("GIF 输出路径已存在但不是普通文件。".into())
         }
         Ok(_) if !overwrite => Err("GIF 输出文件已存在，请启用覆盖同名文件后重试。".into()),
@@ -66,9 +70,15 @@ pub(super) fn write_output(
     overwrite: bool,
     encode: impl FnOnce(&mut File) -> Result<(), String>,
 ) -> Result<(), String> {
+    let parent = output
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    validate_output_directory(parent)?;
     check_target(output, overwrite)?;
-    if let Some(parent) = output.parent().filter(|path| !path.as_os_str().is_empty()) {
+    if !parent.exists() {
         fs::create_dir_all(parent).map_err(|error| format!("无法创建 GIF 输出目录：{error}"))?;
+        validate_output_directory(parent)?;
     }
     let mut temporary = TemporaryOutput::create(output)
         .map_err(|error| format!("无法创建 GIF 临时文件：{error}"))?;
@@ -89,6 +99,49 @@ pub(super) fn write_output(
         temporary.cleanup = false;
     }
     result.map_err(|error| format!("无法保存 GIF 文件（同名目标可能已存在）：{error}"))
+}
+
+pub(super) fn validate_output_directory(directory: &Path) -> Result<(), String> {
+    let mut existing = directory.to_path_buf();
+    loop {
+        match fs::symlink_metadata(&existing) {
+            Ok(_) => break,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                if !existing.pop() {
+                    return Err("输出目录路径无效。".to_string());
+                }
+            }
+            Err(error) => return Err(format!("无法检查输出目录：{error}")),
+        }
+    }
+    validate_directory_metadata(&existing)?;
+    match fs::symlink_metadata(directory) {
+        Ok(_) => validate_directory_metadata(directory)?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("无法检查输出目录：{error}")),
+    }
+    Ok(())
+}
+
+fn validate_directory_metadata(directory: &Path) -> Result<(), String> {
+    let metadata =
+        fs::symlink_metadata(directory).map_err(|error| format!("无法检查输出目录：{error}"))?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() || has_reparse_point(&metadata) {
+        return Err("输出目录必须是普通目录，不能是 symlink 或 junction。".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn has_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn has_reparse_point(_metadata: &fs::Metadata) -> bool {
+    false
 }
 
 pub(super) struct CheckedWriter<W> {
@@ -129,5 +182,23 @@ impl<W: Write> Write for CheckedWriter<W> {
 
     fn flush(&mut self) -> io::Result<()> {
         self.inner.flush()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_output_directory;
+    use std::fs;
+
+    #[test]
+    fn rejects_a_file_as_an_output_directory() {
+        let path = std::env::temp_dir().join(format!(
+            "embedpix-output-directory-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&path);
+        fs::write(&path, b"not a directory").expect("test output marker");
+        assert!(validate_output_directory(&path).is_err());
+        fs::remove_file(path).expect("remove test output marker");
     }
 }
