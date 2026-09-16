@@ -4,6 +4,8 @@ export type GifContentFit = "contain" | "cover" | "stretch";
 export type GifContentAlignment = "center" | "top" | "bottom";
 export interface GifContentMargins { top: number; right: number; bottom: number; left: number }
 export interface GifContentRect { x: number; y: number; width: number; height: number }
+export interface GifSizeComparison { baselineBytes: number; finalBytes: number; targetBytes?: number; maxBytes?: number }
+export interface GifSizeComparisonSummary { ratioPercent: number; changePercent: number; reduced: boolean; meetsTarget: boolean | null; withinMax: boolean | null }
 export type GifWorkloadLevel = "light" | "moderate" | "heavy";
 export interface GifWorkloadEstimate {
   totalPixels: number;
@@ -123,6 +125,19 @@ export function formatGifBytes(bytes: number): string {
   if (bytes < 1024) return `${Math.round(bytes)} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+export function compareGifSizes(comparison: GifSizeComparison): GifSizeComparisonSummary {
+  const baselineBytes = Number.isFinite(comparison.baselineBytes) ? Math.max(0, comparison.baselineBytes) : 0;
+  const finalBytes = Number.isFinite(comparison.finalBytes) ? Math.max(0, comparison.finalBytes) : 0;
+  const ratioPercent = baselineBytes > 0 ? finalBytes / baselineBytes * 100 : 0;
+  return {
+    ratioPercent,
+    changePercent: Math.abs(100 - ratioPercent),
+    reduced: finalBytes <= baselineBytes,
+    meetsTarget: comparison.targetBytes === undefined ? null : finalBytes <= comparison.targetBytes,
+    withinMax: comparison.maxBytes === undefined ? null : finalBytes <= comparison.maxBytes,
+  };
 }
 
 function hasSameBytes(left: Uint8Array, right: Uint8Array): boolean {

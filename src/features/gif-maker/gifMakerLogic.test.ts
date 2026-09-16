@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
   it("estimates export workload without pretending to know compressed file size", () => {
@@ -14,6 +14,18 @@ describe("GIF maker logic", () => {
     expect(estimateGifWorkload({ width: 64, height: 64 }, 1, 2).paletteBytes).toBe(2 * 3);
     expect(estimateGifWorkload({ width: 64, height: 64 }, 1, 1).paletteBytes).toBe(2 * 3);
     expect(estimateGifWorkload({ width: 64, height: 64 }, 1, 257).paletteBytes).toBe(256 * 3);
+  });
+
+  it("compares measured GIF sizes and reports limit states", () => {
+    expect(compareGifSizes({ baselineBytes: 1000, finalBytes: 600, targetBytes: 700, maxBytes: 800 })).toEqual({
+      ratioPercent: 60, changePercent: 40, reduced: true, meetsTarget: true, withinMax: true,
+    });
+    expect(compareGifSizes({ baselineBytes: 1000, finalBytes: 900, targetBytes: 800, maxBytes: 850 })).toEqual({
+      ratioPercent: 90, changePercent: 10, reduced: true, meetsTarget: false, withinMax: false,
+    });
+    expect(compareGifSizes({ baselineBytes: 0, finalBytes: 100, targetBytes: undefined, maxBytes: undefined })).toEqual({
+      ratioPercent: 0, changePercent: 100, reduced: false, meetsTarget: null, withinMax: null,
+    });
   });
 
   it("keeps compression candidates at or below the selected color count", () => {

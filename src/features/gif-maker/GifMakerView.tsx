@@ -23,8 +23,8 @@ import {
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
 import type { GifExportFrame } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
-import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
 import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
@@ -138,6 +138,7 @@ function getErrorMessage(error: unknown): string {
 
 interface GifCompressionResult {
   bytes: number;
+  baselineBytes?: number;
   frames: GifExportFrame[];
   width: number;
   height: number;
@@ -145,6 +146,8 @@ interface GifCompressionResult {
   samplingEvery: number;
   mergedIdenticalFrames: boolean;
 }
+
+interface GifSizeComparisonState extends GifSizeComparison { autoCompress: boolean }
 
 function formatGifCompressionSummary(result: GifCompressionResult): string {
   const sampling = result.samplingEvery === 1 ? "原始采样" : `每 ${result.samplingEvery} 帧采样`;
@@ -452,6 +455,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [autoCompress, setAutoCompress] = useState(savedPreferences.autoCompress);
   const [overwriteExisting, setOverwriteExisting] = useState(savedPreferences.overwriteExisting);
   const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
+  const [sizeComparison, setSizeComparison] = useState<GifSizeComparisonState | null>(null);
   const [compressionSummary, setCompressionSummary] = useState<string | null>(null);
   const [fileName, setFileName] = useState(() => defaultGifFileName(savedPreferences.outputFormat));
   const [outputPath, setOutputPath] = useState<string | null>(null);
@@ -552,6 +556,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     });
   }, [autoCompress, background, batchDuration, canvasHeight, canvasPreset, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, fitMode, firstFrameHoldDuration, gifPreset, globalDuration, keepAspectRatio, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, outputFormat, overwriteExisting, playbackSpeed, targetSizeKiB, videoCropPreset, videoEveryNthFrame, videoFps, videoMaxFrames, videoReverse, videoRotation]);
 
+  useEffect(() => {
+    setMeasuredSizeBytes(null);
+    setSizeComparison(null);
+    setCompressionSummary(null);
+  }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, outputFormat, targetSizeKiB]);
+
   const selectedFrame = frames[selectedIndex] ?? null;
   const canvasSize = useMemo(
     () => ({ width: canvasWidth, height: canvasHeight }),
@@ -589,6 +599,21 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
     return `${format} · ${details.join(" · ")}`;
   }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, outputFormat, overwriteExisting, targetSizeKiB, timeline.totalMs]);
+  const compressionComparisonSummary = useMemo(() => {
+    if (!sizeComparison) return null;
+    const summary = compareGifSizes(sizeComparison);
+    const change = summary.reduced ? `减少 ${summary.changePercent.toFixed(1)}%` : `增加 ${summary.changePercent.toFixed(1)}%`;
+    const targetStatus = summary.meetsTarget === null
+      ? "目标未设置"
+      : summary.meetsTarget ? "达到目标" : "未达到目标";
+    const maxStatus = summary.withinMax === null
+      ? "上限未设置"
+      : summary.withinMax ? "未超过上限" : "超过上限";
+    return {
+      size: `压缩前 ${formatGifBytes(sizeComparison.baselineBytes)} → 压缩后 ${formatGifBytes(sizeComparison.finalBytes)} · 保留 ${summary.ratioPercent.toFixed(1)}%（${change}）`,
+      limits: `${targetStatus} · ${maxStatus}`,
+    };
+  }, [sizeComparison]);
 
   useEffect(() => { if (!active) setIsPlaying(false); }, [active]);
 
@@ -1183,6 +1208,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       })
       : [{ frames: baseFrames, samplingEvery: 1, mergedIdenticalFrames: false }];
     let best: GifCompressionResult | null = null;
+    let baselineBytes: number | undefined;
     let attempt = 0;
     const totalAttempts = autoCompress ? colors.length * frameVariants.length * sizes.length : 1;
 
@@ -1202,8 +1228,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             ditherMode,
             frames: candidate.frames,
           });
-          const result = { bytes: measured.bytes, frames: candidate.frames, width: size.width, height: size.height, colorCount: candidateColorCount, samplingEvery: candidate.samplingEvery, mergedIdenticalFrames: candidate.mergedIdenticalFrames };
-          setMeasuredSizeBytes(measured.bytes);
+          baselineBytes ??= measured.bytes;
+          const result = { bytes: measured.bytes, baselineBytes, frames: candidate.frames, width: size.width, height: size.height, colorCount: candidateColorCount, samplingEvery: candidate.samplingEvery, mergedIdenticalFrames: candidate.mergedIdenticalFrames };
           if (!best || Math.abs(measured.bytes - (targetBytes ?? maxBytes ?? measured.bytes)) < Math.abs(best.bytes - (targetBytes ?? maxBytes ?? best.bytes))) best = result;
           const underMax = maxBytes === undefined || measured.bytes <= maxBytes;
           const reachesTarget = targetBytes === undefined || measured.bytes <= targetBytes;
@@ -1223,6 +1249,22 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return best;
   };
 
+  const applySizeMeasurement = (result: GifCompressionResult) => {
+    if (result.baselineBytes === undefined || result.bytes <= 0) {
+      setMeasuredSizeBytes(null);
+      setSizeComparison(null);
+      return;
+    }
+    setMeasuredSizeBytes(result.bytes);
+    setSizeComparison({
+      baselineBytes: result.baselineBytes,
+      finalBytes: result.bytes,
+      targetBytes: parseSizeBytes(targetSizeKiB),
+      maxBytes: parseSizeBytes(maxSizeKiB),
+      autoCompress,
+    });
+  };
+
   const estimateGifSizeBeforeExport = async () => {
     if (lockedRef.current || !frames.length || outputFormat !== "gif") return;
     lockedRef.current = true;
@@ -1231,7 +1273,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setError(null);
     try {
       const result = await measureCompressionCandidates(true);
-      setMeasuredSizeBytes(result.bytes);
+      applySizeMeasurement(result);
       setCompressionSummary(formatGifCompressionSummary(result));
       setStatus({ kind: "ready", text: `预计 GIF 体积：${formatGifBytes(result.bytes)}` });
     } catch (estimateError) {
@@ -1297,7 +1339,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       }
       const compression = await measureCompressionCandidates();
       const { frames: exportFrames, width, height } = compression;
-      setMeasuredSizeBytes(compression.bytes || null);
+      applySizeMeasurement(compression);
       setCompressionSummary(formatGifCompressionSummary(compression));
       const result = await exportGif({
         outputPath,
@@ -1569,8 +1611,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           {outputFormat === "gif" ? <div className={`gif-workload-summary gif-workload-${workload.level}`}>
             <strong>导出负载</strong>
             <span>{(workload.totalPixels / 1_000_000).toFixed(1)} MP · 帧缓冲 {formatGifBytes(workload.decodedBytes)} · 调色板 {formatGifBytes(workload.paletteBytes)}</span>
-            {measuredSizeBytes !== null ? <span className="gif-measured-size">最近实测 {formatGifBytes(measuredSizeBytes)}</span> : null}
-            {compressionSummary !== null ? <span className="gif-measured-size">采用参数：{compressionSummary}</span> : null}
+            {sizeComparison && measuredSizeBytes !== null && !sizeComparison.autoCompress ? <span className="gif-measured-size">实测基准 {formatGifBytes(sizeComparison.finalBytes)}</span> : null}
+            {sizeComparison && measuredSizeBytes !== null && sizeComparison.autoCompress && compressionComparisonSummary ? <div className="gif-size-comparison"><strong>压缩对比</strong><span>{compressionComparisonSummary.size}</span><small>{compressionComparisonSummary.limits}</small></div> : null}
+            {compressionSummary !== null && sizeComparison?.autoCompress ? <span className="gif-measured-size">采用参数：{compressionSummary}</span> : null}
             <small>{workload.level === "heavy" ? "负载较高，建议缩小画布或减少帧数。" : "实际文件体积取决于画面内容；开启自动压缩后将先实际测量候选参数。"}</small>
             <button className="quiet-button gif-estimate-button" type="button" disabled={!frames.length || locked} onClick={() => void estimateGifSizeBeforeExport()}>{measuredSizeBytes === null ? "估算体积" : "重新估算"}</button>
           </div> : null}
