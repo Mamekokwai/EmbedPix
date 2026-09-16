@@ -48,7 +48,7 @@ describe("GIF maker preferences", () => {
       videoFps: 24,
       videoEveryNthFrame: 2,
       videoMaxFrames: 80,
-      videoCropPreset: "center16x9" as const,
+      videoCropPreset: "custom" as const,
       videoRotation: 90 as const,
       videoReverse: true,
     };

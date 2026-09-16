@@ -14,7 +14,7 @@ export type GifMakerEncodingQuality = "high" | "balanced" | "fast";
 export type GifMakerDitherMode = "none" | "floydSteinberg" | "atkinson";
 export type GifMakerOutputFormat = "gif" | "png-sequence" | "webp" | "apng";
 export type GifMakerPreset = "custom" | "high" | "balanced" | "small";
-export type GifMakerVideoCropPreset = "original" | "center16x9" | "center1x1";
+export type GifMakerVideoCropPreset = "original" | "center16x9" | "center1x1" | "custom";
 export type GifMakerVideoRotation = 0 | 90 | 180 | 270;
 
 export interface GifMakerPreferences {
@@ -101,7 +101,7 @@ const COLOR_COUNTS = new Set<GifColorCount>([2, 16, 32, 64, 128, 256]);
 const DITHER_MODES = new Set<GifMakerDitherMode>(["none", "floydSteinberg", "atkinson"]);
 const GIF_PRESETS = new Set<GifMakerPreset>(["custom", "high", "balanced", "small"]);
 const OUTPUT_FORMATS = new Set<GifMakerOutputFormat>(["gif", "png-sequence", "webp", "apng"]);
-const VIDEO_CROP_PRESETS = new Set<GifMakerVideoCropPreset>(["original", "center16x9", "center1x1"]);
+const VIDEO_CROP_PRESETS = new Set<GifMakerVideoCropPreset>(["original", "center16x9", "center1x1", "custom"]);
 const VIDEO_ROTATIONS = new Set<GifMakerVideoRotation>([0, 90, 180, 270]);
 
 function fallbackPreferences(): GifMakerPreferences {

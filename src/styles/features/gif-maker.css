@@ -31,6 +31,9 @@
 .gif-video-card { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; }
 .gif-video-preview { display: block; width: min(100%, 520px); max-height: 170px; margin: 0 auto; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: #000; object-fit: contain; }
 .gif-video-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(150px, 1.4fr); gap: 8px 12px; align-items: end; }
+.gif-video-custom-crop { grid-column: 1 / -1; min-width: 0; padding: 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: var(--qp-bg-elevated); }
+.gif-video-custom-crop-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 8px; margin-top: 6px; }
+.gif-video-custom-crop-help { display: block; margin-top: 6px; color: var(--qp-text-tertiary); font-size: 10px; line-height: 1.4; }
 .gif-video-summary { display: flex; min-width: 0; flex-direction: column; gap: 3px; color: var(--qp-text-secondary); font-size: 10px; }
 .gif-video-summary strong { color: var(--qp-text-primary); font-size: 12px; font-weight: 600; }
 .gif-video-summary small { color: var(--qp-text-tertiary); }
@@ -188,6 +191,9 @@
   .gif-maker-view :is(.quiet-button, .primary-button, .export-button) { min-height: 28px; padding-block: 3px; }
   .gif-video-preview { max-height: 76px; }
   .gif-video-empty { min-height: 48px; }
+  .gif-video-custom-crop { padding: 5px; }
+  .gif-video-custom-crop-grid { gap: 4px 6px; margin-top: 4px; }
+  .gif-video-custom-crop-help { margin-top: 4px; font-size: 9px; }
   .gif-source-video .gif-workspace-grid { min-height: 100px; }
   .gif-settings-grid, .gif-export-grid { margin-top: 5px; }
   .gif-export-footer { min-height: 30px; }
@@ -221,6 +227,7 @@
   .gif-source-tabs { gap: 4px; margin-top: 5px; }
   .gif-source-tab { min-height: 24px; padding-inline: 7px; font-size: 10px; }
   .gif-video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; }
+  .gif-video-custom-crop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gif-video-summary { grid-column: 1 / -1; }
   .gif-video-actions { align-items: stretch; flex-direction: column; }
   .gif-video-actions .primary-button { width: 100%; }

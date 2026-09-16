@@ -28,8 +28,8 @@ import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration,
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
-import { clampVideoFps, formatVideoTime, planVideoFramesWithSampling } from "./videoGifLogic";
-import type { VideoFramePlan } from "./videoGifLogic";
+import { clampVideoFps, formatVideoTime, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
+import type { VideoCropRect, VideoFramePlan } from "./videoGifLogic";
 import "../../styles/features/gif-maker.css";
 
 export type GifFitMode = GifContentFit;
@@ -130,17 +130,12 @@ export function getGifOutputLocationError(
 
 type VideoCropPreset = GifMakerVideoCropPreset;
 type VideoRotation = GifMakerVideoRotation;
+type VideoCropField = keyof VideoCropRect;
 
-interface VideoCropRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-function resolveVideoCrop(width: number, height: number, preset: VideoCropPreset): VideoCropRect {
+function resolveVideoCrop(width: number, height: number, preset: VideoCropPreset, customRect?: VideoCropRect): VideoCropRect {
   const safeWidth = Math.max(1, Math.floor(width));
   const safeHeight = Math.max(1, Math.floor(height));
+  if (preset === "custom") return normalizeVideoCropRect(customRect, safeWidth, safeHeight);
   if (preset === "original") return { x: 0, y: 0, width: safeWidth, height: safeHeight };
   if (preset === "center1x1") {
     const size = Math.min(safeWidth, safeHeight);
@@ -564,6 +559,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [videoEveryNthFrame, setVideoEveryNthFrame] = useState(savedPreferences.videoEveryNthFrame);
   const [videoMaxFrames, setVideoMaxFrames] = useState(savedPreferences.videoMaxFrames);
   const [videoCropPreset, setVideoCropPreset] = useState<VideoCropPreset>(savedPreferences.videoCropPreset);
+  const [customVideoCrop, setCustomVideoCrop] = useState<VideoCropRect>({ x: 0, y: 0, width: 1, height: 1 });
   const [videoRotation, setVideoRotation] = useState<VideoRotation>(savedPreferences.videoRotation);
   const [videoReverse, setVideoReverse] = useState(savedPreferences.videoReverse);
   const [status, setStatus] = useState<GifStatus>({ kind: "idle", text: "等待导入图片" });
@@ -799,11 +795,28 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setVideoCropPreset(cropPreset);
     setVideoRotation(rotation);
     if (!videoSource) return;
-    const crop = resolveVideoCrop(videoSource.width, videoSource.height, cropPreset);
+    const crop = resolveVideoCrop(videoSource.width, videoSource.height, cropPreset, customVideoCrop);
     const outputSize = resolveVideoOutputSize(crop, rotation);
     setCanvasWidth(outputSize.width);
     setCanvasHeight(outputSize.height);
     setCanvasPreset(cropPreset === "original" && rotation === 0 ? "source" : "custom");
+    ratioRef.current = outputSize;
+    markVideoFramesStale();
+  };
+
+  const updateCustomVideoCrop = (field: VideoCropField, value: number) => {
+    if (!videoSource) return;
+    const next = normalizeVideoCropRect(
+      { ...customVideoCrop, [field]: Number.isFinite(value) ? Math.floor(value) : 0 },
+      videoSource.width,
+      videoSource.height,
+    );
+    setCustomVideoCrop(next);
+    setVideoCropPreset("custom");
+    setCanvasPreset("custom");
+    const outputSize = resolveVideoOutputSize(next, videoRotation);
+    setCanvasWidth(outputSize.width);
+    setCanvasHeight(outputSize.height);
     ratioRef.current = outputSize;
     markVideoFramesStale();
   };
@@ -829,6 +842,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setVideoEveryNthFrame(1);
       setVideoMaxFrames(MAX_VIDEO_FRAME_LIMIT);
       setVideoCropPreset("original");
+      setCustomVideoCrop({ x: 0, y: 0, width: metadata.width, height: metadata.height });
       setVideoRotation(0);
       setVideoReverse(false);
       setFrames((current) => {
@@ -866,7 +880,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       everyNthFrame: videoEveryNthFrame,
       maxFrames: videoMaxFrames,
     });
-    const crop = resolveVideoCrop(videoSource.width, videoSource.height, videoCropPreset);
+    const crop = resolveVideoCrop(videoSource.width, videoSource.height, videoCropPreset, customVideoCrop);
     const outputSize = resolveVideoOutputSize(crop, videoRotation);
     const extractionPlan = videoReverse ? { ...plan, times: [...plan.times].reverse() } : plan;
     setIsPlaying(false);
@@ -1593,8 +1607,18 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                   <label className="gif-field"><span>帧率 · FPS</span><input type="number" min="1" max="30" step="1" value={videoFps} onChange={(event) => { setVideoFps(clampVideoFps(Number(event.target.value))); markVideoFramesStale(); }} /></label>
                   <label className="gif-field"><span>每隔 N 帧</span><input type="number" min="1" max="200" step="1" value={videoEveryNthFrame} onChange={(event) => { setVideoEveryNthFrame(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value) || 1)))); markVideoFramesStale(); }} /></label>
                   <label className="gif-field"><span>最大帧数</span><input type="number" min="1" max={MAX_VIDEO_FRAME_LIMIT} step="1" value={videoMaxFrames} onChange={(event) => { setVideoMaxFrames(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value) || 1)))); markVideoFramesStale(); }} /></label>
-                  <SelectField id="gif-video-crop" label="裁剪区域" value={videoCropPreset} options={[{ value: "original" as const, label: "原始画面" }, { value: "center16x9" as const, label: "居中 16:9" }, { value: "center1x1" as const, label: "居中 1:1" }]} onChange={(value) => updateVideoTransform(value, videoRotation)} />
+                  <SelectField id="gif-video-crop" label="裁剪区域" value={videoCropPreset} options={[{ value: "original" as const, label: "原始画面" }, { value: "center16x9" as const, label: "居中 16:9" }, { value: "center1x1" as const, label: "居中 1:1" }, { value: "custom" as const, label: "自定义" }]} onChange={(value) => updateVideoTransform(value, videoRotation)} />
                   <SelectField id="gif-video-rotation" label="旋转" value={videoRotation} options={[{ value: 0 as const, label: "0°" }, { value: 90 as const, label: "90°" }, { value: 180 as const, label: "180°" }, { value: 270 as const, label: "270°" }]} onChange={(value) => updateVideoTransform(videoCropPreset, value)} />
+                  {videoCropPreset === "custom" ? <div className="gif-video-custom-crop" aria-label="自定义裁剪区域">
+                    <span className="gif-field-label">自定义裁剪 · 源视频像素</span>
+                    <div className="gif-video-custom-crop-grid">
+                      <label className="gif-field"><span>X</span><input type="number" min="0" max={Math.max(0, videoSource.width - customVideoCrop.width)} step="1" value={customVideoCrop.x} onChange={(event) => updateCustomVideoCrop("x", Number(event.target.value))} /></label>
+                      <label className="gif-field"><span>Y</span><input type="number" min="0" max={Math.max(0, videoSource.height - customVideoCrop.height)} step="1" value={customVideoCrop.y} onChange={(event) => updateCustomVideoCrop("y", Number(event.target.value))} /></label>
+                      <label className="gif-field"><span>宽度</span><input type="number" min="1" max={Math.max(1, videoSource.width - customVideoCrop.x)} step="1" value={customVideoCrop.width} onChange={(event) => updateCustomVideoCrop("width", Number(event.target.value))} /></label>
+                      <label className="gif-field"><span>高度</span><input type="number" min="1" max={Math.max(1, videoSource.height - customVideoCrop.y)} step="1" value={customVideoCrop.height} onChange={(event) => updateCustomVideoCrop("height", Number(event.target.value))} /></label>
+                    </div>
+                    <small className="gif-video-custom-crop-help">左上角为 0,0；宽高始终限制在源视频范围内，修改后需重新提取帧。</small>
+                  </div> : null}
                   <label className="gif-check-row gif-video-reverse"><input type="checkbox" checked={videoReverse} onChange={(event) => { setVideoReverse(event.target.checked); markVideoFramesStale(); }} /><span><strong>视频倒放</strong><small>按反向时间顺序抽帧</small></span></label>
                   <div className="gif-video-summary"><span>当前范围</span><strong>{formatVideoTime(videoStart)} – {formatVideoTime(videoEnd)}</strong><small>预计 {planVideoFramesWithSampling(videoStart, videoEnd, videoSource.duration, videoFps, { everyNthFrame: videoEveryNthFrame, maxFrames: videoMaxFrames }).times.length} 帧（最多 {MAX_VIDEO_FRAME_LIMIT} 帧）</small></div>
                 </div>
