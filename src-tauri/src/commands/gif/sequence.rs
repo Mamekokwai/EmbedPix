@@ -452,6 +452,52 @@ mod tests {
     }
 
     #[test]
+    fn unified_output_locations_resolve_source_directory_and_path_safely() {
+        let directory = TestDirectory::new();
+        let source = directory.0.join("source.png");
+        fs::write(&source, b"source marker").unwrap();
+
+        let mut source_request = directory.request(vec![png([21, 22, 23, 255])]);
+        source_request.output_dir.clear();
+        source_request.output_location = Some("source".to_string());
+        source_request.source_path = Some(source.to_string_lossy().into_owned());
+        let source_paths = export_png_sequence_blocking(source_request).unwrap();
+        assert!(source_paths[0].ends_with("frame-001.png"));
+
+        let mut directory_request = directory.request(vec![png([24, 25, 26, 255])]);
+        directory_request.output_dir.clear();
+        directory_request.output_location = Some("directory".to_string());
+        directory_request.output_directory =
+            Some(directory.0.join("custom").to_string_lossy().into_owned());
+        let directory_paths = export_png_sequence_blocking(directory_request).unwrap();
+        assert!(
+            directory_paths[0].ends_with("custom\\frame-001.png")
+                || directory_paths[0].ends_with("custom/frame-001.png")
+        );
+
+        let mut path_request = directory.request(vec![png([27, 28, 29, 255])]);
+        path_request.output_location = Some("path".to_string());
+        let path_paths = export_png_sequence_blocking(path_request).unwrap();
+        assert!(path_paths[0].ends_with("frame-1-001.png"));
+    }
+
+    #[test]
+    fn unified_output_locations_reject_unsafe_subdirectories_before_writing() {
+        let directory = TestDirectory::new();
+        let source = directory.0.join("source.png");
+        fs::write(&source, b"source marker").unwrap();
+        let mut request = directory.request(vec![png([30, 31, 32, 255])]);
+        request.output_dir.clear();
+        request.output_location = Some("subfolder".to_string());
+        request.source_path = Some(source.to_string_lossy().into_owned());
+        request.output_subdirectory = Some("CON".to_string());
+        assert!(export_png_sequence_blocking(request)
+            .unwrap_err()
+            .contains("保留设备名"));
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
+    }
+
+    #[test]
     fn failed_later_frame_leaves_no_partial_outputs_or_temporary_files() {
         let directory = TestDirectory::new();
         let mut request = directory.request(vec![png([1, 2, 3, 255]), b"not an image".to_vec()]);

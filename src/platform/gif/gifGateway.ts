@@ -50,7 +50,11 @@ export interface AnimationSizeEstimateResult {
 }
 
 export interface PngSequenceExportRequest {
-  outputDir: string;
+  outputDir?: string;
+  outputLocation?: GifOutputLocation;
+  sourcePath?: string | null;
+  outputSubdirectory?: string;
+  outputDirectory?: string;
   baseName: string;
   frames: GifExportFrame[];
   overwriteExisting?: boolean;
@@ -213,7 +217,11 @@ export async function exportPngSequence(request: PngSequenceExportRequest): Prom
   try {
     return await invoke<string[]>("export_png_sequence", {
       request: {
-        outputDir: request.outputDir,
+        ...(request.outputDir?.trim() ? { outputDir: request.outputDir.trim() } : {}),
+        ...(request.outputLocation ? { outputLocation: request.outputLocation } : {}),
+        ...(request.sourcePath?.trim() ? { sourcePath: request.sourcePath.trim() } : {}),
+        ...(request.outputSubdirectory?.trim() ? { outputSubdirectory: request.outputSubdirectory.trim() } : {}),
+        ...(request.outputDirectory?.trim() ? { outputDirectory: request.outputDirectory.trim() } : {}),
         baseName: request.baseName,
         overwriteExisting: request.overwriteExisting ?? false,
         frames: serializeGifFrames(request.frames),
