@@ -29,7 +29,8 @@ import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
 import { clampVideoFps, formatVideoTime, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
-import type { VideoCropRect, VideoFramePlan } from "./videoGifLogic";
+import type { VideoCropRect } from "./videoGifLogic";
+import { extractVideoFrameBlobs } from "./videoFrameExtraction";
 import "../../styles/features/gif-maker.css";
 
 export type GifFitMode = GifContentFit;
@@ -308,156 +309,6 @@ function loadVideoMetadata(url: string): Promise<{ width: number; height: number
     video.addEventListener("error", handleError, { once: true });
     video.src = url;
   });
-}
-
-function seekVideo(video: HTMLVideoElement, time: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new DOMException("抽帧已取消", "AbortError"));
-      return;
-    }
-    const timeout = window.setTimeout(() => {
-      cleanup();
-      reject(new Error("视频帧读取超时，请尝试缩短时间范围或更换视频。"));
-    }, 10_000);
-    const cleanup = () => {
-      window.clearTimeout(timeout);
-      video.removeEventListener("seeked", handleSeeked);
-      video.removeEventListener("error", handleError);
-      signal?.removeEventListener("abort", handleAbort);
-    };
-    const handleSeeked = () => {
-      cleanup();
-      resolve();
-    };
-    const handleError = () => {
-      cleanup();
-      reject(new Error("视频帧读取失败，请尝试更换视频。"));
-    };
-    const handleAbort = () => {
-      cleanup();
-      reject(new DOMException("抽帧已取消", "AbortError"));
-    };
-    video.addEventListener("seeked", handleSeeked, { once: true });
-    video.addEventListener("error", handleError, { once: true });
-    signal?.addEventListener("abort", handleAbort, { once: true });
-    try {
-      video.currentTime = time;
-    } catch (error) {
-      cleanup();
-      reject(error);
-    }
-  });
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, signal?: AbortSignal): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const cleanup = () => signal?.removeEventListener("abort", handleAbort);
-    const handleAbort = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(new DOMException("抽帧已取消", "AbortError"));
-    };
-    if (signal?.aborted) {
-      handleAbort();
-      return;
-    }
-    signal?.addEventListener("abort", handleAbort, { once: true });
-    try {
-      canvas.toBlob((blob) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        if (!blob) reject(new Error("无法生成视频帧，请重试。"));
-        else resolve(blob);
-      }, "image/png");
-    } catch (error) {
-      settled = true;
-      cleanup();
-      reject(error);
-    }
-  });
-}
-
-async function extractVideoFrames(
-  source: VideoSourceModel,
-  plan: VideoFramePlan,
-  crop: VideoCropRect,
-  rotation: VideoRotation,
-  onProgress: (current: number, total: number) => void,
-  signal?: AbortSignal,
-): Promise<GifFrameModel[]> {
-  if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
-  const video = document.createElement("video");
-  let canvas: HTMLCanvasElement | null = null;
-  const frames: GifFrameModel[] = [];
-  video.preload = "auto";
-  video.muted = true;
-  video.playsInline = true;
-  video.src = source.previewUrl;
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const cleanup = () => {
-        video.removeEventListener("loadedmetadata", handleMetadata);
-        video.removeEventListener("error", handleError);
-        signal?.removeEventListener("abort", handleAbort);
-      };
-      const handleMetadata = () => { cleanup(); resolve(); };
-      const handleError = () => { cleanup(); reject(new Error("无法解码视频，请尝试 MP4 或 WebM。")); };
-      const handleAbort = () => { cleanup(); reject(new DOMException("抽帧已取消", "AbortError")); };
-      if (signal?.aborted) {
-        handleAbort();
-        return;
-      }
-      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-        resolve();
-        return;
-      }
-      video.addEventListener("loadedmetadata", handleMetadata, { once: true });
-      video.addEventListener("error", handleError, { once: true });
-      signal?.addEventListener("abort", handleAbort, { once: true });
-    });
-    if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
-    canvas = document.createElement("canvas");
-    const outputSize = resolveVideoOutputSize(crop, rotation);
-    canvas.width = outputSize.width;
-    canvas.height = outputSize.height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("当前环境无法创建视频帧画布。");
-    for (const [index, time] of plan.times.entries()) {
-      if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
-      await seekVideo(video, time, signal);
-      if (signal?.aborted) throw new DOMException("抽帧已取消", "AbortError");
-      drawVideoFrame(context, video, crop, rotation, outputSize);
-      const blob = await canvasToBlob(canvas, signal);
-      const file = new File([blob], `${source.name.replace(/\.[^.]+$/u, "")}-${String(index + 1).padStart(3, "0")}.png`, { type: "image/png" });
-      frames.push({
-        id: `video-frame-${index + 1}`,
-        file,
-        previewUrl: URL.createObjectURL(blob),
-        name: file.name,
-        width: outputSize.width,
-        height: outputSize.height,
-        durationMs: plan.durationMs,
-        sourcePath: source.sourcePath,
-      });
-      onProgress(index + 1, plan.times.length);
-    }
-    return frames;
-  } catch (error) {
-    frames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
-    throw error;
-  } finally {
-    if (canvas) {
-      canvas.width = 0;
-      canvas.height = 0;
-    }
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-  }
 }
 
 function readImageFrame(file: File, id: string): Promise<GifFrameModel> {
@@ -976,9 +827,34 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const controller = new AbortController();
     videoExtractControllerRef.current = controller;
     try {
-      const nextFrames = await extractVideoFrames(videoSource, extractionPlan, crop, videoRotation, (current, total) => {
+      const extractedFrames = await extractVideoFrameBlobs(videoSource, extractionPlan, crop, videoRotation, outputSize, (current, total) => {
         setStatus({ kind: "importing", text: `正在提取视频帧 ${current}/${total}…` });
+      }, {
+        createVideo: () => document.createElement("video"),
+        createCanvas: () => document.createElement("canvas"),
+        drawFrame: drawVideoFrame,
+        createObjectURL: (blob) => URL.createObjectURL(blob),
+        revokeObjectURL: (url) => URL.revokeObjectURL(url),
       }, controller.signal);
+      let nextFrames: GifFrameModel[];
+      try {
+        nextFrames = extractedFrames.map(({ blob, previewUrl, durationMs }, index) => {
+          const file = new File([blob], `${videoSource.name.replace(/\.[^.]+$/u, "")}-${String(index + 1).padStart(3, "0")}.png`, { type: "image/png" });
+          return {
+            id: `video-frame-${index + 1}`,
+            file,
+            previewUrl,
+            name: file.name,
+            width: outputSize.width,
+            height: outputSize.height,
+            durationMs,
+            sourcePath: videoSource.sourcePath,
+          };
+        });
+      } catch (error) {
+        extractedFrames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
+        throw error;
+      }
       framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
       framesRef.current = nextFrames;
       setFrames(nextFrames);
