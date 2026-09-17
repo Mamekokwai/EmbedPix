@@ -198,6 +198,16 @@ interface GifCompressionResult {
   mergedIdenticalFrames: boolean;
 }
 
+interface AnimationCompressionResult {
+  bytes: number;
+  baselineBytes?: number;
+  frames: GifExportFrame[];
+  width: number;
+  height: number;
+  samplingEvery: number;
+  mergedIdenticalFrames: boolean;
+}
+
 interface GifSizeComparisonState extends GifSizeComparison { autoCompress: boolean }
 interface GifExportFrameSummary { frameCount: number; totalDurationMs: number }
 
@@ -205,6 +215,30 @@ function formatGifCompressionSummary(result: GifCompressionResult): string {
   const sampling = result.samplingEvery === 1 ? "原始采样" : `每 ${result.samplingEvery} 帧采样`;
   const merged = result.mergedIdenticalFrames ? " · 已合并重复帧" : "";
   return `尺寸 ${result.width} × ${result.height} · ${result.colorCount} 色 · ${result.frames.length} 帧 · ${sampling}${merged}`;
+}
+
+function formatAnimationCompressionSummary(result: AnimationCompressionResult): string {
+  const sampling = result.samplingEvery === 1 ? "原始采样" : `每 ${result.samplingEvery} 帧采样`;
+  const merged = result.mergedIdenticalFrames ? " · 已合并重复帧" : "";
+  return `尺寸 ${result.width} × ${result.height} · ${result.frames.length} 帧 · ${sampling}${merged}`;
+}
+
+export function selectAnimationCompressionResult<T extends { bytes: number }>(
+  results: ReadonlyArray<T>,
+  targetBytes?: number,
+  maxBytes?: number,
+): T | null {
+  const available = maxBytes === undefined ? [...results] : results.filter((result) => result.bytes <= maxBytes);
+  if (!available.length) return null;
+  const target = targetBytes ?? maxBytes;
+  if (target === undefined) return available[0] ?? null;
+  const underTarget = targetBytes === undefined ? available : available.filter((result) => result.bytes <= target);
+  const pool = underTarget.length ? underTarget : available;
+  return pool.reduce((best, result) => {
+    const resultDistance = Math.abs(result.bytes - target);
+    const bestDistance = Math.abs(best.bytes - target);
+    return resultDistance < bestDistance ? result : best;
+  });
 }
 
 function parseSizeBytes(value: string): number | undefined {
@@ -724,6 +758,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       const dither = ditherMode === "none" ? "无抖动" : ditherMode === "atkinson" ? "Atkinson" : "Floyd-Steinberg";
       const quality = encodingQuality === "high" ? "高质量编码" : encodingQuality === "balanced" ? "平衡编码" : "快速编码";
       details.push(`${colorCount} 色`, dither, quality, loopMode === "infinite" ? "无限循环" : `重复 ${loopCount} 次`);
+      if (autoCompress) details.push("自动压缩");
+      if (mergeEnabled) details.push("合并连续相同帧");
+      if (targetSizeKiB.trim()) details.push(`目标 ≤ ${targetSizeKiB.trim()} KiB`);
+      if (maxSizeKiB.trim()) details.push(`上限 ≤ ${maxSizeKiB.trim()} KiB`);
+    } else if (outputFormat === "webp" || outputFormat === "apng") {
       if (autoCompress) details.push("自动压缩");
       if (mergeEnabled) details.push("合并连续相同帧");
       if (targetSizeKiB.trim()) details.push(`目标 ≤ ${targetSizeKiB.trim()} KiB`);
@@ -1352,15 +1391,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return prepared;
   };
 
-  const createAnimationExportRequest = (exportFrames: GifExportFrame[]): AnimationExportRequest => ({
+  const createAnimationExportRequest = (exportFrames: GifExportFrame[], size: GifCanvasSize = canvasSize): AnimationExportRequest => ({
     outputPath: outputPath ?? undefined,
     outputLocation,
     fileName: fileName.trim() || undefined,
     sourcePath,
     outputSubdirectory: outputSubdirectory.trim() || undefined,
     outputDirectory: outputDirectory.trim() || undefined,
-    width: canvasSize.width,
-    height: canvasSize.height,
+    width: size.width,
+    height: size.height,
     loopMode,
     loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
     frames: exportFrames,
@@ -1443,7 +1482,83 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return best;
   };
 
-  const applySizeMeasurement = (result: GifCompressionResult) => {
+  const measureAnimationCompressionCandidates = async (forceMeasure = false): Promise<AnimationCompressionResult> => {
+    if (outputFormat !== "webp" && outputFormat !== "apng") throw new Error("当前输出格式不支持动图体积测量。");
+    const targetBytes = parseSizeBytes(targetSizeKiB);
+    const maxBytes = parseSizeBytes(maxSizeKiB);
+    if (targetSizeKiB.trim() && targetBytes === undefined) throw new Error("目标文件大小必须是大于 0 的数字。");
+    if (maxSizeKiB.trim() && maxBytes === undefined) throw new Error("最大文件大小必须是大于 0 的数字。");
+    if (targetBytes !== undefined && maxBytes !== undefined && targetBytes > maxBytes) {
+      throw new Error("目标文件大小不能大于最大文件大小。");
+    }
+
+    const format = outputFormat.toUpperCase();
+    setStatus({ kind: "exporting", text: `正在准备 ${format} 帧 ${frames.length} 帧…` });
+    const renderedBaseFrames = await renderExportFrames(canvasSize);
+    const baseFrames = mergeIdenticalFrames ? mergeConsecutiveIdenticalFrames(renderedBaseFrames) : renderedBaseFrames;
+    const baseline = await estimateAnimationSize(outputFormat, createAnimationExportRequest(baseFrames));
+    const baselineResult: AnimationCompressionResult = {
+      bytes: baseline.bytes,
+      baselineBytes: baseline.bytes,
+      frames: baseFrames,
+      width: canvasSize.width,
+      height: canvasSize.height,
+      samplingEvery: 1,
+      mergedIdenticalFrames: mergeIdenticalFrames,
+    };
+    const shouldTryCompression = autoCompress && (targetBytes !== undefined || maxBytes !== undefined);
+    const shouldMeasure = forceMeasure || autoCompress || targetBytes !== undefined || maxBytes !== undefined;
+    if (!shouldMeasure || !shouldTryCompression) {
+      if (maxBytes !== undefined && baseline.bytes > maxBytes) {
+        throw new Error(`当前 ${format} 预计为 ${formatGifBytes(baseline.bytes)}，超过最大文件大小 ${formatGifBytes(maxBytes)}。请开启自动压缩或调整参数。`);
+      }
+      return shouldMeasure ? baselineResult : { ...baselineResult, baselineBytes: undefined };
+    }
+
+    const sizes = [
+      canvasSize,
+      resolveGifCanvasSize(canvasSize, canvasSize.width * 0.75, canvasSize.height * 0.75, false),
+      resolveGifCanvasSize(canvasSize, canvasSize.width * 0.5, canvasSize.height * 0.5, false),
+    ].filter((size, index, all) => index === all.findIndex((candidate) => candidate.width === size.width && candidate.height === size.height));
+    const frameVariants = getGifSamplingCandidates(baseFrames.length).flatMap((samplingEvery) => {
+      const sampled = sampleGifFrames(baseFrames, samplingEvery);
+      const merged = mergeConsecutiveIdenticalFrames(sampled);
+      return mergeIdenticalFrames
+        ? [{ frames: merged, samplingEvery, mergedIdenticalFrames: true }]
+        : [
+            { frames: sampled, samplingEvery, mergedIdenticalFrames: false },
+            { frames: merged, samplingEvery, mergedIdenticalFrames: true },
+          ];
+    });
+    const candidates = sizes.flatMap((size) => frameVariants
+      .filter((candidate) => !(size.width === canvasSize.width
+        && size.height === canvasSize.height
+        && candidate.samplingEvery === 1
+        && candidate.mergedIdenticalFrames === mergeIdenticalFrames))
+      .map((candidate) => ({ size, ...candidate })));
+    const results: AnimationCompressionResult[] = [baselineResult];
+    for (const [index, candidate] of candidates.entries()) {
+      setStatus({ kind: "exporting", text: `正在测量 ${format} 体积 ${index + 2}/${candidates.length + 1}…` });
+      const measured = await estimateAnimationSize(outputFormat, createAnimationExportRequest(candidate.frames, candidate.size));
+      results.push({
+        bytes: measured.bytes,
+        baselineBytes: baseline.bytes,
+        frames: candidate.frames,
+        width: candidate.size.width,
+        height: candidate.size.height,
+        samplingEvery: candidate.samplingEvery,
+        mergedIdenticalFrames: candidate.mergedIdenticalFrames,
+      });
+    }
+
+    const selected = selectAnimationCompressionResult(results, targetBytes, maxBytes);
+    if (!selected) {
+      throw new Error(`自动压缩后 ${format} 仍为 ${formatGifBytes(Math.min(...results.map((result) => result.bytes)))}，超过最大文件大小 ${formatGifBytes(maxBytes ?? 0)}。请降低画布尺寸或减少帧数。`);
+    }
+    return selected;
+  };
+
+  const applySizeMeasurement = (result: Pick<GifCompressionResult, "bytes" | "baselineBytes" | "frames">) => {
     setExportFrameSummary({
       frameCount: result.frames.length,
       totalDurationMs: result.frames.reduce((total, frame) => total + frame.durationMs, 0),
@@ -1489,12 +1604,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setLocked(true);
     setIsPlaying(false);
     setError(null);
-    setMeasuredSizeBytes(null);
     setStatus({ kind: "exporting", text: `正在测量 ${outputFormat.toUpperCase()} 体积…` });
     try {
-      const exportFrames = prepareAnimatedExportFrames(await renderExportFrames(canvasSize));
-      const result = await estimateAnimationSize(outputFormat, createAnimationExportRequest(exportFrames));
-      setMeasuredSizeBytes(result.bytes);
+      const result = await measureAnimationCompressionCandidates(true);
+      applySizeMeasurement(result);
+      setCompressionSummary(formatAnimationCompressionSummary(result));
       setStatus({ kind: "ready", text: `预计 ${outputFormat.toUpperCase()} 体积：${formatGifBytes(result.bytes)}` });
     } catch (estimateError) {
       setError(getErrorMessage(estimateError));
@@ -1542,8 +1656,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       }
       if (outputLocation === "path" && !outputPath) throw new Error(`请先选择 ${outputFormat.toUpperCase()} 保存位置。`);
       if (outputFormat === "webp" || outputFormat === "apng") {
-        const exportFrames = prepareAnimatedExportFrames(await renderExportFrames(canvasSize));
-        const request = createAnimationExportRequest(exportFrames);
+        const needsAnimationMeasurement = autoCompress || targetSizeKiB.trim() || maxSizeKiB.trim();
+        const compression = needsAnimationMeasurement ? await measureAnimationCompressionCandidates() : null;
+        const exportFrames = compression?.frames ?? prepareAnimatedExportFrames(await renderExportFrames(canvasSize));
+        if (compression) {
+          applySizeMeasurement(compression);
+          setCompressionSummary(formatAnimationCompressionSummary(compression));
+        }
+        const request = createAnimationExportRequest(exportFrames, compression ? { width: compression.width, height: compression.height } : canvasSize);
         const result = outputFormat === "webp"
           ? await exportWebpAnimation(request)
           : await exportApng(request);
@@ -1576,7 +1696,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setStatus({ kind: "success", text: `GIF 已导出：${result} · ${formatGifCompressionSummary(compression)}` });
     } catch (exportError) {
       setError(getErrorMessage(exportError));
-      setStatus({ kind: "error", text: "GIF 导出失败" });
+      setStatus({ kind: "error", text: `${outputFormat.toUpperCase()} 导出失败` });
     } finally {
       lockedRef.current = false;
       setLocked(false);
@@ -1842,6 +1962,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <label className="gif-check-row gif-merge-toggle"><input type="checkbox" checked={mergeIdenticalFrames} onChange={(event) => setMergeIdenticalFrames(event.target.checked)} /><span><strong>合并连续相同帧</strong><small>仅影响导出，不修改原始帧列表；会保留累计时长</small></span></label>
               {outputFormat === "webp" || outputFormat === "apng" ? <div className="gif-animation-measure">
                 <span>{measuredSizeBytes === null ? "尚未测量当前参数" : `预计体积：${formatGifBytes(measuredSizeBytes)}`}</span>
+                {sizeComparison && measuredSizeBytes !== null ? <small>{sizeComparison.autoCompress && compressionComparisonSummary ? `${compressionComparisonSummary.size} · ${compressionComparisonSummary.limits}` : `实测基准 ${formatGifBytes(sizeComparison.finalBytes)}`}</small> : null}
+                {compressionSummary !== null && sizeComparison?.autoCompress ? <small>采用参数：{compressionSummary}</small> : null}
                 <button className="quiet-button gif-estimate-button" type="button" disabled={!frames.length || locked} onClick={() => void estimateAnimationSizeBeforeExport()}>{measuredSizeBytes === null ? "测量体积" : "重新测量"}</button>
               </div> : null}
               <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); setGifPreset("custom"); }} />
@@ -1854,7 +1976,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => { setTargetSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
                 <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => { setMaxSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
                 <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => { setAutoCompress(event.target.checked); setGifPreset("custom"); }} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
-              </> : <p className="gif-format-note">WebP/APNG 动图使用当前画布和帧时长导出；GIF 专属颜色、抖动和目标体积参数不适用。</p>}
+              </> : <p className="gif-format-note">WebP/APNG 动图使用当前画布和帧时长导出；GIF 专属颜色和抖动参数不适用。</p>}
+              {outputFormat === "webp" || outputFormat === "apng" ? <>
+                <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => { setTargetSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
+                <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => { setMaxSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
+                <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => { setAutoCompress(event.target.checked); setGifPreset("custom"); }} /><span><strong>自动压缩到目标大小</strong><small>合并相同帧 → 跳帧 → 75% / 50% 画布</small></span></label>
+              </> : null}
             </> : <p className="gif-format-note">PNG 帧序列按当前画布逐帧导出，不使用 GIF 的循环、颜色、抖动和体积压缩参数。</p>}
             <div className="gif-output-picker">
               <span className="gif-field-label">{outputLocationLabel}</span>

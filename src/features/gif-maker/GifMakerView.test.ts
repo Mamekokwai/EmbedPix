@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_GIF_SETTINGS_GROUP, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_PRESETS } from "./GifMakerView";
+import { DEFAULT_GIF_SETTINGS_GROUP, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_PRESETS, selectAnimationCompressionResult } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("defines quality, balanced, and small presets without touching other formats", () => {
@@ -47,5 +47,12 @@ describe("GIF settings layout defaults", () => {
       outputDirectory: undefined,
       ...expected,
     });
+  });
+
+  it("selects the closest animation candidate while respecting the maximum", () => {
+    const candidates = [{ bytes: 1_000, id: "original" }, { bytes: 760, id: "75%" }, { bytes: 620, id: "merged" }, { bytes: 420, id: "50%" }];
+    expect(selectAnimationCompressionResult(candidates, 700, 800)?.id).toBe("merged");
+    expect(selectAnimationCompressionResult(candidates, 500, 800)?.id).toBe("50%");
+    expect(selectAnimationCompressionResult(candidates, 700, 400)).toBeNull();
   });
 });

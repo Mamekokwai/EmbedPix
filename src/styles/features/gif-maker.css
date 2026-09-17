@@ -126,8 +126,9 @@
 .gif-check-row small { color: var(--qp-text-secondary); font-size: 10px; overflow-wrap: anywhere; }
 .gif-check-row input { accent-color: var(--qp-accent-default); }
 .gif-merge-toggle { align-self: end; }
-.gif-animation-measure { display: flex; min-width: 0; grid-column: 1 / -1; align-items: center; gap: 8px; min-height: 30px; padding: 5px 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: var(--qp-bg-elevated); color: var(--qp-text-secondary); font-size: 10px; }
-.gif-animation-measure span { min-width: 0; overflow-wrap: anywhere; }
+.gif-animation-measure { display: flex; min-width: 0; grid-column: 1 / -1; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-height: 30px; padding: 5px 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: var(--qp-bg-elevated); color: var(--qp-text-secondary); font-size: 10px; }
+.gif-animation-measure span, .gif-animation-measure small { min-width: 0; overflow-wrap: anywhere; }
+.gif-animation-measure small { flex-basis: 100%; color: var(--qp-text-tertiary); font-size: 9px; }
 .gif-compression-toggle { align-self: end; min-height: 30px; }
 .gif-compression-toggle strong { color: var(--qp-text-primary); }
 .gif-format-note { grid-column: 1 / -1; margin: 0; padding: 7px 8px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: var(--qp-bg-elevated); color: var(--qp-text-secondary); font-size: 10px; line-height: 1.4; }
