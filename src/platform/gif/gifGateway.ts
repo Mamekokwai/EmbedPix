@@ -49,6 +49,11 @@ export interface AnimationSizeEstimateResult {
   bytes: number;
 }
 
+export interface PngSequenceSizeEstimateResult {
+  bytes: number;
+  frames: number;
+}
+
 export interface PngSequenceExportRequest {
   outputDir?: string;
   outputLocation?: GifOutputLocation;
@@ -117,6 +122,13 @@ function serializeAnimationSizeRequest(request: AnimationExportRequest) {
     height: request.height,
     loopMode: request.loopMode,
     loopCount: request.loopCount,
+    frames: serializeGifFrames(request.frames),
+  };
+}
+
+function serializePngSequenceSizeRequest(request: PngSequenceExportRequest) {
+  return {
+    baseName: request.baseName,
     frames: serializeGifFrames(request.frames),
   };
 }
@@ -226,6 +238,21 @@ export async function exportPngSequence(request: PngSequenceExportRequest): Prom
         overwriteExisting: request.overwriteExisting ?? false,
         frames: serializeGifFrames(request.frames),
       },
+    });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function estimatePngSequenceSize(
+  request: PngSequenceExportRequest,
+): Promise<PngSequenceSizeEstimateResult> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持 PNG 帧序列体积测量，请在桌面应用中执行。");
+  }
+  try {
+    return await invoke<PngSequenceSizeEstimateResult>("estimate_png_sequence_size", {
+      request: serializePngSequenceSizeRequest(request),
     });
   } catch (error) {
     throw new Error(getErrorMessage(error));

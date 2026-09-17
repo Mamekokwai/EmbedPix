@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { estimateAnimationSize, estimateGifSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
+import { estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
 import type { GifExportRequest } from "./gifGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -105,6 +105,27 @@ describe("GIF desktop gateway", () => {
         outputDir: input.outputDir,
         baseName: input.baseName,
         overwriteExisting: false,
+        frames: [
+          { data: [0, 127, 128, 255], durationMs: 19 },
+          { data: [255, 1], durationMs: 25 },
+        ],
+      },
+    });
+  });
+
+  it("serializes a PNG sequence size estimate without output metadata", async () => {
+    const input = {
+      outputLocation: "directory" as const,
+      outputDirectory: "E:\\不应写入",
+      baseName: "screen",
+      frames: request().frames,
+      overwriteExisting: true,
+    };
+    vi.mocked(invoke).mockResolvedValueOnce({ bytes: 4321, frames: 2 });
+    await expect(estimatePngSequenceSize(input)).resolves.toEqual({ bytes: 4321, frames: 2 });
+    expect(invoke).toHaveBeenCalledWith("estimate_png_sequence_size", {
+      request: {
+        baseName: input.baseName,
         frames: [
           { data: [0, 127, 128, 255], durationMs: 19 },
           { data: [255, 1], durationMs: 25 },

@@ -4,9 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use image::{io::Reader as ImageReader, ImageOutputFormat};
+use image::{io::Reader as ImageReader, DynamicImage, ImageOutputFormat};
 use rfd::FileDialog;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{decode_limits, detect_format, inspect_frame_dimensions, validate_frame_dimensions};
 
@@ -43,6 +43,12 @@ pub struct PngSequenceFrameRequest {
     data: Vec<u8>,
     #[serde(rename = "durationMs", default)]
     _duration_ms: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PngSequenceSizeEstimateResult {
+    pub bytes: u64,
+    pub frames: usize,
 }
 
 struct TemporaryFile {
@@ -96,6 +102,14 @@ pub async fn export_png_sequence(request: PngSequenceExportRequest) -> Result<Ve
         .map_err(|error| format!("PNG 帧序列导出任务失败：{error}"))?
 }
 
+pub async fn estimate_png_sequence_size(
+    request: PngSequenceExportRequest,
+) -> Result<PngSequenceSizeEstimateResult, String> {
+    tauri::async_runtime::spawn_blocking(move || estimate_png_sequence_size_blocking(request))
+        .await
+        .map_err(|error| format!("PNG 帧序列体积测量任务失败：{error}"))?
+}
+
 fn export_png_sequence_blocking(request: PngSequenceExportRequest) -> Result<Vec<String>, String> {
     let directory = storage::resolve_output_directory(
         &request.output_dir,
@@ -143,6 +157,25 @@ fn export_png_sequence_blocking(request: PngSequenceExportRequest) -> Result<Vec
         .into_iter()
         .map(|path| path.to_string_lossy().into_owned())
         .collect())
+}
+
+fn estimate_png_sequence_size_blocking(
+    request: PngSequenceExportRequest,
+) -> Result<PngSequenceSizeEstimateResult, String> {
+    normalize_base_name(&request.base_name)?;
+    validate_frames(&request.frames)?;
+
+    let mut bytes = 0u64;
+    for frame in &request.frames {
+        let encoded = encode_png_frame_to_vec(frame)?;
+        bytes = bytes
+            .checked_add(encoded.len() as u64)
+            .ok_or_else(|| "PNG 帧序列体积超出可测量范围。".to_string())?;
+    }
+    Ok(PngSequenceSizeEstimateResult {
+        bytes,
+        frames: request.frames.len(),
+    })
 }
 
 fn normalize_base_name(value: &str) -> Result<String, String> {
@@ -204,6 +237,25 @@ fn validate_frames(frames: &[PngSequenceFrameRequest]) -> Result<(), String> {
 }
 
 fn encode_png_frame(writer: &mut File, frame: &PngSequenceFrameRequest) -> Result<(), String> {
+    let image = decode_png_frame(frame)?;
+    image
+        .write_to(writer, ImageOutputFormat::Png)
+        .map_err(|error| format!("无法编码 PNG 帧：{error}"))?;
+    writer
+        .flush()
+        .map_err(|error| format!("无法完成 PNG 帧编码：{error}"))
+}
+
+fn encode_png_frame_to_vec(frame: &PngSequenceFrameRequest) -> Result<Vec<u8>, String> {
+    let image = decode_png_frame(frame)?;
+    let mut output = Cursor::new(Vec::new());
+    image
+        .write_to(&mut output, ImageOutputFormat::Png)
+        .map_err(|error| format!("无法编码 PNG 帧：{error}"))?;
+    Ok(output.into_inner())
+}
+
+fn decode_png_frame(frame: &PngSequenceFrameRequest) -> Result<DynamicImage, String> {
     let mut reader = ImageReader::with_format(
         Cursor::new(&frame.data),
         detect_format(&frame.data).map_err(|error| format!("无法识别 PNG 帧输入格式：{error}"))?,
@@ -212,12 +264,7 @@ fn encode_png_frame(writer: &mut File, frame: &PngSequenceFrameRequest) -> Resul
     let image = reader
         .decode()
         .map_err(|error| format!("无法读取 PNG 帧：{error}"))?;
-    image
-        .write_to(writer, ImageOutputFormat::Png)
-        .map_err(|error| format!("无法编码 PNG 帧：{error}"))?;
-    writer
-        .flush()
-        .map_err(|error| format!("无法完成 PNG 帧编码：{error}"))
+    Ok(image)
 }
 
 fn choose_output_paths(
@@ -526,5 +573,22 @@ mod tests {
         assert_eq!(normalize_base_name(" frame.png ").unwrap(), "frame");
         assert!(normalize_base_name("../frame").is_err());
         assert!(normalize_base_name("frame\\other").is_err());
+    }
+
+    #[test]
+    fn estimates_png_sequence_size_in_memory_without_creating_output_paths() {
+        let directory = TestDirectory::new();
+        let custom_directory = directory.0.join("not-created");
+        let mut request = directory.request(vec![png([41, 42, 43, 255]), png([44, 45, 46, 255])]);
+        request.output_dir.clear();
+        request.output_location = Some("directory".to_string());
+        request.output_directory = Some(custom_directory.to_string_lossy().into_owned());
+
+        let result = estimate_png_sequence_size_blocking(request).unwrap();
+
+        assert_eq!(result.frames, 2);
+        assert!(result.bytes > 0);
+        assert!(!custom_directory.exists());
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 0);
     }
 }

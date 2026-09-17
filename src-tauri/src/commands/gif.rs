@@ -167,6 +167,13 @@ pub async fn export_png_sequence(
 }
 
 #[tauri::command]
+pub async fn estimate_png_sequence_size(
+    request: sequence::PngSequenceExportRequest,
+) -> Result<sequence::PngSequenceSizeEstimateResult, String> {
+    sequence::estimate_png_sequence_size(request).await
+}
+
+#[tauri::command]
 pub async fn pick_animation_output(
     format: String,
     suggested_name: String,
