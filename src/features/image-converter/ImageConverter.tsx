@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ChangeEvent, DragEvent } from "react";
+import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   Check,
@@ -270,6 +270,8 @@ export default function ImageConverter({
   const [flipVertical, setFlipVertical] = useState(false);
   const [cropEnabled, setCropEnabled] = useState(false);
   const [cropInputs, setCropInputs] = useState<CropInputs>(() => getFullImageCropInputs(null));
+  const [pixelSettingsOpen, setPixelSettingsOpen] = useState(false);
+  const [outputSettingsOpen, setOutputSettingsOpen] = useState(false);
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
@@ -854,6 +856,14 @@ export default function ImageConverter({
     updateTransformStatus(getFullImageCropInputs(dimensions), false);
   };
 
+  const handleSettingsSummaryKeyDown = (event: KeyboardEvent<HTMLElement>, close: () => void) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      event.currentTarget.focus();
+    }
+  };
+
   const requestExportCancel = () => {
     if (status.kind !== "busy") {
       return;
@@ -1126,9 +1136,9 @@ export default function ImageConverter({
               <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>
             </fieldset>
 
-            <details className="settings-module">
-              <summary>画面与像素参数</summary>
-              <div className="settings-module-body">
+            <details className="settings-module" open={pixelSettingsOpen} onToggle={(event) => setPixelSettingsOpen(event.currentTarget.open)}>
+              <summary aria-expanded={pixelSettingsOpen} aria-controls="image-settings-panel" onKeyDown={(event) => handleSettingsSummaryKeyDown(event, () => setPixelSettingsOpen(false))}>画面与像素参数</summary>
+              <div id="image-settings-panel" className="settings-module-body">
             <div className="setting-group image-transform-group">
               <div className="label-row">
                 <span className="field-label">基础编辑</span>
@@ -1325,9 +1335,9 @@ export default function ImageConverter({
                 </div>
               </details>
 
-              <details className="settings-module">
-                <summary>输出位置与文件处理</summary>
-                <div className="settings-module-body">
+              <details className="settings-module" open={outputSettingsOpen} onToggle={(event) => setOutputSettingsOpen(event.currentTarget.open)}>
+                <summary aria-expanded={outputSettingsOpen} aria-controls="image-output-settings-panel" onKeyDown={(event) => handleSettingsSummaryKeyDown(event, () => setOutputSettingsOpen(false))}>输出位置与文件处理</summary>
+                <div id="image-output-settings-panel" className="settings-module-body">
             <div className="setting-group output-location-group">
               <div className="label-row">
                 <label className="field-label" htmlFor="output-location">输出位置</label>
