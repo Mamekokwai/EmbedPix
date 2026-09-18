@@ -1,6 +1,13 @@
 import { Laptop, Moon, RotateCcw, Settings2, Sun } from "lucide-react";
-import { OUTPUT_FORMATS } from "../image-converter/imageConverterLogic";
-import type { AppPreferences, ThemeMode } from "../../platform/preferences/appPreferences";
+import { getBitDepths, OUTPUT_FORMATS } from "../image-converter/imageConverterLogic";
+import type { BmpBitDepth, ByteOrder, ChannelOrder, RowAlignment, RowOrder } from "../image-converter/types";
+import {
+  IMAGE_PRESETS,
+  IMAGE_PRESET_OPTIONS,
+  type AppPreferences,
+  type ImagePresetId,
+  type ThemeMode,
+} from "../../platform/preferences/appPreferences";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 
 interface SettingsViewProps {
@@ -21,7 +28,58 @@ function ThemeModeIcon({ mode }: { mode: ThemeMode }) {
   return <Laptop size={16} aria-hidden="true" />;
 }
 
+const BYTE_ORDER_OPTIONS: ReadonlyArray<{ value: ByteOrder; label: string }> = [
+  { value: "little", label: "小端" },
+  { value: "big", label: "大端" },
+];
+
+const CHANNEL_ORDER_OPTIONS: ReadonlyArray<{ value: ChannelOrder; label: string }> = [
+  { value: "rgb", label: "RGB" },
+  { value: "bgr", label: "BGR" },
+];
+
+const ROW_ORDER_OPTIONS: ReadonlyArray<{ value: RowOrder; label: string }> = [
+  { value: "top-down", label: "从上到下" },
+  { value: "bottom-up", label: "从下到上" },
+];
+
+const ROW_ALIGNMENT_OPTIONS: ReadonlyArray<{ value: RowAlignment; label: string }> = [
+  { value: 1, label: "1 字节" },
+  { value: 2, label: "2 字节" },
+  { value: 4, label: "4 字节" },
+];
+
+function presetLabel(preset: ImagePresetId): string {
+  return IMAGE_PRESET_OPTIONS.find((option) => option.value === preset)?.label ?? "自定义";
+}
+
 export default function SettingsView({ preferences, onChange, onReset }: SettingsViewProps) {
+  const updateConverterDefaults = (next: Partial<AppPreferences>) => {
+    onChange({ ...next, imagePreset: "custom" });
+  };
+
+  const applyPreset = (value: ImagePresetId) => {
+    if (value === "custom") {
+      onChange({ imagePreset: value });
+      return;
+    }
+    if (value === preferences.imagePreset) return;
+    const preset = IMAGE_PRESETS[value];
+    if (!window.confirm(`切换到“${presetLabel(value)}”会覆盖图片转换默认格式、JPEG 质量、位深、RAW 参数、背景色和比例设置。是否继续？`)) {
+      return;
+    }
+    onChange({ ...preset, imagePreset: value });
+  };
+
+  const handleDefaultOutputFormat = (value: string | number) => {
+    const nextFormat = value as AppPreferences["defaultOutputFormat"];
+    const availableBitDepths = getBitDepths(nextFormat);
+    const nextBitDepth = availableBitDepths.includes(preferences.defaultBitDepth)
+      ? preferences.defaultBitDepth
+      : availableBitDepths[0] ?? 24;
+    updateConverterDefaults({ defaultOutputFormat: nextFormat, defaultBitDepth: nextBitDepth });
+  };
+
   return (
     <div className="settings-view page-view">
       <header className="page-header">
@@ -83,7 +141,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               value={preferences.defaultOutputFormat}
               options={OUTPUT_FORMATS.map((format) => ({ value: format.value, label: `${format.label} · ${format.hint}` }))}
               aria-label="默认输出格式"
-              onChange={(value) => onChange({ defaultOutputFormat: value as AppPreferences["defaultOutputFormat"] })}
+              onChange={handleDefaultOutputFormat}
             />
           </div>
           <div className="settings-row">
@@ -98,7 +156,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
                 max="100"
                 value={preferences.defaultJpegQuality}
                 aria-label="JPEG 默认质量"
-                onChange={(event) => onChange({ defaultJpegQuality: Number(event.target.value) })}
+                onChange={(event) => updateConverterDefaults({ defaultJpegQuality: Number(event.target.value) })}
               />
               <output>{preferences.defaultJpegQuality}</output>
             </div>
@@ -107,13 +165,104 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
             <input
               type="checkbox"
               checked={preferences.keepAspectRatio}
-              onChange={(event) => onChange({ keepAspectRatio: event.target.checked })}
+              onChange={(event) => updateConverterDefaults({ keepAspectRatio: event.target.checked })}
             />
             <span>
               <strong>默认锁定比例</strong>
               <small>调整输出尺寸时保持原图宽高比。</small>
             </span>
           </label>
+        </section>
+
+        <section className="settings-card" aria-labelledby="converter-preset-title">
+          <div className="settings-card-header">
+            <div>
+              <h2 id="converter-preset-title">图片转换预设</h2>
+              <p>预设会覆盖图片转换的默认格式、质量、位深、RAW 参数、背景色和比例设置；单独修改任一项后会变为自定义。</p>
+            </div>
+          </div>
+          <div className="settings-row settings-preset-row">
+            <div>
+              <h3>当前预设：{presetLabel(preferences.imagePreset)}</h3>
+              <p>{IMAGE_PRESET_OPTIONS.find((option) => option.value === preferences.imagePreset)?.description}</p>
+            </div>
+            <ThemeSelect
+              id="image-converter-preset"
+              className="settings-select"
+              value={preferences.imagePreset}
+              options={IMAGE_PRESET_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+              aria-label="图片转换预设"
+              onChange={(value) => applyPreset(value as ImagePresetId)}
+            />
+          </div>
+        </section>
+
+        <section className="settings-card" aria-labelledby="raw-defaults-title">
+          <div className="settings-card-header">
+            <div>
+              <h2 id="raw-defaults-title">RAW 与像素默认参数</h2>
+              <p>用于 BMP、RGB565 BIN 和 C 数组等嵌入式资源输出；切换预设会覆盖这些值。</p>
+            </div>
+          </div>
+          <div className="settings-row">
+            <div>
+              <h3>默认位深</h3>
+              <p>具体格式可能固定或限制可用位深。</p>
+            </div>
+            <ThemeSelect
+              id="default-bit-depth"
+              className="settings-select"
+              value={preferences.defaultBitDepth}
+              options={getBitDepths(preferences.defaultOutputFormat).map((depth) => ({ value: depth, label: `${depth} 位` }))}
+              aria-label="默认位深"
+              onChange={(value) => updateConverterDefaults({ defaultBitDepth: value as BmpBitDepth })}
+            />
+          </div>
+          <div className="settings-row">
+            <div>
+              <h3>默认字节序</h3>
+              <p>RGB565 BIN 与 C 数组的字节排列方式。</p>
+            </div>
+            <ThemeSelect id="default-byte-order" className="settings-select" value={preferences.defaultByteOrder} options={BYTE_ORDER_OPTIONS} aria-label="默认字节序" onChange={(value) => updateConverterDefaults({ defaultByteOrder: value as ByteOrder })} />
+          </div>
+          <div className="settings-row">
+            <div>
+              <h3>默认通道顺序</h3>
+              <p>适配 RGB/BGR 屏幕控制器。</p>
+            </div>
+            <ThemeSelect id="default-channel-order" className="settings-select" value={preferences.defaultChannelOrder} options={CHANNEL_ORDER_OPTIONS} aria-label="默认通道顺序" onChange={(value) => updateConverterDefaults({ defaultChannelOrder: value as ChannelOrder })} />
+          </div>
+          <div className="settings-row">
+            <div>
+              <h3>默认行顺序</h3>
+              <p>适配从上到下或从下到上的帧缓冲。</p>
+            </div>
+            <ThemeSelect id="default-row-order" className="settings-select" value={preferences.defaultRowOrder} options={ROW_ORDER_OPTIONS} aria-label="默认行顺序" onChange={(value) => updateConverterDefaults({ defaultRowOrder: value as RowOrder })} />
+          </div>
+          <div className="settings-row">
+            <div>
+              <h3>默认行对齐</h3>
+              <p>原始像素数据的每行补齐字节数。</p>
+            </div>
+            <ThemeSelect id="default-row-alignment" className="settings-select" value={preferences.defaultRowAlignment} options={ROW_ALIGNMENT_OPTIONS} aria-label="默认行对齐" onChange={(value) => updateConverterDefaults({ defaultRowAlignment: value as RowAlignment })} />
+          </div>
+          <div className="settings-row">
+            <div>
+              <h3>默认 C 数组变量名</h3>
+              <p>生成 C 数组源码时使用的标识符。</p>
+            </div>
+            <input className="settings-text-input" value={preferences.defaultCArrayName} aria-label="默认 C 数组变量名" spellCheck={false} onChange={(event) => updateConverterDefaults({ defaultCArrayName: event.target.value })} />
+          </div>
+          <div className="settings-row">
+            <div>
+              <h3>默认背景色</h3>
+              <p>非透明输出或留白区域使用的颜色。</p>
+            </div>
+            <label className="settings-color-control" htmlFor="default-background-color">
+              <input id="default-background-color" type="color" value={preferences.defaultBackgroundColor} aria-label="默认背景色" onChange={(event) => updateConverterDefaults({ defaultBackgroundColor: event.target.value.toUpperCase() })} />
+              <span>{preferences.defaultBackgroundColor}</span>
+            </label>
+          </div>
         </section>
 
         <div className="settings-actions">

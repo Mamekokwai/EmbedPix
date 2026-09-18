@@ -150,6 +150,13 @@ export default function AppShell() {
               active={view === "converter"}
               defaultOutputFormat={preferences.defaultOutputFormat}
               defaultJpegQuality={preferences.defaultJpegQuality}
+              defaultBitDepth={preferences.defaultBitDepth}
+              defaultByteOrder={preferences.defaultByteOrder}
+              defaultChannelOrder={preferences.defaultChannelOrder}
+              defaultRowOrder={preferences.defaultRowOrder}
+              defaultRowAlignment={preferences.defaultRowAlignment}
+              defaultCArrayName={preferences.defaultCArrayName}
+              defaultBackgroundColor={preferences.defaultBackgroundColor}
               defaultKeepAspectRatio={preferences.keepAspectRatio}
             />
           </div>

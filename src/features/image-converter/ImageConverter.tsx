@@ -72,6 +72,13 @@ import ThemeSelect from "../../shared/components/ThemeSelect";
 interface ImageConverterProps {
   defaultOutputFormat?: OutputFormat;
   defaultJpegQuality?: number;
+  defaultBitDepth?: BmpBitDepth;
+  defaultByteOrder?: ByteOrder;
+  defaultChannelOrder?: ChannelOrder;
+  defaultRowOrder?: RowOrder;
+  defaultRowAlignment?: RowAlignment;
+  defaultCArrayName?: string;
+  defaultBackgroundColor?: string;
   defaultKeepAspectRatio?: boolean;
   active?: boolean;
 }
@@ -116,6 +123,10 @@ function getSubdirectoryError(value: string): string | null {
     return "子文件夹名称不能包含路径分隔符或 Windows 保留字符。";
   }
   return null;
+}
+
+function resolveDefaultBitDepth(format: OutputFormat, requested: BmpBitDepth): BmpBitDepth {
+  return getBitDepths(format).includes(requested) ? requested : getBitDepths(format)[0] ?? 24;
 }
 
 
@@ -204,6 +215,13 @@ function SelectField<T extends string | number>({
 export default function ImageConverter({
   defaultOutputFormat = "bmp",
   defaultJpegQuality = DEFAULT_JPEG_QUALITY,
+  defaultBitDepth = 24,
+  defaultByteOrder = "little",
+  defaultChannelOrder = "rgb",
+  defaultRowOrder = "top-down",
+  defaultRowAlignment = 1,
+  defaultCArrayName = DEFAULT_C_ARRAY_NAME,
+  defaultBackgroundColor = "#FFFFFF",
   defaultKeepAspectRatio = true,
   active = true,
 }: ImageConverterProps) {
@@ -217,15 +235,15 @@ export default function ImageConverter({
   const [widthInput, setWidthInput] = useState("");
   const [heightInput, setHeightInput] = useState("");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>(defaultOutputFormat);
-  const [bitDepth, setBitDepth] = useState<BmpBitDepth>(24);
+  const [bitDepth, setBitDepth] = useState<BmpBitDepth>(() => resolveDefaultBitDepth(defaultOutputFormat, defaultBitDepth));
   const [jpegQuality, setJpegQuality] = useState(defaultJpegQuality);
-  const [byteOrder, setByteOrder] = useState<ByteOrder>("little");
-  const [channelOrder, setChannelOrder] = useState<ChannelOrder>("rgb");
-  const [rowOrder, setRowOrder] = useState<RowOrder>("top-down");
-  const [rowAlignment, setRowAlignment] = useState<RowAlignment>(1);
-  const [cArrayName, setCArrayName] = useState(DEFAULT_C_ARRAY_NAME);
+  const [byteOrder, setByteOrder] = useState<ByteOrder>(defaultByteOrder);
+  const [channelOrder, setChannelOrder] = useState<ChannelOrder>(defaultChannelOrder);
+  const [rowOrder, setRowOrder] = useState<RowOrder>(defaultRowOrder);
+  const [rowAlignment, setRowAlignment] = useState<RowAlignment>(defaultRowAlignment);
+  const [cArrayName, setCArrayName] = useState(defaultCArrayName);
   const [keepAspectRatio, setKeepAspectRatio] = useState(defaultKeepAspectRatio);
-  const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
+  const [backgroundColor, setBackgroundColor] = useState(defaultBackgroundColor.toUpperCase());
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
@@ -253,6 +271,20 @@ export default function ImageConverter({
       loadedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
   }, []);
+
+  useEffect(() => {
+    if (active) return;
+    setOutputFormat(defaultOutputFormat);
+    setBitDepth(resolveDefaultBitDepth(defaultOutputFormat, defaultBitDepth));
+    setJpegQuality(defaultJpegQuality);
+    setByteOrder(defaultByteOrder);
+    setChannelOrder(defaultChannelOrder);
+    setRowOrder(defaultRowOrder);
+    setRowAlignment(defaultRowAlignment);
+    setCArrayName(normalizeCArrayName(defaultCArrayName));
+    setKeepAspectRatio(defaultKeepAspectRatio);
+    setBackgroundColor(defaultBackgroundColor.toUpperCase());
+  }, [active, defaultBackgroundColor, defaultBitDepth, defaultByteOrder, defaultCArrayName, defaultChannelOrder, defaultJpegQuality, defaultKeepAspectRatio, defaultOutputFormat, defaultRowAlignment, defaultRowOrder]);
 
   const widthError = file ? getDimensionError(widthInput, "宽度") : null;
   const heightError = file ? getDimensionError(heightInput, "高度") : null;

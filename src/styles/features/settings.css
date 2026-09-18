@@ -13,6 +13,12 @@
 .settings-range-control { display: flex; flex: 0 0 180px; align-items: center; gap: 10px; }
 .settings-range-control input { width: 140px; accent-color: var(--qp-accent-default); }
 .settings-range-control output { min-width: 28px; color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 11px; text-align: right; }
+.settings-select { width: min(320px, 100%); flex: 0 1 320px; }
+.settings-text-input { width: min(320px, 100%); min-height: 34px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); outline: 0; background: var(--qp-bg-canvas); padding: 0 9px; color: var(--qp-text-primary); font-family: var(--font-mono); font-size: 11px; }
+.settings-text-input:focus { border-color: var(--qp-border-strong); outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
+.settings-color-control { display: inline-flex; min-width: 120px; align-items: center; gap: 8px; color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 11px; }
+.settings-color-control input { width: 34px; height: 30px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: transparent; padding: 2px; }
+.settings-preset-row { align-items: flex-start; }
 .settings-check-row { display: flex; align-items: flex-start; gap: 10px; border-top: 1px solid var(--qp-border-subtle); padding: 16px 22px; color: var(--qp-text-secondary); font-size: 12px; }
 .settings-check-row input { margin-top: 2px; accent-color: var(--qp-accent-default); }
 .settings-check-row span { display: flex; flex-direction: column; gap: 2px; }
@@ -26,5 +32,6 @@
   .theme-option { flex: 1; justify-content: center; }
   .settings-range-control { flex-basis: auto; }
   .settings-range-control input { flex: 1; }
+  .settings-select, .settings-text-input { width: 100%; flex-basis: auto; }
   .settings-actions { align-items: flex-start; flex-direction: column; }
 }
