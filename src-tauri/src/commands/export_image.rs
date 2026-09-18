@@ -11,14 +11,14 @@ use image::{
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{InvokeBody, Request};
 
+use super::path_security;
+
 mod bmp;
 mod raw;
 
 const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 64 * 1024;
 const MAX_SOURCE_FILE_NAME_BYTES: usize = 1024;
-const MAX_OUTPUT_PATH_BYTES: usize = 4096;
-const MAX_OUTPUT_SUBDIRECTORY_BYTES: usize = 255;
 const MAX_DEFAULT_STEM_CHARS: usize = 120;
 const MAX_WATERMARK_TEXT_BYTES: usize = 256;
 const MAX_IMAGE_DIMENSION: u32 = 8_192;
@@ -374,6 +374,8 @@ pub async fn read_image_file(path: String) -> Result<NativeImageFile, String> {
 }
 
 fn read_image_file_from_path(path: PathBuf) -> Result<NativeImageFile, String> {
+    path_security::validate_source_path(&path)
+        .map_err(|error| format_image_path_error(error, "selected image path"))?;
     let file_name = path
         .file_name()
         .and_then(|value| value.to_str())
@@ -482,50 +484,81 @@ fn normalize_optional_path(value: Option<String>, field: &str) -> Result<Option<
     let Some(value) = value else {
         return Ok(None);
     };
-    let value = value.trim().to_string();
+    let value = value.trim();
     if value.is_empty() {
         return Ok(None);
     }
-    if value.len() > MAX_OUTPUT_PATH_BYTES {
-        return Err(format!(
-            "{field} cannot exceed {MAX_OUTPUT_PATH_BYTES} UTF-8 bytes"
-        ));
-    }
-    if value.chars().any(char::is_control) {
-        return Err(format!("{field} cannot contain control characters"));
-    }
-    Ok(Some(value))
+    path_security::normalize_path(value)
+        .map(|path| path.to_string_lossy().into_owned())
+        .map(Some)
+        .map_err(|error| format_image_path_error(error, field))
 }
 
 fn normalize_optional_subdirectory(value: Option<String>) -> Result<Option<String>, String> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    let value = value.trim().to_string();
-    if value.is_empty() {
-        return Ok(None);
-    }
-    if value.len() > MAX_OUTPUT_SUBDIRECTORY_BYTES {
-        return Err(format!(
-            "outputSubdirectory cannot exceed {MAX_OUTPUT_SUBDIRECTORY_BYTES} UTF-8 bytes"
-        ));
-    }
-    if value == "." || value == ".." {
-        return Err("outputSubdirectory cannot be . or ..".to_string());
-    }
-    if value.chars().any(|character| {
-        character.is_control()
-            || matches!(
-                character,
-                '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+    path_security::normalize_subdirectory(value.as_deref())
+        .map_err(|error| format_image_path_error(error, "outputSubdirectory"))
+}
+
+fn format_image_path_error(error: path_security::PathSecurityError, field: &str) -> String {
+    match error {
+        path_security::PathSecurityError::Empty => format!("{field} cannot be empty"),
+        path_security::PathSecurityError::TooLong => {
+            format!(
+                "{field} cannot exceed {} UTF-8 bytes",
+                path_security::MAX_OUTPUT_PATH_BYTES
             )
-    }) {
-        return Err(
-            "outputSubdirectory cannot contain path separators or Windows reserved characters"
-                .to_string(),
-        );
+        }
+        path_security::PathSecurityError::ControlCharacters => {
+            format!("{field} cannot contain control characters")
+        }
+        path_security::PathSecurityError::InvalidPath => {
+            format!("{field} cannot contain path traversal or Windows reserved device names")
+        }
+        path_security::PathSecurityError::InvalidSubdirectory => {
+            format!("{field} cannot contain path separators or Windows reserved characters")
+        }
+        path_security::PathSecurityError::ReservedName => {
+            format!("{field} cannot use Windows reserved device names")
+        }
+        path_security::PathSecurityError::SymlinkOrReparse => {
+            format!("{field} cannot contain symlink or reparse-point components")
+        }
+        path_security::PathSecurityError::NotDirectory => {
+            format!("{field} must contain only directory components")
+        }
+        path_security::PathSecurityError::NotFile => format!("{field} must be a regular file"),
+        path_security::PathSecurityError::Missing => format!("{field} does not exist"),
+        path_security::PathSecurityError::Io(error) => {
+            format!("failed to inspect {field}: {error}")
+        }
     }
-    Ok(Some(value))
+}
+
+fn validate_image_source(value: Option<&str>) -> Result<PathBuf, String> {
+    path_security::validate_source_file(value).map_err(|error| match error {
+        path_security::PathSecurityError::Empty | path_security::PathSecurityError::Missing => {
+            "original output requires an existing source image".to_string()
+        }
+        error => format_image_path_error(error, "sourcePath"),
+    })
+}
+
+fn validate_image_output_directory(directory: &Path) -> Result<(), String> {
+    path_security::validate_output_directory(directory)
+        .map_err(|error| format_image_path_error(error, "output directory"))
+}
+
+fn ensure_image_output_directory(directory: &Path) -> Result<(), String> {
+    validate_image_output_directory(directory)?;
+    if !directory.exists() {
+        fs::create_dir_all(directory).map_err(|error| {
+            format!(
+                "failed to create output directory `{}`: {error}",
+                directory.display()
+            )
+        })?;
+    }
+    validate_image_output_directory(directory)
 }
 
 fn validate_dimensions(width: u32, height: u32) -> Result<(), String> {
@@ -944,18 +977,11 @@ fn choose_output_path(
 ) -> Result<PathBuf, String> {
     let default_name = default_output_name(source_file_name, output_format);
     if request.output_location == OutputLocation::Original {
-        let source_path = request
-            .source_path
-            .as_deref()
-            .ok_or_else(|| "original output requires the original file path".to_string())?;
-        let source_path = Path::new(source_path);
-        if !source_path.is_file() {
-            return Err("original output requires an existing source image".to_string());
-        }
-        return Ok(with_expected_extension(
-            source_path.to_path_buf(),
-            output_format,
-        ));
+        let source_path = validate_image_source(request.source_path.as_deref())?;
+        let output_path = with_expected_extension(source_path.to_path_buf(), output_format);
+        path_security::validate_output_path(&output_path)
+            .map_err(|error| format_image_path_error(error, "image output path"))?;
+        return Ok(output_path);
     }
 
     let directory = match request.output_location {
@@ -970,26 +996,35 @@ fn choose_output_path(
                 .save_file()
                 .ok_or_else(|| "image export cancelled".to_string())?;
 
-            return Ok(with_expected_extension(path, output_format));
+            let output_path = with_expected_extension(path, output_format);
+            path_security::validate_output_path(&output_path)
+                .map_err(|error| format_image_path_error(error, "image output path"))?;
+            return Ok(output_path);
         }
         OutputLocation::Source | OutputLocation::Subfolder => {
-            let source_path = request.source_path.as_deref().ok_or_else(|| {
-                "source folder output requires the original file path; choose a specified directory instead"
-                    .to_string()
-            })?;
-            let source_path = Path::new(source_path);
+            let source_path = validate_image_source(request.source_path.as_deref()).map_err(
+                |error| {
+                    if error == "original output requires an existing source image" {
+                        "source folder output requires the original file path; choose a specified directory instead"
+                            .to_string()
+                    } else {
+                        error
+                    }
+                },
+            )?;
             source_path
                 .parent()
                 .filter(|parent| !parent.as_os_str().is_empty())
                 .map(Path::to_path_buf)
                 .unwrap_or_else(|| PathBuf::from("."))
         }
-        OutputLocation::Directory => PathBuf::from(
+        OutputLocation::Directory => path_security::normalize_path(
             request
                 .output_directory
                 .as_deref()
                 .ok_or_else(|| "output directory is required".to_string())?,
-        ),
+        )
+        .map_err(|error| format_image_path_error(error, "outputDirectory"))?,
         OutputLocation::Original => unreachable!("original output handled above"),
     };
 
@@ -1003,14 +1038,11 @@ fn choose_output_path(
     } else {
         directory
     };
-    fs::create_dir_all(&directory).map_err(|error| {
-        format!(
-            "failed to create output directory `{}`: {error}",
-            directory.display()
-        )
-    })?;
+    validate_image_output_directory(&directory)?;
 
     let output_path = with_expected_extension(directory.join(default_name), output_format);
+    path_security::validate_output_path(&output_path)
+        .map_err(|error| format_image_path_error(error, "image output path"))?;
     Ok(
         if request.overwrite_existing || request.overwrite_same_name {
             output_path
@@ -1030,7 +1062,11 @@ fn write_exported_file(
         return replace_original_file(output_path, bytes, source_path);
     }
 
-    let output_existed_before_write = output_path.exists();
+    let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
+    ensure_image_output_directory(parent)?;
+    path_security::validate_existing_file(output_path)
+        .map_err(|error| format_image_path_error(error, "image output path"))?;
+    let output_existed_before_write = fs::symlink_metadata(output_path).is_ok();
     let backup_path = if output_existed_before_write && options.manage_existing_output {
         if options.overwrite_same_name {
             Some(move_existing_output_to_temporary_backup(output_path)?)
@@ -1095,18 +1131,17 @@ fn replace_original_file(
     bytes: Vec<u8>,
     source_path: Option<&str>,
 ) -> Result<(), String> {
-    let source_path = source_path
-        .map(Path::new)
-        .ok_or_else(|| "original output requires the original file path".to_string())?;
-    if !source_path.is_file() {
-        return Err("original output requires an existing source image".to_string());
-    }
+    let source_path = validate_image_source(source_path)?;
+    let output_parent = output_path.parent().unwrap_or_else(|| Path::new("."));
+    validate_image_output_directory(output_parent)?;
+    path_security::validate_existing_file(output_path)
+        .map_err(|error| format_image_path_error(error, "image output path"))?;
 
     let mut backups = Vec::new();
-    let source_backup = move_existing_output_to_backup(source_path)?;
-    backups.push((source_path.to_path_buf(), source_backup));
+    let source_backup = move_existing_output_to_backup(&source_path)?;
+    backups.push((source_path.clone(), source_backup));
 
-    if output_path.exists() && !paths_equal(source_path, output_path) {
+    if output_path.exists() && !paths_equal(&source_path, output_path) {
         match move_existing_output_to_backup(output_path) {
             Ok(output_backup) => backups.push((output_path.to_path_buf(), output_backup)),
             Err(error) => {
@@ -1203,12 +1238,7 @@ fn with_rollback_error(operation_error: String, rollback_error: Result<(), Strin
 fn move_existing_output_to_backup(output_path: &Path) -> Result<PathBuf, String> {
     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
     let backup_directory = parent.join("bak");
-    fs::create_dir_all(&backup_directory).map_err(|error| {
-        format!(
-            "failed to create backup directory `{}`: {error}",
-            backup_directory.display()
-        )
-    })?;
+    ensure_image_output_directory(&backup_directory)?;
 
     let file_name = output_path
         .file_name()
@@ -1226,6 +1256,7 @@ fn move_existing_output_to_backup(output_path: &Path) -> Result<PathBuf, String>
 
 fn move_existing_output_to_temporary_backup(output_path: &Path) -> Result<PathBuf, String> {
     let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
+    validate_image_output_directory(parent)?;
     let file_name = output_path
         .file_name()
         .and_then(|value| value.to_str())
@@ -1289,7 +1320,7 @@ fn write_file_atomically(output_path: &Path, bytes: &[u8]) -> io::Result<()> {
 
 fn next_backup_path(directory: &Path, file_name: &str) -> PathBuf {
     let first_path = directory.join(file_name);
-    if !first_path.exists() {
+    if is_absent_path(&first_path) {
         return first_path;
     }
 
@@ -1305,11 +1336,18 @@ fn next_backup_path(directory: &Path, file_name: &str) -> PathBuf {
         .unwrap_or_default();
     for index in 1..=10_000 {
         let candidate = directory.join(format!("{stem}_{index}{extension}"));
-        if !candidate.exists() {
+        if is_absent_path(&candidate) {
             return candidate;
         }
     }
     directory.join(format!("{stem}_backup{extension}"))
+}
+
+fn is_absent_path(path: &Path) -> bool {
+    matches!(
+        fs::symlink_metadata(path),
+        Err(error) if error.kind() == io::ErrorKind::NotFound
+    )
 }
 
 fn paths_equal(left: &Path, right: &Path) -> bool {
@@ -1892,7 +1930,156 @@ mod tests {
     fn output_subdirectories_reject_path_escape_characters() {
         assert!(normalize_optional_subdirectory(Some("..".to_string())).is_err());
         assert!(normalize_optional_subdirectory(Some(r"nested\folder".to_string())).is_err());
+        assert!(normalize_optional_subdirectory(Some("CON".to_string())).is_err());
         assert!(normalize_optional_subdirectory(Some("export".to_string())).is_ok());
+    }
+
+    fn output_path_test_request(
+        output_location: OutputLocation,
+        source_path: Option<String>,
+        output_subdirectory: Option<String>,
+        output_directory: Option<String>,
+    ) -> ExportRequest {
+        ExportRequest {
+            input_data: vec![1],
+            source_file_name: "source.png".to_string(),
+            output_format: OutputFormat::Png,
+            width: 1,
+            height: 1,
+            keep_aspect_ratio: false,
+            background_color: Rgba([255, 255, 255, 255]),
+            bit_depth: 24,
+            jpeg_quality: 85,
+            raw_options: raw::RawOptions::parse(None, None, None, None).unwrap(),
+            c_array_name: "source".to_string(),
+            output_location,
+            source_path,
+            output_subdirectory,
+            output_directory,
+            overwrite_existing: false,
+            overwrite_same_name: true,
+            watermark: None,
+            delete_source: false,
+        }
+    }
+
+    #[test]
+    fn output_path_selection_supports_safe_locations_without_eager_directory_creation() {
+        let root = std::env::temp_dir().join(format!(
+            "embedpix-image-output-path-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("source.png");
+        fs::write(&source, b"source").unwrap();
+        let source_path = Some(source.to_string_lossy().into_owned());
+
+        let source_output = choose_output_path(
+            &output_path_test_request(OutputLocation::Source, source_path.clone(), None, None),
+            "source.png",
+            OutputFormat::Png,
+        )
+        .unwrap();
+        assert_eq!(source_output, source);
+
+        let subfolder = root.join("export");
+        let subfolder_output = choose_output_path(
+            &output_path_test_request(
+                OutputLocation::Subfolder,
+                source_path.clone(),
+                Some("export".to_string()),
+                None,
+            ),
+            "source.png",
+            OutputFormat::Png,
+        )
+        .unwrap();
+        assert_eq!(subfolder_output, subfolder.join("source.png"));
+        assert!(!subfolder.exists());
+
+        let specified_directory = root.join("specified");
+        let directory_output = choose_output_path(
+            &output_path_test_request(
+                OutputLocation::Directory,
+                None,
+                None,
+                Some(specified_directory.to_string_lossy().into_owned()),
+            ),
+            "source.png",
+            OutputFormat::Png,
+        )
+        .unwrap();
+        assert_eq!(directory_output, specified_directory.join("source.png"));
+        assert!(!specified_directory.exists());
+
+        let original_output = choose_output_path(
+            &output_path_test_request(OutputLocation::Original, source_path, None, None),
+            "source.png",
+            OutputFormat::Png,
+        )
+        .unwrap();
+        assert_eq!(original_output, source);
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn output_paths_reject_traversal_and_reserved_device_names() {
+        assert!(normalize_optional_path(Some("../escape".to_string()), "outputDirectory").is_err());
+        assert!(normalize_optional_path(Some("CON".to_string()), "sourcePath").is_err());
+        assert!(normalize_optional_subdirectory(Some("LPT9".to_string())).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_paths_reject_symlinked_directories_without_creating_children() {
+        use std::os::unix::fs::symlink;
+
+        let root = std::env::temp_dir().join(format!(
+            "embedpix-image-output-symlink-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let real = root.join("real");
+        fs::create_dir(&real).unwrap();
+        let link = root.join("link");
+        symlink(&real, &link).unwrap();
+
+        let request = output_path_test_request(
+            OutputLocation::Directory,
+            None,
+            None,
+            Some(link.join("new").to_string_lossy().into_owned()),
+        );
+        let error = choose_output_path(&request, "source.png", OutputFormat::Png).unwrap_err();
+        assert!(error.contains("symlink") || error.contains("reparse"));
+        assert!(!real.join("new").exists());
+
+        let real_source = real.join("source.png");
+        fs::write(&real_source, b"source").unwrap();
+        let source_link = root.join("source-link.png");
+        symlink(&real_source, &source_link).unwrap();
+        let source_request = output_path_test_request(
+            OutputLocation::Source,
+            Some(source_link.to_string_lossy().into_owned()),
+            None,
+            None,
+        );
+        assert!(choose_output_path(&source_request, "source.png", OutputFormat::Png).is_err());
+
+        let output_link = root.join("source.png");
+        symlink(&real_source, &output_link).unwrap();
+        let output_request = output_path_test_request(
+            OutputLocation::Directory,
+            None,
+            None,
+            Some(root.to_string_lossy().into_owned()),
+        );
+        assert!(choose_output_path(&output_request, "source.png", OutputFormat::Png).is_err());
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

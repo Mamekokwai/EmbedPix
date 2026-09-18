@@ -4,9 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const MAX_OUTPUT_PATH_BYTES: usize = 4096;
+use super::super::path_security;
+
 const MAX_OUTPUT_NAME_CHARS: usize = 120;
-const MAX_OUTPUT_SUBDIRECTORY_BYTES: usize = 255;
 
 struct TemporaryOutput {
     path: PathBuf,
@@ -58,7 +58,7 @@ fn check_target(output: &Path, overwrite: bool) -> Result<(), String> {
         Ok(metadata)
             if !metadata.is_file()
                 || metadata.file_type().is_symlink()
-                || has_reparse_point(&metadata) =>
+                || path_security::has_reparse_point(&metadata) =>
         {
             Err("GIF 输出路径已存在但不是普通文件。".into())
         }
@@ -74,7 +74,7 @@ pub(super) fn validate_existing_output_file(path: &Path) -> Result<(), String> {
         Ok(metadata)
             if !metadata.is_file()
                 || metadata.file_type().is_symlink()
-                || has_reparse_point(&metadata) =>
+                || path_security::has_reparse_point(&metadata) =>
         {
             Err(format!(
                 "GIF 输出路径已存在但不是普通文件：{}",
@@ -193,17 +193,7 @@ pub(super) fn resolve_output_directory(
 }
 
 fn normalize_path(value: &str, label: &str) -> Result<PathBuf, String> {
-    let value = value.trim();
-    if value.is_empty() {
-        return Err(format!("{label}不能为空。"));
-    }
-    if value.len() > MAX_OUTPUT_PATH_BYTES {
-        return Err(format!("{label}过长。"));
-    }
-    if value.chars().any(char::is_control) {
-        return Err(format!("{label}不能包含控制字符。"));
-    }
-    Ok(PathBuf::from(value))
+    path_security::normalize_path(value).map_err(|error| format_path_error(error, label))
 }
 
 fn ensure_extension(path: &Path, extension: &str) -> Result<(), String> {
@@ -272,90 +262,32 @@ fn normalize_output_name(
 }
 
 fn normalize_subdirectory(value: Option<&str>) -> Result<Option<String>, String> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    let value = value.trim();
-    if value.is_empty() {
-        return Ok(None);
-    }
-    if value.len() > MAX_OUTPUT_SUBDIRECTORY_BYTES
-        || value == "."
-        || value == ".."
-        || value.ends_with('.')
-        || value.ends_with(' ')
-        || value.chars().any(|character| {
-            character.is_control()
-                || matches!(
-                    character,
-                    '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
-                )
-        })
-    {
-        return Err("GIF 输出子目录名称包含无效字符或路径越界。".to_string());
-    }
-    if is_reserved_windows_name(value) {
-        return Err("GIF 输出子目录不能使用 Windows 保留设备名。".to_string());
-    }
-    Ok(Some(value.to_string()))
+    path_security::normalize_subdirectory(value).map_err(|error| match error {
+        path_security::PathSecurityError::ReservedName => {
+            "GIF 输出子目录不能使用 Windows 保留设备名。".to_string()
+        }
+        error => format_path_error(error, "GIF 输出子目录"),
+    })
 }
 
 fn is_reserved_windows_name(value: &str) -> bool {
-    let base = value
-        .split('.')
-        .next()
-        .unwrap_or(value)
-        .trim_end_matches([' ', '.']);
-    let uppercase = base.to_ascii_uppercase();
-    matches!(uppercase.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || uppercase
-            .strip_prefix("COM")
-            .or_else(|| uppercase.strip_prefix("LPT"))
-            .is_some_and(|suffix| {
-                matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
-            })
+    path_security::is_reserved_windows_name(value)
 }
 
 fn validate_source_file(value: Option<&str>) -> Result<PathBuf, String> {
-    let path = normalize_path(
-        value.ok_or_else(|| "GIF 源文件路径不能为空。".to_string())?,
-        "GIF 源文件路径",
-    )?;
-    validate_path_chain(&path, true)?;
-    Ok(path)
-}
-
-fn validate_path_chain(path: &Path, require_final: bool) -> Result<(), String> {
-    let mut ancestors = path
-        .ancestors()
-        .filter(|ancestor| !ancestor.as_os_str().is_empty())
-        .map(Path::to_path_buf)
-        .collect::<Vec<_>>();
-    ancestors.reverse();
-    for (index, ancestor) in ancestors.iter().enumerate() {
-        let is_final = index + 1 == ancestors.len();
-        match fs::symlink_metadata(ancestor) {
-            Ok(metadata) => {
-                if metadata.file_type().is_symlink() || has_reparse_point(&metadata) {
-                    return Err("GIF 路径目录组件不能是 symlink 或 junction。".to_string());
-                }
-                if !is_final && !metadata.is_dir() {
-                    return Err("GIF 路径目录组件必须是普通目录。".to_string());
-                }
-                if is_final && !metadata.is_file() {
-                    return Err("GIF 路径末端类型不正确。".to_string());
-                }
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound && !require_final => {
-                return Ok(())
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Err("GIF 路径不存在。".to_string())
-            }
-            Err(error) => return Err(format!("无法检查 GIF 路径：{error}")),
+    path_security::validate_source_file(value).map_err(|error| match error {
+        path_security::PathSecurityError::Empty => "GIF 源文件路径不能为空。".to_string(),
+        path_security::PathSecurityError::NotFile => "GIF 路径末端类型不正确。".to_string(),
+        path_security::PathSecurityError::NotDirectory
+        | path_security::PathSecurityError::SymlinkOrReparse => {
+            "GIF 路径目录组件不能是 symlink 或 junction。".to_string()
         }
-    }
-    Ok(())
+        path_security::PathSecurityError::InvalidPath => {
+            "GIF 源文件路径包含路径遍历或 Windows 保留设备名。".to_string()
+        }
+        path_security::PathSecurityError::Missing => "GIF 路径不存在。".to_string(),
+        error => format_path_error(error, "GIF 源文件路径"),
+    })
 }
 
 pub(super) fn write_output(
@@ -395,43 +327,42 @@ pub(super) fn write_output(
 }
 
 pub(super) fn validate_output_directory(directory: &Path) -> Result<(), String> {
-    if directory.as_os_str().is_empty() {
-        return Err("输出目录路径无效。".to_string());
-    }
-    let mut ancestors = directory
-        .ancestors()
-        .filter(|ancestor| !ancestor.as_os_str().is_empty())
-        .collect::<Vec<_>>();
-    ancestors.reverse();
-    for ancestor in ancestors {
-        match fs::symlink_metadata(ancestor) {
-            Ok(_) => validate_directory_metadata(ancestor)?,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => break,
-            Err(error) => return Err(format!("无法检查输出目录：{error}")),
+    path_security::validate_output_directory(directory).map_err(|error| match error {
+        path_security::PathSecurityError::Empty => "输出目录路径无效。".to_string(),
+        path_security::PathSecurityError::NotDirectory
+        | path_security::PathSecurityError::SymlinkOrReparse => {
+            "输出目录必须是普通目录，不能是 symlink 或 junction。".to_string()
         }
+        error => format_path_error(error, "输出目录"),
+    })
+}
+
+fn format_path_error(error: path_security::PathSecurityError, label: &str) -> String {
+    match error {
+        path_security::PathSecurityError::Empty => format!("{label}不能为空。"),
+        path_security::PathSecurityError::TooLong => format!("{label}过长。"),
+        path_security::PathSecurityError::ControlCharacters => {
+            format!("{label}不能包含控制字符。")
+        }
+        path_security::PathSecurityError::InvalidPath => {
+            format!("{label}包含路径遍历或 Windows 保留设备名。")
+        }
+        path_security::PathSecurityError::InvalidSubdirectory => {
+            format!("{label}名称包含无效字符或路径越界。")
+        }
+        path_security::PathSecurityError::ReservedName => {
+            format!("{label}不能使用 Windows 保留设备名。")
+        }
+        path_security::PathSecurityError::SymlinkOrReparse => {
+            format!("{label}路径组件不能是 symlink 或 junction。")
+        }
+        path_security::PathSecurityError::NotDirectory => {
+            format!("{label}路径组件必须是普通目录。")
+        }
+        path_security::PathSecurityError::NotFile => format!("{label}末端类型不正确。"),
+        path_security::PathSecurityError::Missing => format!("{label}路径不存在。"),
+        path_security::PathSecurityError::Io(error) => format!("无法检查{label}：{error}"),
     }
-    Ok(())
-}
-
-fn validate_directory_metadata(directory: &Path) -> Result<(), String> {
-    let metadata =
-        fs::symlink_metadata(directory).map_err(|error| format!("无法检查输出目录：{error}"))?;
-    if !metadata.is_dir() || metadata.file_type().is_symlink() || has_reparse_point(&metadata) {
-        return Err("输出目录必须是普通目录，不能是 symlink 或 junction。".to_string());
-    }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn has_reparse_point(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-#[cfg(not(windows))]
-fn has_reparse_point(_metadata: &fs::Metadata) -> bool {
-    false
 }
 
 pub(super) struct CheckedWriter<W> {
