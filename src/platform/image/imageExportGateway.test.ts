@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
 import {
   encodeExportEnvelope,
   MAX_RAW_IMAGE_BYTES,
   MAX_SOURCE_FILE_NAME_BYTES,
+  pickOutputDirectory,
+  PICK_OUTPUT_DIRECTORY_COMMAND,
   validateExportEnvelopeInput,
 } from "./imageExportGateway";
 import type { ExportImageRequest } from "../../features/image-converter/types";
@@ -26,6 +29,15 @@ function createRequest(inputData: Uint8Array, overrides: Partial<ExportImageRequ
     ...overrides,
   };
 }
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+});
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("image export raw IPC envelope", () => {
   it("encodes Unicode metadata, a little-endian length, and unchanged image bytes", () => {
@@ -136,5 +148,26 @@ describe("image export raw IPC envelope", () => {
     expect(() => validateExportEnvelopeInput(1, "x".repeat(MAX_SOURCE_FILE_NAME_BYTES))).not.toThrow();
     expect(() => validateExportEnvelopeInput(1, "界".repeat(MAX_SOURCE_FILE_NAME_BYTES))).toThrow("UTF-8 字节");
     expect(() => validateExportEnvelopeInput(1, "bad\0name.png")).toThrow("控制字符");
+  });
+});
+
+describe("image output directory picker", () => {
+  it("uses the existing desktop directory picker command", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce("E:\\导出");
+
+    await expect(pickOutputDirectory()).resolves.toBe("E:\\导出");
+    expect(invoke).toHaveBeenCalledWith(PICK_OUTPUT_DIRECTORY_COMMAND);
+  });
+
+  it("preserves cancellation as a null result", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(null);
+
+    await expect(pickOutputDirectory()).resolves.toBeNull();
+  });
+
+  it("reports picker failures without changing the caller's existing path", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("权限不足"));
+
+    await expect(pickOutputDirectory()).rejects.toThrow("权限不足");
   });
 });

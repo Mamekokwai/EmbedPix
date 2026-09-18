@@ -5,6 +5,7 @@ import type {
 } from "../../features/image-converter/types";
 
 export const EXPORT_IMAGE_COMMAND = "export_image" as const;
+export const PICK_OUTPUT_DIRECTORY_COMMAND = "pick_gif_sequence_output" as const;
 export const MAX_METADATA_BYTES = 64 * 1024;
 export const MAX_RAW_IMAGE_BYTES = 32 * 1024 * 1024;
 export const MAX_SOURCE_FILE_NAME_BYTES = 1024;
@@ -107,6 +108,18 @@ export async function pickImageFiles(): Promise<NativeImageFile[]> {
 
 export async function readImageFile(path: string): Promise<NativeImageFile> {
   return invoke<NativeImageFile>("read_image_file", { path });
+}
+
+export async function pickOutputDirectory(): Promise<string | null> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持选择输出目录，请在桌面应用中执行。" );
+  }
+
+  try {
+    return await invoke<string | null>(PICK_OUTPUT_DIRECTORY_COMMAND);
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
 }
 
 export async function exportImage(request: ExportImageRequest) {

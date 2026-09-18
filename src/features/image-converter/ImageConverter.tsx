@@ -18,6 +18,7 @@ import {
   exportImage,
   isTauriEnvironment,
   pickImageFiles,
+  pickOutputDirectory,
   readImageFile,
   type NativeImageFile,
 } from "../../platform/image/imageExportGateway";
@@ -692,6 +693,28 @@ export default function ImageConverter({
     setError(null);
   };
 
+  const handlePickOutputDirectory = async () => {
+    const previousDirectory = outputDirectory;
+    setError(null);
+    setStatus({ kind: "busy", text: "正在选择输出目录…" });
+    try {
+      const selectedDirectory = await pickOutputDirectory();
+      if (!selectedDirectory) {
+        setStatus({
+          kind: "ready",
+          text: previousDirectory.trim() ? "已保留当前输出目录" : "未选择输出目录",
+        });
+        return;
+      }
+      setOutputDirectory(selectedDirectory);
+      setStatus({ kind: "ready", text: "已选择输出目录" });
+    } catch (pickError) {
+      const message = pickError instanceof Error ? pickError.message : "无法选择输出目录，请重试。";
+      setError(message);
+      setStatus({ kind: "error", text: "选择输出目录失败" });
+    }
+  };
+
   const handleDeleteSourceChange = (checked: boolean) => {
     setDeleteSource(checked);
     setError(null);
@@ -1120,15 +1143,26 @@ export default function ImageConverter({
               {outputLocation === "directory" ? (
                 <label className="text-field" htmlFor="output-directory">
                   <span>输出目录</span>
-                  <input
-                    id="output-directory"
-                    value={outputDirectory}
-                    aria-describedby={outputLocationDescription}
-                    aria-invalid={Boolean(outputLocationError)}
-                    onChange={(event) => { setOutputDirectory(event.target.value); setError(null); }}
-                    placeholder="例如 D:\\Images\\Export"
-                    spellCheck={false}
-                  />
+                  <div className="path-input-row">
+                    <input
+                      id="output-directory"
+                      value={outputDirectory}
+                      aria-describedby={outputLocationDescription}
+                      aria-invalid={Boolean(outputLocationError)}
+                      onChange={(event) => { setOutputDirectory(event.target.value); setError(null); }}
+                      placeholder="例如 D:\\Images\\Export"
+                      spellCheck={false}
+                    />
+                    <button
+                      className="quiet-button path-input-picker"
+                      type="button"
+                      disabled={!isTauriEnvironment() || status.kind === "busy"}
+                      onClick={() => void handlePickOutputDirectory()}
+                      title={isTauriEnvironment() ? "使用系统对话框选择目录" : "仅桌面应用支持目录选择"}
+                    >
+                      选择目录
+                    </button>
+                  </div>
                 </label>
               ) : null}
               <p className="field-help" id="output-location-help">
