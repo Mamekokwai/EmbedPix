@@ -19,6 +19,7 @@ import {
   resolveTheme,
   saveAppPreferences,
   type AppPreferences,
+  type SidebarMode,
   type ThemeMode,
 } from "../platform/preferences/appPreferences";
 
@@ -67,8 +68,8 @@ function getPrefersDark(): boolean {
 
 export default function AppShell() {
   const [view, setView] = useState<AppView>("converter");
-  const [sidebarMode, setSidebarMode] = useState<"icon" | "labeled">("icon");
   const [preferences, setPreferences] = useState<AppPreferences>(() => loadAppPreferences());
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() => preferences.sidebarMode);
   const [prefersDark, setPrefersDark] = useState(getPrefersDark);
   const {
     state: updateState,
@@ -93,6 +94,14 @@ export default function AppShell() {
 
   const updatePreferences = (next: Partial<AppPreferences>) => {
     setPreferences((current) => ({ ...current, ...next }));
+  };
+
+  const toggleSidebarMode = () => {
+    setSidebarMode((current) => {
+      const next = current === "icon" ? "labeled" : "icon";
+      setPreferences((currentPreferences) => ({ ...currentPreferences, sidebarMode: next }));
+      return next;
+    });
   };
 
   return (
@@ -136,7 +145,7 @@ export default function AppShell() {
               className={`sidebar-mode-toggle${sidebarMode === "labeled" ? " sidebar-mode-toggle-active" : ""}`}
               aria-label={sidebarMode === "icon" ? "显示导航文字" : "隐藏导航文字"}
               aria-pressed={sidebarMode === "labeled"}
-              onClick={() => setSidebarMode((mode) => mode === "icon" ? "labeled" : "icon")}
+              onClick={toggleSidebarMode}
               title="切换导航标签"
             >
               <Menu size={16} strokeWidth={1.9} aria-hidden="true" />
@@ -167,7 +176,10 @@ export default function AppShell() {
             <SettingsView
               preferences={preferences}
               onChange={updatePreferences}
-              onReset={() => setPreferences(DEFAULT_APP_PREFERENCES)}
+              onReset={() => {
+                setPreferences(DEFAULT_APP_PREFERENCES);
+                setSidebarMode(DEFAULT_APP_PREFERENCES.sidebarMode);
+              }}
             />
           ) : view === "about" ? (
             <AboutView

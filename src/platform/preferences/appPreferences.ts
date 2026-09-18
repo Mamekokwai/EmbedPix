@@ -8,6 +8,7 @@ import type {
 } from "../../features/image-converter/types";
 
 export type ThemeMode = "system" | "light" | "dark";
+export type SidebarMode = "icon" | "labeled";
 export type ImagePresetId = "high-quality" | "balanced" | "small-size" | "custom";
 
 export interface ImageConverterDefaults {
@@ -25,11 +26,13 @@ export interface ImageConverterDefaults {
 
 export interface AppPreferences extends ImageConverterDefaults {
   themeMode: ThemeMode;
+  sidebarMode: SidebarMode;
   imagePreset: ImagePresetId;
 }
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   themeMode: "system",
+  sidebarMode: "icon",
   defaultOutputFormat: "bmp",
   defaultJpegQuality: 85,
   defaultBitDepth: 24,
@@ -106,6 +109,10 @@ function isThemeMode(value: unknown): value is ThemeMode {
   return value === "system" || value === "light" || value === "dark";
 }
 
+function isSidebarMode(value: unknown): value is SidebarMode {
+  return value === "icon" || value === "labeled";
+}
+
 function isImagePresetId(value: unknown): value is ImagePresetId {
   return typeof value === "string" && IMAGE_PRESETS_SET.has(value as ImagePresetId);
 }
@@ -123,6 +130,7 @@ function parseStoredPreferences(value: string | null): Partial<AppPreferences> {
     const record = parsed as Record<string, unknown>;
     return {
       ...(isThemeMode(record.themeMode) ? { themeMode: record.themeMode } : {}),
+      ...(isSidebarMode(record.sidebarMode) ? { sidebarMode: record.sidebarMode } : {}),
       ...(typeof record.defaultOutputFormat === "string" && OUTPUT_FORMATS.has(record.defaultOutputFormat as OutputFormat)
         ? { defaultOutputFormat: record.defaultOutputFormat as OutputFormat }
         : {}),

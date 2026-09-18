@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
+import { getFormatMetadata, GIF_OUTPUT_FORMAT_IDS } from "../../shared/formatMetadata";
 import { estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
 import type { AnimationExportRequest, GifExportFrame, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
@@ -2025,7 +2026,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           </div> : null}
           {group === "export" ? <div id="gif-panel-export" role="region" aria-labelledby="gif-group-export">
           <div className="gif-export-grid">
-            <SelectField id="gif-output-format" label="输出格式" value={outputFormat} options={[{ value: "gif" as const, label: "GIF 动图" }, { value: "webp" as const, label: "WebP 动图" }, { value: "apng" as const, label: "APNG 动图" }, { value: "png-sequence" as const, label: "PNG 帧序列" }]} onChange={changeOutputFormat} />
+            <SelectField id="gif-output-format" label="输出格式" value={outputFormat} options={GIF_OUTPUT_FORMAT_IDS.map((id) => ({ value: id as GifOutputFormat, label: getFormatMetadata(id).label }))} onChange={changeOutputFormat} />
             <label className="gif-field"><span>{outputFormat === "png-sequence" ? "序列基础名" : "文件名"}</span><input value={fileName} maxLength={120} onChange={(event) => { setFileName(event.target.value); clearOutputSelection(); }} placeholder={outputFormat === "png-sequence" ? "embedpix-animation" : `embedpix-animation.${outputFormat}`} /></label>
             {outputFormat === "png-sequence" ? <>
               <div className="gif-animation-measure">

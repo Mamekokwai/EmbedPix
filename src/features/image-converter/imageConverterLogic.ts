@@ -1,4 +1,5 @@
 import type { BmpBitDepth, ImageDimensions, OutputFormat, OutputLocation, RowAlignment } from "./types";
+import { FORMAT_METADATA, IMAGE_OUTPUT_FORMAT_IDS } from "../../shared/formatMetadata";
 
 export const MAX_DIMENSION = 8192;
 export const MAX_IMAGE_PIXELS = 16_777_216;
@@ -13,11 +14,15 @@ export const OUTPUT_FORMATS: ReadonlyArray<{
   hint: string;
   description: string;
 }> = [
-  { value: "bmp", label: "BMP", hint: "1–32 位", description: "支持 1、4、8、16、24、32 位；仅 32 位保留透明度。" },
-  { value: "png", label: "PNG", hint: "24 / 32 位", description: "24 位不含透明度；32 位保留透明度，适合无损资源。" },
-  { value: "jpg", label: "JPG", hint: "24 位 · 有损", description: "固定 24 位，不支持透明度；透明区域使用背景色。" },
-  { value: "rgb565", label: "RGB565 BIN", hint: "16 位 · 原始", description: "输出适合 MCU 屏幕的 RGB565 原始二进制数据。" },
-  { value: "c-array", label: "C 数组", hint: "RGB565 · 源码", description: "输出可直接加入固件工程的 RGB565 C 数组源码。" },
+  ...IMAGE_OUTPUT_FORMAT_IDS.map((id) => {
+    const format = FORMAT_METADATA.find((item) => item.id === id);
+    return {
+      value: id as OutputFormat,
+      label: format?.label ?? id,
+      hint: format?.hint ?? "",
+      description: format?.description ?? "",
+    };
+  }),
 ];
 
 export const BMP_BIT_DEPTHS: ReadonlyArray<BmpBitDepth> = [1, 4, 8, 16, 24, 32];

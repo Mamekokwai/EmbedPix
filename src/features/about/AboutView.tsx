@@ -3,8 +3,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
 import packageJson from "../../../package.json";
 import UpdateView, { type UpdateViewProps } from "../update/UpdateView";
+import { FORMAT_METADATA } from "../../shared/formatMetadata";
 
-const SUPPORTED_OUTPUTS = ["BMP", "PNG", "JPG", "RGB565 BIN", "C 数组"];
 const AUTHOR_BLOG_URL = "https://blog.nywerya.xyz/";
 const AUTHOR_AVATAR_URL = "https://photo.nywerya.xyz/Obsidian/%E5%A4%B4%E5%83%8F2.jpg";
 const AUTHOR_GITHUB_URL = "https://github.com/Mamekokwai";
@@ -39,7 +39,7 @@ export default function AboutView(updateProps: UpdateViewProps) {
             <div className="about-title-line"><h2>嵌图匠</h2><span>v{packageJson.version}</span></div>
             <p>EmbedPix 把常见图片处理和单片机资源导出集中在一个轻量工作区里。</p>
             <div className="about-output-list" aria-label="支持的输出格式">
-              {SUPPORTED_OUTPUTS.map((format) => <span key={format}>{format}</span>)}
+              {FORMAT_METADATA.map((format) => <span key={format.id} title={format.description}>{format.label}</span>)}
             </div>
           </div>
         </section>

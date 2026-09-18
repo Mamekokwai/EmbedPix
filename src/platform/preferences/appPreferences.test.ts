@@ -35,6 +35,7 @@ describe("app preferences", () => {
 
     expect(loadAppPreferences(storage)).toEqual({
       themeMode: "dark",
+      sidebarMode: "icon",
       defaultOutputFormat: "rgb565",
       defaultJpegQuality: 92,
       defaultBitDepth: 24,
@@ -60,6 +61,7 @@ describe("app preferences", () => {
     saveAppPreferences({
       ...DEFAULT_APP_PREFERENCES,
       themeMode: "dark",
+      sidebarMode: "labeled",
       defaultBitDepth: 32,
       defaultByteOrder: "big",
       defaultChannelOrder: "bgr",
@@ -70,6 +72,7 @@ describe("app preferences", () => {
       imagePreset: "custom",
     }, storage);
     expect(loadAppPreferences(storage).themeMode).toBe("dark");
+    expect(loadAppPreferences(storage).sidebarMode).toBe("labeled");
     expect(loadAppPreferences(storage).defaultBitDepth).toBe(32);
     expect(loadAppPreferences(storage).defaultByteOrder).toBe("big");
     expect(loadAppPreferences(storage).defaultChannelOrder).toBe("bgr");
