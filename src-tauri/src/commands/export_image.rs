@@ -6,7 +6,7 @@ use std::{
 
 use image::{
     codecs::jpeg::JpegEncoder, imageops::FilterType, io::Reader as ImageReader, DynamicImage,
-    GenericImage, ImageFormat, Rgba, RgbaImage,
+    GenericImage, GenericImageView, ImageFormat, Rgba, RgbaImage,
 };
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{InvokeBody, Request};
@@ -118,6 +118,7 @@ struct ExportRequest {
     output_directory: Option<String>,
     overwrite_existing: bool,
     overwrite_same_name: bool,
+    transform: ImageTransformOptions,
     watermark: Option<WatermarkOptions>,
     delete_source: bool,
 }
@@ -136,6 +137,38 @@ struct WatermarkOptions {
     position: WatermarkPosition,
     opacity: u8,
     font_size: u16,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ImageTransformOptions {
+    #[serde(default)]
+    rotation: u16,
+    #[serde(default)]
+    flip_horizontal: bool,
+    #[serde(default)]
+    flip_vertical: bool,
+    #[serde(default)]
+    crop: Option<CropRect>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CropRect {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
+impl ImageTransformOptions {
+    fn validate(&self) -> Result<(), String> {
+        if matches!(self.rotation, 0 | 90 | 180 | 270) {
+            Ok(())
+        } else {
+            Err("transform.rotation must be 0, 90, 180, or 270".to_string())
+        }
+    }
 }
 
 impl WatermarkPosition {
@@ -197,6 +230,8 @@ struct ExportMetadata {
     #[serde(default)]
     overwrite_same_name: bool,
     #[serde(default)]
+    transform: Option<ImageTransformOptions>,
+    #[serde(default)]
     watermark_text: Option<String>,
     #[serde(default)]
     watermark_position: Option<String>,
@@ -233,6 +268,8 @@ impl ExportMetadata {
             self.watermark_opacity,
             self.watermark_font_size,
         )?;
+        let transform = self.transform.unwrap_or_default();
+        transform.validate()?;
         Ok(ExportRequest {
             input_data,
             source_file_name: source_file_name.clone(),
@@ -260,6 +297,7 @@ impl ExportMetadata {
             output_directory,
             overwrite_existing: self.overwrite_existing,
             overwrite_same_name: self.overwrite_same_name,
+            transform,
             watermark,
             delete_source: self.delete_source,
         })
@@ -452,7 +490,7 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
     validate_bit_depth(request.output_format, request.bit_depth)?;
 
     validate_input_size(&request.input_data)?;
-    let source = decode_input(&request.input_data)?;
+    let source = apply_image_transform(decode_input(&request.input_data)?, &request.transform)?;
     let mut image = resize_image(
         source,
         request.width,
@@ -778,6 +816,52 @@ fn resize_image(
         .copy_from(&resized, offset_x, offset_y)
         .expect("resized image must fit inside the target canvas");
     canvas
+}
+
+fn apply_image_transform(
+    mut image: DynamicImage,
+    transform: &ImageTransformOptions,
+) -> Result<DynamicImage, String> {
+    transform.validate()?;
+    let (source_width, source_height) = image.dimensions();
+    if let Some(crop) = transform.crop {
+        validate_crop(crop, source_width, source_height)?;
+        image = image.crop_imm(crop.x, crop.y, crop.width, crop.height);
+    }
+    image = match transform.rotation {
+        0 => image,
+        90 => image.rotate90(),
+        180 => image.rotate180(),
+        270 => image.rotate270(),
+        _ => unreachable!("transform rotation was validated"),
+    };
+    if transform.flip_horizontal {
+        image = image.fliph();
+    }
+    if transform.flip_vertical {
+        image = image.flipv();
+    }
+    Ok(image)
+}
+
+fn validate_crop(crop: CropRect, source_width: u32, source_height: u32) -> Result<(), String> {
+    if crop.width == 0 || crop.height == 0 {
+        return Err("transform.crop width and height must be greater than zero".to_string());
+    }
+    let right = crop
+        .x
+        .checked_add(crop.width)
+        .ok_or_else(|| "transform.crop exceeds the source image bounds".to_string())?;
+    let bottom = crop
+        .y
+        .checked_add(crop.height)
+        .ok_or_else(|| "transform.crop exceeds the source image bounds".to_string())?;
+    if right > source_width || bottom > source_height {
+        return Err(format!(
+            "transform.crop must stay within the source image bounds ({source_width}x{source_height})"
+        ));
+    }
+    Ok(())
 }
 
 fn apply_watermark(image: &mut RgbaImage, options: &WatermarkOptions) {
@@ -1491,6 +1575,148 @@ mod tests {
     }
 
     #[test]
+    fn raw_metadata_parses_image_transform_options() {
+        let metadata: ExportMetadata = serde_json::from_str(
+            r##"{
+                "fileName": "source.png",
+                "outputFormat": "png",
+                "width": 20,
+                "height": 10,
+                "keepAspectRatio": true,
+                "backgroundColor": null,
+                "transform": {
+                    "rotation": 90,
+                    "flipHorizontal": true,
+                    "flipVertical": true,
+                    "crop": { "x": 1, "y": 2, "width": 3, "height": 4 }
+                }
+            }"##,
+        )
+        .unwrap();
+
+        let request = metadata.into_request(vec![1]).unwrap();
+        assert_eq!(
+            request.transform,
+            ImageTransformOptions {
+                rotation: 90,
+                flip_horizontal: true,
+                flip_vertical: true,
+                crop: Some(CropRect {
+                    x: 1,
+                    y: 2,
+                    width: 3,
+                    height: 4,
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn image_transform_rejects_invalid_rotation_and_crop() {
+        let invalid_rotation: ExportMetadata = serde_json::from_str(
+            r##"{
+                "fileName": "source.png",
+                "outputFormat": "png",
+                "width": 1,
+                "height": 1,
+                "keepAspectRatio": false,
+                "backgroundColor": null,
+                "transform": { "rotation": 45 }
+            }"##,
+        )
+        .unwrap();
+        assert!(invalid_rotation
+            .into_request(vec![1])
+            .unwrap_err()
+            .contains("rotation"));
+
+        let source = DynamicImage::ImageRgba8(RgbaImage::new(4, 3));
+        for crop in [
+            CropRect {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 1,
+            },
+            CropRect {
+                x: 3,
+                y: 0,
+                width: 2,
+                height: 1,
+            },
+            CropRect {
+                x: 0,
+                y: 2,
+                width: 1,
+                height: 2,
+            },
+            CropRect {
+                x: u32::MAX,
+                y: 0,
+                width: 1,
+                height: 1,
+            },
+        ] {
+            let transform = ImageTransformOptions {
+                crop: Some(crop),
+                ..Default::default()
+            };
+            assert!(apply_image_transform(source.clone(), &transform).is_err());
+        }
+    }
+
+    #[test]
+    fn image_transform_preserves_alpha_and_applies_crop_rotation_and_flips() {
+        let source = DynamicImage::ImageRgba8(
+            RgbaImage::from_raw(
+                3,
+                2,
+                vec![
+                    10, 0, 0, 0, 20, 0, 0, 255, 30, 0, 0, 255, 40, 0, 0, 255, 50, 0, 0, 255, 60, 0,
+                    0, 255,
+                ],
+            )
+            .unwrap(),
+        );
+        let transform = ImageTransformOptions {
+            rotation: 90,
+            flip_horizontal: true,
+            flip_vertical: true,
+            crop: Some(CropRect {
+                x: 1,
+                y: 0,
+                width: 2,
+                height: 1,
+            }),
+        };
+
+        let transformed = apply_image_transform(source, &transform).unwrap();
+        assert_eq!(transformed.dimensions(), (1, 2));
+        let pixels = transformed.to_rgba8();
+        assert!(pixels
+            .pixels()
+            .any(|pixel| pixel[0] == 20 && pixel[3] == 255));
+        assert!(pixels
+            .pixels()
+            .any(|pixel| pixel[0] == 30 && pixel[3] == 255));
+
+        let flipped = apply_image_transform(
+            DynamicImage::ImageRgba8(
+                RgbaImage::from_raw(2, 1, vec![1, 2, 3, 0, 4, 5, 6, 127]).unwrap(),
+            ),
+            &ImageTransformOptions {
+                flip_horizontal: true,
+                flip_vertical: true,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .to_rgba8();
+        assert_eq!(flipped.get_pixel(0, 0), &Rgba([4, 5, 6, 127]));
+        assert_eq!(flipped.get_pixel(1, 0), &Rgba([1, 2, 3, 0]));
+    }
+
+    #[test]
     fn raw_metadata_accepts_camel_case_contract_and_null_bit_depth() {
         let metadata: ExportMetadata = serde_json::from_str(
             r##"{
@@ -1699,6 +1925,7 @@ mod tests {
             output_directory: None,
             overwrite_existing: false,
             overwrite_same_name: false,
+            transform: None,
             watermark_text: None,
             watermark_position: None,
             watermark_opacity: None,
@@ -1734,6 +1961,7 @@ mod tests {
             output_directory: None,
             overwrite_existing: false,
             overwrite_same_name: false,
+            transform: None,
             watermark_text: None,
             watermark_position: None,
             watermark_opacity: None,
@@ -1807,6 +2035,7 @@ mod tests {
             output_directory: None,
             overwrite_existing: false,
             overwrite_same_name: false,
+            transform: None,
             watermark_text: None,
             watermark_position: None,
             watermark_opacity: None,
@@ -1843,6 +2072,7 @@ mod tests {
             output_directory: None,
             overwrite_existing: false,
             overwrite_same_name: false,
+            transform: None,
             watermark_text: None,
             watermark_position: None,
             watermark_opacity: None,
@@ -1958,6 +2188,7 @@ mod tests {
             output_directory,
             overwrite_existing: false,
             overwrite_same_name: true,
+            transform: ImageTransformOptions::default(),
             watermark: None,
             delete_source: false,
         }
