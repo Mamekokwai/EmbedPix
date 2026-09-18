@@ -4,6 +4,7 @@ import {
   checkForUpdates,
   compareVersions,
   isTrustedReleaseAssetUrl,
+  isTrustedReleaseAssetUrlForTarget,
   isTrustedReleasePageUrl,
   openReleasePage,
 } from "./updateGateway";
@@ -69,6 +70,24 @@ describe("update gateway", () => {
     expect(isTrustedReleaseAssetUrl(
       "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.2.1/EmbedPix_0.2.1_x64-setup.exe?download=1",
       "0.2.0",
+    )).toBe(false);
+  });
+
+  it("matches platform and architecture-specific release assets", () => {
+    expect(isTrustedReleaseAssetUrlForTarget(
+      "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.2.0/EmbedPix_0.2.0_aarch64.dmg",
+      "0.2.0",
+      "macos-arm64",
+    )).toBe(true);
+    expect(isTrustedReleaseAssetUrlForTarget(
+      "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.2.0/EmbedPix_0.2.0_amd64.AppImage",
+      "0.2.0",
+      "linux-x64",
+    )).toBe(true);
+    expect(isTrustedReleaseAssetUrlForTarget(
+      "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.2.0/EmbedPix_0.2.0_x64-setup.exe",
+      "0.2.0",
+      "linux-x64",
     )).toBe(false);
   });
 

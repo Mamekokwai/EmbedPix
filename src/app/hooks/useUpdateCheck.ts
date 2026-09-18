@@ -185,7 +185,7 @@ export function useUpdateCheck() {
     const canRetry = current.status === "error" && current.errorStage === "download";
     if ((!canRetry && current.status !== "complete") || !current.info?.updateAvailable) return current;
     if (!current.info.assetDownloadUrl || !current.info.assetSha256) {
-      const failed: UpdateCheckState = { status: "error", currentVersion: current.currentVersion, info: current.info, error: "当前版本没有可用的受信任安装包。", errorStage: "download", downloadPath: null, downloadedBytes: null, totalBytes: current.info.assetSizeBytes };
+      const failed: UpdateCheckState = { status: "error", currentVersion: current.currentVersion, info: current.info, error: "当前平台没有可用的受信任自动安装包，请打开发布页手动下载并安装。", errorStage: "download", downloadPath: null, downloadedBytes: null, totalBytes: current.info.assetSizeBytes };
       stateRef.current = failed;
       setState(failed);
       return failed;

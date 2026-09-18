@@ -45,6 +45,15 @@ interface ReleaseAsset {
   size?: unknown;
 }
 
+export type UpdateTarget =
+  | "windows-x64"
+  | "windows-arm64"
+  | "macos-x64"
+  | "macos-arm64"
+  | "linux-x64"
+  | "linux-arm64"
+  | "unsupported";
+
 function normalizeVersion(value: string): string {
   return value.trim().replace(/^v/i, "");
 }
@@ -115,11 +124,12 @@ function parseReleaseAsset(release: ReleaseResponse, latestVersion: string): {
   sizeBytes: number | null;
 } | null {
   if (!Array.isArray(release.assets)) return null;
-  const expectedName = `EmbedPix_${latestVersion}_x64-setup.exe`;
+  const target = getCurrentUpdateTarget();
   for (const candidate of release.assets) {
     if (!candidate || typeof candidate !== "object") continue;
     const asset = candidate as ReleaseAsset;
-    if (asset.name !== expectedName || typeof asset.browser_download_url !== "string") continue;
+    if (typeof asset.name !== "string" || typeof asset.browser_download_url !== "string") continue;
+    if (!isSupportedAssetName(asset.name, latestVersion, target)) continue;
     if (!isTrustedReleaseAssetUrl(asset.browser_download_url, latestVersion)) continue;
     if (typeof asset.digest !== "string" || !/^sha256:[0-9a-f]{64}$/iu.test(asset.digest)) continue;
     const sizeBytes = typeof asset.size === "number" && Number.isSafeInteger(asset.size) && asset.size >= 0
@@ -135,6 +145,15 @@ function parseReleaseAsset(release: ReleaseResponse, latestVersion: string): {
 }
 
 export function isTrustedReleaseAssetUrl(value: string, version: string): boolean {
+  return isTrustedReleaseAssetUrlForTarget(value, version, getCurrentUpdateTarget());
+}
+
+export function isTrustedReleaseAssetUrlForTarget(
+  value: string,
+  version: string,
+  target: UpdateTarget,
+): boolean {
+  if (target === "unsupported") return false;
   try {
     const url = new URL(value);
     const segments = url.pathname.split("/").filter(Boolean);
@@ -148,11 +167,49 @@ export function isTrustedReleaseAssetUrl(value: string, version: string): boolea
       && segments[2] === "releases"
       && segments[3] === "download"
       && compareVersions(segments[4], version) === 0
-      && segments[5] === `EmbedPix_${normalizeVersion(version)}_x64-setup.exe`
+      && isSupportedAssetName(segments[5], version, target)
       && value.startsWith(RELEASE_ASSET_PREFIX);
   } catch {
     return false;
   }
+}
+
+export function getCurrentUpdateTarget(): UpdateTarget {
+  if (typeof navigator === "undefined") return "windows-x64";
+  const browserNavigator = navigator as Navigator & {
+    userAgentData?: { architecture?: string; platform?: string };
+  };
+  const platform = (browserNavigator.userAgentData?.platform
+    ?? browserNavigator.platform
+    ?? browserNavigator.userAgent).toLowerCase();
+  const architecture = (browserNavigator.userAgentData?.architecture
+    ?? browserNavigator.userAgent).toLowerCase();
+  const arm64 = architecture.includes("arm64") || architecture.includes("aarch64") || architecture.includes("arm");
+  if (platform.includes("win")) return arm64 ? "windows-arm64" : "windows-x64";
+  if (platform.includes("mac") || platform.includes("iphone") || platform.includes("ipad")) {
+    return arm64 ? "macos-arm64" : "macos-x64";
+  }
+  if (platform.includes("linux")) return arm64 ? "linux-arm64" : "linux-x64";
+  return "unsupported";
+}
+
+function isSupportedAssetName(name: string, version: string, target: UpdateTarget): boolean {
+  const prefix = `EmbedPix_${normalizeVersion(version)}_`;
+  if (!name.startsWith(prefix)) return false;
+  const remainder = name.slice(prefix.length);
+  const suffixes = target.startsWith("windows")
+    ? ["-setup.exe"]
+    : target.startsWith("macos")
+      ? [".dmg", ".app.tar.gz"]
+      : target.startsWith("linux")
+        ? [".AppImage", ".deb", ".rpm"]
+        : [];
+  const archAliases = target.endsWith("x64") ? ["x64", "x86_64", "amd64"] : ["arm64", "aarch64"];
+  return suffixes.some((suffix) => {
+    if (!remainder.endsWith(suffix)) return false;
+    const arch = remainder.slice(0, -suffix.length);
+    return archAliases.includes(arch);
+  });
 }
 
 export function isTrustedReleasePageUrl(value: string): boolean {

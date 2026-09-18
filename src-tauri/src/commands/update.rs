@@ -1,4 +1,6 @@
 use std::cmp::Ordering;
+use std::fs::{File, OpenOptions};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
@@ -9,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::AsyncWriteExt;
+
+use super::path_security;
 
 const UPDATE_PROGRESS_EVENT: &str = "update-download-progress";
 const RELEASE_HOST: &str = "github.com";
@@ -96,6 +100,21 @@ struct TrustedAsset {
     url: Url,
     digest_text: String,
     size: u64,
+}
+
+struct VerifiedPackage {
+    path: PathBuf,
+    _file: File,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UpdateTarget {
+    WindowsX64,
+    WindowsArm64,
+    MacosX64,
+    MacosArm64,
+    LinuxX64,
+    LinuxArm64,
 }
 
 async fn fetch_latest_release(client: &reqwest::Client) -> Result<ReleaseResponse, String> {
@@ -247,6 +266,8 @@ async fn download_update_inner(
     expected_size: Option<u64>,
 ) -> Result<DownloadedUpdate, String> {
     let cache_dir = update_cache_dir(app)?;
+    path_security::validate_output_directory(&cache_dir)
+        .map_err(|_| "更新缓存目录路径不安全。".to_string())?;
     tokio::fs::create_dir_all(&cache_dir)
         .await
         .map_err(|error| format!("无法创建更新缓存目录：{error}"))?;
@@ -369,25 +390,21 @@ pub async fn install_update(
     let version = normalize_version(&version)?;
     let app_for_install = app.clone();
     tokio::task::spawn_blocking(move || {
-        let package_path =
-            validate_cached_package(&app_for_install, Path::new(&package_path), &version)?;
-        let metadata = std::fs::metadata(&package_path)
-            .map_err(|_| "更新安装包不可读，请重新下载。".to_string())?;
-        let actual_size = metadata.len();
-        validate_download_size(Some(actual_size), expected_size)?;
-        let bytes = std::fs::read(&package_path)
-            .map_err(|_| "更新安装包不可读，请重新下载。".to_string())?;
-        let actual_digest = Sha256::digest(&bytes);
-        if actual_digest.as_slice() != expected_digest.as_slice() {
-            return Err("更新安装包已发生变化，请重新下载。".to_string());
-        }
+        let verified = open_verified_cached_package(
+            &app_for_install,
+            Path::new(&package_path),
+            &version,
+            &expected_digest,
+            expected_size,
+        )?;
+        let package_path = &verified.path;
 
         #[cfg(windows)]
         {
-            Command::new(&package_path)
+            Command::new(package_path)
                 .spawn()
                 .map_err(|error| format!("无法启动更新安装程序：{error}"))?;
-            Ok(())
+            Ok::<(), String>(())
         }
         #[cfg(not(windows))]
         {
@@ -493,13 +510,20 @@ fn is_allowed_download_host(url: &Url) -> bool {
 
 fn validate_asset_url(value: &str, version: &str) -> Result<Url, String> {
     let url = Url::parse(value).map_err(|_| "更新资产地址无效。".to_string())?;
-    if !is_trusted_release_asset_url(&url, version) {
+    if !is_trusted_release_asset_url_any_target(&url, version) {
         return Err("更新资产不是 EmbedPix 的受信任安装包。".to_string());
     }
     Ok(url)
 }
 
 fn is_trusted_release_asset_url(url: &Url, version: &str) -> bool {
+    let Some(target) = current_update_target() else {
+        return false;
+    };
+    is_trusted_release_asset_url_for_target(url, version, target)
+}
+
+fn is_trusted_release_asset_url_for_target(url: &Url, version: &str, target: UpdateTarget) -> bool {
     if url.scheme() != "https"
         || url.host_str() != Some(RELEASE_HOST)
         || !url.username().is_empty()
@@ -512,7 +536,6 @@ fn is_trusted_release_asset_url(url: &Url, version: &str) -> bool {
     let Ok(version) = normalize_version(version) else {
         return false;
     };
-    let expected_name = format!("EmbedPix_{version}_x64-setup.exe");
     let Some(segments) = url.path_segments() else {
         return false;
     };
@@ -523,7 +546,20 @@ fn is_trusted_release_asset_url(url: &Url, version: &str) -> bool {
         && segments[2] == "releases"
         && segments[3] == "download"
         && normalize_version(segments[4]).is_ok_and(|tag| tag == version)
-        && segments[5] == expected_name
+        && is_supported_asset_name(segments[5], &version, target)
+}
+
+fn is_trusted_release_asset_url_any_target(url: &Url, version: &str) -> bool {
+    [
+        UpdateTarget::WindowsX64,
+        UpdateTarget::WindowsArm64,
+        UpdateTarget::MacosX64,
+        UpdateTarget::MacosArm64,
+        UpdateTarget::LinuxX64,
+        UpdateTarget::LinuxArm64,
+    ]
+    .into_iter()
+    .any(|target| is_trusted_release_asset_url_for_target(url, version, target))
 }
 
 fn is_trusted_release_page_url(value: &str, version: &str) -> bool {
@@ -555,20 +591,128 @@ fn is_trusted_release_page_url(value: &str, version: &str) -> bool {
 }
 
 fn select_trusted_asset(assets: &[ReleaseAsset], version: &str) -> Option<TrustedAsset> {
-    let expected_name = release_asset_file_name(version).ok()?;
-    assets.iter().find_map(|asset| {
-        if asset.name != expected_name || asset.size == 0 || asset.size > MAX_UPDATE_BYTES {
-            return None;
-        }
-        let url = validate_asset_url(&asset.browser_download_url, version).ok()?;
-        let digest_text = asset.digest.as_deref()?.to_ascii_lowercase();
-        parse_sha256(&digest_text).ok()?;
-        Some(TrustedAsset {
-            url,
-            digest_text,
-            size: asset.size,
+    current_update_target()
+        .and_then(|target| select_trusted_asset_for_target(assets, version, target))
+}
+
+fn select_trusted_asset_for_target(
+    assets: &[ReleaseAsset],
+    version: &str,
+    target: UpdateTarget,
+) -> Option<TrustedAsset> {
+    assets
+        .iter()
+        .enumerate()
+        .filter_map(|(index, asset)| {
+            if asset.size == 0
+                || asset.size > MAX_UPDATE_BYTES
+                || !is_supported_asset_name(&asset.name, version, target)
+            {
+                return None;
+            }
+            let url = Url::parse(&asset.browser_download_url).ok()?;
+            if !is_trusted_release_asset_url_for_target(&url, version, target) {
+                return None;
+            }
+            let digest_text = asset.digest.as_deref()?.to_ascii_lowercase();
+            parse_sha256(&digest_text).ok()?;
+            Some((
+                asset_priority(&asset.name, version, target),
+                index,
+                TrustedAsset {
+                    url,
+                    digest_text,
+                    size: asset.size,
+                },
+            ))
         })
+        .min_by_key(|(priority, index, _)| (*priority, *index))
+        .map(|(_, _, asset)| asset)
+}
+
+#[cfg(all(windows, target_arch = "x86_64"))]
+fn current_update_target() -> Option<UpdateTarget> {
+    Some(UpdateTarget::WindowsX64)
+}
+
+#[cfg(all(windows, target_arch = "aarch64"))]
+fn current_update_target() -> Option<UpdateTarget> {
+    Some(UpdateTarget::WindowsArm64)
+}
+
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+fn current_update_target() -> Option<UpdateTarget> {
+    Some(UpdateTarget::MacosX64)
+}
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn current_update_target() -> Option<UpdateTarget> {
+    Some(UpdateTarget::MacosArm64)
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn current_update_target() -> Option<UpdateTarget> {
+    Some(UpdateTarget::LinuxX64)
+}
+
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+fn current_update_target() -> Option<UpdateTarget> {
+    Some(UpdateTarget::LinuxArm64)
+}
+
+#[cfg(not(any(
+    all(windows, target_arch = "x86_64"),
+    all(windows, target_arch = "aarch64"),
+    all(target_os = "macos", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "aarch64"),
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "linux", target_arch = "aarch64"),
+)))]
+fn current_update_target() -> Option<UpdateTarget> {
+    None
+}
+
+fn is_supported_asset_name(name: &str, version: &str, target: UpdateTarget) -> bool {
+    asset_name_parts(name, version, target).is_some()
+}
+
+fn asset_name_parts<'a>(
+    name: &'a str,
+    version: &str,
+    target: UpdateTarget,
+) -> Option<(&'a str, u8)> {
+    let prefix = format!("EmbedPix_{}", normalize_version(version).ok()?);
+    let remainder = name.strip_prefix(&prefix)?.strip_prefix('_')?;
+    let suffixes: &[(&str, u8)] = match target {
+        UpdateTarget::WindowsX64 | UpdateTarget::WindowsArm64 => &[("-setup.exe", 0)],
+        UpdateTarget::MacosX64 | UpdateTarget::MacosArm64 => &[(".dmg", 0), (".app.tar.gz", 1)],
+        UpdateTarget::LinuxX64 | UpdateTarget::LinuxArm64 => {
+            &[(".AppImage", 0), (".deb", 1), (".rpm", 2)]
+        }
+    };
+    suffixes.iter().find_map(|(suffix, priority)| {
+        remainder
+            .strip_suffix(suffix)
+            .filter(|arch| target_arch_aliases(target).contains(arch))
+            .map(|arch| (arch, *priority))
     })
+}
+
+fn target_arch_aliases(target: UpdateTarget) -> &'static [&'static str] {
+    match target {
+        UpdateTarget::WindowsX64 | UpdateTarget::MacosX64 | UpdateTarget::LinuxX64 => {
+            &["x64", "x86_64", "amd64"]
+        }
+        UpdateTarget::WindowsArm64 | UpdateTarget::MacosArm64 | UpdateTarget::LinuxArm64 => {
+            &["arm64", "aarch64"]
+        }
+    }
+}
+
+fn asset_priority(name: &str, version: &str, target: UpdateTarget) -> u8 {
+    asset_name_parts(name, version, target)
+        .map(|(_, package_priority)| package_priority)
+        .unwrap_or(u8::MAX)
 }
 
 fn update_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -590,13 +734,6 @@ fn update_file_name(version: &str) -> Result<String, String> {
     ))
 }
 
-fn release_asset_file_name(version: &str) -> Result<String, String> {
-    Ok(format!(
-        "EmbedPix_{}_x64-setup.exe",
-        normalize_version(version)?
-    ))
-}
-
 fn validate_cached_package(
     app: &AppHandle,
     package_path: &Path,
@@ -604,6 +741,14 @@ fn validate_cached_package(
 ) -> Result<PathBuf, String> {
     let cache_dir = update_cache_dir(app)?;
     let canonical_cache = validate_update_cache_dir(&cache_dir)?;
+    validate_cached_package_path(&canonical_cache, package_path, version)
+}
+
+fn validate_cached_package_path(
+    canonical_cache: &Path,
+    package_path: &Path,
+    version: &str,
+) -> Result<PathBuf, String> {
     let metadata = std::fs::symlink_metadata(package_path)
         .map_err(|_| "更新安装包不存在，请重新下载。".to_string())?;
     if metadata.file_type().is_symlink() || !metadata.is_file() || has_reparse_point(&metadata) {
@@ -615,13 +760,59 @@ fn validate_cached_package(
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| "更新安装包文件名无效。".to_string())?;
-    if canonical_package.parent() != Some(canonical_cache.as_path())
+    if canonical_package.parent() != Some(canonical_cache)
         || !is_generated_update_file_name(file_name, version)
         || !file_name.ends_with(".exe")
     {
         return Err("更新安装包路径不安全。".to_string());
     }
     Ok(canonical_package)
+}
+
+fn open_verified_cached_package(
+    app: &AppHandle,
+    package_path: &Path,
+    version: &str,
+    expected_digest: &[u8],
+    expected_size: Option<u64>,
+) -> Result<VerifiedPackage, String> {
+    let package_path = validate_cached_package(app, package_path, version)?;
+    let file = open_verified_package_file(&package_path, expected_digest, expected_size)?;
+    Ok(VerifiedPackage {
+        path: package_path,
+        _file: file,
+    })
+}
+
+fn open_verified_package_file(
+    package_path: &Path,
+    expected_digest: &[u8],
+    expected_size: Option<u64>,
+) -> Result<File, String> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 0x00000001;
+        options.share_mode(FILE_SHARE_READ);
+    }
+    let mut file = options
+        .open(package_path)
+        .map_err(|_| "更新安装包不可读，请重新下载。".to_string())?;
+    let actual_size = file
+        .metadata()
+        .map_err(|_| "更新安装包不可读，请重新下载。".to_string())?
+        .len();
+    validate_download_size(Some(actual_size), expected_size)?;
+    let mut bytes = Vec::with_capacity(actual_size as usize);
+    file.read_to_end(&mut bytes)
+        .map_err(|_| "更新安装包不可读，请重新下载。".to_string())?;
+    let actual_digest = Sha256::digest(&bytes);
+    if actual_digest.as_slice() != expected_digest {
+        return Err("更新安装包已发生变化，请重新下载。".to_string());
+    }
+    Ok(file)
 }
 
 fn validate_update_cache_dir(cache_dir: &Path) -> Result<PathBuf, String> {
@@ -721,9 +912,12 @@ fn parse_sha256(value: &str) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_versions, is_trusted_release_page_url, normalize_version, parse_sha256,
-        select_trusted_asset, validate_asset_url, validate_update_cache_dir, ReleaseAsset,
+        compare_versions, is_trusted_release_page_url, normalize_version,
+        open_verified_package_file, parse_sha256, select_trusted_asset_for_target,
+        validate_asset_url, validate_cached_package_path, validate_update_cache_dir, ReleaseAsset,
+        UpdateTarget,
     };
+    use sha2::Digest;
 
     #[test]
     fn accepts_only_embedpix_release_installer_urls() {
@@ -772,17 +966,66 @@ mod tests {
             digest: Some(digest.clone()),
             size: 1024,
         }];
-        let asset = select_trusted_asset(&assets, "0.1.2").expect("trusted asset");
+        let asset = select_trusted_asset_for_target(&assets, "0.1.2", UpdateTarget::WindowsX64)
+            .expect("trusted asset");
         assert_eq!(asset.size, 1024);
         assert_eq!(asset.digest_text, digest);
-        assert!(select_trusted_asset(
+        assert!(select_trusted_asset_for_target(
             &[ReleaseAsset {
                 digest: None,
                 ..assets[0].clone()
             }],
-            "0.1.2"
+            "0.1.2",
+            UpdateTarget::WindowsX64
         )
         .is_none());
+    }
+
+    #[test]
+    fn selects_matching_assets_for_each_supported_platform_and_architecture() {
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let assets = [
+            ReleaseAsset {
+                name: "EmbedPix_0.1.2_x64-setup.exe".to_string(),
+                browser_download_url: "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.1.2/EmbedPix_0.1.2_x64-setup.exe".to_string(),
+                digest: Some(digest.clone()),
+                size: 1024,
+            },
+            ReleaseAsset {
+                name: "EmbedPix_0.1.2_aarch64.dmg".to_string(),
+                browser_download_url: "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.1.2/EmbedPix_0.1.2_aarch64.dmg".to_string(),
+                digest: Some(digest.clone()),
+                size: 2048,
+            },
+            ReleaseAsset {
+                name: "EmbedPix_0.1.2_amd64.AppImage".to_string(),
+                browser_download_url: "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.1.2/EmbedPix_0.1.2_amd64.AppImage".to_string(),
+                digest: Some(digest),
+                size: 4096,
+            },
+        ];
+
+        assert_eq!(
+            select_trusted_asset_for_target(&assets, "0.1.2", UpdateTarget::WindowsX64)
+                .unwrap()
+                .size,
+            1024
+        );
+        assert_eq!(
+            select_trusted_asset_for_target(&assets, "0.1.2", UpdateTarget::MacosArm64)
+                .unwrap()
+                .size,
+            2048
+        );
+        assert_eq!(
+            select_trusted_asset_for_target(&assets, "0.1.2", UpdateTarget::LinuxX64)
+                .unwrap()
+                .size,
+            4096
+        );
+        assert!(
+            select_trusted_asset_for_target(&assets, "0.1.2", UpdateTarget::LinuxArm64).is_none()
+        );
     }
 
     #[test]
@@ -807,5 +1050,36 @@ mod tests {
         std::fs::write(&path, b"not a directory").expect("test cache marker");
         assert!(validate_update_cache_dir(&path).is_err());
         std::fs::remove_file(path).expect("remove test cache marker");
+    }
+
+    #[test]
+    fn verifies_cached_package_path_and_digest_before_install() {
+        let root = std::env::temp_dir().join(format!(
+            "embedpix-update-install-precheck-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let cache = std::fs::canonicalize(&root).unwrap();
+        let package = cache.join("EmbedPix-update-0.1.2-123-456.exe");
+        let bytes = b"trusted installer";
+        std::fs::write(&package, bytes).unwrap();
+        let digest = sha2::Sha256::digest(bytes);
+
+        let validated = validate_cached_package_path(&cache, &package, "0.1.2").unwrap();
+        assert_eq!(validated, package);
+        {
+            let _file =
+                open_verified_package_file(&package, digest.as_slice(), Some(bytes.len() as u64))
+                    .unwrap();
+            assert!(
+                open_verified_package_file(&package, &[0; 32], Some(bytes.len() as u64)).is_err()
+            );
+        }
+
+        let outside = root.join("outside.exe");
+        std::fs::write(&outside, bytes).unwrap();
+        assert!(validate_cached_package_path(&cache, &outside, "0.1.2").is_err());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
