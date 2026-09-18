@@ -46,6 +46,8 @@ import {
   getOutputParameterNote,
   getExportSafetyPlan,
   getBatchExportStatus,
+  getCropInputValidation,
+  getTransformedSourceDimensions,
   formatExportSafetyConfirmation,
   getMissingSourcePathFileName,
   getPixelError,
@@ -54,6 +56,7 @@ import {
   isRawPixelFormat,
   normalizeDimension,
   normalizeCArrayName,
+  parseCropInput,
   parseDimension,
 } from "./imageConverterLogic";
 import type {
@@ -61,6 +64,8 @@ import type {
   ChannelOrder,
   ExportImageRequest,
   ImageDimensions,
+  ImageRotation,
+  ImageTransform,
   BmpBitDepth,
   OutputFormat,
   OutputLocation,
@@ -127,6 +132,22 @@ function getSubdirectoryError(value: string): string | null {
 
 function resolveDefaultBitDepth(format: OutputFormat, requested: BmpBitDepth): BmpBitDepth {
   return getBitDepths(format).includes(requested) ? requested : getBitDepths(format)[0] ?? 24;
+}
+
+interface CropInputs {
+  x: string;
+  y: string;
+  width: string;
+  height: string;
+}
+
+function getFullImageCropInputs(source: ImageDimensions | null): CropInputs {
+  return {
+    x: "0",
+    y: "0",
+    width: source ? String(source.width) : "",
+    height: source ? String(source.height) : "",
+  };
 }
 
 
@@ -244,6 +265,11 @@ export default function ImageConverter({
   const [cArrayName, setCArrayName] = useState(defaultCArrayName);
   const [keepAspectRatio, setKeepAspectRatio] = useState(defaultKeepAspectRatio);
   const [backgroundColor, setBackgroundColor] = useState(defaultBackgroundColor.toUpperCase());
+  const [rotation, setRotation] = useState<ImageRotation>(0);
+  const [flipHorizontal, setFlipHorizontal] = useState(false);
+  const [flipVertical, setFlipVertical] = useState(false);
+  const [cropEnabled, setCropEnabled] = useState(false);
+  const [cropInputs, setCropInputs] = useState<CropInputs>(() => getFullImageCropInputs(null));
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
@@ -284,12 +310,40 @@ export default function ImageConverter({
     setCArrayName(normalizeCArrayName(defaultCArrayName));
     setKeepAspectRatio(defaultKeepAspectRatio);
     setBackgroundColor(defaultBackgroundColor.toUpperCase());
+    setRotation(0);
+    setFlipHorizontal(false);
+    setFlipVertical(false);
+    setCropEnabled(false);
+    setCropInputs(getFullImageCropInputs(null));
   }, [active, defaultBackgroundColor, defaultBitDepth, defaultByteOrder, defaultCArrayName, defaultChannelOrder, defaultJpegQuality, defaultKeepAspectRatio, defaultOutputFormat, defaultRowAlignment, defaultRowOrder]);
 
   const widthError = file ? getDimensionError(widthInput, "宽度") : null;
   const heightError = file ? getDimensionError(heightInput, "高度") : null;
   const dimensionError = widthError ?? heightError ?? (file ? getPixelError(widthInput, heightInput) : null);
-  const errorMessage = dimensionError ?? error;
+  const cropValidationError = file && cropEnabled ? getCropInputValidation(cropInputs, dimensions) : null;
+  const errorMessage = dimensionError ?? cropValidationError ?? error;
+  const imageTransform: ImageTransform = {
+    rotation,
+    flipHorizontal,
+    flipVertical,
+    crop: cropEnabled
+      ? {
+          x: parseCropInput(cropInputs.x) ?? 0,
+          y: parseCropInput(cropInputs.y) ?? 0,
+          width: parseCropInput(cropInputs.width) ?? 0,
+          height: parseCropInput(cropInputs.height) ?? 0,
+        }
+      : null,
+  };
+  const transformedSourceDimensions = dimensions
+    ? getTransformedSourceDimensions(dimensions, imageTransform)
+    : null;
+  const hasImageTransform = rotation !== 0 || flipHorizontal || flipVertical || cropEnabled;
+  const previewAppliedTransforms = [
+    rotation !== 0 ? `旋转 ${rotation}°` : null,
+    flipHorizontal ? "水平翻转" : null,
+    flipVertical ? "垂直翻转" : null,
+  ].filter((value): value is string => Boolean(value));
 
   const outputLocationError = useMemo(() => {
     if (!file) {
@@ -346,6 +400,20 @@ export default function ImageConverter({
     return `${width} × ${height} · ${getOutputLabel(outputFormat)} · ${summaryBitDepth} 位`;
   }, [bitDepth, file, height, outputFormat, width]);
 
+  const resetImageTransform = (source: ImageDimensions | null = dimensions) => {
+    setRotation(0);
+    setFlipHorizontal(false);
+    setFlipVertical(false);
+    setCropEnabled(false);
+    setCropInputs(getFullImageCropInputs(source));
+  };
+
+  const updateTransformStatus = (nextCropInputs = cropInputs, nextCropEnabled = cropEnabled) => {
+    const nextError = nextCropEnabled ? getCropInputValidation(nextCropInputs, dimensions) : null;
+    setError(null);
+    setStatus(nextError ? { kind: "error", text: "请检查编辑参数" } : { kind: "ready", text: "参数已更新，可以导出" });
+  };
+
   const activateLoadedImage = (image: LoadedImage, resetDeleteSource = true) => {
     setFile(image.file);
     setPreviewUrl(image.previewUrl);
@@ -355,6 +423,7 @@ export default function ImageConverter({
     setHeight(targetDimensions.height);
     setWidthInput(String(targetDimensions.width));
     setHeightInput(String(targetDimensions.height));
+    resetImageTransform(image.dimensions);
     if (resetDeleteSource) {
       setDeleteSource(false);
     }
@@ -555,6 +624,7 @@ export default function ImageConverter({
     setHeightInput("");
     setError(null);
     setStatus({ kind: "idle", text: "等待导入图片" });
+    resetImageTransform(null);
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
@@ -582,6 +652,7 @@ export default function ImageConverter({
     setHeightInput("");
     setError(null);
     setStatus({ kind: "idle", text: "等待导入图片" });
+    resetImageTransform(null);
     previewUrlRef.current = null;
     setPreviewUrl(null);
   };
@@ -770,6 +841,17 @@ export default function ImageConverter({
     setSettingStatus(nextWidthInput, nextHeightInput);
   };
 
+  const handleCropInputChange = (field: keyof CropInputs, value: string) => {
+    const nextCropInputs = { ...cropInputs, [field]: value };
+    setCropInputs(nextCropInputs);
+    updateTransformStatus(nextCropInputs);
+  };
+
+  const handleResetImageTransform = () => {
+    resetImageTransform(dimensions);
+    updateTransformStatus(getFullImageCropInputs(dimensions), false);
+  };
+
   const handleExport = async () => {
     if (!file || !dimensions) {
       setError("请先导入一张图片。" );
@@ -780,6 +862,12 @@ export default function ImageConverter({
     if (batchOutputLocationError) {
       setError(batchOutputLocationError);
       setStatus({ kind: "error", text: "请检查输出位置" });
+      return;
+    }
+
+    if (cropValidationError) {
+      setError(cropValidationError);
+      setStatus({ kind: "error", text: "请检查编辑参数" });
       return;
     }
 
@@ -805,8 +893,14 @@ export default function ImageConverter({
     for (const [index, image] of loadedImages.entries()) {
       setStatus({ kind: "busy", text: `正在导出 ${index + 1}/${loadedImages.length} 张：${image.file.name}` });
       try {
+        const imageTransformError = cropEnabled ? getCropInputValidation(cropInputs, image.dimensions) : null;
+        if (imageTransformError) {
+          failures.push(`${image.file.name}：${imageTransformError}`);
+          continue;
+        }
+        const targetSourceDimensions = getTransformedSourceDimensions(image.dimensions, imageTransform);
         const targetDimensions = keepAspectRatio
-          ? constrainAspectDimensions("width", width, image.dimensions)
+          ? constrainAspectDimensions("width", width, targetSourceDimensions)
           : { width, height };
         const request: ExportImageRequest = {
           fileName: image.file.name,
@@ -829,6 +923,7 @@ export default function ImageConverter({
           outputDirectory: outputDirectory.trim() || undefined,
           overwriteSameName,
           deleteSource,
+          transform: imageTransform,
         };
         lastOutputPath = await exportImage(request);
         completedCount += 1;
@@ -922,8 +1017,18 @@ export default function ImageConverter({
           ) : (
             <div className="preview-content">
               <div className="preview-frame" style={{ backgroundColor }}>
-                {previewUrl ? <img src={previewUrl} alt={`预览：${file.name}`} /> : null}
+                {previewUrl ? <img
+                  src={previewUrl}
+                  alt={`预览：${file.name}`}
+                  style={{
+                    transform: `rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`,
+                  }}
+                /> : null}
               </div>
+              {hasImageTransform ? <p className="preview-edit-note">
+                {previewAppliedTransforms.length > 0 ? `预览已应用${previewAppliedTransforms.join("、")}；` : "裁剪预览受限；"}
+                {cropEnabled ? "裁剪将在导出时按原图像素坐标执行。" : "当前没有启用裁剪。"}
+              </p> : null}
               <div className="file-summary">
                 <div className="file-icon"><ImageIcon size={18} aria-hidden="true" /></div>
                 <div className="file-copy">
@@ -1000,6 +1105,66 @@ export default function ImageConverter({
             <details className="settings-module">
               <summary>画面与像素参数</summary>
               <div className="settings-module-body">
+            <div className="setting-group image-transform-group">
+              <div className="label-row">
+                <span className="field-label">基础编辑</span>
+                {transformedSourceDimensions ? <span className="field-note">编辑后 {transformedSourceDimensions.width} × {transformedSourceDimensions.height}</span> : null}
+              </div>
+              <div className="parameter-grid">
+                <SelectField
+                  id="image-rotation"
+                  label="旋转"
+                  value={rotation}
+                  options={[0, 90, 180, 270].map((value) => ({ value: value as ImageRotation, label: value === 0 ? "0°" : `${value}°` }))}
+                  onChange={(value) => { setRotation(value); updateTransformStatus(); }}
+                />
+                <label className="compact-field">
+                  <span>裁剪</span>
+                  <span className="transform-toggle">
+                    <input type="checkbox" checked={cropEnabled} onChange={(event) => { setCropEnabled(event.target.checked); updateTransformStatus(cropInputs, event.target.checked); }} />
+                    <span>启用裁剪</span>
+                  </span>
+                </label>
+              </div>
+              <div className="transform-toggle-row">
+                <label className="toggle-row">
+                  <input type="checkbox" checked={flipHorizontal} onChange={(event) => { setFlipHorizontal(event.target.checked); updateTransformStatus(); }} />
+                  <span className="toggle-track" aria-hidden="true"><span /></span>
+                  <span>水平翻转</span>
+                </label>
+                <label className="toggle-row">
+                  <input type="checkbox" checked={flipVertical} onChange={(event) => { setFlipVertical(event.target.checked); updateTransformStatus(); }} />
+                  <span className="toggle-track" aria-hidden="true"><span /></span>
+                  <span>垂直翻转</span>
+                </label>
+              </div>
+              {cropEnabled ? <div className="crop-grid" aria-label="裁剪区域">
+                {(["x", "y", "width", "height"] as const).map((field) => {
+                  const labels = { x: "X", y: "Y", width: "宽度", height: "高度" };
+                  const max = field === "x" ? dimensions?.width : field === "y" ? dimensions?.height : field === "width" ? dimensions?.width : dimensions?.height;
+                  return <label className="text-field" htmlFor={`crop-${field}`} key={field}>
+                    <span>裁剪{labels[field]}</span>
+                    <input
+                      id={`crop-${field}`}
+                      type="number"
+                      inputMode="numeric"
+                      min={field === "x" || field === "y" ? 0 : 1}
+                      max={max}
+                      step="1"
+                      value={cropInputs[field]}
+                      disabled={!file}
+                      aria-invalid={Boolean(cropValidationError)}
+                      onChange={(event) => handleCropInputChange(field, event.target.value)}
+                    />
+                  </label>;
+                })}
+              </div> : null}
+              {cropValidationError ? <p className="error-message transform-error" role="alert">{cropValidationError}</p> : null}
+              <div className="transform-footer">
+                <p className="field-help">旋转和翻转会实时反映在预览；裁剪按原图像素坐标于导出时执行。</p>
+                <button className="quiet-button" type="button" onClick={handleResetImageTransform} disabled={!hasImageTransform}>重置编辑</button>
+              </div>
+            </div>
             <div className="setting-group">
               <div className="label-row">
                 <label className="field-label" htmlFor="bit-depth">位深</label>

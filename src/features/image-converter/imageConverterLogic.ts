@@ -1,4 +1,4 @@
-import type { BmpBitDepth, ImageDimensions, OutputFormat, OutputLocation, RowAlignment } from "./types";
+import type { BmpBitDepth, CropRect, ImageDimensions, ImageRotation, ImageTransform, OutputFormat, OutputLocation, RowAlignment } from "./types";
 import { FORMAT_METADATA, IMAGE_OUTPUT_FORMAT_IDS } from "../../shared/formatMetadata";
 
 export const MAX_DIMENSION = 8192;
@@ -7,6 +7,7 @@ export const MAX_INPUT_BYTES = 32 * 1024 * 1024;
 export const DEFAULT_JPEG_QUALITY = 85;
 export const DEFAULT_C_ARRAY_NAME = "image_data";
 export const ROW_ALIGNMENTS: ReadonlyArray<RowAlignment> = [1, 2, 4];
+export const IMAGE_ROTATIONS: ReadonlyArray<ImageRotation> = [0, 90, 180, 270];
 
 export const OUTPUT_FORMATS: ReadonlyArray<{
   value: OutputFormat;
@@ -115,6 +116,76 @@ export function constrainAspectDimensions(axis: "width" | "height", value: numbe
     ? Math.min(value, maxHeight)
     : Math.max(1, Math.round(nextWidth / ratio));
   return constrainDimensions({ width: nextWidth, height: nextHeight });
+}
+
+export function getTransformedSourceDimensions(source: ImageDimensions, transform: Pick<ImageTransform, "rotation" | "crop">): ImageDimensions {
+  const cropped = transform.crop
+    ? { width: transform.crop.width, height: transform.crop.height }
+    : source;
+  return transform.rotation === 90 || transform.rotation === 270
+    ? { width: cropped.height, height: cropped.width }
+    : cropped;
+}
+
+export function getCropInputError(value: string, label: string, allowZero = false) {
+  if (value.length === 0) {
+    return `${label}不能为空。`;
+  }
+  if (!/^\d+$/.test(value)) {
+    return `${label}需为整数。`;
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || (!allowZero && parsed < 1)) {
+    return allowZero ? `${label}需为不小于 0 的整数。` : `${label}需为大于 0 的整数。`;
+  }
+  return null;
+}
+
+export function parseCropInput(value: string) {
+  return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null;
+}
+
+export function getImageTransformError(transform: ImageTransform, source: ImageDimensions | null) {
+  if (!IMAGE_ROTATIONS.includes(transform.rotation)) {
+    return "旋转角度必须是 0、90、180 或 270 度。";
+  }
+  if (!transform.crop || !source) {
+    return null;
+  }
+  const { x, y, width, height } = transform.crop;
+  if (![x, y, width, height].every((value) => Number.isSafeInteger(value))) {
+    return "裁剪区域必须使用整数像素。";
+  }
+  if (x < 0 || y < 0) {
+    return "裁剪起点不能小于 0。";
+  }
+  if (width < 1 || height < 1) {
+    return "裁剪宽度和高度必须大于 0。";
+  }
+  if (x + width > source.width || y + height > source.height) {
+    return `裁剪区域必须位于原图范围内（${source.width} × ${source.height}）。`;
+  }
+  return null;
+}
+
+export function getCropInputValidation(
+  crop: Readonly<Record<keyof CropRect, string>>,
+  source: ImageDimensions | null,
+) {
+  const inputError = getCropInputError(crop.x, "裁剪 X", true)
+    ?? getCropInputError(crop.y, "裁剪 Y", true)
+    ?? getCropInputError(crop.width, "裁剪宽度")
+    ?? getCropInputError(crop.height, "裁剪高度");
+  if (inputError || !source) {
+    return inputError;
+  }
+  const parsedCrop = {
+    x: parseCropInput(crop.x) ?? 0,
+    y: parseCropInput(crop.y) ?? 0,
+    width: parseCropInput(crop.width) ?? 0,
+    height: parseCropInput(crop.height) ?? 0,
+  };
+  return getImageTransformError({ rotation: 0, flipHorizontal: false, flipVertical: false, crop: parsedCrop }, source);
 }
 
 export function getBitDepths(format: OutputFormat): ReadonlyArray<BmpBitDepth> {

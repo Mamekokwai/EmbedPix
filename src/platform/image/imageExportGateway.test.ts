@@ -137,6 +137,25 @@ describe("image export raw IPC envelope", () => {
     expect(disabledMetadata).not.toHaveProperty("watermarkPosition");
   });
 
+  it("serializes image transform settings for native export", () => {
+    const payload = encodeExportEnvelope(createRequest(new Uint8Array([9]), {
+      transform: {
+        rotation: 90,
+        flipHorizontal: true,
+        flipVertical: false,
+        crop: { x: 2, y: 3, width: 100, height: 80 },
+      },
+    }));
+    const metadataLength = new DataView(payload.buffer, payload.byteOffset, payload.byteLength).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(payload.subarray(8, 8 + metadataLength)));
+    expect(metadata.transform).toEqual({
+      rotation: 90,
+      flipHorizontal: true,
+      flipVertical: false,
+      crop: { x: 2, y: 3, width: 100, height: 80 },
+    });
+  });
+
   it("rejects empty and oversized image data before allocating an envelope", () => {
     expect(() => validateExportEnvelopeInput(0, "icon.png")).toThrow("图片数据不能为空");
     expect(() => validateExportEnvelopeInput(MAX_RAW_IMAGE_BYTES, "icon.png")).not.toThrow();

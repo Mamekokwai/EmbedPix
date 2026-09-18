@@ -15,6 +15,8 @@ import {
   formatExportSafetyConfirmation,
   getBackgroundNote,
   getBatchExportStatus,
+  getCropInputError,
+  getCropInputValidation,
   getBitDepthNote,
   getBitDepths,
   getDimensionError,
@@ -23,6 +25,8 @@ import {
   getOutputLabel,
   getMissingSourcePathFileName,
   getPixelError,
+  getImageTransformError,
+  getTransformedSourceDimensions,
   isImageFile,
   normalizeDimension,
   normalizeCArrayName,
@@ -111,6 +115,27 @@ describe("image converter output rules", () => {
     expect(getBitDepthNote("jpg", 32)).toBe("JPG 始终输出 24 位。");
     expect(getBitDepthNote("png", 32)).toBe("32 位输出保留透明度。");
     expect(getBitDepthNote("bmp", 4)).toContain("4 位输出不含透明度");
+  });
+});
+
+describe("image transform rules", () => {
+  const source = { width: 320, height: 240 };
+
+  it("calculates crop and quarter-turn dimensions before export resizing", () => {
+    expect(getTransformedSourceDimensions(source, { rotation: 0, crop: null })).toEqual({ width: 320, height: 240 });
+    expect(getTransformedSourceDimensions(source, { rotation: 90, crop: { x: 10, y: 20, width: 100, height: 60 } })).toEqual({ width: 60, height: 100 });
+  });
+
+  it("validates crop input clearly and accepts an in-bounds rectangle", () => {
+    expect(getCropInputError("", "裁剪 X", true)).toBe("裁剪 X不能为空。");
+    expect(getCropInputError("0", "裁剪宽度")).toBe("裁剪宽度需为大于 0 的整数。");
+    expect(getCropInputValidation({ x: "10", y: "20", width: "100", height: "60" }, source)).toBeNull();
+    expect(getCropInputValidation({ x: "300", y: "20", width: "100", height: "60" }, source)).toContain("320 × 240");
+  });
+
+  it("rejects unsupported rotations and invalid pixel rectangles", () => {
+    expect(getImageTransformError({ rotation: 45 as never, flipHorizontal: false, flipVertical: false, crop: null }, source)).toContain("0、90、180 或 270");
+    expect(getImageTransformError({ rotation: 0, flipHorizontal: true, flipVertical: true, crop: { x: 0, y: 0, width: 0, height: 20 } }, source)).toContain("大于 0");
   });
 });
 
