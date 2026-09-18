@@ -7,6 +7,7 @@ use std::{
 use super::super::path_security;
 
 const MAX_OUTPUT_NAME_CHARS: usize = 120;
+pub(super) const MAX_OUTPUT_BYTES: u64 = 128 * 1024 * 1024;
 
 struct TemporaryOutput {
     path: PathBuf,
@@ -295,6 +296,15 @@ pub(super) fn write_output(
     overwrite: bool,
     encode: impl FnOnce(&mut File) -> Result<(), String>,
 ) -> Result<(), String> {
+    write_output_with_limit(output, overwrite, MAX_OUTPUT_BYTES, encode)
+}
+
+fn write_output_with_limit(
+    output: &Path,
+    overwrite: bool,
+    max_output_bytes: u64,
+    encode: impl FnOnce(&mut File) -> Result<(), String>,
+) -> Result<(), String> {
     let parent = output
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
@@ -311,6 +321,7 @@ pub(super) fn write_output(
     encode(file)?;
     file.sync_all()
         .map_err(|error| format!("无法完成 GIF 文件写入：{error}"))?;
+    validate_output_size(file, max_output_bytes, "输出")?;
     temporary.file.take();
     check_target(output, overwrite)?;
     let result = if overwrite {
@@ -324,6 +335,28 @@ pub(super) fn write_output(
         temporary.cleanup = false;
     }
     result.map_err(|error| format!("无法保存 GIF 文件（同名目标可能已存在）：{error}"))
+}
+
+pub(super) fn validate_output_size(
+    file: &File,
+    max_output_bytes: u64,
+    label: &str,
+) -> Result<(), String> {
+    let size = file
+        .metadata()
+        .map_err(|error| format!("无法检查{label}文件体积：{error}"))?
+        .len();
+    if size > max_output_bytes {
+        let limit = if max_output_bytes.is_multiple_of(1024 * 1024) {
+            format!("{} MiB", max_output_bytes / (1024 * 1024))
+        } else {
+            format!("{max_output_bytes} 字节")
+        };
+        return Err(format!(
+            "{label}文件体积为 {size} 字节，超过 {limit} 上限，未发布。"
+        ));
+    }
+    Ok(())
 }
 
 pub(super) fn validate_output_directory(directory: &Path) -> Result<(), String> {
@@ -408,8 +441,11 @@ impl<W: Write> Write for CheckedWriter<W> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_output_name, normalize_subdirectory, validate_output_directory};
-    use std::fs;
+    use super::{
+        normalize_output_name, normalize_subdirectory, validate_output_directory,
+        write_output_with_limit,
+    };
+    use std::{fs, io::Write};
 
     #[test]
     fn rejects_a_file_as_an_output_directory() {
@@ -447,5 +483,33 @@ mod tests {
         for name in ["CON", "NUL", "COM1", "LPT9", "CON.backup"] {
             assert!(normalize_subdirectory(Some(name)).is_err());
         }
+    }
+
+    #[test]
+    fn oversized_temporary_output_is_removed_before_publish() {
+        let directory =
+            std::env::temp_dir().join(format!("embedpix-output-limit-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir(&directory).expect("create test directory");
+        let output = directory.join("animation.gif");
+
+        let result = write_output_with_limit(&output, false, 3, |file| {
+            file.write_all(b"over")
+                .map_err(|error| format!("write test output: {error}"))
+        });
+
+        assert!(result.unwrap_err().contains("超过 3 字节 上限"));
+        assert!(!output.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
+
+        fs::write(&output, b"old file").expect("write existing output");
+        let result = write_output_with_limit(&output, true, 3, |file| {
+            file.write_all(b"over")
+                .map_err(|error| format!("write test output: {error}"))
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read(&output).unwrap(), b"old file");
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).expect("remove test directory");
     }
 }

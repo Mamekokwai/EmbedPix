@@ -111,6 +111,13 @@ pub async fn estimate_png_sequence_size(
 }
 
 fn export_png_sequence_blocking(request: PngSequenceExportRequest) -> Result<Vec<String>, String> {
+    export_png_sequence_blocking_with_limit(request, storage::MAX_OUTPUT_BYTES)
+}
+
+fn export_png_sequence_blocking_with_limit(
+    request: PngSequenceExportRequest,
+    max_output_bytes: u64,
+) -> Result<Vec<String>, String> {
     let directory = storage::resolve_output_directory(
         &request.output_dir,
         request.output_location.as_deref(),
@@ -139,12 +146,14 @@ fn export_png_sequence_blocking(request: PngSequenceExportRequest) -> Result<Vec
             temporary.file.as_mut().expect("temporary file is open"),
             frame,
         )?;
-        temporary
-            .file
-            .as_mut()
-            .expect("temporary file is open")
-            .sync_all()
+        let file = temporary.file.as_mut().expect("temporary file is open");
+        file.sync_all()
             .map_err(|error| format!("无法完成第 {} 帧 PNG 写入：{error}", index + 1))?;
+        storage::validate_output_size(
+            file,
+            max_output_bytes,
+            &format!("第 {} 帧 PNG ", index + 1),
+        )?;
         temporary_files.push(temporary);
     }
 
@@ -590,5 +599,20 @@ mod tests {
         assert!(result.bytes > 0);
         assert!(!custom_directory.exists());
         assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn oversized_frame_is_removed_before_sequence_publish() {
+        let directory = TestDirectory::new();
+        let existing = directory.0.join("frame-001.png");
+        fs::write(&existing, b"old frame").unwrap();
+        let mut request = directory.request(vec![png([51, 52, 53, 255])]);
+        request.overwrite_existing = true;
+
+        let result = export_png_sequence_blocking_with_limit(request, 1);
+
+        assert!(result.unwrap_err().contains("超过 1 字节 上限"));
+        assert_eq!(fs::read(existing).unwrap(), b"old frame");
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
     }
 }
