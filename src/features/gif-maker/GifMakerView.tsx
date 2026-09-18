@@ -31,6 +31,7 @@ import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, G
 import { clampVideoFps, formatVideoTime, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoCropRect } from "./videoGifLogic";
 import { extractVideoFrameBlobs } from "./videoFrameExtraction";
+import { loadVideoMetadata } from "./videoMetadata";
 import "../../styles/features/gif-maker.css";
 
 export type GifFitMode = GifContentFit;
@@ -188,6 +189,14 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "操作失败，请检查图片和参数后重试。";
 }
 
+function createAbortError(): DOMException {
+  return new DOMException("操作已取消", "AbortError");
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw createAbortError();
+}
+
 interface GifCompressionResult {
   bytes: number;
   baselineBytes?: number;
@@ -278,39 +287,6 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-function loadVideoMetadata(url: string): Promise<{ width: number; height: number; duration: number }> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.muted = true;
-    video.playsInline = true;
-    const cleanup = () => {
-      video.removeEventListener("loadedmetadata", handleMetadata);
-      video.removeEventListener("error", handleError);
-      video.removeAttribute("src");
-      video.load();
-    };
-    const handleMetadata = () => {
-      const duration = video.duration;
-      if (!Number.isFinite(duration) || duration <= 0 || video.videoWidth <= 0 || video.videoHeight <= 0) {
-        cleanup();
-        reject(new Error("无法读取视频时长或尺寸，请选择有效的视频文件。"));
-        return;
-      }
-      const metadata = { width: video.videoWidth, height: video.videoHeight, duration };
-      cleanup();
-      resolve(metadata);
-    };
-    const handleError = () => {
-      cleanup();
-      reject(new Error("当前环境无法读取该视频格式，请尝试 MP4 或 WebM。"));
-    };
-    video.addEventListener("loadedmetadata", handleMetadata, { once: true });
-    video.addEventListener("error", handleError, { once: true });
-    video.src = url;
-  });
-}
-
 function readImageFrame(file: File, id: string): Promise<GifFrameModel> {
   const previewUrl = URL.createObjectURL(file);
   return loadImage(previewUrl)
@@ -386,8 +362,26 @@ function drawVideoFrame(
   context.restore();
 }
 
-async function canvasToBytes(canvas: HTMLCanvasElement): Promise<Uint8Array> {
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+async function canvasToBytes(canvas: HTMLCanvasElement, signal?: AbortSignal): Promise<Uint8Array> {
+  throwIfAborted(signal);
+  const blob = await new Promise<Blob | null>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => signal?.removeEventListener("abort", handleAbort);
+    const handleAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(createAbortError());
+    };
+    signal?.addEventListener("abort", handleAbort, { once: true });
+    canvas.toBlob((value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    }, "image/png");
+  });
+  throwIfAborted(signal);
   if (!blob) throw new Error("无法生成 GIF 帧数据，请重试。");
   return new Uint8Array(await blob.arrayBuffer());
 }
@@ -496,6 +490,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const pendingRef = useRef(0);
   const initializedRef = useRef(false);
   const videoExtractControllerRef = useRef<AbortController | null>(null);
+  const videoMetadataControllerRef = useRef<AbortController | null>(null);
+  const videoImportRequestRef = useRef(0);
+  const compressionControllerRef = useRef<AbortController | null>(null);
   const ratioRef = useRef<GifCanvasSize>({ width: savedPreferences.canvasWidth, height: savedPreferences.canvasHeight });
   const repeatRef = useRef(0);
   const framesRef = useRef<GifFrameModel[]>([]);
@@ -531,7 +528,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   useEffect(() => () => {
     importQueueRef.current.cancel();
+    videoMetadataControllerRef.current?.abort();
     videoExtractControllerRef.current?.abort();
+    compressionControllerRef.current?.abort();
+    videoImportRequestRef.current += 1;
     framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
     if (videoSource) URL.revokeObjectURL(videoSource.previewUrl);
   }, [videoSource]);
@@ -763,13 +763,21 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setStatus({ kind: "error", text: "视频导入失败" });
       return;
     }
+    videoMetadataControllerRef.current?.abort();
+    const requestId = ++videoImportRequestRef.current;
+    const controller = new AbortController();
+    videoMetadataControllerRef.current = controller;
     const previewUrl = URL.createObjectURL(file);
     setIsPlaying(false);
     setError(null);
     setCompressionSummary(null);
     setStatus({ kind: "importing", text: "正在读取视频信息…" });
     try {
-      const metadata = await loadVideoMetadata(previewUrl);
+      const metadata = await loadVideoMetadata(previewUrl, controller.signal);
+      if (controller.signal.aborted || requestId !== videoImportRequestRef.current) {
+        URL.revokeObjectURL(previewUrl);
+        return;
+      }
       if (videoSource) URL.revokeObjectURL(videoSource.previewUrl);
       const nextSource = { file, previewUrl, name: file.name, sourcePath: getSourcePath(file), ...metadata };
       setVideoSource(nextSource);
@@ -796,8 +804,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setStatus({ kind: "ready", text: `已载入视频：${formatVideoTime(metadata.duration)}` });
     } catch (loadError) {
       URL.revokeObjectURL(previewUrl);
-      setError(getErrorMessage(loadError));
-      setStatus({ kind: "error", text: "视频导入失败" });
+      if (!controller.signal.aborted && requestId === videoImportRequestRef.current) {
+        setError(getErrorMessage(loadError));
+        setStatus({ kind: "error", text: "视频导入失败" });
+      }
+    } finally {
+      if (videoMetadataControllerRef.current === controller) videoMetadataControllerRef.current = null;
     }
   };
 
@@ -881,6 +893,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const cancelVideoExtraction = () => {
     videoExtractControllerRef.current?.abort();
+  };
+
+  const cancelCompression = () => {
+    compressionControllerRef.current?.abort();
   };
 
   const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null) => {
@@ -1251,8 +1267,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
   };
 
-  const renderExportFrames = async (size: GifCanvasSize): Promise<GifExportFrame[]> => {
+  const renderExportFrames = async (size: GifCanvasSize, signal?: AbortSignal): Promise<GifExportFrame[]> => {
     validateGifPixels(size, frames.length);
+    throwIfAborted(signal);
     const exportCanvas = document.createElement("canvas");
     exportCanvas.width = size.width;
     exportCanvas.height = size.height;
@@ -1261,10 +1278,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const rendered: GifExportFrame[] = [];
     try {
       for (const [index, frame] of frames.entries()) {
+        throwIfAborted(signal);
         let data: Uint8Array;
         const image = await loadImage(frame.previewUrl);
+        throwIfAborted(signal);
         drawGifFrame(context, image, size, fitMode, contentAlignment, contentMargins, background, customBackgroundColor);
-        data = await canvasToBytes(exportCanvas);
+        data = await canvasToBytes(exportCanvas, signal);
         const holdDuration = frames.length === 1
           ? firstFrameHoldDuration + lastFrameHoldDuration
           : index === 0 ? firstFrameHoldDuration : index === frames.length - 1 ? lastFrameHoldDuration : 0;
@@ -1307,7 +1326,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     frames: exportFrames,
   });
 
-  const measureCompressionCandidates = async (forceMeasure = false): Promise<GifCompressionResult> => {
+  const measureCompressionCandidates = async (forceMeasure = false, signal?: AbortSignal): Promise<GifCompressionResult> => {
     const targetBytes = parseSizeBytes(targetSizeKiB);
     const maxBytes = parseSizeBytes(maxSizeKiB);
     if (targetSizeKiB.trim() && targetBytes === undefined) throw new Error("目标文件大小必须是大于 0 的数字。");
@@ -1317,7 +1336,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
 
     setStatus({ kind: "exporting", text: `正在准备 GIF 帧 ${frames.length} 帧…` });
-    const renderedBaseFrames = await renderExportFrames(canvasSize);
+    const renderedBaseFrames = await renderExportFrames(canvasSize, signal);
     const baseFrames = mergeIdenticalFrames ? mergeConsecutiveIdenticalFrames(renderedBaseFrames) : renderedBaseFrames;
     const shouldMeasure = forceMeasure || autoCompress || targetBytes !== undefined || maxBytes !== undefined;
     if (!shouldMeasure) {
@@ -1350,6 +1369,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       for (const candidate of frameVariants) {
         if (!autoCompress && size !== canvasSize) continue;
         for (const candidateColorCount of colors) {
+          throwIfAborted(signal);
           attempt += 1;
           setStatus({ kind: "exporting", text: `正在测量 GIF 体积 ${attempt}/${totalAttempts}…` });
           const measured = await estimateGifSize({
@@ -1362,6 +1382,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             ditherMode,
             frames: candidate.frames,
           });
+          throwIfAborted(signal);
           baselineBytes ??= measured.bytes;
           const result = { bytes: measured.bytes, baselineBytes, frames: candidate.frames, width: size.width, height: size.height, colorCount: candidateColorCount, samplingEvery: candidate.samplingEvery, mergedIdenticalFrames: candidate.mergedIdenticalFrames };
           if (!best || Math.abs(measured.bytes - (targetBytes ?? maxBytes ?? measured.bytes)) < Math.abs(best.bytes - (targetBytes ?? maxBytes ?? best.bytes))) best = result;
@@ -1383,7 +1404,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return best;
   };
 
-  const measureAnimationCompressionCandidates = async (forceMeasure = false): Promise<AnimationCompressionResult> => {
+  const measureAnimationCompressionCandidates = async (forceMeasure = false, signal?: AbortSignal): Promise<AnimationCompressionResult> => {
     if (outputFormat !== "webp" && outputFormat !== "apng") throw new Error("当前输出格式不支持动图体积测量。");
     const targetBytes = parseSizeBytes(targetSizeKiB);
     const maxBytes = parseSizeBytes(maxSizeKiB);
@@ -1395,9 +1416,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
     const format = outputFormat.toUpperCase();
     setStatus({ kind: "exporting", text: `正在准备 ${format} 帧 ${frames.length} 帧…` });
-    const renderedBaseFrames = await renderExportFrames(canvasSize);
+    const renderedBaseFrames = await renderExportFrames(canvasSize, signal);
     const baseFrames = mergeIdenticalFrames ? mergeConsecutiveIdenticalFrames(renderedBaseFrames) : renderedBaseFrames;
     const baseline = await estimateAnimationSize(outputFormat, createAnimationExportRequest(baseFrames));
+    throwIfAborted(signal);
     const baselineResult: AnimationCompressionResult = {
       bytes: baseline.bytes,
       baselineBytes: baseline.bytes,
@@ -1439,8 +1461,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       .map((candidate) => ({ size, ...candidate })));
     const results: AnimationCompressionResult[] = [baselineResult];
     for (const [index, candidate] of candidates.entries()) {
+      throwIfAborted(signal);
       setStatus({ kind: "exporting", text: `正在测量 ${format} 体积 ${index + 2}/${candidates.length + 1}…` });
       const measured = await estimateAnimationSize(outputFormat, createAnimationExportRequest(candidate.frames, candidate.size));
+      throwIfAborted(signal);
       results.push({
         bytes: measured.bytes,
         baselineBytes: baseline.bytes,
@@ -1459,7 +1483,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return selected;
   };
 
-  const measurePngSequenceCompressionCandidates = async (forceMeasure = false): Promise<PngSequenceCompressionResult> => {
+  const measurePngSequenceCompressionCandidates = async (forceMeasure = false, signal?: AbortSignal): Promise<PngSequenceCompressionResult> => {
     if (outputFormat !== "png-sequence") throw new Error("当前输出格式不支持 PNG 帧序列体积测量。");
     const targetBytes = parseSizeBytes(targetSizeKiB);
     const maxBytes = parseSizeBytes(maxSizeKiB);
@@ -1470,8 +1494,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
 
     setStatus({ kind: "exporting", text: `正在准备 PNG 帧 ${frames.length} 帧…` });
-    const renderedBaseFrames = await renderExportFrames(canvasSize);
+    const renderedBaseFrames = await renderExportFrames(canvasSize, signal);
     const baseline = await estimatePngSequenceSize(createPngSequenceSizeRequest(renderedBaseFrames));
+    throwIfAborted(signal);
     const baselineResult: PngSequenceCompressionResult = {
       bytes: baseline.bytes,
       baselineBytes: baseline.bytes,
@@ -1499,7 +1524,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     for (const size of sizes) {
       const rendered = size.width === canvasSize.width && size.height === canvasSize.height
         ? renderedBaseFrames
-        : await renderExportFrames(size);
+        : await renderExportFrames(size, signal);
       const frameVariants = getGifSamplingCandidates(rendered.length).flatMap((samplingEvery) => {
         const sampled = sampleGifFrames(rendered, samplingEvery);
         const merged = mergeConsecutiveIdenticalFrames(sampled);
@@ -1518,8 +1543,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
     const results: PngSequenceCompressionResult[] = [baselineResult];
     for (const [index, candidate] of candidates.entries()) {
+      throwIfAborted(signal);
       setStatus({ kind: "exporting", text: `正在测量 PNG 帧序列体积 ${index + 2}/${candidates.length + 1}…` });
       const measured = await estimatePngSequenceSize(createPngSequenceSizeRequest(candidate.frames));
+      throwIfAborted(signal);
       results.push({
         bytes: measured.bytes,
         baselineBytes: baseline.bytes,
@@ -1560,19 +1587,27 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const estimateGifSizeBeforeExport = async () => {
     if (lockedRef.current || !frames.length || outputFormat !== "gif") return;
+    const controller = new AbortController();
+    compressionControllerRef.current = controller;
     lockedRef.current = true;
     setLocked(true);
     setIsPlaying(false);
     setError(null);
     try {
-      const result = await measureCompressionCandidates(true);
+      const result = await measureCompressionCandidates(true, controller.signal);
       applySizeMeasurement(result);
       setCompressionSummary(formatGifCompressionSummary(result));
       setStatus({ kind: "ready", text: `预计 GIF 体积：${formatGifBytes(result.bytes)}` });
     } catch (estimateError) {
-      setError(getErrorMessage(estimateError));
-      setStatus({ kind: "error", text: "GIF 体积估算失败" });
+      if (controller.signal.aborted) {
+        setError(null);
+        setStatus({ kind: "ready", text: "已取消 GIF 体积估算" });
+      } else {
+        setError(getErrorMessage(estimateError));
+        setStatus({ kind: "error", text: "GIF 体积估算失败" });
+      }
     } finally {
+      if (compressionControllerRef.current === controller) compressionControllerRef.current = null;
       lockedRef.current = false;
       setLocked(false);
     }
@@ -1580,20 +1615,28 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const estimateAnimationSizeBeforeExport = async () => {
     if (lockedRef.current || !frames.length || (outputFormat !== "webp" && outputFormat !== "apng")) return;
+    const controller = new AbortController();
+    compressionControllerRef.current = controller;
     lockedRef.current = true;
     setLocked(true);
     setIsPlaying(false);
     setError(null);
     setStatus({ kind: "exporting", text: `正在测量 ${outputFormat.toUpperCase()} 体积…` });
     try {
-      const result = await measureAnimationCompressionCandidates(true);
+      const result = await measureAnimationCompressionCandidates(true, controller.signal);
       applySizeMeasurement(result);
       setCompressionSummary(formatAnimationCompressionSummary(result));
       setStatus({ kind: "ready", text: `预计 ${outputFormat.toUpperCase()} 体积：${formatGifBytes(result.bytes)}` });
     } catch (estimateError) {
-      setError(getErrorMessage(estimateError));
-      setStatus({ kind: "error", text: `${outputFormat.toUpperCase()} 体积测量失败` });
+      if (controller.signal.aborted) {
+        setError(null);
+        setStatus({ kind: "ready", text: `已取消 ${outputFormat.toUpperCase()} 体积测量` });
+      } else {
+        setError(getErrorMessage(estimateError));
+        setStatus({ kind: "error", text: `${outputFormat.toUpperCase()} 体积测量失败` });
+      }
     } finally {
+      if (compressionControllerRef.current === controller) compressionControllerRef.current = null;
       lockedRef.current = false;
       setLocked(false);
     }
@@ -1601,20 +1644,28 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const estimatePngSequenceSizeBeforeExport = async () => {
     if (lockedRef.current || !frames.length || outputFormat !== "png-sequence") return;
+    const controller = new AbortController();
+    compressionControllerRef.current = controller;
     lockedRef.current = true;
     setLocked(true);
     setIsPlaying(false);
     setError(null);
     setStatus({ kind: "exporting", text: "正在测量 PNG 帧序列体积…" });
     try {
-      const result = await measurePngSequenceCompressionCandidates(true);
+      const result = await measurePngSequenceCompressionCandidates(true, controller.signal);
       applySizeMeasurement(result);
       setCompressionSummary(formatPngSequenceCompressionSummary(result));
       setStatus({ kind: "ready", text: `预计 PNG 帧序列体积：${formatGifBytes(result.bytes)}` });
     } catch (estimateError) {
-      setError(getErrorMessage(estimateError));
-      setStatus({ kind: "error", text: "PNG 帧序列体积测量失败" });
+      if (controller.signal.aborted) {
+        setError(null);
+        setStatus({ kind: "ready", text: "已取消 PNG 帧序列体积测量" });
+      } else {
+        setError(getErrorMessage(estimateError));
+        setStatus({ kind: "error", text: "PNG 帧序列体积测量失败" });
+      }
     } finally {
+      if (compressionControllerRef.current === controller) compressionControllerRef.current = null;
       lockedRef.current = false;
       setLocked(false);
     }
@@ -1638,6 +1689,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       return;
     }
     setError(null);
+    const controller = new AbortController();
+    compressionControllerRef.current = controller;
     lockedRef.current = true;
     setLocked(true);
     setIsPlaying(false);
@@ -1645,8 +1698,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     try {
       if (outputFormat === "png-sequence") {
         const needsPngMeasurement = autoCompress || targetSizeKiB.trim() || maxSizeKiB.trim();
-        const compression = needsPngMeasurement ? await measurePngSequenceCompressionCandidates() : null;
-        const exportFrames = compression?.frames ?? await renderExportFrames(canvasSize);
+        const compression = needsPngMeasurement ? await measurePngSequenceCompressionCandidates(false, controller.signal) : null;
+        const exportFrames = compression?.frames ?? await renderExportFrames(canvasSize, controller.signal);
+        throwIfAborted(controller.signal);
         if (compression) {
           applySizeMeasurement(compression);
           setCompressionSummary(formatPngSequenceCompressionSummary(compression));
@@ -1664,8 +1718,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       if (outputLocation === "path" && !outputPath) throw new Error(`请先选择 ${outputFormat.toUpperCase()} 保存位置。`);
       if (outputFormat === "webp" || outputFormat === "apng") {
         const needsAnimationMeasurement = autoCompress || targetSizeKiB.trim() || maxSizeKiB.trim();
-        const compression = needsAnimationMeasurement ? await measureAnimationCompressionCandidates() : null;
-        const exportFrames = compression?.frames ?? prepareAnimatedExportFrames(await renderExportFrames(canvasSize));
+        const compression = needsAnimationMeasurement ? await measureAnimationCompressionCandidates(false, controller.signal) : null;
+        const exportFrames = compression?.frames ?? prepareAnimatedExportFrames(await renderExportFrames(canvasSize, controller.signal));
+        throwIfAborted(controller.signal);
         if (compression) {
           applySizeMeasurement(compression);
           setCompressionSummary(formatAnimationCompressionSummary(compression));
@@ -1678,7 +1733,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         setStatus({ kind: "success", text: `${outputFormat.toUpperCase()} 动图已导出：${result}` });
         return;
       }
-      const compression = await measureCompressionCandidates();
+      const compression = await measureCompressionCandidates(false, controller.signal);
+      throwIfAborted(controller.signal);
       const { frames: exportFrames, width, height } = compression;
       applySizeMeasurement(compression);
       setCompressionSummary(formatGifCompressionSummary(compression));
@@ -1702,9 +1758,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setLastExportPath(result);
       setStatus({ kind: "success", text: `GIF 已导出：${result} · ${formatGifCompressionSummary(compression)}` });
     } catch (exportError) {
-      setError(getErrorMessage(exportError));
-      setStatus({ kind: "error", text: `${outputFormat.toUpperCase()} 导出失败` });
+      if (controller.signal.aborted) {
+        setError(null);
+        setStatus({ kind: "ready", text: `已取消 ${outputFormat.toUpperCase()} 导出` });
+      } else {
+        setError(getErrorMessage(exportError));
+        setStatus({ kind: "error", text: `${outputFormat.toUpperCase()} 导出失败` });
+      }
     } finally {
+      if (compressionControllerRef.current === controller) compressionControllerRef.current = null;
       lockedRef.current = false;
       setLocked(false);
     }
@@ -2043,6 +2105,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       <div className="gif-export-footer">
         {error ? <p className="gif-error-message" role="alert">{error}</p> : <p className={`gif-status gif-status-${status.kind}`} role="status">{status.text}</p>}
         {sourceMode === "video" && locked ? <button className="quiet-button" type="button" onClick={cancelVideoExtraction}>取消抽帧</button> : null}
+        {compressionControllerRef.current ? <button className="quiet-button" type="button" onClick={cancelCompression}>取消处理</button> : null}
         <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!singleOutputReady) { setGroup("export"); if (outputLocation === "path") void chooseOutput(); else { setError(outputLocationError ?? "请先完成输出位置设置。"); setStatus({ kind: "error", text: "输出位置不可用" }); } } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputFormat === "png-sequence" ? (singleOutputReady ? "导出 PNG 帧序列" : "选择输出目录") : outputLocation === "path" ? (outputPath ? `导出 ${outputFormat.toUpperCase()}` : "选择保存位置") : `导出 ${outputFormat.toUpperCase()}`}</button>
       </div>
     </div>
