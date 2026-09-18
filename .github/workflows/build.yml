@@ -14,10 +14,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+        include:
+          - os: ubuntu-latest
+            bundle_target: deb
+            bundle_directory: deb
+            bundle_pattern: '\.deb$'
+          - os: macos-latest
+            bundle_target: dmg
+            bundle_directory: dmg
+            bundle_pattern: '\.dmg$'
+          - os: windows-latest
+            bundle_target: nsis
+            bundle_directory: nsis
+            bundle_pattern: '-setup\.exe$'
 
     steps:
       - name: Check out repository
@@ -65,15 +74,12 @@ jobs:
         run: npm run build
 
       - name: Test frontend
-        if: runner.os == 'Linux'
         run: npm test
 
       - name: Check Rust formatting
-        if: runner.os == 'Linux'
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Lint Rust
-        if: runner.os == 'Linux'
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
 
       - name: Check Rust
@@ -81,3 +87,44 @@ jobs:
 
       - name: Test Rust
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Check Tauri CLI availability
+        id: tauri
+        shell: bash
+        run: |
+          if npm run tauri -- --version; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Tauri CLI is unavailable; bundle smoke will be skipped."
+          fi
+
+      - name: Build Tauri bundle smoke
+        if: steps.tauri.outputs.available == 'true'
+        shell: bash
+        env:
+          TAURI_BUNDLE_TARGET: ${{ matrix.bundle_target }}
+        run: npm run tauri -- build --bundles "$TAURI_BUNDLE_TARGET"
+
+      - name: Verify Tauri bundle artifact
+        if: steps.tauri.outputs.available == 'true'
+        shell: bash
+        env:
+          TAURI_BUNDLE_DIRECTORY: ${{ matrix.bundle_directory }}
+          TAURI_BUNDLE_PATTERN: ${{ matrix.bundle_pattern }}
+        run: >-
+          node -e "const fs=require('node:fs'); const path=require('node:path');
+          const dir=path.join('src-tauri','target','release','bundle',process.env.TAURI_BUNDLE_DIRECTORY);
+          if(!fs.existsSync(dir)) throw new Error('Missing Tauri bundle directory: '+dir);
+          const pattern=new RegExp(process.env.TAURI_BUNDLE_PATTERN);
+          const files=fs.readdirSync(dir).filter((file)=>pattern.test(file));
+          if(files.length===0) throw new Error('No expected Tauri bundle found in '+dir);
+          console.log('Verified Tauri bundle:', files.join(', '));"
+
+      - name: Print CI failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          echo "::error::Cross-platform validation failed on $RUNNER_OS."
+          rustup show active-toolchain || true
+          npm run tauri -- --version || true
