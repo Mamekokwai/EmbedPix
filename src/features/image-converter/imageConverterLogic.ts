@@ -211,6 +211,145 @@ export function getMissingSourcePathFileName(
   return images.find((image) => !image.sourcePath)?.file.name ?? null;
 }
 
+export interface ExportSafetyPlan {
+  targetPaths: string[];
+  sourcePathsToBackup: string[];
+  sourcePathsToDelete: string[];
+  overwriteMode: "original" | "same-name" | null;
+}
+
+interface ExportSafetyPlanOptions {
+  outputFormat: OutputFormat;
+  outputLocation: OutputLocation;
+  outputSubdirectory: string;
+  outputDirectory: string;
+  overwriteSameName: boolean;
+  deleteSource: boolean;
+}
+
+function outputExtension(format: OutputFormat): string {
+  if (format === "rgb565") return "bin";
+  if (format === "c-array") return "h";
+  return format;
+}
+
+function getPathSeparator(path: string): "/" | "\\" {
+  return path.includes("\\") && !path.includes("/") ? "\\" : "/";
+}
+
+function getPathDirectory(path: string): string {
+  const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return separatorIndex >= 0 ? path.slice(0, separatorIndex) : "";
+}
+
+function getPathFileName(path: string): string {
+  const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return path.slice(separatorIndex + 1);
+}
+
+function replacePathExtension(path: string, extension: string): string {
+  const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  const dotIndex = path.lastIndexOf(".");
+  const hasExtension = dotIndex > separatorIndex + 1;
+  const stemEnd = hasExtension ? dotIndex : path.length;
+  return `${path.slice(0, stemEnd)}.${extension}`;
+}
+
+function joinPath(directory: string, child: string): string {
+  const trimmedDirectory = directory.trim().replace(/[\\/]+$/u, "");
+  if (!trimmedDirectory) return child;
+  return `${trimmedDirectory}${getPathSeparator(directory)}${child}`;
+}
+
+function pathsMatch(left: string, right: string): boolean {
+  const normalize = (path: string) => path.replace(/[\\/]+/gu, "/").replace(/\/$/u, "");
+  const normalizedLeft = normalize(left);
+  const normalizedRight = normalize(right);
+  return /^[A-Za-z]:\//u.test(normalizedLeft) || /^[A-Za-z]:\//u.test(normalizedRight)
+    ? normalizedLeft.toLocaleLowerCase() === normalizedRight.toLocaleLowerCase()
+    : normalizedLeft === normalizedRight;
+}
+
+function addConvertedSuffix(path: string): string {
+  const separatorIndex = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  const dotIndex = path.lastIndexOf(".");
+  const hasExtension = dotIndex > separatorIndex + 1;
+  const stemEnd = hasExtension ? dotIndex : path.length;
+  return `${path.slice(0, stemEnd)}_converted${path.slice(stemEnd)}`;
+}
+
+function getPlannedTargetPath(
+  image: { file: { name: string }; sourcePath: string | null },
+  options: ExportSafetyPlanOptions,
+): string {
+  const sourcePath = image.sourcePath?.trim() ?? "";
+  const sourceName = sourcePath ? getPathFileName(sourcePath) : image.file.name;
+  const outputName = replacePathExtension(sourceName, outputExtension(options.outputFormat));
+
+  if (options.outputLocation === "original") {
+    return sourcePath ? replacePathExtension(sourcePath, outputExtension(options.outputFormat)) : outputName;
+  }
+
+  if (options.outputLocation === "directory") {
+    return joinPath(options.outputDirectory, outputName);
+  }
+
+  const sourceDirectory = getPathDirectory(sourcePath);
+  const directory = options.outputLocation === "subfolder"
+    ? joinPath(sourceDirectory, options.outputSubdirectory)
+    : sourceDirectory;
+  const targetPath = joinPath(directory, outputName);
+  return options.outputLocation === "source"
+    && !options.overwriteSameName
+    && sourcePath
+    && pathsMatch(targetPath, sourcePath)
+    ? addConvertedSuffix(targetPath)
+    : targetPath;
+}
+
+export function getExportSafetyPlan(
+  images: ReadonlyArray<{ file: { name: string }; sourcePath: string | null }>,
+  options: ExportSafetyPlanOptions,
+): ExportSafetyPlan {
+  const sourcePaths = images
+    .map((image) => image.sourcePath?.trim() ?? "")
+    .filter((path): path is string => Boolean(path));
+  const isOriginalReplacement = options.outputLocation === "original";
+
+  return {
+    targetPaths: images.map((image) => getPlannedTargetPath(image, options)),
+    sourcePathsToBackup: isOriginalReplacement ? sourcePaths : [],
+    sourcePathsToDelete: options.deleteSource ? sourcePaths : [],
+    overwriteMode: isOriginalReplacement ? "original" : options.overwriteSameName ? "same-name" : null,
+  };
+}
+
+export function formatExportSafetyConfirmation(plan: ExportSafetyPlan): string | null {
+  const requiresConfirmation = plan.overwriteMode !== null || plan.sourcePathsToDelete.length > 0;
+  if (!requiresConfirmation) return null;
+
+  const lines = ["导出前请确认以下文件操作："];
+  if (plan.overwriteMode === "original") {
+    lines.push("覆盖原图（原图会先移入同目录的 bak 文件夹）：");
+  } else if (plan.overwriteMode === "same-name") {
+    lines.push("覆盖同名文件（如果目标已存在，将直接替换）：");
+  }
+  if (plan.overwriteMode !== null || plan.sourcePathsToDelete.length > 0) {
+    if (plan.overwriteMode === null) lines.push("目标文件（写入成功后保留）：");
+    plan.targetPaths.forEach((path) => lines.push(`目标文件：${path}`));
+  }
+  if (plan.sourcePathsToBackup.length > 0) {
+    lines.push("将备份以下源文件：");
+    plan.sourcePathsToBackup.forEach((path) => lines.push(`源文件：${path}`));
+  }
+  if (plan.sourcePathsToDelete.length > 0) {
+    lines.push("仅在对应导出成功后删除以下源文件：");
+    plan.sourcePathsToDelete.forEach((path) => lines.push(`源文件：${path}`));
+  }
+  lines.push("取消不会开始导出，也不会修改或删除任何文件。是否继续？");
+  return lines.join("\n");
+}
+
 export function getBatchExportStatus(completed: number, total: number, lastOutputPath: string | null) {
   if (completed < total) {
     return `已导出 ${completed}/${total} 张`;

@@ -12,12 +12,14 @@ import {
   constrainAspectDimensions,
   constrainDimensions,
   formatFileSize,
+  formatExportSafetyConfirmation,
   getBackgroundNote,
   getBatchExportStatus,
   getBitDepthNote,
   getBitDepths,
   getDimensionError,
   getEffectiveBitDepth,
+  getExportSafetyPlan,
   getOutputLabel,
   getMissingSourcePathFileName,
   getPixelError,
@@ -151,5 +153,79 @@ describe("batch image export helpers", () => {
     expect(getBatchExportStatus(1, 3, null)).toBe("已导出 1/3 张");
     expect(getBatchExportStatus(1, 1, "C:\\Images\\first.bmp")).toBe("已导出到 C:\\Images\\first.bmp");
     expect(getBatchExportStatus(2, 2, "C:\\Images\\second.bmp")).toContain("已导出 2 张图片");
+  });
+
+  it("plans original replacement and source backup paths separately", () => {
+    const plan = getExportSafetyPlan([
+      { file: { name: "screen.png" }, sourcePath: "C:\\Images\\screen.png" },
+    ], {
+      outputFormat: "bmp",
+      outputLocation: "original",
+      outputSubdirectory: "",
+      outputDirectory: "",
+      overwriteSameName: false,
+      deleteSource: false,
+    });
+
+    expect(plan).toEqual({
+      targetPaths: ["C:\\Images\\screen.bmp"],
+      sourcePathsToBackup: ["C:\\Images\\screen.png"],
+      sourcePathsToDelete: [],
+      overwriteMode: "original",
+    });
+    expect(formatExportSafetyConfirmation(plan)).toContain("C:\\Images\\screen.bmp");
+    expect(formatExportSafetyConfirmation(plan)).toContain("C:\\Images\\screen.png");
+  });
+
+  it("requires confirmation before same-name overwrite or source deletion", () => {
+    const plan = getExportSafetyPlan([
+      { file: { name: "screen.png" }, sourcePath: "C:\\Images\\screen.png" },
+    ], {
+      outputFormat: "rgb565",
+      outputLocation: "directory",
+      outputSubdirectory: "",
+      outputDirectory: "D:\\Firmware",
+      overwriteSameName: true,
+      deleteSource: true,
+    });
+
+    expect(plan.targetPaths).toEqual(["D:\\Firmware\\screen.bin"]);
+    expect(plan.sourcePathsToDelete).toEqual(["C:\\Images\\screen.png"]);
+    expect(plan.overwriteMode).toBe("same-name");
+    expect(formatExportSafetyConfirmation(plan)).toContain("取消不会开始导出");
+  });
+
+  it("matches the backend's safe source-folder name and lists it before source deletion", () => {
+    const plan = getExportSafetyPlan([
+      { file: { name: "screen.png" }, sourcePath: "C:\\Images\\screen.png" },
+    ], {
+      outputFormat: "png",
+      outputLocation: "source",
+      outputSubdirectory: "",
+      outputDirectory: "",
+      overwriteSameName: false,
+      deleteSource: true,
+    });
+
+    const confirmation = formatExportSafetyConfirmation(plan);
+    expect(plan.targetPaths).toEqual(["C:\\Images\\screen_converted.png"]);
+    expect(confirmation).toContain("目标文件：C:\\Images\\screen_converted.png");
+    expect(confirmation).toContain("源文件：C:\\Images\\screen.png");
+  });
+
+  it("does not require a confirmation for a safe non-overwriting export", () => {
+    const plan = getExportSafetyPlan([
+      { file: { name: "screen.png" }, sourcePath: "C:\\Images\\screen.png" },
+    ], {
+      outputFormat: "png",
+      outputLocation: "subfolder",
+      outputSubdirectory: "export",
+      outputDirectory: "",
+      overwriteSameName: false,
+      deleteSource: false,
+    });
+
+    expect(plan.targetPaths).toEqual(["C:\\Images\\export\\screen.png"]);
+    expect(formatExportSafetyConfirmation(plan)).toBeNull();
   });
 });

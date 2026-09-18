@@ -43,7 +43,9 @@ import {
   getFormatInfo,
   getOutputLabel,
   getOutputParameterNote,
+  getExportSafetyPlan,
   getBatchExportStatus,
+  formatExportSafetyConfirmation,
   getMissingSourcePathFileName,
   getPixelError,
   isCArrayFormat,
@@ -691,9 +693,6 @@ export default function ImageConverter({
   };
 
   const handleDeleteSourceChange = (checked: boolean) => {
-    if (checked && !window.confirm("导出成功后将删除源图片，仅保留导出的文件。确定启用吗？")) {
-      return;
-    }
     setDeleteSource(checked);
     setError(null);
   };
@@ -726,6 +725,21 @@ export default function ImageConverter({
     if (batchOutputLocationError) {
       setError(batchOutputLocationError);
       setStatus({ kind: "error", text: "请检查输出位置" });
+      return;
+    }
+
+    const safetyPlan = getExportSafetyPlan(loadedImages, {
+      outputFormat,
+      outputLocation,
+      outputSubdirectory,
+      outputDirectory,
+      overwriteSameName,
+      deleteSource,
+    });
+    const confirmationMessage = formatExportSafetyConfirmation(safetyPlan);
+    if (confirmationMessage && !window.confirm(confirmationMessage)) {
+      setError(null);
+      setStatus({ kind: "ready", text: "已取消导出，文件未改变" });
       return;
     }
 
@@ -1128,7 +1142,7 @@ export default function ImageConverter({
               </p>
               {outputLocationError ? <p className="error-message output-location-error" id="output-location-error" role="alert">{outputLocationError}</p> : null}
               {outputLocation === "original" ? (
-                <p className="field-help output-action-help output-action-info" id="output-original-help">旧图片会先移入同目录的 bak 文件夹，再将新文件写回原图位置；输出格式不同会使用对应的新扩展名。</p>
+                <p className="field-help output-action-help output-action-info" id="output-original-help">导出前会列出将被覆盖的目标和待备份源文件并要求确认；旧图片会先移入同目录的 bak 文件夹，再将新文件写回原图位置。</p>
               ) : (
                 <div className="output-actions">
                   <div className="output-action">
@@ -1137,7 +1151,7 @@ export default function ImageConverter({
                       <span className="toggle-track" aria-hidden="true"><span /></span>
                       <span>覆盖同名输出文件</span>
                     </label>
-                    <p className="field-help output-action-help" id="overwrite-same-name-help">已有同名输出会直接覆盖，不移动到 bak 文件夹。</p>
+                    <p className="field-help output-action-help" id="overwrite-same-name-help">导出前会列出目标文件并要求确认；已有同名输出会直接覆盖，不移动到 bak 文件夹。</p>
                   </div>
                   <div className="output-action">
                     <label className="toggle-row output-action-toggle">
@@ -1145,7 +1159,7 @@ export default function ImageConverter({
                       <span className="toggle-track" aria-hidden="true"><span /></span>
                       <span>导出成功后删除源图片</span>
                     </label>
-                    <p className="field-help output-action-help output-action-danger" id="delete-source-help">这是破坏性操作，仅在确认导出文件无误后使用。</p>
+                    <p className="field-help output-action-help output-action-danger" id="delete-source-help">导出前会列出待删除源文件并要求确认；只有对应输出成功后才会删除。</p>
                   </div>
                 </div>
               )}
