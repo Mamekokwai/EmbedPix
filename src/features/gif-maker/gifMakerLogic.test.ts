@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifByteFrame } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
+  it("moves source and settings tabs with standard keyboard directions", () => {
+    expect(getNextGifTabIndex(0, 2, "ArrowRight")).toBe(1);
+    expect(getNextGifTabIndex(1, 2, "ArrowRight")).toBe(0);
+    expect(getNextGifTabIndex(0, 3, "ArrowUp")).toBe(2);
+    expect(getNextGifTabIndex(1, 3, "Home")).toBe(0);
+    expect(getNextGifTabIndex(1, 3, "End")).toBe(2);
+    expect(getNextGifTabIndex(0, 0, "ArrowRight")).toBe(-1);
+  });
+
   it("estimates export workload without pretending to know compressed file size", () => {
     expect(estimateGifWorkload({ width: 320, height: 240 }, 10, 256)).toEqual({
       totalPixels: 768000,

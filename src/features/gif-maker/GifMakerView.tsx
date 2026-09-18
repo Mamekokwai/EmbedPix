@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, DragEvent, MouseEvent } from "react";
+import type { ChangeEvent, DragEvent, KeyboardEvent, MouseEvent } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -25,7 +25,7 @@ import { getFormatMetadata, GIF_OUTPUT_FORMAT_IDS } from "../../shared/formatMet
 import { estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
 import type { AnimationExportRequest, GifExportFrame, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
@@ -59,6 +59,8 @@ export type GifSettingsGroup = "timing" | "canvas" | "export";
 export const DEFAULT_GIF_SETTINGS_GROUP: GifSettingsGroup | null = null;
 type GifOutputFormat = GifMakerOutputFormat;
 type GifSourceMode = "image" | "video";
+const GIF_SOURCE_MODES: ReadonlyArray<GifSourceMode> = ["image", "video"];
+const GIF_SETTINGS_GROUPS: ReadonlyArray<GifSettingsGroup> = ["timing", "canvas", "export"];
 
 function defaultGifFileName(format: GifOutputFormat): string {
   return format === "png-sequence" ? "embedpix-animation" : `embedpix-animation.${format}`;
@@ -1824,6 +1826,42 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         ? (sourcePath ? `源文件夹 / ${outputSubdirectory.trim() || "未填写子文件夹"}` : "等待可用源文件路径")
         : (outputDirectory.trim() || "尚未填写自定义目录");
 
+  const selectSourceMode = (mode: GifSourceMode) => {
+    if (mode === "video") setIsPlaying(false);
+    setSourceMode(mode);
+  };
+
+  const handleSourceTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.currentTarget.blur();
+      return;
+    }
+    const nextIndex = getNextGifTabIndex(index, GIF_SOURCE_MODES.length, event.key);
+    if (nextIndex !== index) {
+      event.preventDefault();
+      const nextMode = GIF_SOURCE_MODES[nextIndex];
+      selectSourceMode(nextMode);
+      document.getElementById(`gif-source-tab-${nextMode}`)?.focus();
+    }
+  };
+
+  const handleSettingsTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setGroup(null);
+      event.currentTarget.focus();
+      return;
+    }
+    const nextIndex = getNextGifTabIndex(index, GIF_SETTINGS_GROUPS.length, event.key);
+    if (nextIndex !== index) {
+      event.preventDefault();
+      const nextGroup = GIF_SETTINGS_GROUPS[nextIndex];
+      setGroup(nextGroup);
+      document.getElementById(`gif-group-${nextGroup}`)?.focus();
+    }
+  };
+
   return (
     <div className={`gif-maker-view page-view gif-source-${sourceMode}`}>
       <header className="page-header gif-maker-header">
@@ -1831,22 +1869,30 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         <div className="page-header-copy">
           <p className="page-eyebrow">GIF MAKER</p>
           <h1>GIF 制作</h1>
-          <div className="gif-source-tabs" role="tablist" aria-label="GIF 来源">
+          <div className="gif-source-tabs" role="tablist" aria-label="GIF 来源" aria-orientation="horizontal">
             <button
+              id="gif-source-tab-image"
               className={`gif-source-tab${sourceMode === "image" ? " gif-source-tab-active" : ""}`}
               type="button"
               role="tab"
               aria-selected={sourceMode === "image"}
-              onClick={() => setSourceMode("image")}
+              aria-controls="gif-source-panel-image"
+              tabIndex={sourceMode === "image" ? 0 : -1}
+              onClick={() => selectSourceMode("image")}
+              onKeyDown={(event) => handleSourceTabKeyDown(event, 0)}
             >
               <Images size={14} aria-hidden="true" />图生 GIF
             </button>
             <button
+              id="gif-source-tab-video"
               className={`gif-source-tab${sourceMode === "video" ? " gif-source-tab-active" : ""}`}
               type="button"
               role="tab"
               aria-selected={sourceMode === "video"}
-              onClick={() => { setIsPlaying(false); setSourceMode("video"); }}
+              aria-controls="gif-source-panel-video"
+              tabIndex={sourceMode === "video" ? 0 : -1}
+              onClick={() => selectSourceMode("video")}
+              onKeyDown={(event) => handleSourceTabKeyDown(event, 1)}
             >
               <Video size={14} aria-hidden="true" />视频生 GIF
             </button>
@@ -1868,7 +1914,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         </div>
 
         {sourceMode === "video" ? (
-          <section className="gif-card gif-video-card" aria-label="视频源设置">
+            <section id="gif-source-panel-video" className="gif-card gif-video-card" role="tabpanel" aria-labelledby="gif-source-tab-video" aria-label="视频源设置">
             <div className="gif-card-heading">
               <div><p className="gif-card-kicker">VIDEO SOURCE</p><h2>视频片段</h2></div>
               {videoSource ? <span className="gif-count-badge">{formatVideoTime(videoSource.duration)}</span> : null}
@@ -1908,7 +1954,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           </section>
         ) : null}
 
-        <div className="gif-workspace-grid">
+        <div id="gif-source-panel-image" className="gif-workspace-grid" role="tabpanel" aria-labelledby="gif-source-tab-image">
           <section className="gif-card gif-assets-card" aria-labelledby="gif-assets-title">
             <div className="gif-card-heading">
               <div><p className="gif-card-kicker">01 / ASSETS</p><h2 id="gif-assets-title">素材帧</h2></div>
@@ -1991,9 +2037,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         </div>
 
         <section className="gif-card gif-settings-card" aria-label="GIF 参数">
-          <div className="gif-group-tabs">
-            {([['timing', '帧时长'], ['canvas', '画布'], ['export', '导出设置']] as const).map(([id, label]) => (
-              <button key={id} id={`gif-group-${id}`} className={`quiet-button${group === id ? ' gif-group-active' : ''}`} type="button" aria-expanded={group === id} aria-controls={`gif-panel-${id}`} onClick={() => setGroup(group === id ? null : id)}>{label}</button>
+          <div className="gif-group-tabs" role="tablist" aria-label="GIF 参数分组" aria-orientation="horizontal">
+            {([['timing', '帧时长'], ['canvas', '画布'], ['export', '导出设置']] as const).map(([id, label], index) => (
+              <button key={id} id={`gif-group-${id}`} className={`quiet-button${group === id ? ' gif-group-active' : ''}`} type="button" role="tab" aria-selected={group === id} aria-controls={`gif-panel-${id}`} tabIndex={(group === id || (!group && index === 0)) ? 0 : -1} onClick={() => setGroup(group === id ? null : id)} onKeyDown={(event) => handleSettingsTabKeyDown(event, index)}>{label}</button>
             ))}
             <span>再次点击折叠</span>
           </div>

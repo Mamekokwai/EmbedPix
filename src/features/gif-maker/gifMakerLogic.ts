@@ -27,6 +27,15 @@ export type GifPlaybackSpeed = typeof GIF_PLAYBACK_SPEEDS[number];
 export const GIF_COLOR_COUNTS = [2, 16, 32, 64, 128, 256] as const;
 export type GifColorCount = typeof GIF_COLOR_COUNTS[number];
 
+export function getNextGifTabIndex(currentIndex: number, tabCount: number, key: string) {
+  if (tabCount <= 0) return -1;
+  if (key === "Home") return 0;
+  if (key === "End") return tabCount - 1;
+  if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "ArrowUp" && key !== "ArrowDown") return currentIndex;
+  const direction = key === "ArrowLeft" || key === "ArrowUp" ? -1 : 1;
+  return (currentIndex + direction + tabCount) % tabCount;
+}
+
 export function getGifCompressionColorCandidates(maxColorCount: number): GifColorCount[] {
   const safeMax = Number.isFinite(maxColorCount) ? Math.round(maxColorCount) : 256;
   return [...GIF_COLOR_COUNTS].reverse().filter((value) => value <= safeMax);
