@@ -45,7 +45,6 @@ import {
   getOutputLabel,
   getOutputParameterNote,
   getExportSafetyPlan,
-  getBatchExportStatus,
   getCropInputValidation,
   getTransformedSourceDimensions,
   formatExportSafetyConfirmation,
@@ -73,6 +72,7 @@ import type {
   RowOrder,
 } from "./types";
 import ThemeSelect from "../../shared/components/ThemeSelect";
+import { formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
 
 interface ImageConverterProps {
   defaultOutputFormat?: OutputFormat;
@@ -278,6 +278,8 @@ export default function ImageConverter({
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
+  const [failedExportIds, setFailedExportIds] = useState<string[]>([]);
+  const exportCancelRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const loadIdRef = useRef(0);
@@ -852,7 +854,15 @@ export default function ImageConverter({
     updateTransformStatus(getFullImageCropInputs(dimensions), false);
   };
 
-  const handleExport = async () => {
+  const requestExportCancel = () => {
+    if (status.kind !== "busy") {
+      return;
+    }
+    exportCancelRef.current = true;
+    setStatus({ kind: "busy", text: "正在等待当前文件完成，之后将停止队列…" });
+  };
+
+  const handleExport = async (requestedImages: ReadonlyArray<LoadedImage> = loadedImages) => {
     if (!file || !dimensions) {
       setError("请先导入一张图片。" );
       setStatus({ kind: "error", text: "还没有可导出的图片" });
@@ -865,13 +875,13 @@ export default function ImageConverter({
       return;
     }
 
-    if (cropValidationError) {
+    if (cropValidationError && requestedImages === loadedImages) {
       setError(cropValidationError);
       setStatus({ kind: "error", text: "请检查编辑参数" });
       return;
     }
 
-    const safetyPlan = getExportSafetyPlan(loadedImages, {
+    const safetyPlan = getExportSafetyPlan(requestedImages, {
       outputFormat,
       outputLocation,
       outputSubdirectory,
@@ -886,17 +896,14 @@ export default function ImageConverter({
       return;
     }
 
+    exportCancelRef.current = false;
     setError(null);
+    setFailedExportIds([]);
     let lastOutputPath: string | null = null;
-    let completedCount = 0;
-    const failures: string[] = [];
-    for (const [index, image] of loadedImages.entries()) {
-      setStatus({ kind: "busy", text: `正在导出 ${index + 1}/${loadedImages.length} 张：${image.file.name}` });
-      try {
+    const result = await runExportQueue(requestedImages, async (image) => {
         const imageTransformError = cropEnabled ? getCropInputValidation(cropInputs, image.dimensions) : null;
         if (imageTransformError) {
-          failures.push(`${image.file.name}：${imageTransformError}`);
-          continue;
+          throw new Error(imageTransformError);
         }
         const targetSourceDimensions = getTransformedSourceDimensions(image.dimensions, imageTransform);
         const targetDimensions = keepAspectRatio
@@ -926,21 +933,38 @@ export default function ImageConverter({
           transform: imageTransform,
         };
         lastOutputPath = await exportImage(request);
-        completedCount += 1;
-      } catch (exportError) {
-        const message = exportError instanceof Error ? exportError.message : "导出失败，请重试。";
-        failures.push(`${image.file.name}：${message}`);
-      }
-    }
-
+      }, {
+        shouldCancel: () => exportCancelRef.current,
+        onProgress: (progress) => {
+          setStatus({ kind: "busy", text: formatExportQueueProgress(progress) });
+        },
+      });
+    const failures = result.failed.map(({ item, error: exportError }) => {
+      const message = exportError instanceof Error ? exportError.message : "导出失败，请重试。";
+      return `${item.file.name}：${message}`;
+    });
+    setFailedExportIds(result.failed.map(({ item }) => item.id));
     if (failures.length > 0) {
-      setStatus({ kind: "error", text: `已导出 ${completedCount}/${loadedImages.length} 张` });
       setError(failures.join("\n"));
+    } else {
+      setError(null);
+    }
+    if (result.cancelled || failures.length > 0) {
+      setStatus({ kind: failures.length > 0 ? "error" : "ready", text: formatExportQueueSummary(result) });
     } else {
       setStatus({
         kind: "success",
-        text: getBatchExportStatus(completedCount, loadedImages.length, lastOutputPath),
+        text: result.total === 1 && result.succeeded.length === 1
+          ? `已导出到 ${lastOutputPath ?? "目标位置"}`
+          : formatExportQueueSummary(result),
       });
+    }
+  };
+
+  const retryFailedExports = () => {
+    const retryImages = loadedImages.filter((image) => failedExportIds.includes(image.id));
+    if (retryImages.length > 0) {
+      void handleExport(retryImages);
     }
   };
 
@@ -1408,10 +1432,23 @@ export default function ImageConverter({
               </div>
               {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}
             </div>
-            <button className="export-button" type="button" disabled={!file || status.kind === "busy" || Boolean(dimensionError) || Boolean(batchOutputLocationError)} aria-busy={status.kind === "busy"} onClick={() => void handleExport()}>
-              <Download size={17} aria-hidden="true" />
-              {status.kind === "busy" ? "处理中…" : `导出 ${getOutputLabel(outputFormat)}`}
-            </button>
+            <div className="footer-actions">
+              {failedExportIds.length > 0 && status.kind !== "busy" ? (
+                <button className="quiet-button export-retry-button" type="button" onClick={retryFailedExports}>
+                  重试失败项（{failedExportIds.length}）
+                </button>
+              ) : null}
+              <button
+                className="export-button"
+                type="button"
+                disabled={status.kind !== "busy" && (!file || Boolean(dimensionError) || Boolean(cropValidationError) || Boolean(batchOutputLocationError))}
+                aria-busy={status.kind === "busy"}
+                onClick={() => status.kind === "busy" ? requestExportCancel() : void handleExport()}
+              >
+                {status.kind === "busy" ? <X size={17} aria-hidden="true" /> : <Download size={17} aria-hidden="true" />}
+                {status.kind === "busy" ? "取消导出" : `导出 ${getOutputLabel(outputFormat)}`}
+              </button>
+            </div>
           </div>
         </div>
       </section>

@@ -875,6 +875,20 @@
   gap: 5px;
 }
 
+.footer-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.export-retry-button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .status-message {
   display: flex;
   min-width: 0;
@@ -1055,6 +1069,15 @@
   .panel-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .footer-actions {
+    width: 100%;
+  }
+
+  .export-retry-button,
+  .footer-actions .export-button {
+    flex: 1;
   }
 
   .export-button {
