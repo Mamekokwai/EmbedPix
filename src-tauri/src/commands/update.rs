@@ -6,6 +6,8 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use base64::Engine;
+use minisign_verify::{PublicKey, Signature};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -105,6 +107,54 @@ struct TrustedAsset {
 struct VerifiedPackage {
     path: PathBuf,
     _file: File,
+}
+
+fn decode_signature_text(value: &str) -> Result<String, String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(value.trim())
+        .map_err(|_| "更新安装包签名编码无效。".to_string())?;
+    String::from_utf8(bytes).map_err(|_| "更新安装包签名内容无效。".to_string())
+}
+
+fn verify_signature(
+    data: &[u8],
+    encoded_signature: &str,
+    encoded_public_key: &str,
+) -> Result<(), String> {
+    let public_key = PublicKey::decode(&decode_signature_text(encoded_public_key)?)
+        .map_err(|_| "更新公钥配置无效。".to_string())?;
+    let signature = Signature::decode(&decode_signature_text(encoded_signature)?)
+        .map_err(|_| "更新安装包签名无效。".to_string())?;
+    public_key
+        .verify(data, &signature, true)
+        .map_err(|_| "更新安装包签名验证失败。".to_string())
+}
+
+fn updater_public_key() -> Result<String, String> {
+    let config: serde_json::Value = serde_json::from_str(include_str!("../../tauri.conf.json"))
+        .map_err(|_| "更新器配置无效。".to_string())?;
+    config
+        .get("plugins")
+        .and_then(|plugins| plugins.get("updater"))
+        .and_then(|updater| updater.get("pubkey"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|key| !key.trim().is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| "更新公钥未配置。".to_string())
+}
+
+fn verify_update_signature(data: &[u8], encoded_signature: &str) -> Result<(), String> {
+    let public_key = updater_public_key()?;
+    verify_signature(data, encoded_signature, &public_key)
+}
+
+fn signature_url_for_asset(asset_url: &Url) -> Result<Url, String> {
+    if asset_url.query().is_some() || asset_url.fragment().is_some() {
+        return Err("更新安装包地址包含无效参数。".to_string());
+    }
+    let mut signature_url = asset_url.clone();
+    signature_url.set_path(&format!("{}.sig", asset_url.path()));
+    Ok(signature_url)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -227,12 +277,14 @@ pub async fn download_update(
         return Err("更新元数据已变化，请重新检查更新。".to_string());
     }
     let expected_size = Some(trusted_asset.size);
+    let signature_url = signature_url_for_asset(&validated_url)?;
     begin_download(&state)?;
 
     let result = download_update_inner(
         &app,
         &state,
         validated_url,
+        signature_url,
         expected_digest,
         &version,
         expected_size,
@@ -261,6 +313,7 @@ async fn download_update_inner(
     app: &AppHandle,
     state: &State<'_, UpdateProgressState>,
     validated_url: Url,
+    signature_url: Url,
     expected_digest: Vec<u8>,
     version: &str,
     expected_size: Option<u64>,
@@ -274,14 +327,19 @@ async fn download_update_inner(
     validate_update_cache_dir(&cache_dir)?;
     let path = cache_dir.join(update_file_name(version)?);
     let part_path = PathBuf::from(format!("{}.part", path.to_string_lossy()));
+    let signature_path = PathBuf::from(format!("{}.sig", path.to_string_lossy()));
+    let signature_part_path = PathBuf::from(format!("{}.part", signature_path.to_string_lossy()));
     // A previous process can leave only the temporary download marker behind; it is safe to replace it because downloads are serialized by the app state.
     let _ = tokio::fs::remove_file(&part_path).await;
+    let _ = tokio::fs::remove_file(&signature_part_path).await;
     let mut file = tokio::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&part_path)
         .await
         .map_err(|error| format!("无法创建更新临时文件：{error}"))?;
+    let mut signature_committed = false;
+    let mut package_committed = false;
 
     let result = async {
         let client = reqwest::Client::builder()
@@ -299,6 +357,26 @@ async fn download_update_inner(
             }))
             .build()
             .map_err(|error| format!("无法初始化更新下载器：{error}"))?;
+        let signature_response = client
+            .get(signature_url)
+            .send()
+            .await
+            .map_err(|error| format!("无法下载更新签名：{error}"))?;
+        let signature_response_url = signature_response.url().clone();
+        if !signature_response.status().is_success()
+            || !is_allowed_download_host(&signature_response_url)
+        {
+            return Err(format!(
+                "更新签名服务返回 HTTP {}。",
+                signature_response.status()
+            ));
+        }
+        let signature_text = signature_response
+            .text()
+            .await
+            .map_err(|error| format!("无法读取更新签名：{error}"))?;
+        let _ = decode_signature_text(&signature_text)?;
+
         let response = client
             .get(validated_url)
             .send()
@@ -358,9 +436,34 @@ async fn download_update_inner(
         if actual_digest.as_slice() != expected_digest.as_slice() {
             return Err("更新安装包校验失败，请重新检查更新。".to_string());
         }
+        let package_bytes = tokio::fs::read(&part_path)
+            .await
+            .map_err(|error| format!("无法读取更新安装包进行签名验证：{error}"))?;
+        verify_update_signature(&package_bytes, &signature_text)?;
+
+        let mut signature_file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&signature_part_path)
+            .await
+            .map_err(|error| format!("无法保存更新签名：{error}"))?;
+        signature_file
+            .write_all(signature_text.trim().as_bytes())
+            .await
+            .map_err(|error| format!("无法保存更新签名：{error}"))?;
+        signature_file
+            .sync_all()
+            .await
+            .map_err(|error| format!("无法同步更新签名：{error}"))?;
+        drop(signature_file);
+        tokio::fs::rename(&signature_part_path, &signature_path)
+            .await
+            .map_err(|error| format!("无法原子提交更新签名：{error}"))?;
+        signature_committed = true;
         tokio::fs::rename(&part_path, &path)
             .await
             .map_err(|error| format!("无法原子提交更新安装包：{error}"))?;
+        package_committed = true;
         Ok(DownloadedUpdate {
             path: path.to_string_lossy().into_owned(),
             size_bytes: downloaded_bytes,
@@ -370,6 +473,13 @@ async fn download_update_inner(
 
     if result.is_err() {
         let _ = tokio::fs::remove_file(&part_path).await;
+        let _ = tokio::fs::remove_file(&signature_part_path).await;
+        if signature_committed {
+            let _ = tokio::fs::remove_file(&signature_path).await;
+        }
+        if package_committed {
+            let _ = tokio::fs::remove_file(&path).await;
+        }
     }
     result
 }
@@ -769,6 +879,24 @@ fn validate_cached_package_path(
     Ok(canonical_package)
 }
 
+fn signature_path_for_package(package_path: &Path) -> PathBuf {
+    PathBuf::from(format!("{}.sig", package_path.to_string_lossy()))
+}
+
+fn verify_cached_package_signature(package_path: &Path) -> Result<(), String> {
+    let signature_path = signature_path_for_package(package_path);
+    let metadata = std::fs::symlink_metadata(&signature_path)
+        .map_err(|_| "更新安装包签名不存在，请重新下载。".to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() || has_reparse_point(&metadata) {
+        return Err("更新安装包签名路径不安全。".to_string());
+    }
+    let signature = std::fs::read_to_string(&signature_path)
+        .map_err(|_| "更新安装包签名不可读，请重新下载。".to_string())?;
+    let package =
+        std::fs::read(package_path).map_err(|_| "更新安装包不可读，请重新下载。".to_string())?;
+    verify_update_signature(&package, &signature)
+}
+
 fn open_verified_cached_package(
     app: &AppHandle,
     package_path: &Path,
@@ -778,6 +906,7 @@ fn open_verified_cached_package(
 ) -> Result<VerifiedPackage, String> {
     let package_path = validate_cached_package(app, package_path, version)?;
     let file = open_verified_package_file(&package_path, expected_digest, expected_size)?;
+    verify_cached_package_signature(&package_path)?;
     Ok(VerifiedPackage {
         path: package_path,
         _file: file,
@@ -914,10 +1043,35 @@ mod tests {
     use super::{
         compare_versions, is_trusted_release_page_url, normalize_version,
         open_verified_package_file, parse_sha256, select_trusted_asset_for_target,
-        validate_asset_url, validate_cached_package_path, validate_update_cache_dir, ReleaseAsset,
+        signature_url_for_asset, validate_asset_url, validate_cached_package_path,
+        validate_update_cache_dir, verify_cached_package_signature, verify_signature, ReleaseAsset,
         UpdateTarget,
     };
+    use base64::Engine;
     use sha2::Digest;
+
+    #[test]
+    fn verifies_minisign_signature_and_rejects_tampering() {
+        let public_key = "untrusted comment: minisign public key E7620F1842B4E81F\nRWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3";
+        let signature = "untrusted comment: signature from minisign secret key\nRWQf6LRCGA9i59SLOFxz6NxvASXDJeRtuZykwQepbDEGt87ig1BNpWaVWuNrm73YiIiJbq71Wi+dP9eKL8OC351vwIasSSbXxwA=\ntrusted comment: timestamp:1555779966\tfile:test\nQtKMXWyYcwdpZAlPF7tE2ENJkRd1ujvKjlj1m9RtHTBnZPa5WKU5uWRs5GoP5M/VqE81QFuMKI5k/SfNQUaOAA==";
+        let encoded_public_key = base64::engine::general_purpose::STANDARD.encode(public_key);
+        let encoded_signature = base64::engine::general_purpose::STANDARD.encode(signature);
+
+        assert!(verify_signature(b"test", &encoded_signature, &encoded_public_key).is_ok());
+        assert!(verify_signature(b"Test", &encoded_signature, &encoded_public_key).is_err());
+    }
+
+    #[test]
+    fn derives_signature_url_from_trusted_asset_url() {
+        let asset = reqwest::Url::parse(
+            "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.1.9/EmbedPix_0.1.9_x64-setup.exe",
+        )
+        .unwrap();
+        assert_eq!(
+            signature_url_for_asset(&asset).unwrap().as_str(),
+            "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.1.9/EmbedPix_0.1.9_x64-setup.exe.sig"
+        );
+    }
 
     #[test]
     fn accepts_only_embedpix_release_installer_urls() {
@@ -1080,6 +1234,21 @@ mod tests {
         let outside = root.join("outside.exe");
         std::fs::write(&outside, bytes).unwrap();
         assert!(validate_cached_package_path(&cache, &outside, "0.1.2").is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_cached_package_without_signature() {
+        let root = std::env::temp_dir().join(format!(
+            "embedpix-update-signature-precheck-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let package = root.join("EmbedPix-update-0.1.2-123-456.exe");
+        std::fs::write(&package, b"trusted installer").unwrap();
+
+        assert!(verify_cached_package_signature(&package).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 }

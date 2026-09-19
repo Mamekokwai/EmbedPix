@@ -993,9 +993,11 @@ name = "embedpix"
 version = "0.1.9"
 dependencies = [
  "apng",
+ "base64 0.22.1",
  "color_quant",
  "gif",
  "image",
+ "minisign-verify",
  "reqwest 0.12.28",
  "rfd",
  "serde",
