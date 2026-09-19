@@ -1,0 +1,365 @@
+name: Publish EmbedPix Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing version tag to publish, for example 0.1.8"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v[0-9]*.[0-9]*.[0-9]*"
+      - "v[0-9]*.[0-9]*.[0-9]*-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-embedpix-${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve release tag
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release version
+        id: release
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $semverPattern = '(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9A-Za-z-][0-9A-Za-z-]*))*))?'
+          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
+            $version = $env:INPUT_VERSION
+          } else {
+            if ($env:REF_NAME -notmatch "^v(?<version>$semverPattern)$") {
+              throw "Tag '$env:REF_NAME' is not a release version tag."
+            }
+            $version = $Matches.version
+          }
+
+          if ($version -notmatch "^$semverPattern$") {
+            throw "Version '$version' is not valid SemVer."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Resolved EmbedPix release version: $version"
+
+      - name: Confirm tag and release state
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
+            $tagRef = git ls-remote --tags origin "refs/tags/$tag"
+            if (-not $tagRef) {
+              throw "Tag $tag does not exist. Push the tag before starting a manual release."
+            }
+          }
+
+          $releaseUri = "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag"
+          $headers = @{
+            Accept = 'application/vnd.github+json'
+            Authorization = "Bearer $env:GH_TOKEN"
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          try {
+            Invoke-RestMethod -Uri $releaseUri -Headers $headers | Out-Null
+            throw "Release $tag already exists; use a new version instead of overwriting it."
+          } catch {
+            if ($_.Exception.Message -like 'Release * already exists*') { throw }
+            $statusCode = [int]$_.Exception.Response.StatusCode
+            if ($statusCode -ne 404) {
+              throw "Could not determine whether release $tag exists: $($_.Exception.Message)"
+            }
+          }
+
+          git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to fetch $tag from origin." }
+          Write-Host "Release $tag is ready for validation and publication."
+
+  quality:
+    name: Validate release source
+    runs-on: windows-latest
+    needs: resolve
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Run frontend quality gate
+        run: npm test
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Lint Rust
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+
+      - name: Check Rust
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Test Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+  windows-build:
+    name: Build signed Windows installer (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: [resolve, quality]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - arch: arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Set up Rust target
+        shell: pwsh
+        env:
+          RUST_TARGET: ${{ matrix.target }}
+        run: |
+          rustup set default-host $env:RUST_TARGET
+          if ($LASTEXITCODE -ne 0) { throw 'Rust host configuration failed.' }
+          rustup toolchain install --no-self-update
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed.' }
+          rustup target add $env:RUST_TARGET
+          if ($LASTEXITCODE -ne 0) { throw 'Rust target installation failed.' }
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Require updater signing key
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            throw 'Missing TAURI_SIGNING_PRIVATE_KEY repository secret.'
+          }
+
+      - name: Build signed Tauri bundle
+        env:
+          RUST_TARGET: ${{ matrix.target }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri -- build --bundles nsis --target $env:RUST_TARGET
+
+      - name: Stage and verify Tauri artifacts
+        shell: pwsh
+        env:
+          RUST_TARGET: ${{ matrix.target }}
+          RELEASE_ARCH: ${{ matrix.arch }}
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          $root = "src-tauri/target/$env:RUST_TARGET/release"
+          $bundleDir = Join-Path $root 'bundle/nsis'
+          $installer = Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -File | Select-Object -First 1
+          if (-not $installer) { throw "No NSIS installer was generated in $bundleDir." }
+
+          $signature = Get-Item -LiteralPath "$($installer.FullName).sig" -ErrorAction SilentlyContinue
+          if (-not $signature -or $signature.Length -eq 0) {
+            throw "Missing Tauri updater signature for $($installer.Name)."
+          }
+
+          $binary = Join-Path $root 'EmbedPix.exe'
+          if (-not (Test-Path -LiteralPath $binary)) { throw "Missing main binary: $binary" }
+
+          $outputDir = 'bundle-artifact'
+          New-Item -ItemType Directory -Force $outputDir | Out-Null
+          $installerName = "EmbedPix_${env:RELEASE_VERSION}_${env:RELEASE_ARCH}-setup.exe"
+          Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $outputDir $installerName)
+          Copy-Item -LiteralPath $signature.FullName -Destination (Join-Path $outputDir "$installerName.sig")
+
+          $stagedInstaller = Get-Item -LiteralPath (Join-Path $outputDir $installerName)
+          if ($stagedInstaller.Length -eq 0) { throw "Staged installer is empty: $installerName" }
+          Write-Host "Staged $installerName ($($stagedInstaller.Length) bytes) and $installerName.sig."
+
+      - name: Upload architecture artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: embedpix-bundle-${{ matrix.arch }}
+          path: bundle-artifact
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: windows-latest
+    needs: [resolve, windows-build]
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - name: Download architecture artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: embedpix-bundle-*
+          path: bundle-downloads
+
+      - name: Arrange and verify release assets
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          $version = $env:RELEASE_VERSION
+          $releaseDir = 'release-assets'
+          New-Item -ItemType Directory -Force $releaseDir | Out-Null
+
+          $expected = @(
+            "EmbedPix_${version}_x64-setup.exe",
+            "EmbedPix_${version}_x64-setup.exe.sig",
+            "EmbedPix_${version}_arm64-setup.exe",
+            "EmbedPix_${version}_arm64-setup.exe.sig"
+          )
+          foreach ($name in $expected) {
+            $matches = @(Get-ChildItem -Path 'bundle-downloads' -Recurse -Filter $name -File)
+            if ($matches.Count -ne 1) { throw "Expected exactly one artifact named $name, found $($matches.Count)." }
+            Copy-Item -LiteralPath $matches[0].FullName -Destination (Join-Path $releaseDir $name)
+          }
+
+          foreach ($name in $expected) {
+            $file = Get-Item -LiteralPath (Join-Path $releaseDir $name)
+            if ($file.Length -eq 0) { throw "Release asset is empty: $name" }
+          }
+
+      - name: Generate and verify latest.json
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          $version = $env:RELEASE_VERSION
+          $repo = $env:RELEASE_REPOSITORY
+          $releaseDir = 'release-assets'
+          $x64Name = "EmbedPix_${version}_x64-setup.exe"
+          $arm64Name = "EmbedPix_${version}_arm64-setup.exe"
+          $x64Signature = (Get-Content -Raw (Join-Path $releaseDir "$x64Name.sig")).Trim()
+          $arm64Signature = (Get-Content -Raw (Join-Path $releaseDir "$arm64Name.sig")).Trim()
+          if (-not $x64Signature -or -not $arm64Signature) { throw 'A Tauri signature file is empty.' }
+
+          $manifest = [ordered]@{
+            version = $version
+            notes = "EmbedPix v$version"
+            pub_date = (Get-Date).ToUniversalTime().ToString('o')
+            platforms = [ordered]@{
+              'windows-x86_64' = [ordered]@{
+                signature = $x64Signature
+                url = "https://github.com/$repo/releases/download/v$version/$x64Name"
+              }
+              'windows-aarch64' = [ordered]@{
+                signature = $arm64Signature
+                url = "https://github.com/$repo/releases/download/v$version/$arm64Name"
+              }
+            }
+          }
+
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $releaseDir 'latest.json') -Encoding utf8NoBOM
+          $parsed = Get-Content -Raw (Join-Path $releaseDir 'latest.json') | ConvertFrom-Json
+          if ($parsed.version -ne $version) { throw 'latest.json version validation failed.' }
+          if ($parsed.platforms.'windows-x86_64'.signature -ne $x64Signature) { throw 'x64 signature validation failed.' }
+          if ($parsed.platforms.'windows-aarch64'.signature -ne $arm64Signature) { throw 'arm64 signature validation failed.' }
+          if ($parsed.platforms.'windows-x86_64'.url -notlike "*/$x64Name") { throw 'x64 URL validation failed.' }
+          if ($parsed.platforms.'windows-aarch64'.url -notlike "*/$arm64Name") { throw 'arm64 URL validation failed.' }
+
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem -Path release-assets -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          }
+          $lines | Set-Content -Path release-assets/SHA256SUMS.txt -Encoding utf8NoBOM
+
+      - name: Write release notes
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          @"
+          # EmbedPix v$env:RELEASE_VERSION
+
+          Signed Windows NSIS installers for x64 and ARM64.
+
+          The `.sig` files and `latest.json` are generated from the Tauri updater signing key configured in GitHub Actions.
+          "@ | Set-Content -Path release-assets/release-notes.md -Encoding utf8NoBOM
+
+      - name: Attest x64 installer
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: release-assets/EmbedPix_${{ needs.resolve.outputs.version }}_x64-setup.exe
+
+      - name: Attest ARM64 installer
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: release-assets/EmbedPix_${{ needs.resolve.outputs.version }}_arm64-setup.exe
+
+      - name: Upload release assets as workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: embedpix-release-assets
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          tag_name: ${{ needs.resolve.outputs.tag }}
+          name: EmbedPix v${{ needs.resolve.outputs.version }}
+          body_path: release-assets/release-notes.md
+          draft: false
+          prerelease: ${{ contains(needs.resolve.outputs.version, '-') }}
+          overwrite_files: false
+          files: |
+            release-assets/EmbedPix_${{ needs.resolve.outputs.version }}_x64-setup.exe
+            release-assets/EmbedPix_${{ needs.resolve.outputs.version }}_x64-setup.exe.sig
+            release-assets/EmbedPix_${{ needs.resolve.outputs.version }}_arm64-setup.exe
+            release-assets/EmbedPix_${{ needs.resolve.outputs.version }}_arm64-setup.exe.sig
+            release-assets/latest.json
+            release-assets/SHA256SUMS.txt
