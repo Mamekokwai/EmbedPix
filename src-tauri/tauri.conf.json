@@ -52,7 +52,7 @@
       "endpoints": [
         "https://github.com/Mamekokwai/EmbedPix/releases/latest/download/latest.json"
       ],
-      "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMwRjU2Q0VGMjI0MjZCRTQKUldUa2EwSWk3MnoxTUZEeEhMNk5pYUN5T1VwbGt2S0ZINm9lKytFbmpLT2c5RWIzUDY4a0RqVHgK"
     }
   }
 }
