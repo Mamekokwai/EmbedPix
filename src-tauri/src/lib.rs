@@ -4,6 +4,7 @@ mod commands;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(commands::update::UpdateProgressState::default())
         .invoke_handler(tauri::generate_handler![
             commands::gif::pick_gif_output,
