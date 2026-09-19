@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_GIF_SETTINGS_GROUP, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_PRESETS, selectAnimationCompressionResult } from "./GifMakerView";
+import { DEFAULT_GIF_SETTINGS_GROUP, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("defines quality, balanced, and small presets without touching other formats", () => {
@@ -54,5 +54,14 @@ describe("GIF settings layout defaults", () => {
     expect(selectAnimationCompressionResult(candidates, 700, 800)?.id).toBe("merged");
     expect(selectAnimationCompressionResult(candidates, 500, 800)?.id).toBe("50%");
     expect(selectAnimationCompressionResult(candidates, 700, 400)).toBeNull();
+  });
+});
+
+describe("GIF error details", () => {
+  it("only offers expansion when an error can be clipped", () => {
+    expect(shouldOfferGifErrorDetails("操作失败，请重试。".repeat(2))).toBe(false);
+    expect(shouldOfferGifErrorDetails("错误：" + "无法完成导出。".repeat(12))).toBe(true);
+    expect(shouldOfferGifErrorDetails("x".repeat(GIF_ERROR_DETAILS_THRESHOLD))).toBe(false);
+    expect(shouldOfferGifErrorDetails("x".repeat(GIF_ERROR_DETAILS_THRESHOLD + 1))).toBe(true);
   });
 });

@@ -8,9 +8,12 @@
   min-width: 0;
   padding: 10px;
   gap: 10px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
   font-size: 12px;
 }
+.gif-maker-view.page-view::-webkit-scrollbar { display: none; }
 .gif-maker-header.page-header { flex: 0 0 auto; padding-bottom: 10px; gap: 10px; }
 .gif-maker-header h1 { font-size: 19px; }
 .gif-maker-header .page-header-copy { min-width: 0; }
@@ -158,9 +161,15 @@
 .gif-export-footer { flex: 0 0 auto; justify-content: space-between; min-height: 36px; }
 .gif-maker-view > .gif-export-footer { width: 100%; }
 .gif-maker-view > .gif-export-footer > :first-child { flex: 1 1 auto; }
-.gif-status, .gif-error-message { min-width: 0; margin: 0; font-size: 11px; overflow-wrap: anywhere; max-height: 48px; overflow-y: auto; }
+.gif-status, .gif-error-message { min-width: 0; margin: 0; font-size: 11px; overflow-wrap: anywhere; }
 .gif-status { color: var(--qp-text-secondary); }
-.gif-error-message, .gif-status-error { color: var(--qp-danger); }
+.gif-error-message { display: flex; min-height: 24px; align-items: flex-start; gap: 6px; color: var(--qp-danger); line-height: 1.4; }
+.gif-error-message-text { min-width: 0; }
+.gif-error-message:not(.gif-error-message-expanded) .gif-error-message-text { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.gif-error-details-toggle { flex: 0 0 auto; border: 0; padding: 0; background: transparent; color: var(--qp-accent-default); font-size: 10px; white-space: nowrap; }
+.gif-error-details-toggle:hover { text-decoration: underline; }
+.gif-error-details-toggle:focus-visible { outline: 2px solid var(--qp-accent-default); outline-offset: 2px; }
+.gif-status-error { color: var(--qp-danger); }
 .gif-status-success { color: var(--qp-success); }
 
 @media (max-width: 820px) {
@@ -254,17 +263,20 @@
   .gif-preview-footer { font-size: 9px; }
 }
 @media (max-width: 760px) and (max-height: 620px) {
-  .gif-workspace-grid { grid-template-rows: minmax(96px, .85fr) minmax(96px, 1.15fr); }
-  .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(96px, .85fr) minmax(96px, 1.15fr); }
+  .gif-maker-content.page-content { flex: 0 0 auto; overflow: visible; }
+  .gif-source-video .gif-video-card { max-height: none; overflow: visible; }
+  .gif-workspace-grid { flex: 0 0 auto; grid-template-rows: minmax(132px, auto) minmax(210px, auto); overflow: visible; }
+  .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(160px, auto) minmax(210px, auto); }
+  .gif-settings-card { max-height: none; overflow: visible; }
 }
 
-@media (max-width: 760px) and (max-height: 760px) {
+@media (max-width: 760px) and (min-height: 621px) and (max-height: 760px) {
   .gif-workspace-grid { grid-template-rows: minmax(96px, .85fr) minmax(96px, 1.15fr); }
   .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(96px, .85fr) minmax(96px, 1.15fr); min-height: 0; }
   .gif-source-video .gif-assets-card,
   .gif-source-video .gif-main-column,
   .gif-source-video .gif-preview-card { min-height: 0; }
-  .gif-workspace-grid { overflow: hidden; }
+  .gif-workspace-grid { overflow: visible; }
   .gif-video-card { gap: 4px; padding: 6px; }
   .gif-video-preview { max-height: clamp(56px, 12vh, 88px); }
   .gif-video-grid { gap: 4px 6px; }
@@ -274,9 +286,12 @@
 }
 
 @media (max-height: 620px) {
-  .gif-maker-content.page-content { gap: 5px; }
+  .gif-maker-content.page-content { flex: 0 0 auto; gap: 5px; overflow: visible; }
+  .gif-source-video .gif-video-card { max-height: none; overflow: visible; }
+  .gif-maker-content > .gif-workspace-grid { flex: 0 0 auto; min-height: 260px; }
   .gif-maker-content > .gif-settings-card {
-    max-height: clamp(132px, 36vh, 220px);
+    max-height: none;
+    overflow: visible;
   }
   .gif-maker-view > .gif-export-footer { align-items: stretch; gap: 5px; min-height: 0; }
   .gif-maker-view > .gif-export-footer .gif-export-button { min-height: 30px; }

@@ -61,6 +61,11 @@ type GifOutputFormat = GifMakerOutputFormat;
 type GifSourceMode = "image" | "video";
 const GIF_SOURCE_MODES: ReadonlyArray<GifSourceMode> = ["image", "video"];
 const GIF_SETTINGS_GROUPS: ReadonlyArray<GifSettingsGroup> = ["timing", "canvas", "export"];
+export const GIF_ERROR_DETAILS_THRESHOLD = 72;
+
+export function shouldOfferGifErrorDetails(message: string): boolean {
+  return message.trim().length > GIF_ERROR_DETAILS_THRESHOLD;
+}
 
 function defaultGifFileName(format: GifOutputFormat): string {
   return format === "png-sequence" ? "embedpix-animation" : `embedpix-animation.${format}`;
@@ -481,6 +486,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [videoReverse, setVideoReverse] = useState(savedPreferences.videoReverse);
   const [status, setStatus] = useState<GifStatus>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
+  const [expandedError, setExpandedError] = useState<string | null>(null);
   const [group, setGroup] = useState<GifSettingsGroup | null>(DEFAULT_GIF_SETTINGS_GROUP);
   const [locked, setLocked] = useState(false);
   const [pendingImports, setPendingImports] = useState(0);
@@ -2150,7 +2156,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         </>
       </fieldset>
       <div className="gif-export-footer">
-        {error ? <p className="gif-error-message" role="alert">{error}</p> : <p className={`gif-status gif-status-${status.kind}`} role="status">{status.text}</p>}
+        {error ? <div className={`gif-error-message${expandedError === error ? " gif-error-message-expanded" : ""}`} role="alert">
+          <span className="gif-error-message-text" id="gif-error-details">{error}</span>
+          {shouldOfferGifErrorDetails(error) ? <button className="gif-error-details-toggle" type="button" aria-expanded={expandedError === error} aria-controls="gif-error-details" onClick={() => setExpandedError(expandedError === error ? null : error)}>{expandedError === error ? "收起详情" : "查看详情"}</button> : null}
+        </div> : <p className={`gif-status gif-status-${status.kind}`} role="status">{status.text}</p>}
         {sourceMode === "video" && locked ? <button className="quiet-button" type="button" onClick={cancelVideoExtraction}>取消抽帧</button> : null}
         {compressionControllerRef.current ? <button className="quiet-button" type="button" onClick={cancelCompression}>取消处理</button> : null}
         <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!singleOutputReady) { setGroup("export"); if (outputLocation === "path") void chooseOutput(); else { setError(outputLocationError ?? "请先完成输出位置设置。"); setStatus({ kind: "error", text: "输出位置不可用" }); } } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputFormat === "png-sequence" ? (singleOutputReady ? "导出 PNG 帧序列" : "选择输出目录") : outputLocation === "path" ? (outputPath ? `导出 ${outputFormat.toUpperCase()}` : "选择保存位置") : `导出 ${outputFormat.toUpperCase()}`}</button>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Github, Info } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
@@ -7,6 +8,7 @@ import { FORMAT_METADATA } from "../../shared/formatMetadata";
 
 const AUTHOR_BLOG_URL = "https://blog.nywerya.xyz/";
 const AUTHOR_AVATAR_URL = "https://photo.nywerya.xyz/Obsidian/%E5%A4%B4%E5%83%8F2.jpg";
+const AUTHOR_AVATAR_FALLBACK_URL = "/embedpix-icon.png";
 const AUTHOR_GITHUB_URL = "https://github.com/Mamekokwai";
 
 function isTauriRuntime(): boolean {
@@ -21,6 +23,8 @@ function handleExternalLink(event: MouseEvent<HTMLAnchorElement>, url: string): 
 }
 
 export default function AboutView(updateProps: UpdateViewProps) {
+  const [authorAvatarUrl, setAuthorAvatarUrl] = useState(AUTHOR_AVATAR_URL);
+
   return (
     <div className="about-view page-view">
       <header className="page-header">
@@ -45,7 +49,7 @@ export default function AboutView(updateProps: UpdateViewProps) {
         </section>
 
         <section className="about-author-card" aria-label="作者信息">
-          <img className="about-author-avatar" src={AUTHOR_AVATAR_URL} alt="Nywerya头像" />
+          <img className="about-author-avatar" src={authorAvatarUrl} alt="Nywerya头像" onError={() => setAuthorAvatarUrl((current) => current === AUTHOR_AVATAR_URL ? AUTHOR_AVATAR_FALLBACK_URL : current)} />
           <div className="about-author-copy">
             <p className="about-section-eyebrow">MADE BY NYWERYA</p>
             <h2>Nywerya · XUNCHANG WANG</h2>
