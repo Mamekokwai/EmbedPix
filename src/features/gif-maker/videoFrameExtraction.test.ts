@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractVideoFrameBlobs } from "./videoFrameExtraction";
 import type { VideoFrameExtractionDependencies } from "./videoFrameExtraction";
+import { MAX_FRAME_BYTES, MAX_TOTAL_BYTES } from "./gifMakerLogic";
 
 type ListenerEntry = { listener: EventListener; once: boolean };
 
@@ -98,6 +99,12 @@ function setup() {
   const crop = { x: 0, y: 0, width: 2, height: 1 };
   const outputSize = { width: 2, height: 1 };
   return { video, canvas, dependencies, plan, crop, outputSize, revokedUrls };
+}
+
+function blobWithSize(size: number): Blob {
+  const blob = new Blob(["frame"], { type: "image/png" });
+  Object.defineProperty(blob, "size", { value: size });
+  return blob;
 }
 
 function extract(
@@ -231,5 +238,79 @@ describe("video frame extraction lifecycle", () => {
 
     await expect(pending).rejects.toThrow("1 到 200");
     expect(state.video.src).toBe("");
+  });
+
+  it("accepts one 4K frame but rejects an 8K canvas before allocating media", async () => {
+    const fourK = setup();
+    fourK.outputSize = { width: 3840, height: 2160 };
+    fourK.video.onCurrentTime = () => fourK.video.emit("seeked");
+    fourK.canvas.onToBlob = () => fourK.canvas.toBlobCallback?.(new Blob(["frame"], { type: "image/png" }));
+    const fourKPending = extract(fourK, new AbortController());
+    fourK.video.readyState = 1;
+    fourK.video.emit("loadedmetadata");
+    await expect(fourKPending).resolves.toHaveLength(1);
+
+    const eightK = setup();
+    eightK.outputSize = { width: 7680, height: 4320 };
+    await expect(extract(eightK, new AbortController())).rejects.toThrow("1–4096");
+    expect(eightK.video.src).toBe("");
+  });
+
+  it("supports the 200-frame plan without exceeding the pixel budget", async () => {
+    const state = setup();
+    state.plan.times = Array.from({ length: 200 }, (_, index) => index);
+    state.video.onCurrentTime = () => state.video.emit("seeked");
+    state.canvas.onToBlob = () => state.canvas.toBlobCallback?.(new Blob(["frame"], { type: "image/png" }));
+    const pending = extract(state, new AbortController());
+    state.video.readyState = 1;
+    state.video.emit("loadedmetadata");
+
+    await expect(pending).resolves.toHaveLength(200);
+    expect(state.revokedUrls).toEqual([]);
+  });
+
+  it("rejects an oversized frame before creating an object URL", async () => {
+    const state = setup();
+    const controller = new AbortController();
+    state.video.onCurrentTime = () => state.video.emit("seeked");
+    state.canvas.onToBlob = () => state.canvas.toBlobCallback?.(blobWithSize(MAX_FRAME_BYTES + 1));
+    const pending = extract(state, controller);
+    state.video.readyState = 1;
+    state.video.emit("loadedmetadata");
+
+    await expect(pending).rejects.toThrow("32 MiB");
+    expect(state.revokedUrls).toEqual([]);
+  });
+
+  it("rejects cumulative frame bytes and releases every earlier object URL", async () => {
+    const state = setup();
+    state.plan.times = Array.from({ length: 5 }, (_, index) => index);
+    state.video.onCurrentTime = () => state.video.emit("seeked");
+    state.canvas.onToBlob = () => state.canvas.toBlobCallback?.(blobWithSize(MAX_FRAME_BYTES));
+    const pending = extract(state, new AbortController());
+    state.video.readyState = 1;
+    state.video.emit("loadedmetadata");
+
+    await expect(pending).rejects.toThrow(`${MAX_TOTAL_BYTES / (1024 * 1024)} MiB`);
+    expect(state.revokedUrls).toEqual(["blob:frame-1", "blob:frame-2", "blob:frame-3", "blob:frame-4"]);
+  });
+
+  it("releases completed frame URLs when cancellation arrives between frames", async () => {
+    const state = setup();
+    state.plan.times.push(1);
+    const controller = new AbortController();
+    let encodedFrames = 0;
+    state.video.onCurrentTime = () => state.video.emit("seeked");
+    state.canvas.onToBlob = () => {
+      encodedFrames += 1;
+      state.canvas.toBlobCallback?.(new Blob(["frame"], { type: "image/png" }));
+      if (encodedFrames === 1) controller.abort();
+    };
+    const pending = extract(state, controller);
+    state.video.readyState = 1;
+    state.video.emit("loadedmetadata");
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(state.revokedUrls).toEqual(["blob:frame-1"]);
   });
 });

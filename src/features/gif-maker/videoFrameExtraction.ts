@@ -1,7 +1,12 @@
 import { MAX_VIDEO_FRAMES } from "./videoGifLogic";
 import type { VideoCropRect, VideoFramePlan } from "./videoGifLogic";
 import type { GifMakerVideoRotation as VideoRotation } from "./gifMakerPreferences";
-import type { GifCanvasSize } from "./gifMakerLogic";
+import {
+  MAX_FRAME_BYTES,
+  MAX_TOTAL_BYTES,
+  validateGifPixels,
+  type GifCanvasSize,
+} from "./gifMakerLogic";
 
 export interface VideoFrameExtractionSource {
   previewUrl: string;
@@ -136,6 +141,25 @@ function canvasToBlob(canvas: HTMLCanvasElement, signal?: AbortSignal): Promise<
   });
 }
 
+function validateExtractedBlob(blob: Blob, totalBytes: number): number {
+  if (blob.size <= 0 || blob.size > MAX_FRAME_BYTES) {
+    throw new Error("视频单帧图片不能为空且不能超过 32 MiB。");
+  }
+  const nextTotalBytes = totalBytes + blob.size;
+  if (!Number.isSafeInteger(nextTotalBytes) || nextTotalBytes > MAX_TOTAL_BYTES) {
+    throw new Error("视频抽取帧总大小不能超过 128 MiB。");
+  }
+  return nextTotalBytes;
+}
+
+function releaseExtractedFrames(
+  frames: ExtractedVideoFrame[],
+  dependencies: VideoFrameExtractionDependencies,
+): void {
+  frames.forEach((frame) => dependencies.revokeObjectURL(frame.previewUrl));
+  frames.length = 0;
+}
+
 export async function extractVideoFrameBlobs(
   source: VideoFrameExtractionSource,
   plan: VideoFramePlan,
@@ -150,9 +174,11 @@ export async function extractVideoFrameBlobs(
   if (!plan.times.length || plan.times.length > MAX_VIDEO_FRAMES) {
     throw new Error(`视频帧数必须在 1 到 ${MAX_VIDEO_FRAMES} 之间。`);
   }
+  validateGifPixels(outputSize, plan.times.length);
   const video = dependencies.createVideo();
   let canvas: HTMLCanvasElement | null = null;
   const frames: ExtractedVideoFrame[] = [];
+  let totalBytes = 0;
   video.preload = "auto";
   video.muted = true;
   video.playsInline = true;
@@ -171,6 +197,7 @@ export async function extractVideoFrameBlobs(
       if (signal?.aborted) throw createAbortError();
       dependencies.drawFrame(context, video, crop, rotation, outputSize);
       const blob = await canvasToBlob(canvas, signal);
+      totalBytes = validateExtractedBlob(blob, totalBytes);
       frames.push({
         blob,
         previewUrl: dependencies.createObjectURL(blob),
@@ -180,7 +207,7 @@ export async function extractVideoFrameBlobs(
     }
     return frames;
   } catch (error) {
-    frames.forEach((frame) => dependencies.revokeObjectURL(frame.previewUrl));
+    releaseExtractedFrames(frames, dependencies);
     throw error;
   } finally {
     if (canvas) {
