@@ -80,15 +80,16 @@ jobs:
             Authorization = "Bearer $env:GH_TOKEN"
             'X-GitHub-Api-Version' = '2022-11-28'
           }
-          try {
-            Invoke-RestMethod -Uri $releaseUri -Headers $headers | Out-Null
-            throw "Release $tag already exists; use a new version instead of overwriting it."
-          } catch {
-            if ($_.Exception.Message -like 'Release * already exists*') { throw }
-            $statusCode = [int]$_.Exception.Response.StatusCode
-            if ($statusCode -ne 404) {
-              throw "Could not determine whether release $tag exists: $($_.Exception.Message)"
-            }
+          $response = Invoke-WebRequest `
+            -Uri $releaseUri `
+            -Headers $headers `
+            -Method Get `
+            -SkipHttpErrorCheck
+          $statusCode = [int]$response.StatusCode
+          switch ($statusCode) {
+            200 { throw "Release $tag already exists; use a new version instead of overwriting it." }
+            404 { Write-Host "Release $tag does not exist; publication may continue." }
+            default { throw "Could not determine whether release $tag exists: HTTP $statusCode." }
           }
 
           git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
