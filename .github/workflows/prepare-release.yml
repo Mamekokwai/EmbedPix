@@ -63,16 +63,14 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           $tag = $env:RELEASE_TAG
-          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
-            $tagRef = git ls-remote --tags origin "refs/tags/$tag"
-            if (-not $tagRef) {
-              throw "Tag $tag does not exist. Push the tag before starting a manual release."
-            }
+          $tagRef = git ls-remote --exit-code --refs origin "refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0 -or -not $tagRef) {
+            throw "Tag $tag does not exist on origin."
           }
+          Write-Host "Confirmed remote tag $tag."
 
           $releaseUri = "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag"
           $headers = @{
@@ -92,8 +90,6 @@ jobs:
             default { throw "Could not determine whether release $tag exists: HTTP $statusCode." }
           }
 
-          git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
-          if ($LASTEXITCODE -ne 0) { throw "Failed to fetch $tag from origin." }
           Write-Host "Release $tag is ready for validation and publication."
 
   quality:
