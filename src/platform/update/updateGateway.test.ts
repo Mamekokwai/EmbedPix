@@ -31,6 +31,14 @@ describe("update gateway", () => {
   });
 
   it("maps a valid GitHub release and detects a newer version", async () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      userAgentData: {
+        platform: "Windows",
+        architecture: "x86-64",
+      },
+    });
+
     const result = await checkForUpdates(
       async () => response({
         tag_name: "v0.2.0",
