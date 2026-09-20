@@ -905,6 +905,58 @@
   white-space: nowrap;
 }
 
+.export-progress-panel {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--qp-text-tertiary);
+  font-size: 10px;
+}
+
+.export-progress-heading,
+.export-progress-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.export-progress-file {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.export-progress-heading strong {
+  flex: 0 0 auto;
+  color: var(--qp-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.export-progress-track {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--qp-bg-elevated);
+}
+
+.export-progress-value {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--qp-accent-default);
+  transition: width var(--qp-motion-fast) var(--qp-motion-ease);
+}
+
+.export-progress-summary {
+  justify-content: flex-start;
+  color: var(--qp-text-tertiary);
+}
+
 .status-ready .status-indicator {
   background: var(--qp-accent-default);
 }

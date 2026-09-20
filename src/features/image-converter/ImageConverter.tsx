@@ -73,6 +73,9 @@ import type {
 } from "./types";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
+import type { ExportQueueProgress } from "./imageExportQueue";
+
+type ImageExportQueueProgress = ExportQueueProgress<{ file: { name: string } }>;
 
 interface ImageConverterProps {
   defaultOutputFormat?: OutputFormat;
@@ -281,6 +284,7 @@ export default function ImageConverter({
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const [failedExportIds, setFailedExportIds] = useState<string[]>([]);
+  const [exportProgress, setExportProgress] = useState<ImageExportQueueProgress | null>(null);
   const exportCancelRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -909,6 +913,7 @@ export default function ImageConverter({
     exportCancelRef.current = false;
     setError(null);
     setFailedExportIds([]);
+    setExportProgress(null);
     let lastOutputPath: string | null = null;
     const result = await runExportQueue(requestedImages, async (image) => {
         const imageTransformError = cropEnabled ? getCropInputValidation(cropInputs, image.dimensions) : null;
@@ -946,6 +951,7 @@ export default function ImageConverter({
       }, {
         shouldCancel: () => exportCancelRef.current,
         onProgress: (progress) => {
+          setExportProgress(progress);
           setStatus({ kind: "busy", text: formatExportQueueProgress(progress) });
         },
       });
@@ -1440,6 +1446,25 @@ export default function ImageConverter({
                 <span className="status-indicator" aria-hidden="true" />
                 <span>{status.text}</span>
               </div>
+              {status.kind === "busy" && exportProgress ? (
+                <div className="export-progress-panel" role="group" aria-label="批量导出进度">
+                  <div className="export-progress-heading">
+                    <span className="export-progress-file" title={exportProgress.item.file.name}>当前：{exportProgress.item.file.name}</span>
+                    <strong>{exportProgress.index}/{exportProgress.total}</strong>
+                  </div>
+                  <div
+                    className="export-progress-track"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={exportProgress.total}
+                    aria-valuenow={exportProgress.succeeded + exportProgress.failed + exportProgress.skipped}
+                    aria-valuetext={`当前第 ${exportProgress.index} 个，共 ${exportProgress.total} 个；成功 ${exportProgress.succeeded}，失败 ${exportProgress.failed}，跳过 ${exportProgress.skipped}`}
+                  >
+                    <span className="export-progress-value" style={{ width: `${Math.min(100, ((exportProgress.succeeded + exportProgress.failed + exportProgress.skipped) / Math.max(1, exportProgress.total)) * 100)}%` }} />
+                  </div>
+                  <span className="export-progress-summary">成功 {exportProgress.succeeded} · 失败 {exportProgress.failed} · 跳过 {exportProgress.skipped}</span>
+                </div>
+              ) : null}
               {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}
             </div>
             <div className="footer-actions">
