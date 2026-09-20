@@ -1600,14 +1600,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             { frames: merged, samplingEvery, mergedIdenticalFrames: true },
           ];
     });
-    const candidates = sizes.flatMap((size) => frameVariants
+    const candidates = limitGifCompressionCandidates(sizes.flatMap((size) => frameVariants
       .filter((candidate) => !(size.width === canvasSize.width
         && size.height === canvasSize.height
         && candidate.samplingEvery === 1
         && candidate.mergedIdenticalFrames === mergeIdenticalFrames))
-      .map((candidate) => ({ size, ...candidate })));
+      .map((candidate) => ({ size, ...candidate }))));
     const results: AnimationCompressionResult[] = [baselineResult];
-    for (const [index, candidate] of candidates.entries()) {
+    for (const [index, candidate] of limitGifCompressionCandidates(candidates).entries()) {
       throwIfAborted(signal);
       setStatus({ kind: "exporting", text: `正在测量 ${format} 体积 ${index + 2}/${candidates.length + 1}…` });
       const measured = await estimateAnimationSize(outputFormat, createAnimationExportRequest(candidate.frames, candidate.size));
@@ -1680,16 +1680,16 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           { frames: merged, samplingEvery, mergedIdenticalFrames: true },
         ];
       });
-      candidates.push(...frameVariants
+      candidates.push(...limitGifCompressionCandidates(frameVariants
         .filter((candidate) => !(size.width === canvasSize.width
           && size.height === canvasSize.height
           && candidate.samplingEvery === 1
           && !candidate.mergedIdenticalFrames))
-        .map((candidate) => ({ size, ...candidate })));
+        .map((candidate) => ({ size, ...candidate }))));
     }
 
     const results: PngSequenceCompressionResult[] = [baselineResult];
-    for (const [index, candidate] of candidates.entries()) {
+    for (const [index, candidate] of limitGifCompressionCandidates(candidates).entries()) {
       throwIfAborted(signal);
       setStatus({ kind: "exporting", text: `正在测量 PNG 帧序列体积 ${index + 2}/${candidates.length + 1}…` });
       const measured = await estimatePngSequenceSize(createPngSequenceSizeRequest(candidate.frames));
