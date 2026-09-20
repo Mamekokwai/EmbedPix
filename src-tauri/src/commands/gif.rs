@@ -25,6 +25,7 @@ mod animation;
 pub mod benchmark;
 mod dither;
 mod sequence;
+mod spool;
 mod storage;
 #[cfg(test)]
 mod tests;
@@ -69,6 +70,8 @@ pub struct GifExportJobState {
     jobs: Mutex<HashMap<String, Arc<GifExportJob>>>,
     encoder_slots: Arc<EncodingSemaphore>,
 }
+
+pub use spool::GifFrameSpoolState;
 
 pub(super) struct GifExportJob {
     phase: AtomicU8,
@@ -424,7 +427,12 @@ pub struct GifExportRequest {
     color_count: u16,
     #[serde(default = "default_dither_mode")]
     dither_mode: String,
+    #[serde(default)]
     frames: Vec<GifFrameRequest>,
+    #[serde(default)]
+    spool_id: Option<String>,
+    #[serde(default)]
+    spool_durations: Vec<u32>,
     #[serde(default)]
     overwrite_existing: bool,
     #[serde(default)]
@@ -465,6 +473,8 @@ impl From<GifSizeEstimateRequest> for GifExportRequest {
             color_count: request.color_count,
             dither_mode: request.dither_mode,
             frames: request.frames,
+            spool_id: None,
+            spool_durations: Vec::new(),
             overwrite_existing: false,
             job_id: None,
         }
@@ -542,8 +552,13 @@ pub async fn pick_gif_output(suggested_name: String) -> Result<Option<String>, S
 #[tauri::command]
 pub async fn export_gif(
     state: State<'_, GifExportJobState>,
-    request: GifExportRequest,
+    spool_state: State<'_, GifFrameSpoolState>,
+    mut request: GifExportRequest,
 ) -> Result<String, String> {
+    if let Some(spool_id) = request.spool_id.take() {
+        request.frames = spool_state.take_frames(&spool_id, &request.spool_durations)?;
+        request.spool_durations.clear();
+    }
     let job = state.register(request.job_id.as_deref(), "gif", request.frames.len())?;
     let encoder_slots = state.encoder_slots();
     let result = tauri::async_runtime::spawn_blocking({
@@ -562,6 +577,34 @@ pub async fn export_gif(
         }
     }
     result
+}
+
+#[tauri::command]
+pub fn create_gif_frame_spool(state: State<'_, GifFrameSpoolState>) -> Result<String, String> {
+    state.create()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GifSpoolFrameRequest {
+    spool_id: String,
+    data_base64: String,
+}
+
+#[tauri::command]
+pub fn write_gif_frame_spool(
+    state: State<'_, GifFrameSpoolState>,
+    request: GifSpoolFrameRequest,
+) -> Result<(), String> {
+    state.write_frame(&request.spool_id, &request.data_base64)
+}
+
+#[tauri::command]
+pub fn discard_gif_frame_spool(
+    state: State<'_, GifFrameSpoolState>,
+    spool_id: String,
+) -> Result<(), String> {
+    state.discard(&spool_id)
 }
 
 #[tauri::command]

@@ -995,6 +995,7 @@ dependencies = [
  "apng",
  "base64 0.22.1",
  "color_quant",
+ "getrandom 0.3.4",
  "gif",
  "image",
  "minisign-verify",

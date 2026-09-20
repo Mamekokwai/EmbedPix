@@ -62,6 +62,7 @@ export interface GifSizeEstimateResult {
 
 // Keep temporary String.fromCharCode calls bounded while avoiding a full JS number array.
 export const GIF_IPC_BASE64_CHUNK_BYTES = 64 * 1024;
+export const GIF_SPOOL_FRAME_THRESHOLD = 64;
 
 export interface AnimationSizeEstimateResult {
   bytes: number;
@@ -258,7 +259,16 @@ export async function exportGif(request: GifExportRequest): Promise<string> {
   if (!isTauriEnvironment()) {
     throw new Error("当前预览环境不支持 GIF 导出，请在桌面应用中执行导出。");
   }
+  let spoolId: string | undefined;
   try {
+    if (request.frames.length > GIF_SPOOL_FRAME_THRESHOLD) {
+      spoolId = await invoke<string>("create_gif_frame_spool");
+      for (const frame of request.frames) {
+        await invoke<void>("write_gif_frame_spool", {
+          request: { spoolId, dataBase64: encodeFrameBase64(frame.data) },
+        });
+      }
+    }
     return await invoke<string>("export_gif", {
       request: {
         ...serializeOutputLocation(request),
@@ -271,10 +281,15 @@ export async function exportGif(request: GifExportRequest): Promise<string> {
         encodingSpeed: request.encodingSpeed ?? 1,
         colorCount: request.colorCount ?? 256,
         ditherMode: request.ditherMode ?? "none",
-        frames: serializeGifFrames(request.frames),
+        ...(spoolId
+          ? { frames: [], spoolId, spoolDurations: request.frames.map((frame) => frame.durationMs) }
+          : { frames: serializeGifFrames(request.frames) }),
       },
     });
   } catch (error) {
+    if (spoolId) {
+      await invoke<void>("discard_gif_frame_spool", { spoolId }).catch(() => undefined);
+    }
     throw new Error(getErrorMessage(error));
   }
 }

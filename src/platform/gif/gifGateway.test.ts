@@ -46,10 +46,12 @@ describe("GIF desktop gateway", () => {
 
     await exportGif(input);
 
-    const payload = vi.mocked(invoke).mock.calls[0]?.[1] as { request: { frames: Array<{ dataBase64: string; durationMs: number }> } };
-    expect(payload.request.frames).toHaveLength(200);
-    expect(payload.request.frames[0]).toEqual({ dataBase64: "AH8A/w==", durationMs: 10 });
-    expect(payload.request.frames[199]).toEqual({ dataBase64: "x38A/w==", durationMs: 11 });
+    const calls = vi.mocked(invoke).mock.calls;
+    const payload = calls[calls.length - 1]?.[1] as { request: { frames: Array<{ dataBase64: string; durationMs: number }>; spoolId: string; spoolDurations: number[] } };
+    expect(payload.request.frames).toEqual([]);
+    expect(payload.request.spoolId).toBeTruthy();
+    expect(payload.request.spoolDurations).toEqual(frames.map((frame) => frame.durationMs));
+    expect(vi.mocked(invoke).mock.calls).toHaveLength(202);
   });
 
   it("preserves the camelCase contract, frame order, byte values and input buffers", async () => {

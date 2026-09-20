@@ -88,6 +88,8 @@ fn request(path: &Path) -> GifExportRequest {
         encoding_speed: 1,
         color_count: 256,
         dither_mode: "none".into(),
+        spool_id: None,
+        spool_durations: Vec::new(),
         overwrite_existing: false,
         job_id: None,
         frames: vec![
@@ -692,6 +694,31 @@ fn accepts_base64_frame_data_without_changing_decoded_bytes() {
     }))
     .unwrap();
     assert_eq!(req.frames[0].data, vec![0, 127, 128, 255]);
+}
+
+#[test]
+fn spool_accepts_200_ordered_frames_and_cleans_after_take() {
+    let state = GifFrameSpoolState::default();
+    let id = state.create().unwrap();
+    for _ in 0..200 {
+        state.write_frame(&id, "AQI=").unwrap();
+    }
+    let frames = state.take_frames(&id, &[10; 200]).unwrap();
+    assert_eq!(frames.len(), 200);
+    assert_eq!(frames[0].data, vec![1, 2]);
+    assert!(state.take_frames(&id, &[10]).is_err());
+}
+
+#[test]
+fn spool_rejects_unknown_and_mismatched_ids_without_path_access() {
+    let state = GifFrameSpoolState::default();
+    assert!(state.write_frame("..", "AQI=").is_err());
+    assert!(state.take_frames("..", &[10]).is_err());
+    let id = state.create().unwrap();
+    state.write_frame(&id, "AQI=").unwrap();
+    assert!(state.take_frames(&id, &[10, 10]).is_err());
+    assert!(state.discard(&id).is_ok());
+    assert!(state.discard(&id).is_ok());
 }
 
 #[test]

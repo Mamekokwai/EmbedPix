@@ -125,6 +125,8 @@ pub fn run_case(name: &str, output_dir: &Path) -> Result<BenchmarkSample, String
         color_count: spec.color_count,
         dither_mode: "none".to_string(),
         frames,
+        spool_id: None,
+        spool_durations: Vec::new(),
         overwrite_existing: true,
         job_id: None,
     };

@@ -7,9 +7,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(commands::update::UpdateProgressState::default())
         .manage(commands::gif::GifExportJobState::default())
+        .manage(commands::gif::GifFrameSpoolState::default())
         .invoke_handler(tauri::generate_handler![
             commands::gif::pick_gif_output,
             commands::gif::export_gif,
+            commands::gif::create_gif_frame_spool,
+            commands::gif::write_gif_frame_spool,
+            commands::gif::discard_gif_frame_spool,
             commands::gif::cancel_gif_export,
             commands::gif::get_gif_export_progress,
             commands::gif::estimate_gif_size,
