@@ -24,7 +24,7 @@ const RELEASE_REPOSITORY: &str = "EmbedPix";
 const MAX_UPDATE_BYTES: u64 = 128 * 1024 * 1024;
 const UPDATE_CACHE_DIR: &str = "updates";
 const UPDATE_FILE_PREFIX: &str = "EmbedPix-update-";
-const UPDATE_PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMwRjU2Q0VGMjI0MjZCRTQKUldUa2EwSWk3MnoxTUZEeEhMNk5pYUN5T1VwbGt2S0ZINm9lKytFbmpLT2c5RWIzUDY4a0RqVHgK";
+const UPDATE_PUBLIC_KEY: &str = include_str!("../../update-public-key.txt");
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

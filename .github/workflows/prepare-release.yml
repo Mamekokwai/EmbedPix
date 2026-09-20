@@ -60,6 +60,21 @@ jobs:
           "tag=v$version" >> $env:GITHUB_OUTPUT
           Write-Host "Resolved EmbedPix release version: $version"
 
+      - name: Enforce package, Cargo, Tauri, and tag version agreement
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          $version = $env:RELEASE_VERSION
+          $package = (Get-Content -Raw package.json | ConvertFrom-Json).version
+          $tauri = (Get-Content -Raw src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $cargoLine = Select-String -Path src-tauri/Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
+          $cargo = $cargoLine.Matches[0].Groups[1].Value
+          if ($package -ne $version -or $cargo -ne $version -or $tauri -ne $version) {
+            throw "Version mismatch: tag=$version package=$package cargo=$cargo tauri=$tauri"
+          }
+          Write-Host "All source versions agree on $version."
+
       - name: Confirm tag and release state
         id: provenance
         shell: pwsh
@@ -325,53 +340,16 @@ jobs:
       - name: Prepare independent minisign verifier
         shell: pwsh
         run: |
-          $verifierRoot = Join-Path $env:RUNNER_TEMP 'embedpix-minisign-verifier'
-          $sourceDir = Join-Path $verifierRoot 'src'
-          New-Item -ItemType Directory -Force $sourceDir | Out-Null
-
-          @'
-          [package]
-          name = "embedpix-minisign-verifier"
-          version = "0.0.0"
-          edition = "2021"
-
-          [dependencies]
-          minisign-verify = "0.2.5"
-          '@ | Set-Content -Path (Join-Path $verifierRoot 'Cargo.toml') -Encoding utf8NoBOM
-
-          @'
-          use std::{env, fs, path::PathBuf};
-          use minisign_verify::{PublicKey, Signature};
-
-          fn main() -> Result<(), Box<dyn std::error::Error>> {
-              let args: Vec<_> = env::args_os().collect();
-              if args.len() != 4 {
-                  eprintln!("usage: verifier <public-key> <file> <signature>");
-                  std::process::exit(2);
-              }
-
-              let public_key = PublicKey::from_file(PathBuf::from(&args[1]))?;
-              let signature = Signature::from_file(PathBuf::from(&args[3]))?;
-              let content = fs::read(PathBuf::from(&args[2]))?;
-              public_key.verify(&content, &signature, false)?;
-              println!("Verified {}", PathBuf::from(&args[2]).display());
-              Ok(())
-          }
-          '@ | Set-Content -Path (Join-Path $sourceDir 'main.rs') -Encoding utf8NoBOM
-
-          cargo generate-lockfile --manifest-path (Join-Path $verifierRoot 'Cargo.toml')
-          if ($LASTEXITCODE -ne 0) { throw 'Could not lock the independent minisign verifier.' }
-          cargo build --manifest-path (Join-Path $verifierRoot 'Cargo.toml') --release --locked
+          cargo build --manifest-path tools/minisign-verifier/Cargo.toml --release --locked
           if ($LASTEXITCODE -ne 0) { throw 'Could not build the independent minisign verifier.' }
-          "MINISIGN_VERIFIER=$verifierRoot\target\release\embedpix-minisign-verifier.exe" >> $env:GITHUB_ENV
+          "MINISIGN_VERIFIER=$PWD\tools\minisign-verifier\target\release\embedpix-minisign-verifier.exe" >> $env:GITHUB_ENV
 
       - name: Independently verify installer signatures
         shell: pwsh
         env:
           RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          $config = Get-Content -Raw 'src-tauri/tauri.conf.json' | ConvertFrom-Json
-          $encodedPublicKey = [string]$config.plugins.updater.pubkey
+          $encodedPublicKey = (Get-Content -Raw 'src-tauri/update-public-key.txt').Trim()
           if (-not $encodedPublicKey) { throw 'Updater public key is missing from tauri.conf.json.' }
 
           $publicKeyPath = Join-Path $env:RUNNER_TEMP 'embedpix-updater.pub'
@@ -535,3 +513,32 @@ jobs:
             release-assets/latest.json
             release-assets/SHA256SUMS.txt
             release-assets/release-provenance.json
+
+      - name: Verify published release assets and manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          $headers = @{ Accept = 'application/vnd.github+json'; Authorization = "Bearer $env:GH_TOKEN" }
+          $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/${{ github.repository }}/releases/tags/$env:RELEASE_TAG"
+          $expected = @(
+            "EmbedPix_${env:RELEASE_VERSION}_x64-setup.exe",
+            "EmbedPix_${env:RELEASE_VERSION}_x64-setup.exe.sig",
+            "EmbedPix_${env:RELEASE_VERSION}_arm64-setup.exe",
+            "EmbedPix_${env:RELEASE_VERSION}_arm64-setup.exe.sig",
+            'latest.json', 'SHA256SUMS.txt', 'release-provenance.json'
+          )
+          $actual = @($release.assets | ForEach-Object name)
+          if ($actual.Count -ne $expected.Count -or @($expected | Where-Object { $actual -notcontains $_ }).Count -ne 0) {
+            throw "Published release assets do not match expected set. Actual: $($actual -join ', ')"
+          }
+          $latestAsset = $release.assets | Where-Object name -eq 'latest.json'
+          $latest = Invoke-RestMethod -Headers $headers -Uri $latestAsset.url
+          if ($latest.version -ne $env:RELEASE_VERSION -or @($latest.platforms.PSObject.Properties.Name).Count -ne 2) {
+            throw 'Published latest.json version or platform count is invalid.'
+          }
+          if ($latest.platforms.'windows-x86_64'.signature -notmatch '^untrusted comment:') { throw 'Published x64 signature is invalid.' }
+          if ($latest.platforms.'windows-aarch64'.signature -notmatch '^untrusted comment:') { throw 'Published ARM64 signature is invalid.' }
+          Write-Host "Published release assets and latest.json verified for $env:RELEASE_TAG."

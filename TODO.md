@@ -248,13 +248,13 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 ### D5：发布供应链加固
 
-- [ ] 固化独立 verifier 源码和 lockfile
-- [ ] 所有第三方 Action 固定 SHA
+- [x] 固化独立 verifier 源码和 lockfile
+- [x] 所有第三方 Action 固定 SHA
 - [ ] 生产环境增加审批和受保护 tag
-- [ ] 发布后回读 GitHub Release 资产摘要
-- [ ] 强制 package/Cargo/Tauri/tag 版本一致
+- [x] 发布后回读 GitHub Release 资产摘要
+- [x] 强制 package/Cargo/Tauri/tag 版本一致
 
-验收：篡改版本、commit、资产、签名或 manifest 任一字段都会阻止发布。
+验收：篡改版本、commit、资产、签名或 manifest 任一字段都会阻止发布；生产审批和受保护 tag 仍需 GitHub 仓库设置权限。
 
 ### D6：0.3.0 验收与发布
 
