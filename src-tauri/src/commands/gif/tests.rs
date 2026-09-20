@@ -685,6 +685,16 @@ fn camel_case_request_defaults_to_no_overwrite_and_normalizes_suggested_name() {
 }
 
 #[test]
+fn accepts_base64_frame_data_without_changing_decoded_bytes() {
+    let req: GifExportRequest = serde_json::from_value(serde_json::json!({
+        "outputPath": "test.gif", "width": 1, "height": 1, "loopMode": "infinite", "loopCount": 0,
+        "frames": [{ "dataBase64": "AH+A/w==", "durationMs": 10 }]
+    }))
+    .unwrap();
+    assert_eq!(req.frames[0].data, vec![0, 127, 128, 255]);
+}
+
+#[test]
 fn parses_safe_gif_output_location_fields_in_the_camel_case_contract() {
     let req: GifExportRequest = serde_json::from_value(serde_json::json!({
         "outputLocation": "subfolder",

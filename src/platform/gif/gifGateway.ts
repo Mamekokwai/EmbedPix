@@ -60,6 +60,9 @@ export interface GifSizeEstimateResult {
   bytes: number;
 }
 
+// Keep temporary String.fromCharCode calls bounded while avoiding a full JS number array.
+export const GIF_IPC_BASE64_CHUNK_BYTES = 64 * 1024;
+
 export interface AnimationSizeEstimateResult {
   bytes: number;
 }
@@ -170,9 +173,18 @@ export function parseGifExportProgress(value: unknown): GifExportProgress {
   };
 }
 
+function encodeFrameBase64(data: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < data.byteLength; offset += GIF_IPC_BASE64_CHUNK_BYTES) {
+    const chunk = data.subarray(offset, offset + GIF_IPC_BASE64_CHUNK_BYTES);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
 function serializeGifFrames(frames: GifExportFrame[]) {
   return frames.map((frame) => ({
-    data: Array.from(frame.data),
+    dataBase64: encodeFrameBase64(frame.data),
     durationMs: frame.durationMs,
   }));
 }

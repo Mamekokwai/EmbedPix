@@ -9,6 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use base64::Engine;
 use color_quant::NeuQuant;
 use gif::{DisposalMethod, Encoder, Frame as GifFrame, Repeat};
 use image::{
@@ -482,11 +483,45 @@ fn default_dither_mode() -> String {
     "none".to_string()
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct GifFrameRequest {
     data: Vec<u8>,
     duration_ms: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GifFrameWire {
+    #[serde(default)]
+    data: Option<Vec<u8>>,
+    #[serde(default)]
+    data_base64: Option<String>,
+    duration_ms: u32,
+}
+
+impl<'de> Deserialize<'de> for GifFrameRequest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire = GifFrameWire::deserialize(deserializer)?;
+        let data = match (wire.data, wire.data_base64) {
+            (Some(data), None) => data,
+            (None, Some(encoded)) => base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .map_err(serde::de::Error::custom)?,
+            (Some(_), Some(_)) => {
+                return Err(serde::de::Error::custom(
+                    "GIF 帧不能同时提供 data 和 dataBase64。",
+                ))
+            }
+            (None, None) => return Err(serde::de::Error::missing_field("dataBase64")),
+        };
+        Ok(Self {
+            data,
+            duration_ms: wire.duration_ms,
+        })
+    }
 }
 
 #[derive(Debug, Serialize)]

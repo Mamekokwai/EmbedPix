@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, parseGifExportProgress, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
+import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, GIF_IPC_BASE64_CHUNK_BYTES, parseGifExportProgress, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
 import type { GifExportRequest } from "./gifGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -25,14 +25,41 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("GIF desktop gateway", () => {
+  it("encodes large frames in bounded chunks without creating a number array", async () => {
+    const input = { ...request(), frames: [{ data: new Uint8Array(GIF_IPC_BASE64_CHUNK_BYTES + 1).fill(255), durationMs: 10 }] };
+    vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
+
+    await exportGif(input);
+
+    const payload = vi.mocked(invoke).mock.calls[0]?.[1] as { request: { frames: Array<{ dataBase64: string }> } };
+    expect(payload.request.frames[0].dataBase64).toHaveLength(4 * Math.ceil(input.frames[0].data.byteLength / 3));
+    expect(payload.request.frames[0]).not.toHaveProperty("data");
+  });
+
+  it("keeps a 200-frame request ordered and byte-identical", async () => {
+    const frames = Array.from({ length: 200 }, (_, index) => ({
+      data: new Uint8Array([index & 255, 127, 0, 255]),
+      durationMs: 10 + (index % 3),
+    }));
+    const input = { ...request(), frames };
+    vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
+
+    await exportGif(input);
+
+    const payload = vi.mocked(invoke).mock.calls[0]?.[1] as { request: { frames: Array<{ dataBase64: string; durationMs: number }> } };
+    expect(payload.request.frames).toHaveLength(200);
+    expect(payload.request.frames[0]).toEqual({ dataBase64: "AH8A/w==", durationMs: 10 });
+    expect(payload.request.frames[199]).toEqual({ dataBase64: "x38A/w==", durationMs: 11 });
+  });
+
   it("preserves the camelCase contract, frame order, byte values and input buffers", async () => {
     const input = request();
     vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
     await expect(exportGif(input)).resolves.toBe(input.outputPath);
     expect(invoke).toHaveBeenCalledWith("export_gif", {
       request: { ...input, overwriteExisting: false, encodingSpeed: 1, colorCount: 256, ditherMode: "none", frames: [
-        { data: [0, 127, 128, 255], durationMs: 19 },
-        { data: [255, 1], durationMs: 25 },
+        { dataBase64: "AH+A/w==", durationMs: 19 },
+        { dataBase64: "/wE=", durationMs: 25 },
       ] },
     });
     expect(input.frames[0].data).toEqual(new Uint8Array([0, 127, 128, 255]));
@@ -65,8 +92,8 @@ describe("GIF desktop gateway", () => {
         colorCount: 256,
         ditherMode: "none",
         frames: [
-          { data: [0, 127, 128, 255], durationMs: 19 },
-          { data: [255, 1], durationMs: 25 },
+        { dataBase64: "AH+A/w==", durationMs: 19 },
+        { dataBase64: "/wE=", durationMs: 25 },
         ],
       },
     });
@@ -84,8 +111,8 @@ describe("GIF desktop gateway", () => {
         loopMode: input.loopMode,
         loopCount: input.loopCount,
         frames: [
-          { data: [0, 127, 128, 255], durationMs: 19 },
-          { data: [255, 1], durationMs: 25 },
+        { dataBase64: "AH+A/w==", durationMs: 19 },
+        { dataBase64: "/wE=", durationMs: 25 },
         ],
       },
     });
@@ -117,8 +144,8 @@ describe("GIF desktop gateway", () => {
         baseName: input.baseName,
         overwriteExisting: false,
         frames: [
-          { data: [0, 127, 128, 255], durationMs: 19 },
-          { data: [255, 1], durationMs: 25 },
+        { dataBase64: "AH+A/w==", durationMs: 19 },
+        { dataBase64: "/wE=", durationMs: 25 },
         ],
       },
     });
@@ -138,8 +165,8 @@ describe("GIF desktop gateway", () => {
       request: {
         baseName: input.baseName,
         frames: [
-          { data: [0, 127, 128, 255], durationMs: 19 },
-          { data: [255, 1], durationMs: 25 },
+        { dataBase64: "AH+A/w==", durationMs: 19 },
+        { dataBase64: "/wE=", durationMs: 25 },
         ],
       },
     });
@@ -163,8 +190,8 @@ describe("GIF desktop gateway", () => {
         baseName: "screen",
         overwriteExisting: false,
         frames: [
-          { data: [0, 127, 128, 255], durationMs: 19 },
-          { data: [255, 1], durationMs: 25 },
+        { dataBase64: "AH+A/w==", durationMs: 19 },
+        { dataBase64: "/wE=", durationMs: 25 },
         ],
       },
     });
@@ -187,8 +214,8 @@ describe("GIF desktop gateway", () => {
         baseName: input.baseName,
         overwriteExisting: false,
         frames: [
-          { data: [0, 127, 128, 255], durationMs: 19 },
-          { data: [255, 1], durationMs: 25 },
+        { dataBase64: "AH+A/w==", durationMs: 19 },
+        { dataBase64: "/wE=", durationMs: 25 },
         ],
       },
     });
@@ -248,8 +275,8 @@ describe("GIF desktop gateway", () => {
     await expect(exportAnimation(input)).resolves.toBe(input.outputPath);
     expect(invoke).toHaveBeenCalledWith(command, { request: {
       ...input, overwriteExisting: false, frames: [
-        { data: [0, 127, 128, 255], durationMs: 19 },
-        { data: [255, 1], durationMs: 25 },
+        { dataBase64: "AH+A/w==", durationMs: 19 },
+        { dataBase64: "/wE=", durationMs: 25 },
       ],
     } });
   });
