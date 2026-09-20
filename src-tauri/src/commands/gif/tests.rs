@@ -722,3 +722,105 @@ fn export_job_reports_progress_and_cancellation() {
     assert_eq!(cancelled.status, "cancelling");
     assert!(job_checkpoint(&Some(job)).is_err());
 }
+
+#[test]
+fn cancellation_after_encoding_does_not_publish_output() {
+    let dir = TestDirectory::new();
+    let state = GifExportJobState::default();
+    let job = state
+        .register(Some("cancel-before-publish"), "gif", 1)
+        .unwrap()
+        .unwrap();
+    let check_job = Some(job.clone());
+    let publish_job = Some(job.clone());
+    let completed_job = Some(job.clone());
+    let checks = AtomicUsize::new(0);
+    let output_path = dir.output();
+    let output_path_text = output_path.to_string_lossy().into_owned();
+
+    let result = storage::write_output_with_publish(
+        &output_path,
+        false,
+        storage::MAX_OUTPUT_BYTES,
+        |file| {
+            file.write_all(b"encoded")
+                .map_err(|error| format!("write test output: {error}"))
+        },
+        || {
+            if checks.fetch_add(1, Ordering::Relaxed) == 1 {
+                job.cancel();
+                assert!(job_begin_publish(&check_job).is_err());
+            }
+            job_checkpoint(&check_job)
+        },
+        || job_begin_publish(&publish_job),
+        || job_mark_published(&completed_job, output_path_text),
+    );
+
+    assert_eq!(result.unwrap_err(), "导出已取消。");
+    job.finish_error("导出已取消。".to_string());
+    let progress = job.progress();
+    assert_eq!(progress.status, "cancelled");
+    assert_eq!(progress.output_path, None);
+    assert!(!output_path.exists());
+}
+
+#[test]
+fn cancellation_during_and_after_publish_keeps_completed_output_consistent() {
+    let dir = TestDirectory::new();
+    let state = GifExportJobState::default();
+    let job = state
+        .register(Some("cancel-during-publish"), "gif", 1)
+        .unwrap()
+        .unwrap();
+    let check_job = Some(job.clone());
+    let publish_job = Some(job.clone());
+    let completed_job = Some(job.clone());
+    let output_path = dir.output();
+    let output_path_text = output_path.to_string_lossy().into_owned();
+
+    storage::write_output_with_publish(
+        &output_path,
+        false,
+        storage::MAX_OUTPUT_BYTES,
+        |file| {
+            file.write_all(b"published")
+                .map_err(|error| format!("write test output: {error}"))
+        },
+        || job_checkpoint(&check_job),
+        || job_begin_publish(&publish_job),
+        || {
+            assert_eq!(job.cancel().status, "running");
+            job_mark_published(&completed_job, output_path_text);
+        },
+    )
+    .unwrap();
+
+    let progress = job.progress();
+    assert_eq!(progress.status, "completed");
+    assert_eq!(progress.stage, "completed");
+    assert_eq!(
+        progress.output_path,
+        Some(output_path.to_string_lossy().into_owned())
+    );
+    assert_eq!(job.cancel().status, "completed");
+    assert_eq!(fs::read(output_path).unwrap(), b"published");
+}
+
+#[test]
+fn failed_publish_lease_returns_job_to_cancellable_state() {
+    let state = GifExportJobState::default();
+    let job = state
+        .register(Some("failed-publish"), "gif", 1)
+        .unwrap()
+        .unwrap();
+    let publish_job = Some(job.clone());
+
+    let lease = job_begin_publish(&publish_job).unwrap();
+    assert!(lease.is_some());
+    assert_eq!(job.progress().stage, "publishing");
+    drop(lease);
+
+    assert_eq!(job.cancel().status, "cancelling");
+    assert!(job_checkpoint(&Some(job)).is_err());
+}

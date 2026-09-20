@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use webp_animation::{AnimParams, Encoder as WebpEncoder, EncoderOptions, EncodingConfig};
 
 use super::{
-    decode_limits, detect_format, inspect_frame_dimensions, job_checkpoint, job_report, ExportJob,
-    GifFrameRequest,
+    decode_limits, detect_format, inspect_frame_dimensions, job_begin_publish, job_checkpoint,
+    job_mark_published, job_report, ExportJob, GifFrameRequest,
 };
 
 #[derive(Debug, Deserialize)]
@@ -115,9 +115,13 @@ fn export_animation_blocking_with_job(
     job_checkpoint(&job)?;
     validate_request(&request, format)?;
     let output_path = resolve_output_path(&request, format)?;
-    storage::write_output_with_cancel(
+    let publish_job = job.clone();
+    let completed_job = job.clone();
+    let completed_path = output_path.to_string_lossy().into_owned();
+    storage::write_output_with_publish(
         &output_path,
         request.overwrite_existing,
+        storage::MAX_OUTPUT_BYTES,
         |file| {
             if format == "webp" {
                 encode_webp_with_job(file, &request, &job)
@@ -125,10 +129,9 @@ fn export_animation_blocking_with_job(
                 encode_apng_with_job(file, &request, &job)
             }
         },
-        || {
-            job_report(&job, "publishing", request.frames.len());
-            job_checkpoint(&job)
-        },
+        || job_checkpoint(&job),
+        move || job_begin_publish(&publish_job),
+        move || job_mark_published(&completed_job, completed_path),
     )?;
     Ok(output_path.to_string_lossy().into_owned())
 }

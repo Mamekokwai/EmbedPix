@@ -300,21 +300,51 @@ pub(super) fn write_output(
     write_output_with_cancel(output, overwrite, encode, || Ok(()))
 }
 
+#[cfg(test)]
 pub(super) fn write_output_with_cancel(
     output: &Path,
     overwrite: bool,
     encode: impl FnOnce(&mut File) -> Result<(), String>,
     check_cancel: impl Fn() -> Result<(), String>,
 ) -> Result<(), String> {
-    write_output_with_limit(output, overwrite, MAX_OUTPUT_BYTES, encode, check_cancel)
+    write_output_with_publish(
+        output,
+        overwrite,
+        MAX_OUTPUT_BYTES,
+        encode,
+        check_cancel,
+        || Ok(()),
+        || {},
+    )
 }
 
+#[cfg(test)]
 fn write_output_with_limit(
     output: &Path,
     overwrite: bool,
     max_output_bytes: u64,
     encode: impl FnOnce(&mut File) -> Result<(), String>,
     check_cancel: impl Fn() -> Result<(), String>,
+) -> Result<(), String> {
+    write_output_with_publish(
+        output,
+        overwrite,
+        max_output_bytes,
+        encode,
+        check_cancel,
+        || Ok(()),
+        || {},
+    )
+}
+
+pub(super) fn write_output_with_publish<PublishGuard>(
+    output: &Path,
+    overwrite: bool,
+    max_output_bytes: u64,
+    encode: impl FnOnce(&mut File) -> Result<(), String>,
+    check_cancel: impl Fn() -> Result<(), String>,
+    acquire_publish: impl FnOnce() -> Result<PublishGuard, String>,
+    on_published: impl FnOnce(),
 ) -> Result<(), String> {
     let parent = output
         .parent()
@@ -337,6 +367,8 @@ fn write_output_with_limit(
     validate_output_size(file, max_output_bytes, "输出")?;
     check_cancel()?;
     temporary.file.take();
+    let _publish_guard = acquire_publish()?;
+    check_cancel()?;
     check_target(output, overwrite)?;
     let result = if overwrite {
         // 同目录 rename 在 Windows 使用 MoveFileExW(REPLACE_EXISTING)，失败时旧文件仍在原位。
@@ -345,8 +377,11 @@ fn write_output_with_limit(
         // hard_link 的 create-new 语义保护检查后才出现的同名目标；不支持硬链接时安全失败。
         fs::hard_link(&temporary.path, output)
     };
-    if overwrite && result.is_ok() {
-        temporary.cleanup = false;
+    if result.is_ok() {
+        on_published();
+        if overwrite {
+            temporary.cleanup = false;
+        }
     }
     result.map_err(|error| format!("无法保存 GIF 文件（同名目标可能已存在）：{error}"))
 }

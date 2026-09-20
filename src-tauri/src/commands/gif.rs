@@ -3,7 +3,7 @@ use std::{
     io::{Cursor, Write},
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU8, Ordering},
         Arc, Mutex,
     },
 };
@@ -40,6 +40,10 @@ const MIN_ENCODING_SPEED: i32 = 1;
 const MAX_ENCODING_SPEED: i32 = 30;
 const MIN_COLOR_COUNT: u16 = 2;
 const MAX_COLOR_COUNT: u16 = 256;
+const JOB_OPEN: u8 = 0;
+const JOB_CANCELLING: u8 = 1;
+const JOB_PUBLISHING: u8 = 2;
+const JOB_COMMITTED: u8 = 3;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,14 +64,27 @@ pub struct GifExportJobState {
 }
 
 pub(super) struct GifExportJob {
-    cancelled: AtomicBool,
+    phase: AtomicU8,
     progress: Mutex<GifExportProgress>,
+}
+
+pub(super) struct PublishLease(Arc<GifExportJob>);
+
+impl Drop for PublishLease {
+    fn drop(&mut self) {
+        let _ = self.0.phase.compare_exchange(
+            JOB_PUBLISHING,
+            JOB_OPEN,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+    }
 }
 
 impl GifExportJob {
     fn new(job_id: String, format: &str, total_frames: usize) -> Self {
         Self {
-            cancelled: AtomicBool::new(false),
+            phase: AtomicU8::new(JOB_OPEN),
             progress: Mutex::new(GifExportProgress {
                 job_id,
                 format: format.to_string(),
@@ -82,7 +99,7 @@ impl GifExportJob {
     }
 
     fn checkpoint(&self) -> Result<(), String> {
-        if self.cancelled.load(Ordering::Acquire) {
+        if self.phase.load(Ordering::Acquire) == JOB_CANCELLING {
             Err("导出已取消。".to_string())
         } else {
             Ok(())
@@ -97,25 +114,35 @@ impl GifExportJob {
     }
 
     fn cancel(&self) -> GifExportProgress {
-        if let Ok(mut progress) = self.progress.lock() {
-            if matches!(
-                progress.status.as_str(),
-                "completed" | "cancelled" | "failed"
-            ) {
-                return progress.clone();
+        let mut phase = self.phase.load(Ordering::Acquire);
+        loop {
+            match phase {
+                JOB_OPEN => match self.phase.compare_exchange(
+                    JOB_OPEN,
+                    JOB_CANCELLING,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => break,
+                    Err(next) => phase = next,
+                },
+                JOB_CANCELLING | JOB_PUBLISHING | JOB_COMMITTED => {
+                    return self.progress();
+                }
+                _ => return self.progress(),
             }
-            self.cancelled.store(true, Ordering::Release);
+        }
+        if let Ok(mut progress) = self.progress.lock() {
             progress.status = "cancelling".to_string();
             progress.stage = "cancelling".to_string();
             return progress.clone();
         }
-        self.cancelled.store(true, Ordering::Release);
         self.progress()
     }
 
     fn finish_ok(&self, output_path: String) {
         if let Ok(mut progress) = self.progress.lock() {
-            if self.cancelled.load(Ordering::Acquire) {
+            if self.phase.load(Ordering::Acquire) == JOB_CANCELLING {
                 progress.status = "cancelled".to_string();
                 progress.stage = "cancelled".to_string();
                 progress.error = Some("导出已取消。".to_string());
@@ -129,7 +156,7 @@ impl GifExportJob {
 
     fn finish_error(&self, error: String) {
         if let Ok(mut progress) = self.progress.lock() {
-            if self.cancelled.load(Ordering::Acquire) {
+            if self.phase.load(Ordering::Acquire) == JOB_CANCELLING {
                 progress.status = "cancelled".to_string();
                 progress.stage = "cancelled".to_string();
                 progress.error = Some("导出已取消。".to_string());
@@ -155,6 +182,35 @@ impl GifExportJob {
                 output_path: None,
                 error: Some("导出任务状态不可用。".to_string()),
             })
+    }
+
+    fn begin_publish(self: &Arc<Self>) -> Result<PublishLease, String> {
+        match self.phase.compare_exchange(
+            JOB_OPEN,
+            JOB_PUBLISHING,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => {
+                if let Ok(mut progress) = self.progress.lock() {
+                    progress.stage = "publishing".to_string();
+                }
+                Ok(PublishLease(Arc::clone(self)))
+            }
+            Err(JOB_CANCELLING) => Err("导出已取消。".to_string()),
+            Err(_) => Err("导出任务已进入发布阶段。".to_string()),
+        }
+    }
+
+    fn mark_published(&self, output_path: String) {
+        if let Ok(mut progress) = self.progress.lock() {
+            progress.status = "completed".to_string();
+            progress.stage = "completed".to_string();
+            progress.completed_frames = progress.total_frames;
+            progress.output_path = Some(output_path);
+            progress.error = None;
+        }
+        self.phase.store(JOB_COMMITTED, Ordering::Release);
     }
 }
 
@@ -219,6 +275,17 @@ pub(super) fn job_checkpoint(job: &ExportJob) -> Result<(), String> {
 pub(super) fn job_report(job: &ExportJob, stage: &str, completed_frames: usize) {
     if let Some(job) = job {
         job.report(stage, completed_frames);
+    }
+}
+
+pub(super) fn job_begin_publish(job: &ExportJob) -> Result<Option<PublishLease>, String> {
+    job.as_ref()
+        .map_or(Ok(None), |job| job.begin_publish().map(Some))
+}
+
+pub(super) fn job_mark_published(job: &ExportJob, output_path: String) {
+    if let Some(job) = job {
+        job.mark_published(output_path);
     }
 }
 
@@ -468,14 +535,17 @@ fn export_gif_blocking_with_job(
     validate_request(&request)?;
     let output_path = resolve_output_path(&request)?;
     job_report(&job, "encoding", 0);
-    storage::write_output_with_cancel(
+    let publish_job = job.clone();
+    let completed_job = job.clone();
+    let completed_path = output_path.to_string_lossy().into_owned();
+    storage::write_output_with_publish(
         &output_path,
         request.overwrite_existing,
+        storage::MAX_OUTPUT_BYTES,
         |file| encode_gif_with_job(file, &request, &job),
-        || {
-            job_report(&job, "publishing", request.frames.len());
-            job_checkpoint(&job)
-        },
+        || job_checkpoint(&job),
+        move || job_begin_publish(&publish_job),
+        move || job_mark_published(&completed_job, completed_path),
     )?;
     Ok(output_path.to_string_lossy().into_owned())
 }

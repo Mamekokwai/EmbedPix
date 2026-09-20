@@ -9,8 +9,8 @@ use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    decode_limits, detect_format, inspect_frame_dimensions, job_checkpoint, job_report,
-    validate_frame_dimensions, ExportJob,
+    decode_limits, detect_format, inspect_frame_dimensions, job_begin_publish, job_checkpoint,
+    job_mark_published, job_report, validate_frame_dimensions, ExportJob,
 };
 
 use super::storage;
@@ -189,16 +189,20 @@ fn export_png_sequence_blocking_with_limit_and_job(
         job_report(&job, "encoding", index + 1);
     }
 
-    job_report(&job, "publishing", request.frames.len());
     job_checkpoint(&job)?;
+    let publish_job = job.clone();
+    let completed_job = job.clone();
+    let completed_path = output_paths
+        .first()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_default();
     publish_files(
         &output_paths,
         &mut temporary_files,
         request.overwrite_existing,
-        || {
-            job_report(&job, "publishing", request.frames.len());
-            job_checkpoint(&job)
-        },
+        || job_checkpoint(&job),
+        move || job_begin_publish(&publish_job),
+        move || job_mark_published(&completed_job, completed_path),
     )?;
     job_checkpoint(&job)?;
     Ok(output_paths
@@ -360,11 +364,13 @@ fn reserve_backup_path(directory: &Path, index: usize) -> Result<PathBuf, String
     Err("无法分配 PNG 帧序列回滚文件。".to_string())
 }
 
-fn publish_files(
+fn publish_files<PublishGuard>(
     output_paths: &[PathBuf],
     temporary_files: &mut [TemporaryFile],
     overwrite_existing: bool,
     check_cancel: impl Fn() -> Result<(), String>,
+    acquire_publish: impl FnOnce() -> Result<PublishGuard, String>,
+    on_published: impl FnOnce(),
 ) -> Result<(), String> {
     let directory = output_paths
         .first()
@@ -372,6 +378,8 @@ fn publish_files(
         .ok_or_else(|| "PNG 帧序列输出目录无效。".to_string())?;
     let mut backups = Vec::new();
     let mut published = Vec::new();
+    check_cancel()?;
+    let publish_guard = acquire_publish()?;
     let result = (|| {
         check_cancel()?;
         if overwrite_existing {
@@ -397,6 +405,8 @@ fn publish_files(
     })();
 
     if result.is_ok() {
+        on_published();
+        drop(publish_guard);
         for (_, backup) in backups {
             let _ = fs::remove_file(backup);
         }
@@ -409,6 +419,7 @@ fn publish_files(
     for (output, backup) in backups.into_iter().rev() {
         let _ = fs::rename(backup, output);
     }
+    drop(publish_guard);
     Err(result.expect_err("publish result was checked"))
 }
 
@@ -658,5 +669,43 @@ mod tests {
         assert!(result.unwrap_err().contains("超过 1 字节 上限"));
         assert_eq!(fs::read(existing).unwrap(), b"old frame");
         assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn failed_overwrite_publish_restores_originals_and_removes_backups() {
+        let directory = TestDirectory::new();
+        let first_output = directory.0.join("frame-001.png");
+        let second_output = directory.0.join("frame-002.png");
+        fs::write(&first_output, b"old one").unwrap();
+        fs::write(&second_output, b"old two").unwrap();
+
+        let mut first_temporary = TemporaryFile::create(&directory.0, 0).unwrap();
+        first_temporary
+            .file
+            .as_mut()
+            .unwrap()
+            .write_all(b"new one")
+            .unwrap();
+        first_temporary.file.as_mut().unwrap().sync_all().unwrap();
+        let second_temporary = TemporaryFile {
+            path: directory.0.join("missing-frame.tmp"),
+            file: None,
+            cleanup: true,
+        };
+        let mut temporary_files = vec![first_temporary, second_temporary];
+
+        let result = publish_files(
+            &[first_output.clone(), second_output.clone()],
+            &mut temporary_files,
+            true,
+            || Ok(()),
+            || Ok(()),
+            || {},
+        );
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(first_output).unwrap(), b"old one");
+        assert_eq!(fs::read(second_output).unwrap(), b"old two");
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 2);
     }
 }
