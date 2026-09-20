@@ -1,4 +1,10 @@
-use std::io::{self, Read};
+use std::{
+    io::{self, Read},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use base64::Engine;
 use embedpix_lib::commands::{export_image, gif};
@@ -32,6 +38,18 @@ struct Event<'a> {
 }
 
 fn main() {
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let signal_state = Arc::clone(&interrupted);
+    if ctrlc::set_handler(move || signal_state.store(true, Ordering::SeqCst)).is_err() {
+        emit(
+            None,
+            "error",
+            "signal_setup_error",
+            "无法安装 Ctrl+C 处理器",
+            None,
+        );
+        std::process::exit(2);
+    }
     let mut input = String::new();
     if io::stdin().read_to_string(&mut input).is_err() {
         emit(None, "error", "input_read_error", "无法读取 stdin", None);
@@ -48,20 +66,45 @@ fn main() {
         emit(None, "error", "empty_input", "stdin 未提供 JSON 请求", None);
         std::process::exit(2);
     }
-    let mut failed = false;
+    let mut succeeded = 0usize;
+    let mut failed = 0usize;
     for request in requests {
+        if interrupted.load(Ordering::SeqCst) {
+            emit(
+                None,
+                "error",
+                "interrupted",
+                "已收到中断信号，未开始后续请求",
+                None,
+            );
+            break;
+        }
         let id = request.id.clone();
         emit(id.clone(), "progress", "started", "请求已接收", None);
         match execute(request) {
-            Ok(output) => emit(id, "success", "ok", "请求完成", Some(output)),
+            Ok(output) => {
+                succeeded += 1;
+                emit(id, "success", "ok", "请求完成", Some(output));
+            }
             Err((code, message)) => {
-                failed = true;
+                failed += 1;
                 emit(id, "error", code, &message, None);
             }
         }
     }
-    if failed {
-        std::process::exit(1);
+    let code = classify_exit_code(succeeded, failed, interrupted.load(Ordering::SeqCst));
+    if code != 0 {
+        std::process::exit(code);
+    }
+}
+
+fn classify_exit_code(succeeded: usize, failed: usize, interrupted: bool) -> i32 {
+    if interrupted || (succeeded > 0 && failed > 0) {
+        2
+    } else if failed > 0 {
+        1
+    } else {
+        0
     }
 }
 
@@ -236,5 +279,13 @@ mod tests {
         assert_eq!(encoded["type"], "success");
         assert_eq!(encoded["id"], "job-1");
         assert_eq!(encoded["output"]["output"], "x");
+    }
+
+    #[test]
+    fn exit_code_contract_distinguishes_batch_results() {
+        assert_eq!(classify_exit_code(2, 0, false), 0);
+        assert_eq!(classify_exit_code(0, 2, false), 1);
+        assert_eq!(classify_exit_code(1, 1, false), 2);
+        assert_eq!(classify_exit_code(1, 0, true), 2);
     }
 }

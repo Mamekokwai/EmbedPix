@@ -28,6 +28,7 @@ image = { version = "0.24", default-features = false, features = ["png", "jpeg",
 gif = "0.13"
 getrandom = "0.3"
 color_quant = "1.1"
+ctrlc = "3.4"
 apng = { version = "0.3.4", features = ["png"] }
 webp-animation = { version = "0.10", features = ["static"] }
 rfd = "0.15.4"
