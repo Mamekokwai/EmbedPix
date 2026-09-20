@@ -26,7 +26,7 @@ import { getFormatMetadata, GIF_OUTPUT_FORMAT_IDS } from "../../shared/formatMet
 import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
@@ -1499,15 +1499,21 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             ];
       })
       : [{ frames: baseFrames, samplingEvery: 1, mergedIdenticalFrames: mergeIdenticalFrames }];
+    const candidatePlans = autoCompress ? limitGifCompressionCandidates(sizes.flatMap((size) => frameVariants
+      .filter((candidate) => !(size.width === canvasSize.width
+        && size.height === canvasSize.height
+        && candidate.samplingEvery === 1
+        && candidate.mergedIdenticalFrames === mergeIdenticalFrames))
+      .map((candidate) => ({ size, ...candidate })))) : [{ size: canvasSize, ...frameVariants[0] }];
     let best: GifCompressionResult | null = null;
     let baselineBytes: number | undefined;
     let attempt = 0;
-    const totalAttempts = autoCompress ? colors.length * frameVariants.length * sizes.length : 1;
+    const totalAttempts = autoCompress ? Math.min(MAX_GIF_COMPRESSION_CANDIDATES, colors.length * candidatePlans.length) : 1;
 
-    for (const size of sizes) {
-      for (const candidate of frameVariants) {
+    candidateSearch: for (const { size, ...candidate } of candidatePlans) {
         if (!autoCompress && size !== canvasSize) continue;
         for (const candidateColorCount of colors) {
+          if (attempt >= MAX_GIF_COMPRESSION_CANDIDATES) break candidateSearch;
           throwIfAborted(signal);
           attempt += 1;
           setStatus({ kind: "exporting", text: `正在测量 GIF 体积 ${attempt}/${totalAttempts}…` });
@@ -1533,13 +1539,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             return result;
           }
         }
-      }
     }
 
-    if (maxBytes !== undefined && (!best || best.bytes > maxBytes)) {
-      throw new Error(`自动压缩后 GIF 仍为 ${formatGifBytes(best?.bytes ?? 0)}，超过最大文件大小 ${formatGifBytes(maxBytes)}。请降低画布尺寸或减少帧数。`);
-    }
     if (!best) throw new Error("无法测量 GIF 文件体积。");
+    if (maxBytes !== undefined && best.bytes > maxBytes) {
+      throw new Error(`自动压缩后 GIF 仍为 ${formatGifBytes(best.bytes)}，超过最大文件大小 ${formatGifBytes(maxBytes)}；最佳参数为 ${best.width}×${best.height}、${best.frames.length} 帧、${best.colorCount} 色。请降低画布尺寸或减少帧数。`);
+    }
+    if (targetBytes !== undefined && best.bytes > targetBytes) {
+      throw new Error(`自动压缩未达到目标 ${formatGifBytes(targetBytes)}，最佳结果为 ${formatGifBytes(best.bytes)}；参数为 ${best.width}×${best.height}、${best.frames.length} 帧、${best.colorCount} 色。请降低目标或减少帧数。`);
+    }
     return best;
   };
 

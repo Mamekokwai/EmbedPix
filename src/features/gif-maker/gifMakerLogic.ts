@@ -18,6 +18,7 @@ export interface GifByteFrame {
   durationMs: number;
 }
 export const MAX_FRAMES = 200;
+export const MAX_GIF_COMPRESSION_CANDIDATES = 96;
 export const MAX_FRAME_BYTES = 32 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 export const MAX_TOTAL_PIXELS = 64 * 1024 * 1024;
@@ -26,6 +27,10 @@ export const GIF_PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2] as const;
 export type GifPlaybackSpeed = typeof GIF_PLAYBACK_SPEEDS[number];
 export const GIF_COLOR_COUNTS = [2, 16, 32, 64, 128, 256] as const;
 export type GifColorCount = typeof GIF_COLOR_COUNTS[number];
+
+export function limitGifCompressionCandidates<T>(candidates: ReadonlyArray<T>, max = MAX_GIF_COMPRESSION_CANDIDATES): T[] {
+  return candidates.slice(0, Math.max(1, Math.floor(max)));
+}
 
 export function getNextGifTabIndex(currentIndex: number, tabCount: number, key: string) {
   if (tabCount <= 0) return -1;
