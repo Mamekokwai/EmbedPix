@@ -1,0 +1,238 @@
+use std::{
+    env, fs,
+    io::Read,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    thread,
+    time::Duration,
+};
+
+use embedpix_lib::commands::gif::benchmark::{
+    default_output_dir, run_case, BenchmarkSample, CASES,
+};
+use serde::Serialize;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Baseline {
+    schema_version: u32,
+    samples: Vec<BenchmarkSample>,
+}
+
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("gif benchmark failed: {error}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), String> {
+    let args = env::args().collect::<Vec<_>>();
+    let output_dir = argument(&args, "--output-dir")
+        .map(PathBuf::from)
+        .unwrap_or_else(default_output_dir);
+    fs::create_dir_all(&output_dir)
+        .map_err(|error| format!("cannot create benchmark directory: {error}"))?;
+
+    if let Some(case) = argument(&args, "--worker-case") {
+        let sample = run_case(&case, &output_dir)?;
+        println!(
+            "{}",
+            serde_json::to_string(&sample).map_err(|error| error.to_string())?
+        );
+        return Ok(());
+    }
+
+    let mut samples = Vec::with_capacity(CASES.len());
+    for case in CASES {
+        let mut sample = run_worker(case.name, &output_dir)?;
+        println!(
+            "{}: {}x{} @ {} FPS, {} colors, {} frames, {} bytes, {} ms, peak {} bytes",
+            sample.name,
+            sample.width,
+            sample.height,
+            sample.fps,
+            sample.color_count,
+            sample.frames,
+            sample.output_bytes,
+            sample.elapsed_ms,
+            sample
+                .peak_memory_bytes
+                .map_or_else(|| "unsupported".to_string(), |bytes| bytes.to_string()),
+        );
+        if sample.peak_memory_bytes.is_none() {
+            sample.peak_memory_bytes = peak_memory_bytes(std::process::id());
+        }
+        samples.push(sample);
+    }
+
+    let baseline = Baseline {
+        schema_version: 1,
+        samples,
+    };
+    let json = serde_json::to_string_pretty(&baseline).map_err(|error| error.to_string())?;
+    fs::write(output_dir.join("baseline.json"), format!("{json}\n"))
+        .map_err(|error| format!("cannot write baseline JSON: {error}"))?;
+    write_csv(&output_dir, &baseline.samples)?;
+    Ok(())
+}
+
+fn run_worker(name: &str, output_dir: &PathBuf) -> Result<BenchmarkSample, String> {
+    let executable = env::current_exe()
+        .map_err(|error| format!("cannot resolve benchmark executable: {error}"))?;
+    let mut child = Command::new(executable)
+        .arg("--worker-case")
+        .arg(name)
+        .arg("--output-dir")
+        .arg(output_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|error| format!("cannot start benchmark worker {name}: {error}"))?;
+    let pid = child.id();
+    let mut peak = 0;
+    loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| format!("cannot poll benchmark worker {name}: {error}"))?
+        {
+            if !status.success() {
+                return Err(format!("benchmark worker {name} exited with {status}"));
+            }
+            break;
+        }
+        peak = peak.max(peak_memory_bytes(pid).unwrap_or(0));
+        thread::sleep(Duration::from_millis(10));
+    }
+    peak = peak.max(peak_memory_bytes(pid).unwrap_or(0));
+    let mut output = String::new();
+    child
+        .stdout
+        .take()
+        .ok_or_else(|| "benchmark worker stdout unavailable".to_string())?
+        .read_to_string(&mut output)
+        .map_err(|error| format!("cannot read benchmark worker output: {error}"))?;
+    let line = output
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .ok_or_else(|| format!("benchmark worker {name} returned no result"))?;
+    let mut sample: BenchmarkSample = serde_json::from_str(line)
+        .map_err(|error| format!("invalid benchmark worker result: {error}"))?;
+    sample.peak_memory_bytes = (peak > 0).then_some(peak);
+    Ok(sample)
+}
+
+fn write_csv(output_dir: &Path, samples: &[BenchmarkSample]) -> Result<(), String> {
+    let mut csv = String::from(
+        "name,width,height,fps,color_count,frames,output_bytes,elapsed_ms,peak_memory_bytes\n",
+    );
+    for sample in samples {
+        csv.push_str(&format!(
+            "{},{},{},{},{},{},{},{},{}\n",
+            sample.name,
+            sample.width,
+            sample.height,
+            sample.fps,
+            sample.color_count,
+            sample.frames,
+            sample.output_bytes,
+            sample.elapsed_ms,
+            sample
+                .peak_memory_bytes
+                .map_or_else(String::new, |bytes| bytes.to_string()),
+        ));
+    }
+    fs::write(output_dir.join("baseline.csv"), csv)
+        .map_err(|error| format!("cannot write baseline CSV: {error}"))
+}
+
+fn argument(args: &[String], name: &str) -> Option<String> {
+    args.windows(2)
+        .find(|pair| pair[0] == name)
+        .map(|pair| pair[1].clone())
+}
+
+#[cfg(target_os = "linux")]
+fn peak_memory_bytes(pid: u32) -> Option<u64> {
+    let status = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    status.lines().find_map(|line| {
+        let value = line
+            .strip_prefix("VmHWM:")?
+            .trim()
+            .strip_suffix("kB")?
+            .trim();
+        value.parse::<u64>().ok().map(|kilobytes| kilobytes * 1024)
+    })
+}
+
+#[cfg(windows)]
+fn peak_memory_bytes(pid: u32) -> Option<u64> {
+    use std::mem::size_of;
+
+    const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
+    const PROCESS_VM_READ: u32 = 0x0010;
+    #[repr(C)]
+    struct ProcessMemoryCounters {
+        cb: u32,
+        page_fault_count: u32,
+        peak_working_set_size: usize,
+        working_set_size: usize,
+        quota_peak_paged_pool_usage: usize,
+        quota_paged_pool_usage: usize,
+        quota_peak_non_paged_pool_usage: usize,
+        quota_non_paged_pool_usage: usize,
+        pagefile_usage: usize,
+        peak_pagefile_usage: usize,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(
+            desired_access: u32,
+            inherit_handle: i32,
+            process_id: u32,
+        ) -> *mut std::ffi::c_void;
+        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+    }
+    #[link(name = "psapi")]
+    unsafe extern "system" {
+        fn GetProcessMemoryInfo(
+            process: *mut std::ffi::c_void,
+            counters: *mut ProcessMemoryCounters,
+            size: u32,
+        ) -> i32;
+    }
+
+    let process = unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid) };
+    if process.is_null() {
+        return None;
+    }
+    let mut counters = ProcessMemoryCounters {
+        cb: size_of::<ProcessMemoryCounters>() as u32,
+        page_fault_count: 0,
+        peak_working_set_size: 0,
+        working_set_size: 0,
+        quota_peak_paged_pool_usage: 0,
+        quota_paged_pool_usage: 0,
+        quota_peak_non_paged_pool_usage: 0,
+        quota_non_paged_pool_usage: 0,
+        pagefile_usage: 0,
+        peak_pagefile_usage: 0,
+    };
+    let ok = unsafe {
+        GetProcessMemoryInfo(
+            process,
+            &mut counters,
+            size_of::<ProcessMemoryCounters>() as u32,
+        ) != 0
+    };
+    unsafe {
+        CloseHandle(process);
+    }
+    ok.then_some(counters.peak_working_set_size as u64)
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn peak_memory_bytes(_pid: u32) -> Option<u64> {
+    None
+}

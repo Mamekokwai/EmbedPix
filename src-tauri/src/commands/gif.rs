@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 mod animation;
+pub mod benchmark;
 mod dither;
 mod sequence;
 mod storage;

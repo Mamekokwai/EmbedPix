@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "samples": [
+    {
+      "name": "landscape",
+      "width": 320,
+      "height": 180,
+      "fps": 15,
+      "colorCount": 256,
+      "frames": 30,
+      "outputBytes": 258069,
+      "elapsedMs": 112,
+      "peakMemoryBytes": 6713344
+    },
+    {
+      "name": "portrait",
+      "width": 180,
+      "height": 320,
+      "fps": 15,
+      "colorCount": 128,
+      "frames": 30,
+      "outputBytes": 281069,
+      "elapsedMs": 123,
+      "peakMemoryBytes": 7147520
+    },
+    {
+      "name": "transparent-png",
+      "width": 320,
+      "height": 180,
+      "fps": 10,
+      "colorCount": 256,
+      "frames": 20,
+      "outputBytes": 273376,
+      "elapsedMs": 81,
+      "peakMemoryBytes": 6791168
+    },
+    {
+      "name": "game-recording",
+      "width": 640,
+      "height": 360,
+      "fps": 30,
+      "colorCount": 256,
+      "frames": 60,
+      "outputBytes": 2477929,
+      "elapsedMs": 842,
+      "peakMemoryBytes": 8556544
+    },
+    {
+      "name": "long-video",
+      "width": 640,
+      "height": 360,
+      "fps": 24,
+      "colorCount": 128,
+      "frames": 120,
+      "outputBytes": 1910765,
+      "elapsedMs": 1502,
+      "peakMemoryBytes": 9031680
+    }
+  ]
+}

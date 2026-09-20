@@ -1,0 +1,6 @@
+name,width,height,fps,color_count,frames,output_bytes,elapsed_ms,peak_memory_bytes
+landscape,320,180,15,256,30,258069,112,6713344
+portrait,180,320,15,128,30,281069,123,7147520
+transparent-png,320,180,10,256,20,273376,81,6791168
+game-recording,640,360,30,256,60,2477929,842,8556544
+long-video,640,360,24,128,120,1910765,1502,9031680
