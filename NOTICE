@@ -1,0 +1,12 @@
+EmbedPix NOTICE
+
+EmbedPix is distributed under the MIT License. See LICENSE for the complete
+license text.
+
+The GIF palette and dithering work in benchmarks/gif/c4 is an experiment
+harness and does not add FFmpeg or Gifski as a production dependency.
+
+FFmpeg and Gifski are referenced only for comparison and are not bundled,
+linked, or distributed by EmbedPix. Their licenses therefore do not apply to
+the EmbedPix binaries. If either project is added as a distribution
+dependency in the future, its license and notices must be reviewed again.

@@ -489,6 +489,9 @@ jobs:
 
           Signed Windows NSIS installers for x64 and ARM64.
 
+          This release includes the bounded GIF compression search and deterministic GIF benchmark records.
+          The repository's MIT license and third-party notices are included in the source tree.
+
           The `.sig` files and `latest.json` are generated from the Tauri updater signing key configured in GitHub Actions.
           "@ | Set-Content -Path release-assets/release-notes.md -Encoding utf8NoBOM
 
