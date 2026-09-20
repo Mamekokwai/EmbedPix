@@ -1,6 +1,11 @@
 use std::{
+    collections::HashMap,
     io::{Cursor, Write},
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use color_quant::NeuQuant;
@@ -12,6 +17,7 @@ use image::{
 };
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 mod animation;
 mod dither;
@@ -34,6 +40,187 @@ const MIN_ENCODING_SPEED: i32 = 1;
 const MAX_ENCODING_SPEED: i32 = 30;
 const MIN_COLOR_COUNT: u16 = 2;
 const MAX_COLOR_COUNT: u16 = 256;
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GifExportProgress {
+    pub job_id: String,
+    pub format: String,
+    pub status: String,
+    pub stage: String,
+    pub completed_frames: usize,
+    pub total_frames: usize,
+    pub output_path: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Default)]
+pub struct GifExportJobState {
+    jobs: Mutex<HashMap<String, Arc<GifExportJob>>>,
+}
+
+pub(super) struct GifExportJob {
+    cancelled: AtomicBool,
+    progress: Mutex<GifExportProgress>,
+}
+
+impl GifExportJob {
+    fn new(job_id: String, format: &str, total_frames: usize) -> Self {
+        Self {
+            cancelled: AtomicBool::new(false),
+            progress: Mutex::new(GifExportProgress {
+                job_id,
+                format: format.to_string(),
+                status: "running".to_string(),
+                stage: "validating".to_string(),
+                completed_frames: 0,
+                total_frames,
+                output_path: None,
+                error: None,
+            }),
+        }
+    }
+
+    fn checkpoint(&self) -> Result<(), String> {
+        if self.cancelled.load(Ordering::Acquire) {
+            Err("导出已取消。".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn report(&self, stage: &str, completed_frames: usize) {
+        if let Ok(mut progress) = self.progress.lock() {
+            progress.stage = stage.to_string();
+            progress.completed_frames = completed_frames;
+        }
+    }
+
+    fn cancel(&self) -> GifExportProgress {
+        if let Ok(mut progress) = self.progress.lock() {
+            if matches!(
+                progress.status.as_str(),
+                "completed" | "cancelled" | "failed"
+            ) {
+                return progress.clone();
+            }
+            self.cancelled.store(true, Ordering::Release);
+            progress.status = "cancelling".to_string();
+            progress.stage = "cancelling".to_string();
+            return progress.clone();
+        }
+        self.cancelled.store(true, Ordering::Release);
+        self.progress()
+    }
+
+    fn finish_ok(&self, output_path: String) {
+        if let Ok(mut progress) = self.progress.lock() {
+            if self.cancelled.load(Ordering::Acquire) {
+                progress.status = "cancelled".to_string();
+                progress.stage = "cancelled".to_string();
+                progress.error = Some("导出已取消。".to_string());
+            } else {
+                progress.status = "completed".to_string();
+                progress.stage = "completed".to_string();
+                progress.output_path = Some(output_path);
+            }
+        }
+    }
+
+    fn finish_error(&self, error: String) {
+        if let Ok(mut progress) = self.progress.lock() {
+            if self.cancelled.load(Ordering::Acquire) {
+                progress.status = "cancelled".to_string();
+                progress.stage = "cancelled".to_string();
+                progress.error = Some("导出已取消。".to_string());
+            } else {
+                progress.status = "failed".to_string();
+                progress.stage = "failed".to_string();
+                progress.error = Some(error);
+            }
+        }
+    }
+
+    fn progress(&self) -> GifExportProgress {
+        self.progress
+            .lock()
+            .map(|progress| progress.clone())
+            .unwrap_or_else(|_| GifExportProgress {
+                job_id: String::new(),
+                format: "unknown".to_string(),
+                status: "failed".to_string(),
+                stage: "failed".to_string(),
+                completed_frames: 0,
+                total_frames: 0,
+                output_path: None,
+                error: Some("导出任务状态不可用。".to_string()),
+            })
+    }
+}
+
+impl GifExportJobState {
+    fn register(
+        &self,
+        job_id: Option<&str>,
+        format: &str,
+        total_frames: usize,
+    ) -> Result<Option<Arc<GifExportJob>>, String> {
+        let Some(job_id) = normalize_job_id(job_id)? else {
+            return Ok(None);
+        };
+        let job = Arc::new(GifExportJob::new(job_id.clone(), format, total_frames));
+        let mut jobs = self
+            .jobs
+            .lock()
+            .map_err(|_| "导出任务状态不可用。".to_string())?;
+        if jobs.get(&job_id).is_some_and(|existing| {
+            matches!(
+                existing.progress().status.as_str(),
+                "running" | "cancelling"
+            )
+        }) {
+            return Err("导出任务 ID 已在使用中。".to_string());
+        }
+        jobs.insert(job_id, job.clone());
+        Ok(Some(job))
+    }
+
+    fn get(&self, job_id: &str) -> Result<Arc<GifExportJob>, String> {
+        let job_id =
+            normalize_job_id(Some(job_id))?.ok_or_else(|| "导出任务 ID 不能为空。".to_string())?;
+        self.jobs
+            .lock()
+            .map_err(|_| "导出任务状态不可用。".to_string())?
+            .get(&job_id)
+            .cloned()
+            .ok_or_else(|| "找不到导出任务。".to_string())
+    }
+}
+
+fn normalize_job_id(value: Option<&str>) -> Result<Option<String>, String> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    if value.len() > 128 || value.chars().any(char::is_control) {
+        return Err("导出任务 ID 无效。".to_string());
+    }
+    Ok(Some(value.to_string()))
+}
+
+pub(super) type ExportJob = Option<Arc<GifExportJob>>;
+
+pub(super) fn job_checkpoint(job: &ExportJob) -> Result<(), String> {
+    if let Some(job) = job {
+        job.checkpoint()?;
+    }
+    Ok(())
+}
+
+pub(super) fn job_report(job: &ExportJob, stage: &str, completed_frames: usize) {
+    if let Some(job) = job {
+        job.report(stage, completed_frames);
+    }
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +250,8 @@ pub struct GifExportRequest {
     frames: Vec<GifFrameRequest>,
     #[serde(default)]
     overwrite_existing: bool,
+    #[serde(default)]
+    job_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -100,6 +289,7 @@ impl From<GifSizeEstimateRequest> for GifExportRequest {
             dither_mode: request.dither_mode,
             frames: request.frames,
             overwrite_existing: false,
+            job_id: None,
         }
     }
 }
@@ -139,10 +329,40 @@ pub async fn pick_gif_output(suggested_name: String) -> Result<Option<String>, S
 }
 
 #[tauri::command]
-pub async fn export_gif(request: GifExportRequest) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || export_gif_blocking(request))
-        .await
-        .map_err(|error| format!("GIF 导出任务失败：{error}"))?
+pub async fn export_gif(
+    state: State<'_, GifExportJobState>,
+    request: GifExportRequest,
+) -> Result<String, String> {
+    let job = state.register(request.job_id.as_deref(), "gif", request.frames.len())?;
+    let result = tauri::async_runtime::spawn_blocking({
+        let job = job.clone();
+        move || export_gif_blocking_with_job(request, job)
+    })
+    .await
+    .map_err(|error| format!("GIF 导出任务失败：{error}"))?;
+    if let Some(job) = &job {
+        match &result {
+            Ok(output_path) => job.finish_ok(output_path.clone()),
+            Err(error) => job.finish_error(error.clone()),
+        }
+    }
+    result
+}
+
+#[tauri::command]
+pub fn cancel_gif_export(
+    state: State<'_, GifExportJobState>,
+    job_id: String,
+) -> Result<GifExportProgress, String> {
+    Ok(state.get(&job_id)?.cancel())
+}
+
+#[tauri::command]
+pub fn get_gif_export_progress(
+    state: State<'_, GifExportJobState>,
+    job_id: String,
+) -> Result<GifExportProgress, String> {
+    Ok(state.get(&job_id)?.progress())
 }
 
 #[tauri::command]
@@ -161,9 +381,22 @@ pub async fn pick_gif_sequence_output() -> Result<Option<String>, String> {
 
 #[tauri::command]
 pub async fn export_png_sequence(
+    state: State<'_, GifExportJobState>,
     request: sequence::PngSequenceExportRequest,
 ) -> Result<Vec<String>, String> {
-    sequence::export_png_sequence(request).await
+    let job = state.register(
+        request.job_id.as_deref(),
+        "png-sequence",
+        request.frames.len(),
+    )?;
+    let result = sequence::export_png_sequence(request, job.clone()).await;
+    if let Some(job) = &job {
+        match &result {
+            Ok(output_paths) => job.finish_ok(output_paths.first().cloned().unwrap_or_default()),
+            Err(error) => job.finish_error(error.clone()),
+        }
+    }
+    result
 }
 
 #[tauri::command]
@@ -183,14 +416,34 @@ pub async fn pick_animation_output(
 
 #[tauri::command]
 pub async fn export_webp_animation(
+    state: State<'_, GifExportJobState>,
     request: animation::AnimationExportRequest,
 ) -> Result<String, String> {
-    animation::export_webp_animation(request).await
+    let job = state.register(request.job_id.as_deref(), "webp", request.frames.len())?;
+    let result = animation::export_webp_animation(request, job.clone()).await;
+    if let Some(job) = &job {
+        match &result {
+            Ok(output_path) => job.finish_ok(output_path.clone()),
+            Err(error) => job.finish_error(error.clone()),
+        }
+    }
+    result
 }
 
 #[tauri::command]
-pub async fn export_apng(request: animation::AnimationExportRequest) -> Result<String, String> {
-    animation::export_apng(request).await
+pub async fn export_apng(
+    state: State<'_, GifExportJobState>,
+    request: animation::AnimationExportRequest,
+) -> Result<String, String> {
+    let job = state.register(request.job_id.as_deref(), "apng", request.frames.len())?;
+    let result = animation::export_apng(request, job.clone()).await;
+    if let Some(job) = &job {
+        match &result {
+            Ok(output_path) => job.finish_ok(output_path.clone()),
+            Err(error) => job.finish_error(error.clone()),
+        }
+    }
+    result
 }
 
 #[tauri::command]
@@ -202,11 +455,27 @@ pub async fn estimate_animation_size(
 }
 
 fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
+    export_gif_blocking_with_job(request, None)
+}
+
+fn export_gif_blocking_with_job(
+    request: GifExportRequest,
+    job: ExportJob,
+) -> Result<String, String> {
+    job_report(&job, "validating", 0);
+    job_checkpoint(&job)?;
     validate_request(&request)?;
     let output_path = resolve_output_path(&request)?;
-    storage::write_output(&output_path, request.overwrite_existing, |file| {
-        encode_gif(file, &request)
-    })?;
+    job_report(&job, "encoding", 0);
+    storage::write_output_with_cancel(
+        &output_path,
+        request.overwrite_existing,
+        |file| encode_gif_with_job(file, &request, &job),
+        || {
+            job_report(&job, "publishing", request.frames.len());
+            job_checkpoint(&job)
+        },
+    )?;
     Ok(output_path.to_string_lossy().into_owned())
 }
 
@@ -223,6 +492,14 @@ fn estimate_gif_size_blocking(
 }
 
 fn encode_gif(writer: impl Write, request: &GifExportRequest) -> Result<(), String> {
+    encode_gif_with_job(writer, request, &None)
+}
+
+fn encode_gif_with_job(
+    writer: impl Write,
+    request: &GifExportRequest,
+    job: &ExportJob,
+) -> Result<(), String> {
     let mut writer = storage::CheckedWriter::new(writer);
     {
         let mut encoder = Encoder::new(
@@ -242,7 +519,8 @@ fn encode_gif(writer: impl Write, request: &GifExportRequest) -> Result<(), Stri
             .set_repeat(repeat)
             .map_err(|error| format!("无法写入 GIF 循环设置：{error}"))?;
 
-        for frame in &request.frames {
+        for (index, frame) in request.frames.iter().enumerate() {
+            job_checkpoint(job)?;
             let mut reader =
                 ImageReader::with_format(Cursor::new(&frame.data), detect_format(&frame.data)?);
             reader.limits(decode_limits());
@@ -300,8 +578,10 @@ fn encode_gif(writer: impl Write, request: &GifExportRequest) -> Result<(), Stri
             encoder
                 .write_frame(&gif_frame)
                 .map_err(|error| format!("无法写入 GIF 帧：{error}"))?;
+            job_report(job, "encoding", index + 1);
         }
     }
+    job_checkpoint(job)?;
     writer
         .finish()
         .map_err(|error| format!("无法完成 GIF 文件写入：{error}"))

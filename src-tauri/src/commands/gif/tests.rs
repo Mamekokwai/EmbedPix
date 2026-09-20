@@ -88,6 +88,7 @@ fn request(path: &Path) -> GifExportRequest {
         color_count: 256,
         dither_mode: "none".into(),
         overwrite_existing: false,
+        job_id: None,
         frames: vec![
             frame([255, 0, 0, 255], 19),
             frame([0, 255, 0, 255], 25),
@@ -700,4 +701,24 @@ fn parses_safe_gif_output_location_fields_in_the_camel_case_contract() {
     assert_eq!(req.source_path.as_deref(), Some("C:\\Images\\source.png"));
     assert_eq!(req.output_subdirectory.as_deref(), Some("exports"));
     assert_eq!(req.file_name.as_deref(), Some("animation.gif"));
+}
+
+#[test]
+fn export_job_reports_progress_and_cancellation() {
+    let state = GifExportJobState::default();
+    let job = state.register(Some("job-1"), "gif", 3).unwrap().unwrap();
+
+    let progress = state.get("job-1").unwrap().progress();
+    assert_eq!(progress.job_id, "job-1");
+    assert_eq!(progress.format, "gif");
+    assert_eq!(progress.status, "running");
+    assert_eq!(progress.total_frames, 3);
+
+    job_report(&Some(job.clone()), "encoding", 1);
+    assert_eq!(job.progress().stage, "encoding");
+    assert_eq!(job.progress().completed_frames, 1);
+
+    let cancelled = state.get("job-1").unwrap().cancel();
+    assert_eq!(cancelled.status, "cancelling");
+    assert!(job_checkpoint(&Some(job)).is_err());
 }

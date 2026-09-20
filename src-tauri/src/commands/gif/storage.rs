@@ -296,7 +296,16 @@ pub(super) fn write_output(
     overwrite: bool,
     encode: impl FnOnce(&mut File) -> Result<(), String>,
 ) -> Result<(), String> {
-    write_output_with_limit(output, overwrite, MAX_OUTPUT_BYTES, encode)
+    write_output_with_cancel(output, overwrite, encode, || Ok(()))
+}
+
+pub(super) fn write_output_with_cancel(
+    output: &Path,
+    overwrite: bool,
+    encode: impl FnOnce(&mut File) -> Result<(), String>,
+    check_cancel: impl Fn() -> Result<(), String>,
+) -> Result<(), String> {
+    write_output_with_limit(output, overwrite, MAX_OUTPUT_BYTES, encode, check_cancel)
 }
 
 fn write_output_with_limit(
@@ -304,6 +313,7 @@ fn write_output_with_limit(
     overwrite: bool,
     max_output_bytes: u64,
     encode: impl FnOnce(&mut File) -> Result<(), String>,
+    check_cancel: impl Fn() -> Result<(), String>,
 ) -> Result<(), String> {
     let parent = output
         .parent()
@@ -318,10 +328,13 @@ fn write_output_with_limit(
     let mut temporary = TemporaryOutput::create(output)
         .map_err(|error| format!("无法创建 GIF 临时文件：{error}"))?;
     let file = temporary.file.as_mut().expect("temporary file is open");
+    check_cancel()?;
     encode(file)?;
+    check_cancel()?;
     file.sync_all()
         .map_err(|error| format!("无法完成 GIF 文件写入：{error}"))?;
     validate_output_size(file, max_output_bytes, "输出")?;
+    check_cancel()?;
     temporary.file.take();
     check_target(output, overwrite)?;
     let result = if overwrite {
@@ -493,23 +506,61 @@ mod tests {
         fs::create_dir(&directory).expect("create test directory");
         let output = directory.join("animation.gif");
 
-        let result = write_output_with_limit(&output, false, 3, |file| {
-            file.write_all(b"over")
-                .map_err(|error| format!("write test output: {error}"))
-        });
+        let result = write_output_with_limit(
+            &output,
+            false,
+            3,
+            |file| {
+                file.write_all(b"over")
+                    .map_err(|error| format!("write test output: {error}"))
+            },
+            || Ok(()),
+        );
 
         assert!(result.unwrap_err().contains("超过 3 字节 上限"));
         assert!(!output.exists());
         assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
 
         fs::write(&output, b"old file").expect("write existing output");
-        let result = write_output_with_limit(&output, true, 3, |file| {
-            file.write_all(b"over")
-                .map_err(|error| format!("write test output: {error}"))
-        });
+        let result = write_output_with_limit(
+            &output,
+            true,
+            3,
+            |file| {
+                file.write_all(b"over")
+                    .map_err(|error| format!("write test output: {error}"))
+            },
+            || Ok(()),
+        );
         assert!(result.is_err());
         assert_eq!(fs::read(&output).unwrap(), b"old file");
         assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn cancelled_temporary_output_is_removed_before_publish() {
+        let directory = std::env::temp_dir().join(format!(
+            "embedpix-output-cancel-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir(&directory).expect("create test directory");
+        let output = directory.join("animation.gif");
+
+        let result = super::write_output_with_cancel(
+            &output,
+            false,
+            |file| {
+                file.write_all(b"partial")
+                    .map_err(|error| format!("write test output: {error}"))
+            },
+            || Err("导出已取消。".to_string()),
+        );
+
+        assert_eq!(result.unwrap_err(), "导出已取消。");
+        assert!(!output.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
         fs::remove_dir_all(directory).expect("remove test directory");
     }
 }

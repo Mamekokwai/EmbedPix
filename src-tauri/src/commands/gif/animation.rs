@@ -10,7 +10,10 @@ use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use webp_animation::{AnimParams, Encoder as WebpEncoder, EncoderOptions, EncodingConfig};
 
-use super::{decode_limits, detect_format, inspect_frame_dimensions, GifFrameRequest};
+use super::{
+    decode_limits, detect_format, inspect_frame_dimensions, job_checkpoint, job_report, ExportJob,
+    GifFrameRequest,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,9 +34,11 @@ pub struct AnimationExportRequest {
     height: u32,
     loop_mode: String,
     loop_count: u16,
-    frames: Vec<GifFrameRequest>,
+    pub(super) frames: Vec<GifFrameRequest>,
     #[serde(default)]
     overwrite_existing: bool,
+    #[serde(default)]
+    pub(super) job_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -63,16 +68,24 @@ pub(super) async fn pick_animation_output(
 
 pub(super) async fn export_webp_animation(
     request: AnimationExportRequest,
+    job: ExportJob,
 ) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || export_animation_blocking(request, "webp"))
-        .await
-        .map_err(|error| format!("WebP 动图导出任务失败：{error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        export_animation_blocking_with_job(request, "webp", job)
+    })
+    .await
+    .map_err(|error| format!("WebP 动图导出任务失败：{error}"))?
 }
 
-pub(super) async fn export_apng(request: AnimationExportRequest) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || export_animation_blocking(request, "apng"))
-        .await
-        .map_err(|error| format!("APNG 导出任务失败：{error}"))?
+pub(super) async fn export_apng(
+    request: AnimationExportRequest,
+    job: ExportJob,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        export_animation_blocking_with_job(request, "apng", job)
+    })
+    .await
+    .map_err(|error| format!("APNG 导出任务失败：{error}"))?
 }
 
 pub(super) async fn estimate_animation_size(
@@ -89,15 +102,33 @@ fn export_animation_blocking(
     request: AnimationExportRequest,
     format: &str,
 ) -> Result<String, String> {
+    export_animation_blocking_with_job(request, format, None)
+}
+
+fn export_animation_blocking_with_job(
+    request: AnimationExportRequest,
+    format: &str,
+    job: ExportJob,
+) -> Result<String, String> {
+    job_report(&job, "validating", 0);
+    job_checkpoint(&job)?;
     validate_request(&request, format)?;
     let output_path = resolve_output_path(&request, format)?;
-    storage::write_output(&output_path, request.overwrite_existing, |file| {
-        if format == "webp" {
-            encode_webp(file, &request)
-        } else {
-            encode_apng(file, &request)
-        }
-    })?;
+    storage::write_output_with_cancel(
+        &output_path,
+        request.overwrite_existing,
+        |file| {
+            if format == "webp" {
+                encode_webp_with_job(file, &request, &job)
+            } else {
+                encode_apng_with_job(file, &request, &job)
+            }
+        },
+        || {
+            job_report(&job, "publishing", request.frames.len());
+            job_checkpoint(&job)
+        },
+    )?;
     Ok(output_path.to_string_lossy().into_owned())
 }
 
@@ -136,6 +167,14 @@ fn prepare_frame(request: &AnimationExportRequest, index: usize) -> Result<Vec<u
 }
 
 fn encode_webp<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Result<(), String> {
+    encode_webp_with_job(writer, request, &None)
+}
+
+fn encode_webp_with_job<W: Write>(
+    writer: &mut W,
+    request: &AnimationExportRequest,
+    job: &ExportJob,
+) -> Result<(), String> {
     let mut options = EncoderOptions {
         anim_params: AnimParams {
             loop_count: if request.loop_mode == "finite" {
@@ -152,6 +191,7 @@ fn encode_webp<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Re
         .map_err(|error| format!("无法创建 WebP 动图编码器：{error}"))?;
     let mut timestamp = 0u64;
     for (index, frame) in request.frames.iter().enumerate() {
+        job_checkpoint(job)?;
         let pixels = prepare_frame(request, index)?;
         let timestamp_ms =
             i32::try_from(timestamp).map_err(|_| "WebP 动图总时长超出编码器限制。".to_string())?;
@@ -161,6 +201,7 @@ fn encode_webp<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Re
         timestamp = timestamp
             .checked_add(u64::from(super::quantize_duration_ms(frame.duration_ms)))
             .ok_or_else(|| "WebP 动图总时长超出编码器限制。".to_string())?;
+        job_report(job, "encoding", index + 1);
     }
     let final_timestamp =
         i32::try_from(timestamp).map_err(|_| "WebP 动图总时长超出编码器限制。".to_string())?;
@@ -172,10 +213,19 @@ fn encode_webp<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Re
         .map_err(|error| format!("无法写入 WebP 动图：{error}"))?;
     writer
         .flush()
-        .map_err(|error| format!("无法完成 WebP 动图写入：{error}"))
+        .map_err(|error| format!("无法完成 WebP 动图写入：{error}"))?;
+    job_checkpoint(job)
 }
 
 fn encode_apng<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Result<(), String> {
+    encode_apng_with_job(writer, request, &None)
+}
+
+fn encode_apng_with_job<W: Write>(
+    writer: &mut W,
+    request: &AnimationExportRequest,
+    job: &ExportJob,
+) -> Result<(), String> {
     let config = apng::Config {
         width: request.width,
         height: request.height,
@@ -192,6 +242,7 @@ fn encode_apng<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Re
     let mut encoder = apng::Encoder::new(writer, config)
         .map_err(|error| format!("无法创建 APNG 编码器：{error}"))?;
     for (index, frame) in request.frames.iter().enumerate() {
+        job_checkpoint(job)?;
         let pixels = prepare_frame(request, index)?;
         let image = PNGImage {
             width: request.width,
@@ -210,13 +261,15 @@ fn encode_apng<W: Write>(writer: &mut W, request: &AnimationExportRequest) -> Re
         encoder
             .write_frame(&image, frame)
             .map_err(|error| format!("无法编码第 {} 帧 APNG：{error}", index + 1))?;
+        job_report(job, "encoding", index + 1);
     }
     encoder
         .finish_encode()
         .map_err(|error| format!("无法完成 APNG 编码：{error}"))?;
     writer
         .flush()
-        .map_err(|error| format!("无法完成 APNG 写入：{error}"))
+        .map_err(|error| format!("无法完成 APNG 写入：{error}"))?;
+    job_checkpoint(job)
 }
 
 fn validate_request(request: &AnimationExportRequest, format: &str) -> Result<(), String> {
@@ -398,6 +451,7 @@ mod tests {
                 png_frame([0, 255, 0, 255], 200),
             ],
             overwrite_existing: false,
+            job_id: None,
         }
     }
 

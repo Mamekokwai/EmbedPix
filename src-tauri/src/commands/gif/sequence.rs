@@ -8,7 +8,10 @@ use image::{io::Reader as ImageReader, DynamicImage, ImageOutputFormat};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 
-use super::{decode_limits, detect_format, inspect_frame_dimensions, validate_frame_dimensions};
+use super::{
+    decode_limits, detect_format, inspect_frame_dimensions, job_checkpoint, job_report,
+    validate_frame_dimensions, ExportJob,
+};
 
 use super::storage;
 
@@ -32,9 +35,11 @@ pub struct PngSequenceExportRequest {
     #[serde(default)]
     output_directory: Option<String>,
     base_name: String,
-    frames: Vec<PngSequenceFrameRequest>,
+    pub(super) frames: Vec<PngSequenceFrameRequest>,
     #[serde(default)]
     overwrite_existing: bool,
+    #[serde(default)]
+    pub(super) job_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,10 +101,15 @@ pub async fn pick_gif_sequence_output() -> Result<Option<String>, String> {
         .map(|path| path.to_string_lossy().into_owned()))
 }
 
-pub async fn export_png_sequence(request: PngSequenceExportRequest) -> Result<Vec<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || export_png_sequence_blocking(request))
-        .await
-        .map_err(|error| format!("PNG 帧序列导出任务失败：{error}"))?
+pub async fn export_png_sequence(
+    request: PngSequenceExportRequest,
+    job: ExportJob,
+) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        export_png_sequence_blocking_with_job(request, job)
+    })
+    .await
+    .map_err(|error| format!("PNG 帧序列导出任务失败：{error}"))?
 }
 
 pub async fn estimate_png_sequence_size(
@@ -111,13 +121,30 @@ pub async fn estimate_png_sequence_size(
 }
 
 fn export_png_sequence_blocking(request: PngSequenceExportRequest) -> Result<Vec<String>, String> {
-    export_png_sequence_blocking_with_limit(request, storage::MAX_OUTPUT_BYTES)
+    export_png_sequence_blocking_with_job(request, None)
+}
+
+fn export_png_sequence_blocking_with_job(
+    request: PngSequenceExportRequest,
+    job: ExportJob,
+) -> Result<Vec<String>, String> {
+    export_png_sequence_blocking_with_limit_and_job(request, storage::MAX_OUTPUT_BYTES, job)
 }
 
 fn export_png_sequence_blocking_with_limit(
     request: PngSequenceExportRequest,
     max_output_bytes: u64,
 ) -> Result<Vec<String>, String> {
+    export_png_sequence_blocking_with_limit_and_job(request, max_output_bytes, None)
+}
+
+fn export_png_sequence_blocking_with_limit_and_job(
+    request: PngSequenceExportRequest,
+    max_output_bytes: u64,
+    job: ExportJob,
+) -> Result<Vec<String>, String> {
+    job_report(&job, "validating", 0);
+    job_checkpoint(&job)?;
     let directory = storage::resolve_output_directory(
         &request.output_dir,
         request.output_location.as_deref(),
@@ -141,6 +168,8 @@ fn export_png_sequence_blocking_with_limit(
 
     let mut temporary_files = Vec::with_capacity(request.frames.len());
     for (index, frame) in request.frames.iter().enumerate() {
+        job_checkpoint(&job)?;
+        job_report(&job, "encoding", index);
         let mut temporary = TemporaryFile::create(&directory, index)?;
         encode_png_frame(
             temporary.file.as_mut().expect("temporary file is open"),
@@ -155,13 +184,21 @@ fn export_png_sequence_blocking_with_limit(
             &format!("第 {} 帧 PNG ", index + 1),
         )?;
         temporary_files.push(temporary);
+        job_report(&job, "encoding", index + 1);
     }
 
+    job_report(&job, "publishing", request.frames.len());
+    job_checkpoint(&job)?;
     publish_files(
         &output_paths,
         &mut temporary_files,
         request.overwrite_existing,
+        || {
+            job_report(&job, "publishing", request.frames.len());
+            job_checkpoint(&job)
+        },
     )?;
+    job_checkpoint(&job)?;
     Ok(output_paths
         .into_iter()
         .map(|path| path.to_string_lossy().into_owned())
@@ -325,6 +362,7 @@ fn publish_files(
     output_paths: &[PathBuf],
     temporary_files: &mut [TemporaryFile],
     overwrite_existing: bool,
+    check_cancel: impl Fn() -> Result<(), String>,
 ) -> Result<(), String> {
     let directory = output_paths
         .first()
@@ -333,8 +371,10 @@ fn publish_files(
     let mut backups = Vec::new();
     let mut published = Vec::new();
     let result = (|| {
+        check_cancel()?;
         if overwrite_existing {
             for (index, output) in output_paths.iter().enumerate() {
+                check_cancel()?;
                 if fs::symlink_metadata(output).is_ok() {
                     let backup = reserve_backup_path(directory, index)?;
                     fs::rename(output, &backup)
@@ -344,6 +384,7 @@ fn publish_files(
             }
         }
         for (temporary, output) in temporary_files.iter_mut().zip(output_paths) {
+            check_cancel()?;
             temporary.file.take();
             fs::rename(&temporary.path, output)
                 .map_err(|error| format!("无法发布 PNG 帧 {}：{error}", published.len() + 1))?;
@@ -413,6 +454,7 @@ mod tests {
                     })
                     .collect(),
                 overwrite_existing: false,
+                job_id: None,
             }
         }
     }
