@@ -25,12 +25,12 @@
 
 验收：Gateway 单测覆盖正常响应、非法响应、未知状态和取消失败。
 
-### A2：GIF 导出接入 Job
+### A2：GIF 导出接入 Job ✅
 
-- [ ] GIF 导出生成唯一 `jobId`
-- [ ] 导出中显示 `validating / encoding / publishing`
-- [ ] 显示已完成帧数/总帧数
-- [ ] 导出完成后只接受 `completed`
+- [x] GIF 导出生成唯一 `jobId`
+- [x] 导出中显示 `validating / encoding / publishing`
+- [x] 显示已完成帧数/总帧数
+- [x] 导出完成后只接受 `completed`
 
 验收：GIF 导出 UI 能显示真实 Rust 进度，不再只显示静态“导出中”。
 
