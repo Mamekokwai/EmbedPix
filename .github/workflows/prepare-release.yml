@@ -282,6 +282,7 @@ jobs:
   publish:
     name: Publish GitHub Release
     runs-on: windows-latest
+    environment: production
     needs: [resolve, windows-build]
     permissions:
       contents: write
