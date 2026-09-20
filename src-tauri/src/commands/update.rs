@@ -1243,4 +1243,33 @@ mod tests {
         assert!(verify_cached_package_signature(&package).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
+
+    #[test]
+    fn local_fixture_rechecks_asset_digest_path_and_signature_before_use() {
+        let public_key = "untrusted comment: minisign public key E7620F1842B4E81F\nRWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3";
+        let signature = "untrusted comment: signature from minisign secret key\nRWQf6LRCGA9i59SLOFxz6NxvASXDJeRtuZykwQepbDEGt87ig1BNpWaVWuNrm73YiIiJbq71Wi+dP9eKL8OC351vwIasSSbXxwA=\ntrusted comment: timestamp:1555779966\tfile:test\nQtKMXWyYcwdpZAlPF7tE2ENJkRd1ujvKjlj1m9RtHTBnZPa5WKU5uWRs5GoP5M/VqE81QFuMKI5k/SfNQUaOAA==";
+        let encoded_public_key = base64::engine::general_purpose::STANDARD.encode(public_key);
+        let encoded_signature = base64::engine::general_purpose::STANDARD.encode(signature);
+        let bytes = b"test";
+        assert!(verify_signature(bytes, &encoded_signature, &encoded_public_key).is_ok());
+
+        let root = std::env::temp_dir().join(format!(
+            "embedpix-update-local-fixture-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let package = root.join("EmbedPix-update-0.1.2-123-456.exe");
+        std::fs::write(&package, bytes).unwrap();
+        let digest = sha2::Sha256::digest(bytes);
+        let cache = std::fs::canonicalize(&root).unwrap();
+        let validated = validate_cached_package_path(&cache, &package, "0.1.2").unwrap();
+        {
+            let _file = open_verified_package_file(&validated, digest.as_slice(), Some(4)).unwrap();
+        }
+        verify_signature(bytes, &encoded_signature, &encoded_public_key).unwrap();
+        std::fs::write(&package, b"tampered").unwrap();
+        assert!(open_verified_package_file(&package, digest.as_slice(), Some(4)).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
