@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const gifCss = readFileSync(new URL("./features/gif-maker.css", import.meta.url), "utf8");
-const converterCss = readFileSync(new URL("./features/image-converter.css", import.meta.url), "utf8");
-const gifView = readFileSync(new URL("../features/gif-maker/GifMakerView.tsx", import.meta.url), "utf8");
-const converterView = readFileSync(new URL("../features/image-converter/ImageConverter.tsx", import.meta.url), "utf8");
+function readSource(url: URL): string {
+  return readFileSync(url, "utf8").replace(/\r\n?/g, "\n");
+}
+
+const gifCss = readSource(new URL("./features/gif-maker.css", import.meta.url));
+const converterCss = readSource(new URL("./features/image-converter.css", import.meta.url));
+const gifView = readSource(new URL("../features/gif-maker/GifMakerView.tsx", import.meta.url));
+const converterView = readSource(new URL("../features/image-converter/ImageConverter.tsx", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -14,6 +18,10 @@ const VIEWPORT_MATRIX = [
 ] as const;
 
 describe("compact layout viewport contract", () => {
+  it("normalizes both LF and CRLF source checkouts before matching contracts", () => {
+    expect(".a\r\n.b\r.c\n".replace(/\r\n?/g, "\n")).toBe(".a\n.b\n.c\n");
+  });
+
   it.each(VIEWPORT_MATRIX)("defines a deterministic contract for $name ($width×$height)", ({ width, height }) => {
     expect(width).toBeGreaterThan(0);
     expect(height).toBeGreaterThan(0);
