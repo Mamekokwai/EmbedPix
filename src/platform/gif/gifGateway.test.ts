@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
+import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, parseGifExportProgress, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "./gifGateway";
 import type { GifExportRequest } from "./gifGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -38,6 +38,17 @@ describe("GIF desktop gateway", () => {
     expect(input.frames[0].data).toEqual(new Uint8Array([0, 127, 128, 255]));
     expect(input.frames[1].data).toBeInstanceOf(Uint8Array);
     expect(input).not.toHaveProperty("overwriteExisting");
+  });
+
+  it("passes an optional jobId without changing the legacy payload shape", async () => {
+    const input = { ...request(), jobId: " gif-job-1 " };
+    vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
+
+    await expect(exportGif(input)).resolves.toBe(input.outputPath);
+
+    expect(invoke).toHaveBeenCalledWith("export_gif", {
+      request: expect.objectContaining({ jobId: "gif-job-1" }),
+    });
   });
 
   it("serializes a GIF size estimate without an output path or overwrite flag", async () => {
@@ -241,6 +252,99 @@ describe("GIF desktop gateway", () => {
         { data: [255, 1], durationMs: 25 },
       ],
     } });
+  });
+
+  it("passes an optional jobId for PNG sequence and animation exports", async () => {
+    const sequenceInput = { outputDir: "E:\\导出", baseName: "screen", frames: request().frames, jobId: "sequence-job" };
+    vi.mocked(invoke).mockResolvedValueOnce([]);
+    await expect(exportPngSequence(sequenceInput)).resolves.toEqual([]);
+    expect(invoke).toHaveBeenCalledWith("export_png_sequence", {
+      request: expect.objectContaining({ jobId: "sequence-job" }),
+    });
+
+    const animationInput = { ...request(), jobId: "animation-job" };
+    vi.mocked(invoke).mockResolvedValueOnce(animationInput.outputPath);
+    await expect(exportWebpAnimation(animationInput)).resolves.toBe(animationInput.outputPath);
+    expect(invoke).toHaveBeenCalledWith("export_webp_animation", {
+      request: expect.objectContaining({ jobId: "animation-job" }),
+    });
+  });
+
+  it("parses a valid GIF export progress DTO", () => {
+    expect(parseGifExportProgress({
+      jobId: "gif-job-1",
+      format: "gif",
+      status: "running",
+      stage: "encoding",
+      completedFrames: 2,
+      totalFrames: 5,
+      outputPath: null,
+      error: null,
+    })).toEqual({
+      jobId: "gif-job-1",
+      format: "gif",
+      status: "running",
+      stage: "encoding",
+      completedFrames: 2,
+      totalFrames: 5,
+      outputPath: null,
+      error: null,
+    });
+  });
+
+  it.each([
+    ["status", { status: "unknown" }],
+    ["stage", { stage: "unknown" }],
+    ["completedFrames", { completedFrames: -1 }],
+    ["totalFrames", { totalFrames: 1.5 }],
+    ["outputPath", { outputPath: 123 }],
+    ["error", { error: false }],
+  ])("rejects invalid progress field: %s", (field, override) => {
+    const progress = {
+      jobId: "gif-job-1",
+      format: "gif",
+      status: "running",
+      stage: "encoding",
+      completedFrames: 0,
+      totalFrames: 1,
+      outputPath: null,
+      error: null,
+      ...override,
+    };
+    expect(() => parseGifExportProgress(progress)).toThrow(`字段 ${field} 无效`);
+  });
+
+  it("rejects progress where completedFrames exceeds totalFrames", () => {
+    expect(() => parseGifExportProgress({
+      jobId: "gif-job-1",
+      format: "gif",
+      status: "running",
+      stage: "encoding",
+      completedFrames: 2,
+      totalFrames: 1,
+      outputPath: null,
+      error: null,
+    })).toThrow("进度帧数无效");
+  });
+
+  it.each([
+    [cancelGifExport, "cancel_gif_export"],
+    [getGifExportProgress, "get_gif_export_progress"],
+  ] as const)("calls %s and validates its response", async (getProgress, command) => {
+    const progress = {
+      jobId: "gif-job-1",
+      format: "gif",
+      status: "completed",
+      stage: "completed",
+      completedFrames: 1,
+      totalFrames: 1,
+      outputPath: "E:\\导出\\动画.gif",
+      error: null,
+    };
+    vi.mocked(invoke).mockResolvedValueOnce(progress);
+
+    await expect(getProgress(" gif-job-1 ")).resolves.toEqual(progress);
+    expect(invoke).toHaveBeenCalledWith(command, { jobId: "gif-job-1" });
   });
 
   it.each([undefined, {}])("rejects browser-only environments without invoking Rust", async (browser) => {

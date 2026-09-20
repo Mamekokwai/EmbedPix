@@ -17,7 +17,22 @@ export interface GifOutputLocationRequest {
   outputDirectory?: string;
 }
 
+export type GifExportJobStatus = "running" | "cancelling" | "completed" | "cancelled" | "failed";
+export type GifExportJobStage = "validating" | "encoding" | "publishing" | "completed" | "cancelled" | "failed";
+
+export interface GifExportProgress {
+  jobId: string;
+  format: string;
+  status: GifExportJobStatus;
+  stage: GifExportJobStage;
+  completedFrames: number;
+  totalFrames: number;
+  outputPath: string | null;
+  error: string | null;
+}
+
 export interface GifExportRequest extends GifOutputLocationRequest {
+  jobId?: string;
   width: number;
   height: number;
   loopMode: "infinite" | "finite";
@@ -55,6 +70,7 @@ export interface PngSequenceSizeEstimateResult {
 }
 
 export interface PngSequenceExportRequest {
+  jobId?: string;
   outputDir?: string;
   outputLocation?: GifOutputLocation;
   sourcePath?: string | null;
@@ -66,6 +82,7 @@ export interface PngSequenceExportRequest {
 }
 
 export interface AnimationExportRequest extends GifOutputLocationRequest {
+  jobId?: string;
   width: number;
   height: number;
   loopMode: "infinite" | "finite";
@@ -83,6 +100,74 @@ function getErrorMessage(error: unknown): string {
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.message;
   return "GIF 导出失败，请检查帧图片和参数后重试。";
+}
+
+const GIF_EXPORT_JOB_STATUSES = ["running", "cancelling", "completed", "cancelled", "failed"] as const;
+const GIF_EXPORT_JOB_STAGES = ["validating", "encoding", "publishing", "completed", "cancelled", "failed"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readRequiredString(payload: Record<string, unknown>, field: string): string {
+  const value = payload[field];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`GIF 导出进度字段 ${field} 无效。`);
+  }
+  return value;
+}
+
+function readNullableString(payload: Record<string, unknown>, field: string): string | null {
+  const value = payload[field];
+  if (value !== null && typeof value !== "string") {
+    throw new Error(`GIF 导出进度字段 ${field} 无效。`);
+  }
+  return value;
+}
+
+function readFrameCount(payload: Record<string, unknown>, field: string): number {
+  const value = payload[field];
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`GIF 导出进度字段 ${field} 无效。`);
+  }
+  return value;
+}
+
+function isGifExportJobStatus(value: unknown): value is GifExportJobStatus {
+  return typeof value === "string" && GIF_EXPORT_JOB_STATUSES.includes(value as GifExportJobStatus);
+}
+
+function isGifExportJobStage(value: unknown): value is GifExportJobStage {
+  return typeof value === "string" && GIF_EXPORT_JOB_STAGES.includes(value as GifExportJobStage);
+}
+
+function normalizeJobId(jobId: string): string {
+  const normalized = jobId.trim();
+  if (!normalized) throw new Error("导出任务 ID 不能为空。");
+  return normalized;
+}
+
+export function parseGifExportProgress(value: unknown): GifExportProgress {
+  if (!isRecord(value)) throw new Error("GIF 导出进度响应无效。");
+  const status = value.status;
+  const stage = value.stage;
+  if (!isGifExportJobStatus(status)) throw new Error("GIF 导出进度字段 status 无效。");
+  if (!isGifExportJobStage(stage)) throw new Error("GIF 导出进度字段 stage 无效。");
+  const completedFrames = readFrameCount(value, "completedFrames");
+  const totalFrames = readFrameCount(value, "totalFrames");
+  if (completedFrames > totalFrames) {
+    throw new Error("GIF 导出进度帧数无效。");
+  }
+  return {
+    jobId: readRequiredString(value, "jobId"),
+    format: readRequiredString(value, "format"),
+    status,
+    stage,
+    completedFrames,
+    totalFrames,
+    outputPath: readNullableString(value, "outputPath"),
+    error: readNullableString(value, "error"),
+  };
 }
 
 function serializeGifFrames(frames: GifExportFrame[]) {
@@ -165,6 +250,7 @@ export async function exportGif(request: GifExportRequest): Promise<string> {
     return await invoke<string>("export_gif", {
       request: {
         ...serializeOutputLocation(request),
+        ...(request.jobId?.trim() ? { jobId: request.jobId.trim() } : {}),
         width: request.width,
         height: request.height,
         loopMode: request.loopMode,
@@ -234,6 +320,7 @@ export async function exportPngSequence(request: PngSequenceExportRequest): Prom
         ...(request.sourcePath?.trim() ? { sourcePath: request.sourcePath.trim() } : {}),
         ...(request.outputSubdirectory?.trim() ? { outputSubdirectory: request.outputSubdirectory.trim() } : {}),
         ...(request.outputDirectory?.trim() ? { outputDirectory: request.outputDirectory.trim() } : {}),
+        ...(request.jobId?.trim() ? { jobId: request.jobId.trim() } : {}),
         baseName: request.baseName,
         overwriteExisting: request.overwriteExisting ?? false,
         frames: serializeGifFrames(request.frames),
@@ -284,6 +371,7 @@ async function exportAnimation(
     return await invoke<string>(command, {
       request: {
         ...serializeOutputLocation(request),
+        ...(request.jobId?.trim() ? { jobId: request.jobId.trim() } : {}),
         width: request.width,
         height: request.height,
         loopMode: request.loopMode,
@@ -303,4 +391,28 @@ export function exportWebpAnimation(request: AnimationExportRequest): Promise<st
 
 export function exportApng(request: AnimationExportRequest): Promise<string> {
   return exportAnimation("export_apng", request);
+}
+
+export async function cancelGifExport(jobId: string): Promise<GifExportProgress> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持取消 GIF 导出，请在桌面应用中执行导出。");
+  }
+  try {
+    const progress = await invoke<unknown>("cancel_gif_export", { jobId: normalizeJobId(jobId) });
+    return parseGifExportProgress(progress);
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function getGifExportProgress(jobId: string): Promise<GifExportProgress> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持查询 GIF 导出进度，请在桌面应用中执行导出。");
+  }
+  try {
+    const progress = await invoke<unknown>("get_gif_export_progress", { jobId: normalizeJobId(jobId) });
+    return parseGifExportProgress(progress);
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
 }
