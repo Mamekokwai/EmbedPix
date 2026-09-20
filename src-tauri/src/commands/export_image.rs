@@ -411,6 +411,10 @@ pub async fn read_image_file(path: String) -> Result<NativeImageFile, String> {
         .map_err(|error| format!("image read task failed: {error}"))?
 }
 
+pub fn read_image_file_cli(path: &str) -> Result<NativeImageFile, String> {
+    read_image_file_from_path(PathBuf::from(path))
+}
+
 fn read_image_file_from_path(path: PathBuf) -> Result<NativeImageFile, String> {
     path_security::validate_source_path(&path)
         .map_err(|error| format_image_path_error(error, "selected image path"))?;
@@ -480,6 +484,33 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
         output_path: output_path.to_string_lossy().into_owned(),
         width,
         height,
+        format: output_format.name().to_string(),
+        bit_depth: actual_bit_depth,
+    })
+}
+
+pub fn export_image_cli(payload: &[u8]) -> Result<ExportImageResult, String> {
+    let request = parse_raw_payload(payload)?;
+    let source_file_name = request.source_file_name.clone();
+    let output_format = request.output_format;
+    let (bytes, actual_bit_depth) = convert_image(&request)?;
+    let output_path = choose_output_path(&request, &source_file_name, output_format)?;
+    write_exported_file(
+        &output_path,
+        bytes,
+        request.source_path.as_deref(),
+        WriteOptions {
+            manage_existing_output: request.output_location != OutputLocation::Dialog,
+            overwrite_existing: request.overwrite_existing,
+            overwrite_same_name: request.overwrite_same_name,
+            delete_source: request.delete_source,
+            replace_original: request.output_location == OutputLocation::Original,
+        },
+    )?;
+    Ok(ExportImageResult {
+        output_path: output_path.to_string_lossy().into_owned(),
+        width: request.width,
+        height: request.height,
         format: output_format.name().to_string(),
         bit_depth: actual_bit_depth,
     })

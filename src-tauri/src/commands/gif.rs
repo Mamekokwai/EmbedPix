@@ -71,6 +71,7 @@ pub struct GifExportJobState {
     encoder_slots: Arc<EncodingSemaphore>,
 }
 
+pub use sequence::{export_png_sequence_cli, PngSequenceExportRequest};
 pub use spool::GifFrameSpoolState;
 
 pub(super) struct GifExportJob {
@@ -720,9 +721,13 @@ pub async fn estimate_animation_size(
     animation::estimate_animation_size(format, request, state.encoder_slots()).await
 }
 
+pub fn export_gif_cli(request: GifExportRequest) -> Result<String, String> {
+    export_gif_blocking_with_job(request, None)
+}
+
 #[cfg(test)]
 fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
-    export_gif_blocking_with_job(request, None)
+    export_gif_cli(request)
 }
 
 fn export_gif_blocking_with_job(
