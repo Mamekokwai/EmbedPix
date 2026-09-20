@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_GIF_SETTINGS_GROUP, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
+import { createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifExportProgress, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("defines quality, balanced, and small presets without touching other formats", () => {
@@ -63,5 +63,20 @@ describe("GIF error details", () => {
     expect(shouldOfferGifErrorDetails("错误：" + "无法完成导出。".repeat(12))).toBe(true);
     expect(shouldOfferGifErrorDetails("x".repeat(GIF_ERROR_DETAILS_THRESHOLD))).toBe(false);
     expect(shouldOfferGifErrorDetails("x".repeat(GIF_ERROR_DETAILS_THRESHOLD + 1))).toBe(true);
+  });
+});
+
+describe("GIF export jobs", () => {
+  it("creates distinct job IDs and only accepts completed progress", () => {
+    expect(createGifExportJobId()).not.toBe(createGifExportJobId());
+    expect(isCompletedGifExport({ status: "completed", stage: "completed" })).toBe(true);
+    expect(isCompletedGifExport({ status: "failed", stage: "failed" })).toBe(false);
+    expect(isCompletedGifExport({ status: "cancelled", stage: "cancelled" })).toBe(false);
+  });
+
+  it("surfaces native GIF stages and frame progress", () => {
+    expect(formatGifExportProgress({ stage: "validating", completedFrames: 0, totalFrames: 4 })).toContain("validating · 0/4 帧");
+    expect(formatGifExportProgress({ stage: "encoding", completedFrames: 2, totalFrames: 4 })).toContain("encoding · 2/4 帧");
+    expect(formatGifExportProgress({ stage: "publishing", completedFrames: 4, totalFrames: 4 })).toContain("publishing · 4/4 帧");
   });
 });
