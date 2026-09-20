@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "ffmpegAvailable": true,
+  "gifskiAvailable": false,
+  "samples": [
+    {
+      "sample": "landscape",
+      "ditherMode": "none",
+      "outputBytes": 258069,
+      "elapsedMs": 116,
+      "qualityMaeRgb": 0,
+      "peakMemoryBytes": 6959104
+    },
+    {
+      "sample": "landscape",
+      "ditherMode": "floydSteinberg",
+      "outputBytes": 379749,
+      "elapsedMs": 656,
+      "qualityMaeRgb": 0,
+      "peakMemoryBytes": 7581696
+    },
+    {
+      "sample": "landscape",
+      "ditherMode": "atkinson",
+      "outputBytes": 316509,
+      "elapsedMs": 656,
+      "qualityMaeRgb": 0,
+      "peakMemoryBytes": 7581696
+    },
+    {
+      "sample": "portrait",
+      "ditherMode": "none",
+      "outputBytes": 281069,
+      "elapsedMs": 126,
+      "qualityMaeRgb": 4,
+      "peakMemoryBytes": 7581696
+    },
+    {
+      "sample": "portrait",
+      "ditherMode": "floydSteinberg",
+      "outputBytes": 707846,
+      "elapsedMs": 380,
+      "qualityMaeRgb": 6,
+      "peakMemoryBytes": 8286208
+    },
+    {
+      "sample": "portrait",
+      "ditherMode": "atkinson",
+      "outputBytes": 664129,
+      "elapsedMs": 381,
+      "qualityMaeRgb": 5,
+      "peakMemoryBytes": 8286208
+    },
+    {
+      "sample": "transparent-png",
+      "ditherMode": "none",
+      "outputBytes": 273376,
+      "elapsedMs": 83,
+      "qualityMaeRgb": 3,
+      "peakMemoryBytes": 8286208
+    },
+    {
+      "sample": "transparent-png",
+      "ditherMode": "floydSteinberg",
+      "outputBytes": 229941,
+      "elapsedMs": 441,
+      "qualityMaeRgb": 8,
+      "peakMemoryBytes": 8286208
+    },
+    {
+      "sample": "transparent-png",
+      "ditherMode": "atkinson",
+      "outputBytes": 230159,
+      "elapsedMs": 441,
+      "qualityMaeRgb": 6,
+      "peakMemoryBytes": 8286208
+    },
+    {
+      "sample": "game-recording",
+      "ditherMode": "none",
+      "outputBytes": 2477929,
+      "elapsedMs": 858,
+      "qualityMaeRgb": 0,
+      "peakMemoryBytes": 14028800
+    },
+    {
+      "sample": "game-recording",
+      "ditherMode": "floydSteinberg",
+      "outputBytes": 2546945,
+      "elapsedMs": 5132,
+      "qualityMaeRgb": 0,
+      "peakMemoryBytes": 14909440
+    },
+    {
+      "sample": "game-recording",
+      "ditherMode": "atkinson",
+      "outputBytes": 2523527,
+      "elapsedMs": 5132,
+      "qualityMaeRgb": 0,
+      "peakMemoryBytes": 15212544
+    },
+    {
+      "sample": "long-video",
+      "ditherMode": "none",
+      "outputBytes": 1910765,
+      "elapsedMs": 1502,
+      "qualityMaeRgb": 4,
+      "peakMemoryBytes": 15212544
+    },
+    {
+      "sample": "long-video",
+      "ditherMode": "floydSteinberg",
+      "outputBytes": 8848048,
+      "elapsedMs": 5837,
+      "qualityMaeRgb": 5,
+      "peakMemoryBytes": 27320320
+    },
+    {
+      "sample": "long-video",
+      "ditherMode": "atkinson",
+      "outputBytes": 8332293,
+      "elapsedMs": 5814,
+      "qualityMaeRgb": 4,
+      "peakMemoryBytes": 27320320
+    }
+  ]
+}

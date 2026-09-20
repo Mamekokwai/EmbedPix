@@ -1,0 +1,27 @@
+[
+  {
+    "sample": "landscape",
+    "output_bytes": 9763,
+    "elapsed_ms": 182
+  },
+  {
+    "sample": "portrait",
+    "output_bytes": 732690,
+    "elapsed_ms": 379
+  },
+  {
+    "sample": "transparent-png",
+    "output_bytes": 204732,
+    "elapsed_ms": 134
+  },
+  {
+    "sample": "game-recording",
+    "output_bytes": 392663,
+    "elapsed_ms": 332
+  },
+  {
+    "sample": "long-video",
+    "output_bytes": 10077982,
+    "elapsed_ms": 2799
+  }
+]

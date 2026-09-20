@@ -1,0 +1,16 @@
+sample,dither_mode,output_bytes,elapsed_ms,quality_mae_rgb,peak_memory_bytes
+landscape,none,258069,116,0,6959104
+landscape,floydSteinberg,379749,656,0,7581696
+landscape,atkinson,316509,656,0,7581696
+portrait,none,281069,126,4,7581696
+portrait,floydSteinberg,707846,380,6,8286208
+portrait,atkinson,664129,381,5,8286208
+transparent-png,none,273376,83,3,8286208
+transparent-png,floydSteinberg,229941,441,8,8286208
+transparent-png,atkinson,230159,441,6,8286208
+game-recording,none,2477929,858,0,14028800
+game-recording,floydSteinberg,2546945,5132,0,14909440
+game-recording,atkinson,2523527,5132,0,15212544
+long-video,none,1910765,1502,4,15212544
+long-video,floydSteinberg,8848048,5837,5,27320320
+long-video,atkinson,8332293,5814,4,27320320

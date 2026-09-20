@@ -4,7 +4,9 @@ use std::{
     time::Instant,
 };
 
-use image::{DynamicImage, ImageOutputFormat, Rgba, RgbaImage};
+use image::{
+    codecs::gif::GifDecoder, AnimationDecoder, DynamicImage, ImageOutputFormat, Rgba, RgbaImage,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{export_gif_blocking_with_job, GifExportRequest, GifFrameRequest};
@@ -91,6 +93,19 @@ pub struct BenchmarkSample {
     pub peak_memory_bytes: Option<u64>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExperimentSample {
+    pub sample: String,
+    pub dither_mode: String,
+    pub output_bytes: u64,
+    pub elapsed_ms: u128,
+    pub quality_mae_rgb: u64,
+    pub peak_memory_bytes: Option<u64>,
+}
+
+pub const EXPERIMENT_DITHER_MODES: &[&str] = &["none", "floydSteinberg", "atkinson"];
+
 pub fn run_case(name: &str, output_dir: &Path) -> Result<BenchmarkSample, String> {
     let spec = CASES
         .iter()
@@ -146,6 +161,151 @@ pub fn run_case(name: &str, output_dir: &Path) -> Result<BenchmarkSample, String
         elapsed_ms: started.elapsed().as_millis(),
         peak_memory_bytes: None,
     })
+}
+
+pub fn run_experiment_case(
+    name: &str,
+    dither_mode: &str,
+    output_dir: &Path,
+) -> Result<ExperimentSample, String> {
+    let spec = CASES
+        .iter()
+        .find(|candidate| candidate.name == name)
+        .copied()
+        .ok_or_else(|| format!("未知 GIF 实验样本：{name}"))?;
+    if !EXPERIMENT_DITHER_MODES.contains(&dither_mode) {
+        return Err(format!("未知 GIF 抖动模式：{dither_mode}"));
+    }
+    std::fs::create_dir_all(output_dir)
+        .map_err(|error| format!("无法创建实验输出目录：{error}"))?;
+    let duration_ms = (1000 / spec.fps / 10 * 10).max(10);
+    let source_first = encode_sample_frame(&spec, 0)?;
+    let frames = (0..spec.frames)
+        .map(|index| {
+            Ok(GifFrameRequest {
+                data: encode_sample_frame(&spec, index)?,
+                duration_ms,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let output_path = output_dir.join(format!("{}-{}.gif", spec.name, dither_mode));
+    let request = GifExportRequest {
+        output_path: output_path.to_string_lossy().into_owned(),
+        output_location: None,
+        source_path: None,
+        output_subdirectory: None,
+        output_directory: None,
+        file_name: None,
+        width: spec.width,
+        height: spec.height,
+        loop_mode: "infinite".to_string(),
+        loop_count: 0,
+        encoding_speed: 10,
+        color_count: spec.color_count,
+        dither_mode: dither_mode.to_string(),
+        frames,
+        spool_id: None,
+        spool_durations: Vec::new(),
+        overwrite_existing: true,
+        job_id: None,
+    };
+    let started = Instant::now();
+    export_gif_blocking_with_job(request, None)?;
+    let output =
+        std::fs::read(&output_path).map_err(|error| format!("无法读取实验 GIF：{error}"))?;
+    let decoded = GifDecoder::new(Cursor::new(output.clone()))
+        .map_err(|error| format!("无法解码实验 GIF：{error}"))?
+        .into_frames()
+        .next()
+        .ok_or_else(|| "实验 GIF 没有首帧。".to_string())?
+        .map_err(|error| format!("无法读取实验 GIF 首帧：{error}"))?
+        .into_buffer();
+    let source = image::load_from_memory(&source_first)
+        .map_err(|error| format!("无法解码实验源帧：{error}"))?
+        .to_rgba8();
+    let quality_mae_rgb = source
+        .pixels()
+        .zip(decoded.pixels())
+        .map(|(left, right)| {
+            u64::from(left[0].abs_diff(right[0]))
+                + u64::from(left[1].abs_diff(right[1]))
+                + u64::from(left[2].abs_diff(right[2]))
+        })
+        .sum::<u64>()
+        / u64::from(spec.width * spec.height * 3);
+    Ok(ExperimentSample {
+        sample: spec.name.to_string(),
+        dither_mode: dither_mode.to_string(),
+        output_bytes: output.len() as u64,
+        elapsed_ms: started.elapsed().as_millis(),
+        quality_mae_rgb,
+        peak_memory_bytes: current_peak_memory_bytes(),
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn current_peak_memory_bytes() -> Option<u64> {
+    let status = std::fs::read_to_string(format!("/proc/{}/status", std::process::id())).ok()?;
+    status.lines().find_map(|line| {
+        line.strip_prefix("VmHWM:")?
+            .trim()
+            .strip_suffix("kB")?
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .map(|value| value * 1024)
+    })
+}
+
+#[cfg(windows)]
+fn current_peak_memory_bytes() -> Option<u64> {
+    use std::mem::size_of;
+    #[repr(C)]
+    struct Counters {
+        cb: u32,
+        page_fault_count: u32,
+        peak_working_set_size: usize,
+        working_set_size: usize,
+        quota_peak_paged_pool_usage: usize,
+        quota_paged_pool_usage: usize,
+        quota_peak_non_paged_pool_usage: usize,
+        quota_non_paged_pool_usage: usize,
+        pagefile_usage: usize,
+        peak_pagefile_usage: usize,
+    }
+    #[link(name = "psapi")]
+    unsafe extern "system" {
+        fn GetProcessMemoryInfo(
+            process: *mut std::ffi::c_void,
+            counters: *mut Counters,
+            size: u32,
+        ) -> i32;
+    }
+    let mut counters = Counters {
+        cb: size_of::<Counters>() as u32,
+        page_fault_count: 0,
+        peak_working_set_size: 0,
+        working_set_size: 0,
+        quota_peak_paged_pool_usage: 0,
+        quota_paged_pool_usage: 0,
+        quota_peak_non_paged_pool_usage: 0,
+        quota_non_paged_pool_usage: 0,
+        pagefile_usage: 0,
+        peak_pagefile_usage: 0,
+    };
+    let ok = unsafe {
+        GetProcessMemoryInfo(
+            (-1isize) as *mut _,
+            &mut counters,
+            size_of::<Counters>() as u32,
+        ) != 0
+    };
+    ok.then_some(counters.peak_working_set_size as u64)
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn current_peak_memory_bytes() -> Option<u64> {
+    None
 }
 
 pub fn default_output_dir() -> PathBuf {
