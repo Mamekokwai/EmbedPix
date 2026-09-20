@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -59,6 +59,11 @@ const STATUS_META: Record<UpdateStatus, StatusMeta> = {
 
 export function resolveUpdateStatusLabel(status: UpdateStatus, errorStage?: UpdateErrorStage): string {
   return status === "error" && errorStage === "offline" ? "当前离线" : STATUS_META[status].label;
+}
+
+export function formatUpdateCheckTime(value: Date | null): string {
+  if (!value || Number.isNaN(value.getTime())) return "—";
+  return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatBytes(value: number | null | undefined): string {
@@ -153,7 +158,6 @@ function UpdateProgressBar({
 
 export default function UpdateView({
   currentVersion,
-  latestVersion,
   status,
   releaseNotes,
   releaseUrl,
@@ -161,7 +165,6 @@ export default function UpdateView({
   errorStage,
   downloadedBytes,
   totalBytes,
-  errorMessage,
   onCheckForUpdates,
   onDownloadUpdate,
   onInstallUpdate,
@@ -170,11 +173,19 @@ export default function UpdateView({
   className,
 }: UpdateViewProps) {
   const [releaseOpenError, setReleaseOpenError] = useState<string | null>(null);
+  const [releaseExpanded, setReleaseExpanded] = useState(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
   const meta = STATUS_META[status];
   const progress = resolveUpdateProgress(status, downloadedBytes, totalBytes);
   const busy = status === "checking" || status === "downloading" || status === "installing";
   const offline = status === "error" && errorStage === "offline";
   const viewClassName = ["update-view", embedded ? "update-view-embedded" : "page-view", className].filter(Boolean).join(" ");
+
+  useEffect(() => {
+    if (status !== "idle" && status !== "checking" && status !== "downloading" && status !== "installing") {
+      setLastCheckedAt(new Date());
+    }
+  }, [status]);
 
   const handlePrimaryAction = () => {
     if (busy) return;
@@ -224,22 +235,6 @@ export default function UpdateView({
                 ? "重新检查"
                 : "检查更新";
 
-  const statusDetail = offline
-    ? "当前没有网络连接，已跳过自动检查。恢复网络后点击“重试检查”即可。"
-    : status === "available"
-    ? assetAvailable
-      ? "发现新版本，点击下载后会自动获取安装包。"
-      : "发现新版本，但没有可用的受信任安装包，请打开发布页手动下载。"
-    : status === "downloaded"
-      ? "更新包已通过校验，点击后会关闭当前应用并完成安装。"
-      : status === "downloading"
-        ? "安装包正在后台下载，完成后即可一键关闭并安装。"
-        : status === "installing"
-          ? "正在启动安装程序，应用即将关闭。"
-          : status === "error"
-            ? errorMessage ?? "更新流程未能完成，可稍后重试。"
-            : null;
-
   return (
     <div className={viewClassName}>
       {!embedded ? (
@@ -276,14 +271,14 @@ export default function UpdateView({
 
           <div className="update-version-grid" aria-label="版本信息">
             <div className="update-version-item"><span>当前版本</span><strong>{currentVersion}</strong></div>
-            <div className="update-version-item"><span>最新版本</span><strong>{latestVersion ?? "—"}</strong></div>
+            <div className="update-version-item"><span>检查状态</span><strong>{resolveUpdateStatusLabel(status, errorStage)}</strong></div>
+            <div className="update-version-item"><span>上次检查</span><strong>{formatUpdateCheckTime(lastCheckedAt)}</strong></div>
           </div>
 
           <div className={`update-status ${offline ? "update-status-offline" : meta.className}`} role="status" aria-live="polite" aria-atomic="true">
             <StatusIcon status={status} offline={offline} />
             <span>{resolveUpdateStatusLabel(status, errorStage)}</span>
           </div>
-          {statusDetail ? <p className="update-status-detail">{statusDetail}</p> : null}
           {progress ? <UpdateProgressBar progress={progress} /> : null}
         </section>
 
@@ -305,7 +300,8 @@ export default function UpdateView({
               </button>
             </div>
             {releaseOpenError ? <p className="update-release-open-error" id="release-open-error" role="alert">{releaseOpenError}</p> : null}
-            {releaseNotes ? <p className="update-release-notes">{releaseNotes}</p> : null}
+            {releaseNotes ? <button className="update-release-toggle" type="button" aria-expanded={releaseExpanded} aria-controls="release-notes-content" onClick={() => setReleaseExpanded((expanded) => !expanded)}>{releaseExpanded ? "收起发布说明" : "展开发布说明"}</button> : null}
+            {releaseNotes && releaseExpanded ? <p className="update-release-notes" id="release-notes-content">{releaseNotes}</p> : null}
           </section>
         )}
       </div>

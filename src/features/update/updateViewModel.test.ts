@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveUpdateProgress, resolveUpdateStatusLabel } from "./UpdateView";
+import { formatUpdateCheckTime, resolveUpdateProgress, resolveUpdateStatusLabel } from "./UpdateView";
 import { makeOfflineState } from "../../app/hooks/useUpdateCheck";
 
 describe("update progress model", () => {
@@ -50,5 +50,23 @@ describe("offline update state", () => {
       errorStage: "offline",
       error: "当前处于离线状态，暂不检查更新。恢复网络后可手动重试。",
     });
+  });
+});
+
+describe("compact update status", () => {
+  it("covers the compact status labels used by the single primary action", () => {
+    expect([
+      resolveUpdateStatusLabel("idle"),
+      resolveUpdateStatusLabel("checking"),
+      resolveUpdateStatusLabel("up-to-date"),
+      resolveUpdateStatusLabel("available"),
+      resolveUpdateStatusLabel("downloading"),
+      resolveUpdateStatusLabel("error", "install"),
+    ]).toEqual(["尚未检查更新", "正在检查更新…", "已是最新版本", "发现新版本", "正在下载更新…", "更新失败"]);
+  });
+
+  it("formats the last check time without leaking a placeholder date", () => {
+    expect(formatUpdateCheckTime(null)).toBe("—");
+    expect(formatUpdateCheckTime(new Date(2026, 0, 2, 9, 5))).toMatch(/09:05|上午09:05/);
   });
 });

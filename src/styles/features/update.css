@@ -15,7 +15,7 @@
 .update-check-button:focus-visible,
 .update-release-link:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
 .update-check-button:disabled { opacity: .7; }
-.update-version-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--qp-border-subtle); }
+.update-version-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--qp-border-subtle); }
 .update-version-item { display: flex; min-height: 76px; flex-direction: column; justify-content: center; gap: 7px; padding: 16px 22px; }
 .update-version-item + .update-version-item { border-left: 1px solid var(--qp-border-subtle); }
 .update-version-item span { color: var(--qp-text-tertiary); font-size: 11px; }
@@ -33,9 +33,11 @@
 .update-section-eyebrow { margin: 0 0 4px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
 .update-release-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 0; color: var(--qp-accent-default); cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; text-decoration: none; }
 .update-release-link:hover { text-decoration: underline; }
+.update-release-toggle { display: inline-flex; margin: 0 22px 12px; border: 0; background: transparent; padding: 0; color: var(--qp-accent-default); cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; }
+.update-release-toggle:hover { text-decoration: underline; }
 .update-release-link:disabled { opacity: .55; cursor: not-allowed; text-decoration: none; }
 .update-release-open-error { margin: -4px 22px 12px; color: var(--qp-danger); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
-.update-release-notes { margin: 0; border-top: 1px solid var(--qp-border-subtle); padding: 16px 22px 18px; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.65; }
+.update-release-notes { margin: 0; border-top: 1px solid var(--qp-border-subtle); padding: 16px 22px 18px; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .update-status-detail { margin: 0; border-top: 1px solid var(--qp-border-subtle); padding: 12px 22px 0; color: var(--qp-text-secondary); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
 .update-progress { border-top: 1px solid var(--qp-border-subtle); padding: 14px 22px 18px; }
 .update-progress-label { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; color: var(--qp-text-tertiary); font-size: 11px; }
@@ -78,4 +80,5 @@
   .update-status-detail,
   .update-progress,
   .update-release-notes { padding-left: 16px; padding-right: 16px; }
+  .update-release-toggle { margin-left: 16px; margin-right: 16px; }
 }
