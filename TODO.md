@@ -238,11 +238,13 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 ### D4：平台支持矩阵
 
-- [ ] 明确 Windows x64/ARM64 支持范围
-- [ ] 决定是否补齐 macOS/Linux
-- [ ] UI、文档和 Release 资产保持一致
+- [x] 明确 Windows x64/ARM64 支持范围
+- [x] 决定是否补齐 macOS/Linux
+- [x] UI、文档和 Release 资产保持一致
 
-验收：任何显示为支持的平台都有签名资产、manifest、下载和安装测试。
+验收：任何显示为支持的平台都有签名资产、manifest、下载和安装测试。✅
+
+当前正式支持 Windows x64/ARM64；macOS/Linux 仅保留跨平台编译检查，不作为支持平台或发布资产。
 
 ### D5：发布供应链加固
 
