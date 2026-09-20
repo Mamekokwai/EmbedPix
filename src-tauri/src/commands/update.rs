@@ -1272,4 +1272,60 @@ mod tests {
         assert!(open_verified_package_file(&package, digest.as_slice(), Some(4)).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
+
+    #[test]
+    fn local_http_fixture_runs_download_size_digest_and_signature_pipeline() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let public_key = "untrusted comment: minisign public key E7620F1842B4E81F\nRWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3";
+        let signature = "untrusted comment: signature from minisign secret key\nRWQf6LRCGA9i59SLOFxz6NxvASXDJeRtuZykwQepbDEGt87ig1BNpWaVWuNrm73YiIiJbq71Wi+dP9eKL8OC351vwIasSSbXxwA=\ntrusted comment: timestamp:1555779966\tfile:test\nQtKMXWyYcwdpZAlPF7tE2ENJkRd1ujvKjlj1m9RtHTBnZPa5WKU5uWRs5GoP5M/VqE81QFuMKI5k/SfNQUaOAA==";
+        let encoded_public_key = base64::engine::general_purpose::STANDARD.encode(public_key);
+        let encoded_signature = base64::engine::general_purpose::STANDARD.encode(signature);
+        let package = b"test".to_vec();
+        let digest = sha2::Sha256::digest(&package);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 1024];
+                let size = stream.read(&mut request).unwrap();
+                let path = String::from_utf8_lossy(&request[..size]);
+                let (body, content_type) = if path.contains(".sig") {
+                    (encoded_signature.as_bytes().to_vec(), "text/plain")
+                } else {
+                    (package.clone(), "application/octet-stream")
+                };
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: {content_type}\r\nConnection: close\r\n\r\n", body.len()).unwrap();
+                stream.write_all(&body).unwrap();
+            }
+        });
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let client = reqwest::Client::new();
+        let base = format!("http://{address}");
+        runtime.block_on(async {
+            let signature_text = client
+                .get(format!("{base}/asset.exe.sig"))
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap();
+            let package_response = client
+                .get(format!("{base}/asset.exe"))
+                .send()
+                .await
+                .unwrap();
+            let bytes = package_response.bytes().await.unwrap();
+            assert_eq!(bytes.len(), 4);
+            assert_eq!(sha2::Sha256::digest(&bytes).as_slice(), digest.as_slice());
+            verify_signature(&bytes, &signature_text, &encoded_public_key).unwrap();
+        });
+        server.join().unwrap();
+        let tampered = sha2::Sha256::digest(b"tampered");
+        assert_ne!(tampered.as_slice(), digest.as_slice());
+    }
 }
