@@ -98,6 +98,7 @@ pub(super) async fn estimate_animation_size(
         .map_err(|error| format!("{format} 体积测量任务失败：{error}"))?
 }
 
+#[cfg(test)]
 fn export_animation_blocking(
     request: AnimationExportRequest,
     format: &str,

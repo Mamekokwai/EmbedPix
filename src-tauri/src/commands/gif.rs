@@ -454,6 +454,7 @@ pub async fn estimate_animation_size(
     animation::estimate_animation_size(format, request).await
 }
 
+#[cfg(test)]
 fn export_gif_blocking(request: GifExportRequest) -> Result<String, String> {
     export_gif_blocking_with_job(request, None)
 }

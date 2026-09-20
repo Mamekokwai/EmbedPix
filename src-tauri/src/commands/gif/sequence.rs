@@ -120,6 +120,7 @@ pub async fn estimate_png_sequence_size(
         .map_err(|error| format!("PNG 帧序列体积测量任务失败：{error}"))?
 }
 
+#[cfg(test)]
 fn export_png_sequence_blocking(request: PngSequenceExportRequest) -> Result<Vec<String>, String> {
     export_png_sequence_blocking_with_job(request, None)
 }
@@ -131,6 +132,7 @@ fn export_png_sequence_blocking_with_job(
     export_png_sequence_blocking_with_limit_and_job(request, storage::MAX_OUTPUT_BYTES, job)
 }
 
+#[cfg(test)]
 fn export_png_sequence_blocking_with_limit(
     request: PngSequenceExportRequest,
     max_output_bytes: u64,

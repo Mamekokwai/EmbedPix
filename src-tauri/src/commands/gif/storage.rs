@@ -291,6 +291,7 @@ fn validate_source_file(value: Option<&str>) -> Result<PathBuf, String> {
     })
 }
 
+#[cfg(test)]
 pub(super) fn write_output(
     output: &Path,
     overwrite: bool,
