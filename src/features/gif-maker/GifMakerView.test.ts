@@ -75,8 +75,8 @@ describe("GIF export jobs", () => {
   });
 
   it("surfaces native GIF stages and frame progress", () => {
-    expect(formatGifExportProgress({ stage: "validating", completedFrames: 0, totalFrames: 4 })).toContain("validating · 0/4 帧");
-    expect(formatGifExportProgress({ stage: "encoding", completedFrames: 2, totalFrames: 4 })).toContain("encoding · 2/4 帧");
-    expect(formatGifExportProgress({ stage: "publishing", completedFrames: 4, totalFrames: 4 })).toContain("publishing · 4/4 帧");
+    expect(formatGifExportProgress({ format: "gif", stage: "validating", completedFrames: 0, totalFrames: 4 })).toContain("GIF 导出 · validating · 0/4 帧");
+    expect(formatGifExportProgress({ format: "webp", stage: "encoding", completedFrames: 2, totalFrames: 4 })).toContain("WEBP 导出 · encoding · 2/4 帧");
+    expect(formatGifExportProgress({ format: "png-sequence", stage: "publishing", completedFrames: 4, totalFrames: 4 })).toContain("PNG 帧序列导出 · publishing · 4/4 帧");
   });
 });

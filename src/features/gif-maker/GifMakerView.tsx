@@ -215,14 +215,15 @@ export function isCompletedGifExport(progress: Pick<GifExportProgress, "status" 
   return progress.status === "completed" && progress.stage === "completed";
 }
 
-export function formatGifExportProgress(progress: Pick<GifExportProgress, "stage" | "completedFrames" | "totalFrames">): string {
+export function formatGifExportProgress(progress: Pick<GifExportProgress, "format" | "stage" | "completedFrames" | "totalFrames">): string {
+  const formatLabel = progress.format === "png-sequence" ? "PNG 帧序列" : `${progress.format.toUpperCase()} `;
   const frameSummary = `${progress.completedFrames}/${progress.totalFrames} 帧`;
-  if (progress.stage === "validating") return `GIF 导出 · validating · ${frameSummary}`;
-  if (progress.stage === "encoding") return `GIF 导出 · encoding · ${frameSummary}`;
-  if (progress.stage === "publishing") return `GIF 导出 · publishing · ${frameSummary}`;
-  if (progress.stage === "completed") return `GIF 导出 · completed · ${frameSummary}`;
-  if (progress.stage === "cancelled") return `GIF 导出 · cancelled · ${frameSummary}`;
-  return `GIF 导出 · failed · ${frameSummary}`;
+  if (progress.stage === "validating") return `${formatLabel}导出 · validating · ${frameSummary}`;
+  if (progress.stage === "encoding") return `${formatLabel}导出 · encoding · ${frameSummary}`;
+  if (progress.stage === "publishing") return `${formatLabel}导出 · publishing · ${frameSummary}`;
+  if (progress.stage === "completed") return `${formatLabel}导出 · completed · ${frameSummary}`;
+  if (progress.stage === "cancelled") return `${formatLabel}导出 · cancelled · ${frameSummary}`;
+  return `${formatLabel}导出 · failed · ${frameSummary}`;
 }
 
 interface GifCompressionResult {
@@ -945,6 +946,36 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       await new Promise<void>((resolve) => window.setTimeout(resolve, 180));
     }
     return latest;
+  };
+
+  const runNativeExportJob = async <T,>(
+    format: GifOutputFormat,
+    totalFrames: number,
+    signal: AbortSignal,
+    exportCall: (jobId: string) => Promise<T>,
+  ): Promise<T> => {
+    const jobId = createGifExportJobId();
+    gifExportJobIdRef.current = jobId;
+    setGifExportProgress({
+      jobId,
+      format,
+      status: "running",
+      stage: "validating",
+      completedFrames: 0,
+      totalFrames,
+      outputPath: null,
+      error: null,
+    });
+    void monitorGifExportProgress(jobId).catch(() => undefined);
+    const result = await exportCall(jobId);
+    throwIfAborted(signal);
+    const finalProgress = await getGifExportProgress(jobId);
+    if (!isCompletedGifExport(finalProgress)) {
+      throw new Error(finalProgress.error ?? `${format.toUpperCase()} 导出未完成（${finalProgress.status}）。`);
+    }
+    gifExportJobIdRef.current = null;
+    setGifExportProgress(finalProgress);
+    return result;
   };
 
   const cancelCompression = () => {
@@ -1771,12 +1802,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           applySizeMeasurement(compression);
           setCompressionSummary(formatPngSequenceCompressionSummary(compression));
         }
-        const result = await exportPngSequence({
+        const result = await runNativeExportJob("png-sequence", exportFrames.length, controller.signal, (jobId) => exportPngSequence({
           ...getPngSequenceOutputLocationFields(outputLocation, sequenceOutputDir, sourcePath, outputSubdirectory, outputDirectory),
+          jobId,
           baseName: createPngSequenceSizeRequest(exportFrames).baseName,
           frames: exportFrames,
           overwriteExisting,
-        });
+        }));
         setLastExportPath(result[0] ?? sequenceOutputDir);
         setStatus({ kind: "success", text: `PNG 帧序列已导出：${result.length} 帧` });
         return;
@@ -1792,9 +1824,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           setCompressionSummary(formatAnimationCompressionSummary(compression));
         }
         const request = createAnimationExportRequest(exportFrames, compression ? { width: compression.width, height: compression.height } : canvasSize);
-        const result = outputFormat === "webp"
-          ? await exportWebpAnimation(request)
-          : await exportApng(request);
+        const result = await runNativeExportJob(outputFormat, exportFrames.length, controller.signal, (jobId) => outputFormat === "webp"
+          ? exportWebpAnimation({ ...request, jobId })
+          : exportApng({ ...request, jobId }));
         setLastExportPath(result);
         setStatus({ kind: "success", text: `${outputFormat.toUpperCase()} 动图已导出：${result}` });
         return;
@@ -1804,20 +1836,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       const { frames: exportFrames, width, height } = compression;
       applySizeMeasurement(compression);
       setCompressionSummary(formatGifCompressionSummary(compression));
-      const jobId = createGifExportJobId();
-      gifExportJobIdRef.current = jobId;
-      setGifExportProgress({
-        jobId,
-        format: "gif",
-        status: "running",
-        stage: "validating",
-        completedFrames: 0,
-        totalFrames: exportFrames.length,
-        outputPath: null,
-        error: null,
-      });
-      void monitorGifExportProgress(jobId).catch(() => undefined);
-      const result = await exportGif({
+      const result = await runNativeExportJob("gif", exportFrames.length, controller.signal, (jobId) => exportGif({
         jobId,
         outputPath: outputPath ?? undefined,
         outputLocation,
@@ -1834,14 +1853,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         ditherMode,
         frames: exportFrames,
         overwriteExisting,
-      });
-      throwIfAborted(controller.signal);
-      const finalProgress = await getGifExportProgress(jobId);
-      if (!isCompletedGifExport(finalProgress)) {
-        throw new Error(finalProgress.error ?? `GIF 导出未完成（${finalProgress.status}）。`);
-      }
-      gifExportJobIdRef.current = null;
-      setGifExportProgress(finalProgress);
+      }));
       setLastExportPath(result);
       setStatus({ kind: "success", text: `GIF 已导出：${result} · ${formatGifCompressionSummary(compression)}` });
     } catch (exportError) {
@@ -1854,6 +1866,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       }
     } finally {
       if (compressionControllerRef.current === controller) compressionControllerRef.current = null;
+      gifExportJobIdRef.current = null;
       lockedRef.current = false;
       setLocked(false);
     }
