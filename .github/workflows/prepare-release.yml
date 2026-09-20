@@ -26,6 +26,7 @@ jobs:
     outputs:
       version: ${{ steps.release.outputs.version }}
       tag: ${{ steps.release.outputs.tag }}
+      commit: ${{ steps.provenance.outputs.commit }}
 
     steps:
       - name: Checkout
@@ -60,9 +61,12 @@ jobs:
           Write-Host "Resolved EmbedPix release version: $version"
 
       - name: Confirm tag and release state
+        id: provenance
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           $tag = $env:RELEASE_TAG
@@ -70,7 +74,24 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or -not $tagRef) {
             throw "Tag $tag does not exist on origin."
           }
+
+          $peeledRef = 'refs/tags/{0}^{{}}' -f $tag
+          $peeledTagRef = git ls-remote --exit-code origin $peeledRef
+          if ($LASTEXITCODE -eq 0 -and $peeledTagRef) {
+            $commitLine = $peeledTagRef
+          } else {
+            $commitLine = $tagRef
+          }
+          $tagCommit = (($commitLine -split '\s+')[0]).Trim()
+          if ($tagCommit -notmatch '^[0-9a-fA-F]{40}$') {
+            throw "Could not resolve an immutable commit for tag $tag."
+          }
+          if ($env:EVENT_NAME -eq 'push' -and $env:EVENT_SHA -match '^[0-9a-fA-F]{40}$' -and ($env:EVENT_SHA).ToLowerInvariant() -ne $tagCommit.ToLowerInvariant()) {
+            throw "Push event commit $env:EVENT_SHA does not match tag $tag commit $tagCommit."
+          }
+          "commit=$tagCommit" >> $env:GITHUB_OUTPUT
           Write-Host "Confirmed remote tag $tag."
+          Write-Host "Resolved tag $tag to commit $tagCommit."
 
           $releaseUri = "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag"
           $headers = @{
@@ -101,7 +122,17 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.resolve.outputs.tag }}
+          ref: ${{ needs.resolve.outputs.commit }}
+
+      - name: Verify checked out release commit
+        shell: pwsh
+        env:
+          RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          $actualCommit = (git rev-parse HEAD).Trim()
+          if ($actualCommit -ne $env:RELEASE_COMMIT) {
+            throw "Checked out commit $actualCommit does not match release commit $env:RELEASE_COMMIT."
+          }
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -146,7 +177,17 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.resolve.outputs.tag }}
+          ref: ${{ needs.resolve.outputs.commit }}
+
+      - name: Verify checked out release commit
+        shell: pwsh
+        env:
+          RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          $actualCommit = (git rev-parse HEAD).Trim()
+          if ($actualCommit -ne $env:RELEASE_COMMIT) {
+            throw "Checked out commit $actualCommit does not match release commit $env:RELEASE_COMMIT."
+          }
 
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -234,6 +275,21 @@ jobs:
       artifact-metadata: write
 
     steps:
+      - name: Checkout release source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+
+      - name: Verify checked out release commit
+        shell: pwsh
+        env:
+          RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          $actualCommit = (git rev-parse HEAD).Trim()
+          if ($actualCommit -ne $env:RELEASE_COMMIT) {
+            throw "Checked out commit $actualCommit does not match release commit $env:RELEASE_COMMIT."
+          }
+
       - name: Download architecture artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -264,6 +320,85 @@ jobs:
           foreach ($name in $expected) {
             $file = Get-Item -LiteralPath (Join-Path $releaseDir $name)
             if ($file.Length -eq 0) { throw "Release asset is empty: $name" }
+          }
+
+      - name: Prepare independent minisign verifier
+        shell: pwsh
+        run: |
+          $verifierRoot = Join-Path $env:RUNNER_TEMP 'embedpix-minisign-verifier'
+          $sourceDir = Join-Path $verifierRoot 'src'
+          New-Item -ItemType Directory -Force $sourceDir | Out-Null
+
+          @'
+          [package]
+          name = "embedpix-minisign-verifier"
+          version = "0.0.0"
+          edition = "2021"
+
+          [dependencies]
+          minisign-verify = "0.2.5"
+          '@ | Set-Content -Path (Join-Path $verifierRoot 'Cargo.toml') -Encoding utf8NoBOM
+
+          @'
+          use std::{env, fs, path::PathBuf};
+          use minisign_verify::{PublicKey, Signature};
+
+          fn main() -> Result<(), Box<dyn std::error::Error>> {
+              let args: Vec<_> = env::args_os().collect();
+              if args.len() != 4 {
+                  eprintln!("usage: verifier <public-key> <file> <signature>");
+                  std::process::exit(2);
+              }
+
+              let public_key = PublicKey::from_file(PathBuf::from(&args[1]))?;
+              let signature = Signature::from_file(PathBuf::from(&args[3]))?;
+              let content = fs::read(PathBuf::from(&args[2]))?;
+              public_key.verify(&content, &signature, false)?;
+              println!("Verified {}", PathBuf::from(&args[2]).display());
+              Ok(())
+          }
+          '@ | Set-Content -Path (Join-Path $sourceDir 'main.rs') -Encoding utf8NoBOM
+
+          cargo generate-lockfile --manifest-path (Join-Path $verifierRoot 'Cargo.toml')
+          if ($LASTEXITCODE -ne 0) { throw 'Could not lock the independent minisign verifier.' }
+          cargo build --manifest-path (Join-Path $verifierRoot 'Cargo.toml') --release --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Could not build the independent minisign verifier.' }
+          "MINISIGN_VERIFIER=$verifierRoot\target\release\embedpix-minisign-verifier.exe" >> $env:GITHUB_ENV
+
+      - name: Independently verify installer signatures
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          $config = Get-Content -Raw 'src-tauri/tauri.conf.json' | ConvertFrom-Json
+          $encodedPublicKey = [string]$config.plugins.updater.pubkey
+          if (-not $encodedPublicKey) { throw 'Updater public key is missing from tauri.conf.json.' }
+
+          $publicKeyPath = Join-Path $env:RUNNER_TEMP 'embedpix-updater.pub'
+          try {
+            $publicKey = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encodedPublicKey))
+          } catch {
+            throw 'Updater public key is not valid base64.'
+          }
+          [IO.File]::WriteAllText($publicKeyPath, $publicKey, [Text.UTF8Encoding]::new($false))
+
+          $releaseDir = 'release-assets'
+          $version = $env:RELEASE_VERSION
+          foreach ($arch in @('x64', 'arm64')) {
+            $installerName = "EmbedPix_${version}_${arch}-setup.exe"
+            $installerPath = Join-Path $releaseDir $installerName
+            $signaturePath = Join-Path $releaseDir "$installerName.sig"
+            $rawSignaturePath = Join-Path $env:RUNNER_TEMP "$installerName.minisig"
+            try {
+              $encodedSignature = (Get-Content -Raw -LiteralPath $signaturePath).Trim()
+              $rawSignature = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encodedSignature))
+            } catch {
+              throw "Signature for $installerName is not valid base64."
+            }
+            [IO.File]::WriteAllText($rawSignaturePath, $rawSignature, [Text.UTF8Encoding]::new($false))
+
+            & $env:MINISIGN_VERIFIER $publicKeyPath $installerPath $rawSignaturePath
+            if ($LASTEXITCODE -ne 0) { throw "Independent minisign verification failed for $installerName." }
           }
 
       - name: Generate and verify latest.json
@@ -302,8 +437,39 @@ jobs:
           if ($parsed.version -ne $version) { throw 'latest.json version validation failed.' }
           if ($parsed.platforms.'windows-x86_64'.signature -ne $x64Signature) { throw 'x64 signature validation failed.' }
           if ($parsed.platforms.'windows-aarch64'.signature -ne $arm64Signature) { throw 'arm64 signature validation failed.' }
-          if ($parsed.platforms.'windows-x86_64'.url -notlike "*/$x64Name") { throw 'x64 URL validation failed.' }
-          if ($parsed.platforms.'windows-aarch64'.url -notlike "*/$arm64Name") { throw 'arm64 URL validation failed.' }
+          $expectedX64Url = "https://github.com/$repo/releases/download/v$version/$x64Name"
+          $expectedArm64Url = "https://github.com/$repo/releases/download/v$version/$arm64Name"
+          if ($parsed.platforms.'windows-x86_64'.url -ne $expectedX64Url) { throw 'x64 URL validation failed.' }
+          if ($parsed.platforms.'windows-aarch64'.url -ne $expectedArm64Url) { throw 'arm64 URL validation failed.' }
+          $platformNames = @($parsed.platforms.PSObject.Properties.Name)
+          if ($platformNames.Count -ne 2 -or $platformNames -notcontains 'windows-x86_64' -or $platformNames -notcontains 'windows-aarch64') {
+            throw 'latest.json platform mapping contains unexpected or missing platforms.'
+          }
+
+      - name: Write release provenance
+        shell: pwsh
+        env:
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
+          WORKFLOW_REF: ${{ github.ref }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if ($env:RELEASE_COMMIT -notmatch '^[0-9a-fA-F]{40}$') { throw 'Release commit provenance is invalid.' }
+          $provenance = [ordered]@{
+            repository = $env:RELEASE_REPOSITORY
+            release_tag = $env:RELEASE_TAG
+            release_commit = ($env:RELEASE_COMMIT).ToLowerInvariant()
+            workflow_ref = $env:WORKFLOW_REF
+            workflow_sha = $env:WORKFLOW_SHA
+            event_name = $env:EVENT_NAME
+          }
+          $provenance | ConvertTo-Json -Depth 4 | Set-Content -Path release-assets/release-provenance.json -Encoding utf8NoBOM
+          $parsed = Get-Content -Raw release-assets/release-provenance.json | ConvertFrom-Json
+          if ($parsed.release_tag -ne $env:RELEASE_TAG -or $parsed.release_commit -ne ($env:RELEASE_COMMIT).ToLowerInvariant()) {
+            throw 'Release provenance validation failed.'
+          }
 
       - name: Generate checksums
         shell: pwsh
@@ -336,6 +502,11 @@ jobs:
         with:
           subject-path: release-assets/EmbedPix_${{ needs.resolve.outputs.version }}_arm64-setup.exe
 
+      - name: Attest release provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: release-assets/release-provenance.json
+
       - name: Upload release assets as workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -360,3 +531,4 @@ jobs:
             release-assets/EmbedPix_${{ needs.resolve.outputs.version }}_arm64-setup.exe.sig
             release-assets/latest.json
             release-assets/SHA256SUMS.txt
+            release-assets/release-provenance.json
