@@ -37,4 +37,11 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).not.toMatch(/\.gif-frame-list \{[^}]*overflow-x: auto;/s);
     expect(gifCss).toMatch(/\.gif-frame-list \{[^}]*overflow-x: hidden; overflow-y: auto;/s);
   });
+
+  it("keeps one target, limit, and compression control per output-format branch", () => {
+    expect((gifView.match(/<span>目标文件大小<\/span>/g) ?? []).length).toBe(3);
+    expect((gifView.match(/<span>最大文件大小<\/span>/g) ?? []).length).toBe(3);
+    expect((gifView.match(/<strong>自动压缩到目标大小<\/strong>/g) ?? []).length).toBe(3);
+    expect(gifCss).toContain(".gif-export-grid { grid-template-columns: minmax(0, 1fr); }");
+  });
 });
