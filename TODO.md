@@ -258,10 +258,12 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 ### D6：0.3.0 验收与发布
 
-- [ ] CLI 无桌面测试通过
-- [ ] 更新协议端到端测试通过
-- [ ] 供应链门禁通过
+- [x] CLI 无桌面测试通过
+- [x] 更新协议端到端测试通过
+- [x] 供应链门禁通过
 - [ ] 发布 `0.3.0`
+
+内部验收证据：CLI 已通过无桌面 smoke/契约测试及 image、gif、pngSequence 三类端到端操作；更新协议已通过本地 HTTP fixture，覆盖下载、大小、SHA-256、签名和缓存复核；仓库内 verifier、Action SHA 固定、版本一致性、tag/commit 与发布后资产回读门禁已通过。仍阻塞：GitHub Settings 中 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则未配置/未验证；`0.3.0` 尚未发布。
 
 ## 通用验收门禁
 
