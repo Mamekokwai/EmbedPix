@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifExportProgress, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
+import { canRequestGifExportCancel, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("defines quality, balanced, and small presets without touching other formats", () => {
@@ -78,5 +78,14 @@ describe("GIF export jobs", () => {
     expect(formatGifExportProgress({ format: "gif", stage: "validating", completedFrames: 0, totalFrames: 4 })).toContain("GIF 导出 · validating · 0/4 帧");
     expect(formatGifExportProgress({ format: "webp", stage: "encoding", completedFrames: 2, totalFrames: 4 })).toContain("WEBP 导出 · encoding · 2/4 帧");
     expect(formatGifExportProgress({ format: "png-sequence", stage: "publishing", completedFrames: 4, totalFrames: 4 })).toContain("PNG 帧序列导出 · publishing · 4/4 帧");
+  });
+
+  it("protects cancelling jobs from duplicate requests and uses explicit cancel copy", () => {
+    expect(canRequestGifExportCancel("job-1", null, "running")).toBe(true);
+    expect(canRequestGifExportCancel("job-1", "job-1", "running")).toBe(false);
+    expect(canRequestGifExportCancel("job-1", null, "cancelling")).toBe(false);
+    expect(getGifCancelButtonLabel(true, false)).toBe("取消导出");
+    expect(getGifCancelButtonLabel(true, true)).toBe("正在取消导出…");
+    expect(formatGifCancelledStatus("png-sequence")).toBe("PNG 帧序列导出已取消");
   });
 });
