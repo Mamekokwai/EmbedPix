@@ -2,6 +2,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Cursor, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use image::{io::Reader as ImageReader, DynamicImage, ImageOutputFormat};
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     decode_limits, detect_format, inspect_frame_dimensions, job_begin_publish, job_checkpoint,
-    job_mark_published, job_report, validate_frame_dimensions, ExportJob,
+    job_mark_published, job_report, validate_frame_dimensions, EncodingSemaphore, ExportJob,
 };
 
 use super::storage;
@@ -104,8 +105,10 @@ pub async fn pick_gif_sequence_output() -> Result<Option<String>, String> {
 pub async fn export_png_sequence(
     request: PngSequenceExportRequest,
     job: ExportJob,
+    encoder_slots: Arc<EncodingSemaphore>,
 ) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let _encoding_permit = encoder_slots.acquire();
         export_png_sequence_blocking_with_job(request, job)
     })
     .await
@@ -114,10 +117,14 @@ pub async fn export_png_sequence(
 
 pub async fn estimate_png_sequence_size(
     request: PngSequenceExportRequest,
+    encoder_slots: Arc<EncodingSemaphore>,
 ) -> Result<PngSequenceSizeEstimateResult, String> {
-    tauri::async_runtime::spawn_blocking(move || estimate_png_sequence_size_blocking(request))
-        .await
-        .map_err(|error| format!("PNG 帧序列体积测量任务失败：{error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _encoding_permit = encoder_slots.acquire();
+        estimate_png_sequence_size_blocking(request)
+    })
+    .await
+    .map_err(|error| format!("PNG 帧序列体积测量任务失败：{error}"))?
 }
 
 #[cfg(test)]

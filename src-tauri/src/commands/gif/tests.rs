@@ -10,6 +10,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc, Barrier,
     },
+    time::Duration,
 };
 
 struct TestDirectory(PathBuf);
@@ -721,6 +722,61 @@ fn export_job_reports_progress_and_cancellation() {
     let cancelled = state.get("job-1").unwrap().cancel();
     assert_eq!(cancelled.status, "cancelling");
     assert!(job_checkpoint(&Some(job)).is_err());
+}
+
+#[test]
+fn job_registry_rejects_active_ids_and_reclaims_expired_terminal_jobs() {
+    let state = GifExportJobState::default();
+    let job = state
+        .register(Some("reused-job"), "gif", 1)
+        .unwrap()
+        .unwrap();
+    assert!(state.register(Some("reused-job"), "gif", 1).is_err());
+
+    job.finish_ok("E:\\导出\\动画.gif".to_string());
+    let replacement = state
+        .register(Some("reused-job"), "gif", 2)
+        .unwrap()
+        .unwrap();
+    assert_eq!(replacement.progress().total_frames, 2);
+    replacement.finish_ok("E:\\导出\\动画-2.gif".to_string());
+    assert!(state.get("reused-job").is_ok());
+
+    replacement.expire_for_test();
+    let error = match state.get("reused-job") {
+        Ok(_) => panic!("expired job should be removed"),
+        Err(error) => error,
+    };
+    assert!(error.contains("已过期"));
+}
+
+#[test]
+fn encoding_semaphore_limits_parallel_work_to_two_slots() {
+    let semaphore = Arc::new(EncodingSemaphore::new(2));
+    let active = Arc::new(AtomicUsize::new(0));
+    let maximum = Arc::new(AtomicUsize::new(0));
+    let barrier = Arc::new(Barrier::new(2));
+    let workers = (0..4)
+        .map(|_| {
+            let semaphore = Arc::clone(&semaphore);
+            let active = Arc::clone(&active);
+            let maximum = Arc::clone(&maximum);
+            let barrier = Arc::clone(&barrier);
+            std::thread::spawn(move || {
+                let _permit = semaphore.acquire();
+                let current = active.fetch_add(1, Ordering::AcqRel) + 1;
+                maximum.fetch_max(current, Ordering::AcqRel);
+                barrier.wait();
+                std::thread::sleep(Duration::from_millis(5));
+                active.fetch_sub(1, Ordering::AcqRel);
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    assert_eq!(maximum.load(Ordering::Acquire), 2);
 }
 
 #[test]

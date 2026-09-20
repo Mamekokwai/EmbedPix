@@ -1,6 +1,7 @@
 use std::{
     io::{Cursor, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use apng::image_png::{BitDepth, ColorType, FilterType};
@@ -12,7 +13,7 @@ use webp_animation::{AnimParams, Encoder as WebpEncoder, EncoderOptions, Encodin
 
 use super::{
     decode_limits, detect_format, inspect_frame_dimensions, job_begin_publish, job_checkpoint,
-    job_mark_published, job_report, ExportJob, GifFrameRequest,
+    job_mark_published, job_report, EncodingSemaphore, ExportJob, GifFrameRequest,
 };
 
 #[derive(Debug, Deserialize)]
@@ -69,8 +70,10 @@ pub(super) async fn pick_animation_output(
 pub(super) async fn export_webp_animation(
     request: AnimationExportRequest,
     job: ExportJob,
+    encoder_slots: Arc<EncodingSemaphore>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let _encoding_permit = encoder_slots.acquire();
         export_animation_blocking_with_job(request, "webp", job)
     })
     .await
@@ -80,8 +83,10 @@ pub(super) async fn export_webp_animation(
 pub(super) async fn export_apng(
     request: AnimationExportRequest,
     job: ExportJob,
+    encoder_slots: Arc<EncodingSemaphore>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let _encoding_permit = encoder_slots.acquire();
         export_animation_blocking_with_job(request, "apng", job)
     })
     .await
@@ -91,11 +96,15 @@ pub(super) async fn export_apng(
 pub(super) async fn estimate_animation_size(
     format: String,
     request: AnimationExportRequest,
+    encoder_slots: Arc<EncodingSemaphore>,
 ) -> Result<AnimationSizeEstimateResult, String> {
     let format = normalize_format(&format)?;
-    tauri::async_runtime::spawn_blocking(move || estimate_animation_size_blocking(request, format))
-        .await
-        .map_err(|error| format!("{format} 体积测量任务失败：{error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _encoding_permit = encoder_slots.acquire();
+        estimate_animation_size_blocking(request, format)
+    })
+    .await
+    .map_err(|error| format!("{format} 体积测量任务失败：{error}"))?
 }
 
 #[cfg(test)]

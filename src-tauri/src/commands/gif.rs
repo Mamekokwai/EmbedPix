@@ -4,8 +4,9 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU8, Ordering},
-        Arc, Mutex,
+        Arc, Condvar, Mutex,
     },
+    time::{Duration, Instant},
 };
 
 use color_quant::NeuQuant;
@@ -44,6 +45,10 @@ const JOB_OPEN: u8 = 0;
 const JOB_CANCELLING: u8 = 1;
 const JOB_PUBLISHING: u8 = 2;
 const JOB_COMMITTED: u8 = 3;
+const JOB_FAILED: u8 = 4;
+const JOB_CANCELLED: u8 = 5;
+const MAX_ENCODING_CONCURRENCY: usize = 2;
+const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,14 +63,66 @@ pub struct GifExportProgress {
     pub error: Option<String>,
 }
 
-#[derive(Default)]
 pub struct GifExportJobState {
     jobs: Mutex<HashMap<String, Arc<GifExportJob>>>,
+    encoder_slots: Arc<EncodingSemaphore>,
 }
 
 pub(super) struct GifExportJob {
     phase: AtomicU8,
     progress: Mutex<GifExportProgress>,
+    terminal_at: Mutex<Option<Instant>>,
+}
+
+struct EncodingSemaphore {
+    available: Mutex<usize>,
+    wake: Condvar,
+}
+
+struct EncodingPermit {
+    semaphore: Arc<EncodingSemaphore>,
+}
+
+impl Default for GifExportJobState {
+    fn default() -> Self {
+        Self {
+            jobs: Mutex::new(HashMap::new()),
+            encoder_slots: Arc::new(EncodingSemaphore::new(MAX_ENCODING_CONCURRENCY)),
+        }
+    }
+}
+
+impl EncodingSemaphore {
+    fn new(limit: usize) -> Self {
+        assert!(limit > 0);
+        Self {
+            available: Mutex::new(limit),
+            wake: Condvar::new(),
+        }
+    }
+
+    fn acquire(self: &Arc<Self>) -> EncodingPermit {
+        let mut available = self.available.lock().expect("encoding semaphore poisoned");
+        while *available == 0 {
+            available = self
+                .wake
+                .wait(available)
+                .expect("encoding semaphore poisoned");
+        }
+        *available -= 1;
+        EncodingPermit {
+            semaphore: Arc::clone(self),
+        }
+    }
+}
+
+impl Drop for EncodingPermit {
+    fn drop(&mut self) {
+        if let Ok(mut available) = self.semaphore.available.lock() {
+            *available += 1;
+            self.semaphore.wake.notify_one();
+        }
+    }
 }
 
 pub(super) struct PublishLease(Arc<GifExportJob>);
@@ -95,7 +152,36 @@ impl GifExportJob {
                 output_path: None,
                 error: None,
             }),
+            terminal_at: Mutex::new(None),
         }
+    }
+
+    fn mark_terminal(&self) {
+        if let Ok(mut terminal_at) = self.terminal_at.lock() {
+            *terminal_at = Some(Instant::now());
+        }
+    }
+
+    fn is_expired(&self, now: Instant) -> bool {
+        self.terminal_at
+            .lock()
+            .ok()
+            .and_then(|terminal_at| *terminal_at)
+            .is_some_and(|terminal_at| now.duration_since(terminal_at) >= JOB_RETENTION)
+    }
+
+    #[cfg(test)]
+    fn expire_for_test(&self) {
+        if let Ok(mut terminal_at) = self.terminal_at.lock() {
+            *terminal_at = Some(Instant::now() - JOB_RETENTION - Duration::from_secs(1));
+        }
+    }
+
+    fn is_active(&self) -> bool {
+        matches!(
+            self.phase.load(Ordering::Acquire),
+            JOB_OPEN | JOB_CANCELLING | JOB_PUBLISHING
+        )
     }
 
     fn checkpoint(&self) -> Result<(), String> {
@@ -146,10 +232,14 @@ impl GifExportJob {
                 progress.status = "cancelled".to_string();
                 progress.stage = "cancelled".to_string();
                 progress.error = Some("导出已取消。".to_string());
+                self.phase.store(JOB_CANCELLED, Ordering::Release);
+                self.mark_terminal();
             } else {
                 progress.status = "completed".to_string();
                 progress.stage = "completed".to_string();
                 progress.output_path = Some(output_path);
+                self.phase.store(JOB_COMMITTED, Ordering::Release);
+                self.mark_terminal();
             }
         }
     }
@@ -160,11 +250,14 @@ impl GifExportJob {
                 progress.status = "cancelled".to_string();
                 progress.stage = "cancelled".to_string();
                 progress.error = Some("导出已取消。".to_string());
+                self.phase.store(JOB_CANCELLED, Ordering::Release);
             } else {
                 progress.status = "failed".to_string();
                 progress.stage = "failed".to_string();
                 progress.error = Some(error);
+                self.phase.store(JOB_FAILED, Ordering::Release);
             }
+            self.mark_terminal();
         }
     }
 
@@ -211,16 +304,32 @@ impl GifExportJob {
             progress.error = None;
         }
         self.phase.store(JOB_COMMITTED, Ordering::Release);
+        self.mark_terminal();
     }
 }
 
 impl GifExportJobState {
+    fn cleanup_expired(&self) -> Result<(), String> {
+        let now = Instant::now();
+        let mut jobs = self
+            .jobs
+            .lock()
+            .map_err(|_| "导出任务状态不可用。".to_string())?;
+        jobs.retain(|_, job| !job.is_expired(now));
+        Ok(())
+    }
+
+    fn encoder_slots(&self) -> Arc<EncodingSemaphore> {
+        Arc::clone(&self.encoder_slots)
+    }
+
     fn register(
         &self,
         job_id: Option<&str>,
         format: &str,
         total_frames: usize,
     ) -> Result<Option<Arc<GifExportJob>>, String> {
+        self.cleanup_expired()?;
         let Some(job_id) = normalize_job_id(job_id)? else {
             return Ok(None);
         };
@@ -229,12 +338,10 @@ impl GifExportJobState {
             .jobs
             .lock()
             .map_err(|_| "导出任务状态不可用。".to_string())?;
-        if jobs.get(&job_id).is_some_and(|existing| {
-            matches!(
-                existing.progress().status.as_str(),
-                "running" | "cancelling"
-            )
-        }) {
+        if jobs
+            .get(&job_id)
+            .is_some_and(|existing| existing.is_active())
+        {
             return Err("导出任务 ID 已在使用中。".to_string());
         }
         jobs.insert(job_id, job.clone());
@@ -242,6 +349,7 @@ impl GifExportJobState {
     }
 
     fn get(&self, job_id: &str) -> Result<Arc<GifExportJob>, String> {
+        self.cleanup_expired()?;
         let job_id =
             normalize_job_id(Some(job_id))?.ok_or_else(|| "导出任务 ID 不能为空。".to_string())?;
         self.jobs
@@ -249,7 +357,7 @@ impl GifExportJobState {
             .map_err(|_| "导出任务状态不可用。".to_string())?
             .get(&job_id)
             .cloned()
-            .ok_or_else(|| "找不到导出任务。".to_string())
+            .ok_or_else(|| "导出任务不存在或已过期。".to_string())
     }
 }
 
@@ -401,9 +509,13 @@ pub async fn export_gif(
     request: GifExportRequest,
 ) -> Result<String, String> {
     let job = state.register(request.job_id.as_deref(), "gif", request.frames.len())?;
+    let encoder_slots = state.encoder_slots();
     let result = tauri::async_runtime::spawn_blocking({
         let job = job.clone();
-        move || export_gif_blocking_with_job(request, job)
+        move || {
+            let _encoding_permit = encoder_slots.acquire();
+            export_gif_blocking_with_job(request, job)
+        }
     })
     .await
     .map_err(|error| format!("GIF 导出任务失败：{error}"))?;
@@ -434,11 +546,16 @@ pub fn get_gif_export_progress(
 
 #[tauri::command]
 pub async fn estimate_gif_size(
+    state: State<'_, GifExportJobState>,
     request: GifSizeEstimateRequest,
 ) -> Result<GifSizeEstimateResult, String> {
-    tauri::async_runtime::spawn_blocking(move || estimate_gif_size_blocking(request))
-        .await
-        .map_err(|error| format!("GIF 体积测量任务失败：{error}"))?
+    let encoder_slots = state.encoder_slots();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _encoding_permit = encoder_slots.acquire();
+        estimate_gif_size_blocking(request)
+    })
+    .await
+    .map_err(|error| format!("GIF 体积测量任务失败：{error}"))?
 }
 
 #[tauri::command]
@@ -456,7 +573,7 @@ pub async fn export_png_sequence(
         "png-sequence",
         request.frames.len(),
     )?;
-    let result = sequence::export_png_sequence(request, job.clone()).await;
+    let result = sequence::export_png_sequence(request, job.clone(), state.encoder_slots()).await;
     if let Some(job) = &job {
         match &result {
             Ok(output_paths) => job.finish_ok(output_paths.first().cloned().unwrap_or_default()),
@@ -468,9 +585,10 @@ pub async fn export_png_sequence(
 
 #[tauri::command]
 pub async fn estimate_png_sequence_size(
+    state: State<'_, GifExportJobState>,
     request: sequence::PngSequenceExportRequest,
 ) -> Result<sequence::PngSequenceSizeEstimateResult, String> {
-    sequence::estimate_png_sequence_size(request).await
+    sequence::estimate_png_sequence_size(request, state.encoder_slots()).await
 }
 
 #[tauri::command]
@@ -487,7 +605,8 @@ pub async fn export_webp_animation(
     request: animation::AnimationExportRequest,
 ) -> Result<String, String> {
     let job = state.register(request.job_id.as_deref(), "webp", request.frames.len())?;
-    let result = animation::export_webp_animation(request, job.clone()).await;
+    let result =
+        animation::export_webp_animation(request, job.clone(), state.encoder_slots()).await;
     if let Some(job) = &job {
         match &result {
             Ok(output_path) => job.finish_ok(output_path.clone()),
@@ -503,7 +622,7 @@ pub async fn export_apng(
     request: animation::AnimationExportRequest,
 ) -> Result<String, String> {
     let job = state.register(request.job_id.as_deref(), "apng", request.frames.len())?;
-    let result = animation::export_apng(request, job.clone()).await;
+    let result = animation::export_apng(request, job.clone(), state.encoder_slots()).await;
     if let Some(job) = &job {
         match &result {
             Ok(output_path) => job.finish_ok(output_path.clone()),
@@ -515,10 +634,11 @@ pub async fn export_apng(
 
 #[tauri::command]
 pub async fn estimate_animation_size(
+    state: State<'_, GifExportJobState>,
     format: String,
     request: animation::AnimationExportRequest,
 ) -> Result<animation::AnimationSizeEstimateResult, String> {
-    animation::estimate_animation_size(format, request).await
+    animation::estimate_animation_size(format, request, state.encoder_slots()).await
 }
 
 #[cfg(test)]
