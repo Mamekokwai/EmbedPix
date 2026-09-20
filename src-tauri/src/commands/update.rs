@@ -24,6 +24,7 @@ const RELEASE_REPOSITORY: &str = "EmbedPix";
 const MAX_UPDATE_BYTES: u64 = 128 * 1024 * 1024;
 const UPDATE_CACHE_DIR: &str = "updates";
 const UPDATE_FILE_PREFIX: &str = "EmbedPix-update-";
+const UPDATE_PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMwRjU2Q0VGMjI0MjZCRTQKUldUa2EwSWk3MnoxTUZEeEhMNk5pYUN5T1VwbGt2S0ZINm9lKytFbmpLT2c5RWIzUDY4a0RqVHgK";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -131,16 +132,7 @@ fn verify_signature(
 }
 
 fn updater_public_key() -> Result<String, String> {
-    let config: serde_json::Value = serde_json::from_str(include_str!("../../tauri.conf.json"))
-        .map_err(|_| "更新器配置无效。".to_string())?;
-    config
-        .get("plugins")
-        .and_then(|plugins| plugins.get("updater"))
-        .and_then(|updater| updater.get("pubkey"))
-        .and_then(serde_json::Value::as_str)
-        .filter(|key| !key.trim().is_empty())
-        .map(str::to_owned)
-        .ok_or_else(|| "更新公钥未配置。".to_string())
+    Ok(UPDATE_PUBLIC_KEY.to_string())
 }
 
 fn verify_update_signature(data: &[u8], encoded_signature: &str) -> Result<(), String> {
