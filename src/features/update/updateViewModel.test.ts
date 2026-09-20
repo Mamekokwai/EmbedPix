@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveUpdateProgress } from "./UpdateView";
+import { resolveUpdateProgress, resolveUpdateStatusLabel } from "./UpdateView";
+import { makeOfflineState } from "../../app/hooks/useUpdateCheck";
 
 describe("update progress model", () => {
   it("formats a determinate download with bytes and percentage", () => {
@@ -32,6 +33,22 @@ describe("update progress model", () => {
     expect(resolveUpdateProgress("installing", null, null)).toMatchObject({
       percent: null,
       indeterminate: true,
+    });
+  });
+});
+
+describe("offline update state", () => {
+  it("shows a dedicated offline label instead of a generic failure", () => {
+    expect(resolveUpdateStatusLabel("error", "offline")).toBe("当前离线");
+    expect(resolveUpdateStatusLabel("error", "check")).toBe("更新失败");
+  });
+
+  it("keeps offline startup retryable without invoking the updater", () => {
+    expect(makeOfflineState("0.2.0")).toMatchObject({
+      status: "error",
+      currentVersion: "0.2.0",
+      errorStage: "offline",
+      error: "当前处于离线状态，暂不检查更新。恢复网络后可手动重试。",
     });
   });
 });

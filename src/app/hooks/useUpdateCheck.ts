@@ -3,6 +3,7 @@ import {
   checkForUpdates,
   CURRENT_VERSION,
   openReleasePage as openReleasePageInBrowser,
+  UpdateCheckError,
   type UpdateInfo,
 } from "../../platform/update/updateGateway";
 import {
@@ -15,7 +16,7 @@ import {
 const STARTUP_CHECK_DELAYS_MS = [3_500, 15_000, 60_000] as const;
 const LAST_AUTO_CHECK_DAY_KEY = "embedpix.update.last-auto-check-day";
 
-export type UpdateErrorStage = "check" | "download" | "install";
+export type UpdateErrorStage = "check" | "download" | "install" | "offline";
 
 export type UpdateCheckState =
   | { status: "idle"; currentVersion: string; info: null; error: null; errorStage: null; downloadPath: null; downloadedBytes: null; totalBytes: null }
@@ -29,6 +30,10 @@ export type UpdateCheckState =
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined"
     && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+}
+
+export function isNetworkAvailable(): boolean {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
 function errorText(error: unknown, stage: UpdateErrorStage): string {
@@ -58,6 +63,26 @@ function makeIdleState(): UpdateCheckState {
   };
 }
 
+export function makeOfflineState(currentVersion = CURRENT_VERSION): UpdateCheckState {
+  return {
+    status: "error",
+    currentVersion,
+    info: null,
+    error: "当前处于离线状态，暂不检查更新。恢复网络后可手动重试。",
+    errorStage: "offline",
+    downloadPath: null,
+    downloadedBytes: null,
+    totalBytes: null,
+  };
+}
+
+function isOfflineCheckError(error: unknown): boolean {
+  if (!isNetworkAvailable()) return true;
+  if (error instanceof UpdateCheckError && error.kind === "network") return true;
+  if (!(error instanceof Error)) return false;
+  return /failed to fetch|load failed|network request|network error|offline|网络|连接/u.test(error.message);
+}
+
 function localDayKey(): string {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -82,7 +107,7 @@ function writeLastAutoCheckDay(): void {
 }
 
 export function useUpdateCheck() {
-  const [state, setState] = useState<UpdateCheckState>(makeIdleState);
+  const [state, setState] = useState<UpdateCheckState>(() => isNetworkAvailable() ? makeIdleState() : makeOfflineState());
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -119,6 +144,12 @@ export function useUpdateCheck() {
   const runCheck = useCallback(async (options: { silent?: boolean } = {}) => {
     const current = stateRef.current;
     if (current.status === "checking" || current.status === "downloading" || current.status === "installing") return current;
+    if (!isNetworkAvailable()) {
+      const offline = makeOfflineState(current.currentVersion);
+      stateRef.current = offline;
+      setState(offline);
+      return offline;
+    }
     const checking: UpdateCheckState = {
       status: "checking",
       currentVersion: current.currentVersion,
@@ -140,7 +171,10 @@ export function useUpdateCheck() {
       setState(complete);
       return complete;
     } catch (error) {
-      const failed: UpdateCheckState = { status: "error", currentVersion: current.currentVersion, info: null, error: errorText(error, "check"), errorStage: "check", downloadPath: null, downloadedBytes: null, totalBytes: null };
+      const offline = isOfflineCheckError(error);
+      const failed: UpdateCheckState = offline
+        ? makeOfflineState(current.currentVersion)
+        : { status: "error", currentVersion: current.currentVersion, info: null, error: errorText(error, "check"), errorStage: "check", downloadPath: null, downloadedBytes: null, totalBytes: null };
       stateRef.current = failed;
       setState(failed);
       if (options.silent) return failed;
@@ -156,17 +190,20 @@ export function useUpdateCheck() {
     });
 
     const runStartupCheck = async () => {
+      if (!isNetworkAvailable()) return;
       if (readLastAutoCheckDay() === localDayKey()) return;
 
       for (const delayMs of STARTUP_CHECK_DELAYS_MS) {
         await wait(delayMs);
         if (cancelled) return;
+        if (!isNetworkAvailable()) return;
 
         const current = stateRef.current;
         if (current.status !== "idle" && current.status !== "error") return;
 
         const result = await runCheck({ silent: true });
         if (cancelled) return;
+        if (result.status === "error" && result.errorStage === "offline") return;
         if (result.status !== "error") {
           writeLastAutoCheckDay();
           return;
@@ -179,6 +216,25 @@ export function useUpdateCheck() {
       cancelled = true;
     };
   }, [runCheck]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    let cancelled = false;
+    const handleOffline = () => {
+      const current = stateRef.current;
+      if (cancelled || current.status === "checking" || current.status === "downloading" || current.status === "installing") return;
+      if (current.status === "idle" || (current.status === "error" && current.errorStage === "check")) {
+        const offline = makeOfflineState(current.currentVersion);
+        stateRef.current = offline;
+        setState(offline);
+      }
+    };
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   const runDownload = useCallback(async () => {
     const current = stateRef.current;

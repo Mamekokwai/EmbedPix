@@ -27,6 +27,7 @@
 .update-status-success { color: var(--qp-success); }
 .update-status-available { color: var(--qp-accent-default); }
 .update-status-error { color: var(--qp-danger); }
+.update-status-offline { color: var(--qp-text-secondary); }
 .update-status-icon-spinning { animation: update-spin .9s linear infinite; }
 .update-release-heading { align-items: center; padding-bottom: 14px; }
 .update-section-eyebrow { margin: 0 0 4px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; }

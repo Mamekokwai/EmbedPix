@@ -6,6 +6,7 @@ import {
   Info,
   RefreshCw,
   TriangleAlert,
+  WifiOff,
 } from "lucide-react";
 import "../../styles/features/update.css";
 
@@ -19,7 +20,7 @@ export type UpdateStatus =
   | "installing"
   | "error";
 
-export type UpdateErrorStage = "check" | "download" | "install";
+export type UpdateErrorStage = "check" | "download" | "install" | "offline";
 
 export interface UpdateViewProps {
   currentVersion: string;
@@ -55,6 +56,10 @@ const STATUS_META: Record<UpdateStatus, StatusMeta> = {
   installing: { label: "正在安装更新…", className: "update-status-available" },
   error: { label: "更新失败", className: "update-status-error" },
 };
+
+export function resolveUpdateStatusLabel(status: UpdateStatus, errorStage?: UpdateErrorStage): string {
+  return status === "error" && errorStage === "offline" ? "当前离线" : STATUS_META[status].label;
+}
 
 function formatBytes(value: number | null | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "0 B";
@@ -103,7 +108,8 @@ export function resolveUpdateProgress(
   return null;
 }
 
-function StatusIcon({ status }: { status: UpdateStatus }) {
+function StatusIcon({ status, offline }: { status: UpdateStatus; offline: boolean }) {
+  if (offline) return <WifiOff size={16} aria-hidden="true" />;
   if (status === "up-to-date" || status === "downloaded") {
     return <CheckCircle2 size={16} aria-hidden="true" />;
   }
@@ -167,6 +173,7 @@ export default function UpdateView({
   const meta = STATUS_META[status];
   const progress = resolveUpdateProgress(status, downloadedBytes, totalBytes);
   const busy = status === "checking" || status === "downloading" || status === "installing";
+  const offline = status === "error" && errorStage === "offline";
   const viewClassName = ["update-view", embedded ? "update-view-embedded" : "page-view", className].filter(Boolean).join(" ");
 
   const handlePrimaryAction = () => {
@@ -199,7 +206,9 @@ export default function UpdateView({
     }
   };
 
-  const actionLabel = status === "checking"
+  const actionLabel = offline
+    ? "重试检查"
+    : status === "checking"
     ? "检查中…"
     : status === "downloading" || status === "installing"
       ? "处理中…"
@@ -215,7 +224,9 @@ export default function UpdateView({
                 ? "重新检查"
                 : "检查更新";
 
-  const statusDetail = status === "available"
+  const statusDetail = offline
+    ? "当前没有网络连接，已跳过自动检查。恢复网络后点击“重试检查”即可。"
+    : status === "available"
     ? assetAvailable
       ? "发现新版本，点击下载后会自动获取安装包。"
       : "发现新版本，但没有可用的受信任安装包，请打开发布页手动下载。"
@@ -257,7 +268,7 @@ export default function UpdateView({
                 aria-busy={busy}
                 onClick={handlePrimaryAction}
               >
-                {status === "available" && assetAvailable ? <Download size={15} aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" />}
+                {offline ? <WifiOff size={15} aria-hidden="true" /> : status === "available" && assetAvailable ? <Download size={15} aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" />}
                 {actionLabel}
               </button>
             ) : null}
@@ -268,9 +279,9 @@ export default function UpdateView({
             <div className="update-version-item"><span>最新版本</span><strong>{latestVersion ?? "—"}</strong></div>
           </div>
 
-          <div className={`update-status ${meta.className}`} role="status" aria-live="polite" aria-atomic="true">
-            <StatusIcon status={status} />
-            <span>{meta.label}</span>
+          <div className={`update-status ${offline ? "update-status-offline" : meta.className}`} role="status" aria-live="polite" aria-atomic="true">
+            <StatusIcon status={status} offline={offline} />
+            <span>{resolveUpdateStatusLabel(status, errorStage)}</span>
           </div>
           {statusDetail ? <p className="update-status-detail">{statusDetail}</p> : null}
           {progress ? <UpdateProgressBar progress={progress} /> : null}
