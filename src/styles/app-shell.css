@@ -288,11 +288,17 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 18px;
   scrollbar-width: none;
   background: var(--qp-bg-app);
 }
 
 .app-main::-webkit-scrollbar { display: none; }
+
+.app-main :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
+  scroll-margin-block: 18px;
+}
 
 .page-view { width: min(920px, 100%); min-height: 100%; margin: 0 auto; padding: 34px 40px 42px; }
 .page-header { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--qp-border-subtle); padding-bottom: 24px; }

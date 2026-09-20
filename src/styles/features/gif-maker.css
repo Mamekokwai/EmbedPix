@@ -10,8 +10,14 @@
   gap: 10px;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 18px;
   scrollbar-width: none;
   font-size: 12px;
+}
+
+.gif-maker-view :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
+  scroll-margin-block: 18px;
 }
 .gif-maker-view.page-view::-webkit-scrollbar { display: none; }
 .gif-maker-header.page-header { flex: 0 0 auto; padding-bottom: 10px; gap: 10px; }

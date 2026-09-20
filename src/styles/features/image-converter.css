@@ -1,8 +1,27 @@
 .converter-app {
   width: min(1180px, 100%);
+  min-width: 0;
   min-height: 100%;
+  overflow-x: hidden;
   margin: 0 auto;
   padding: 20px 28px 18px;
+}
+
+.converter-app,
+.workspace-grid,
+.preview-panel,
+.settings-panel,
+.settings-stack,
+.preview-content {
+  min-width: 0;
+}
+
+.workspace-grid,
+.preview-panel,
+.settings-panel,
+.settings-stack,
+.preview-content {
+  min-height: 0;
 }
 
 .converter-header,
@@ -398,8 +417,17 @@
   flex-direction: column;
   gap: 5px;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
   border-top: 1px solid var(--qp-border-subtle);
   padding-top: 8px;
+}
+
+.file-list::-webkit-scrollbar { display: none; }
+
+.converter-app :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
+  scroll-margin-block: 18px;
 }
 
 .file-list-item {
