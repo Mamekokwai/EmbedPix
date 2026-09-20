@@ -17,11 +17,11 @@
 
 ## 0.2.1 可靠导出
 
-### A1：前端 Job 类型和 Gateway
+### A1：前端 Job 类型和 Gateway ✅
 
-- [ ] 在 `gifGateway.ts` 增加 `jobId`、进度 DTO、取消和查询方法
-- [ ] 校验 Rust 返回的状态、阶段、帧数和错误字段
-- [ ] 保留没有 `jobId` 的旧调用兼容性
+- [x] 在 `gifGateway.ts` 增加 `jobId`、进度 DTO、取消和查询方法
+- [x] 校验 Rust 返回的状态、阶段、帧数和错误字段
+- [x] 保留没有 `jobId` 的旧调用兼容性
 
 验收：Gateway 单测覆盖正常响应、非法响应、未知状态和取消失败。
 
