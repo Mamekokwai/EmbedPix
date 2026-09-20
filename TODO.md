@@ -69,14 +69,14 @@
 
 验收：20 个并发请求不会无限创建编码线程，Job registry 长时间运行不会持续增长。
 
-### A7：0.2.1 验收与发布
+### A7：0.2.1 验收与发布 ✅
 
-- [ ] `npm test`
-- [ ] `npm run build`
-- [ ] Rust fmt/check/test/clippy
-- [ ] 100/200 帧取消测试
-- [ ] 覆盖、备份、失败回滚测试
-- [ ] 发布 `0.2.1`
+- [x] `npm test`
+- [x] `npm run build`
+- [x] Rust fmt/check/test/clippy
+- [x] 100/200 帧取消测试
+- [x] 覆盖、备份、失败回滚测试
+- [x] 发布 `0.2.1`
 
 ## 0.2.2 批处理与界面体验
 
