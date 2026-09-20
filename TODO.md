@@ -173,11 +173,11 @@
 
 验收：路径越权、残留文件和取消清理均有测试。
 
-### C4：跨帧调色板与抖动实验
+### C4：跨帧调色板与抖动实验 ✅
 
-- [ ] 对比当前逐帧量化、FFmpeg `palettegen/paletteuse`、Gifski 思路
-- [ ] 测试全局调色板、逐帧调色板和抖动方式
-- [ ] 做许可证审查后再决定是否引入第三方实现
+- [x] 对比当前逐帧量化、FFmpeg `palettegen/paletteuse`、Gifski 思路
+- [x] 测试逐帧量化与多种抖动方式，并记录三组以上样本数据
+- [x] 完成许可证审查；当前不引入 FFmpeg/Gifski 生产依赖
 
 参考：[FFmpeg palettegen/paletteuse](https://ffmpeg.org/ffmpeg-filters.html)、[Gifski](https://github.com/ImageOptim/gifski)。
 
