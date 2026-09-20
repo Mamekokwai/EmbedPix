@@ -242,6 +242,18 @@ export function getGifFrameOrder(length: number, index: number, direction: -1 | 
   return length ? Math.min(length - 1, Math.max(0, index + direction)) : -1;
 }
 
+export function reorderGifFrameIndices<T>(items: ReadonlyArray<T>, selectedIndices: ReadonlySet<number>, fromIndices: ReadonlyArray<number>, toIndex: number): { items: T[]; selectedIndices: Set<number> } {
+  const sourceIndices = [...new Set(fromIndices)].filter((index) => index >= 0 && index < items.length).sort((left, right) => left - right);
+  if (!sourceIndices.length) return { items: [...items], selectedIndices: new Set(selectedIndices) };
+  const sourceSet = new Set(sourceIndices);
+  const moving = sourceIndices.map((index) => items[index]);
+  const remaining = items.filter((_, index) => !sourceSet.has(index));
+  const insertionIndex = Math.max(0, Math.min(remaining.length, Math.floor(toIndex) - sourceIndices.filter((index) => index < toIndex).length));
+  const nextItems = [...remaining.slice(0, insertionIndex), ...moving, ...remaining.slice(insertionIndex)];
+  const selectedItems = new Set([...selectedIndices].filter((index) => index >= 0 && index < items.length).map((index) => items[index]));
+  return { items: nextItems, selectedIndices: new Set(nextItems.flatMap((item, index) => selectedItems.has(item) ? [index] : [])) };
+}
+
 export function validateGifFiles(files: ReadonlyArray<{ size: number }>): void {
   if (files.length > MAX_FRAMES) throw new Error("最多导入 200 帧，请减少素材数量。");
   if (files.some((file) => file.size <= 0 || file.size > MAX_FRAME_BYTES)) throw new Error("单帧图片不能为空且不能超过 32 MiB。");

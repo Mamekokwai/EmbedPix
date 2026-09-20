@@ -14,6 +14,7 @@ import {
   Images,
   Pause,
   Play,
+  Plus,
   RotateCcw,
   Trash2,
   Upload,
@@ -25,7 +26,7 @@ import { getFormatMetadata, GIF_OUTPUT_FORMAT_IDS } from "../../shared/formatMet
 import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
@@ -528,6 +529,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [pendingImports, setPendingImports] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceFrameIdRef = useRef<string | null>(null);
+  const insertFrameAtRef = useRef<number | null>(null);
+  const draggedFrameIndicesRef = useRef<number[]>([]);
   const frameIdRef = useRef(0);
   const importQueueRef = useRef(new GifImportQueue());
   const draggedFrameIndexRef = useRef<number | null>(null);
@@ -756,9 +759,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return () => { cancelled = true; };
   }, [active, background, canvasSize, contentAlignment, contentMargins, customBackgroundColor, fitMode, selectedFrame]);
 
-  const openFileDialog = (frameId: string | null = null) => {
+  const openFileDialog = (frameId: string | null = null, insertAt: number | null = null) => {
     if (lockedRef.current) return;
     replaceFrameIdRef.current = frameId;
+    insertFrameAtRef.current = insertAt;
     fileInputRef.current?.click();
   };
 
@@ -1037,7 +1041,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       });
   };
 
-  const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null) => {
+  const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null, insertAt: number | null = null) => {
     if (lockedRef.current || !inputFiles.length) return;
     const imageFiles = inputFiles.filter(isImageFile);
     if (imageFiles.length !== inputFiles.length) {
@@ -1053,7 +1057,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setStatus({ kind: "importing", text: `正在读取 ${filesToRead.length} 张图片…` });
     try {
       await importQueueRef.current.run(async (isCurrent) => {
-        const retained = framesRef.current.filter((frame) => frame.id !== replaceFrameId);
+        const retained = replaceFrameId ? framesRef.current.filter((frame) => frame.id !== replaceFrameId) : framesRef.current;
         validateGifFiles([...retained.map((frame) => frame.file), ...filesToRead]);
         let pixels = retained.reduce((sum, frame) => sum + frame.width * frame.height, 0);
         const loadedFrames = await readGifBatch(filesToRead, async (file) => {
@@ -1079,13 +1083,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           setCanvasHeight(loadedFrames[0].height);
           setCanvasPreset("source");
         }
-        const next = replaceFrameId ? current.map((frame, i) => i === index ? { ...loadedFrames[0], durationMs: frame.durationMs } : frame) : [...current, ...loadedFrames];
+        const insertionIndex = insertAt === null ? current.length : Math.max(0, Math.min(current.length, Math.floor(insertAt)));
+        const next = replaceFrameId ? current.map((frame, i) => i === index ? { ...loadedFrames[0], durationMs: frame.durationMs } : frame) : insertAt === null ? [...current, ...loadedFrames] : [...current.slice(0, insertionIndex), ...loadedFrames, ...current.slice(insertionIndex)];
         if (index >= 0) URL.revokeObjectURL(current[index].previewUrl);
         framesRef.current = next;
         setFrames(next);
-        setSelectedIndex(replaceFrameId ? index : current.length);
-        setSelectedFrameIndices(new Set([replaceFrameId ? index : current.length]));
-        setStatus({ kind: "ready", text: `已加入 ${loadedFrames.length} 张图片` });
+        const nextIndex = replaceFrameId ? index : insertionIndex;
+        setSelectedIndex(nextIndex);
+        setSelectedFrameIndices(new Set([nextIndex]));
+        setStatus({ kind: "ready", text: replaceFrameId ? "已替换帧" : insertAt === null ? `已加入 ${loadedFrames.length} 张图片` : `已插入 ${loadedFrames.length} 张图片` });
       });
     } catch (loadError) {
       setError(getErrorMessage(loadError));
@@ -1099,12 +1105,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
     const replaceFrameId = replaceFrameIdRef.current;
+    const insertAt = insertFrameAtRef.current;
     replaceFrameIdRef.current = null;
+    insertFrameAtRef.current = null;
     event.target.value = "";
     if (sourceMode === "video") {
       if (selectedFiles[0]) void importVideo(selectedFiles[0]);
     } else {
-      void importFiles(selectedFiles, replaceFrameId);
+      void importFiles(selectedFiles, replaceFrameId, insertAt);
     }
   };
 
@@ -1212,39 +1220,32 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     selectionAnchorRef.current = targetIndex;
   };
 
-  const reorderFrame = (fromIndex: number, toIndex: number) => {
-    if (lockedRef.current || fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= frames.length || toIndex >= frames.length) return;
+  const reorderFrames = (fromIndices: number[], toIndex: number) => {
+    if (lockedRef.current || !fromIndices.length || toIndex < 0 || toIndex >= frames.length) return;
     setIsPlaying(false);
-    const remapIndex = (index: number) => {
-      if (index === fromIndex) return toIndex;
-      if (fromIndex < toIndex && index > fromIndex && index <= toIndex) return index - 1;
-      if (fromIndex > toIndex && index >= toIndex && index < fromIndex) return index + 1;
-      return index;
-    };
-    const next = [...frames];
-    const [moved] = next.splice(fromIndex, 1);
-    if (!moved) return;
-    next.splice(toIndex, 0, moved);
-    framesRef.current = next;
-    setFrames(next);
-    setSelectedIndex((current) => remapIndex(current));
-    setSelectedFrameIndices((current) => new Set([...current].map(remapIndex)));
-    selectionAnchorRef.current = remapIndex(selectionAnchorRef.current);
+    const selectedFrame = frames[selectedIndex];
+    const anchorFrame = frames[selectionAnchorRef.current];
+    const result = reorderGifFrameIndices(frames, selectedFrameIndices, fromIndices, toIndex);
+    framesRef.current = result.items;
+    setFrames(result.items);
+    setSelectedIndex(Math.max(0, result.items.findIndex((frame) => frame === selectedFrame)));
+    setSelectedFrameIndices(result.selectedIndices);
+    selectionAnchorRef.current = Math.max(0, result.items.findIndex((frame) => frame === anchorFrame));
     setStatus({ kind: "ready", text: "已调整帧顺序" });
   };
 
   const handleFrameDragStart = (event: DragEvent<HTMLDivElement>, index: number) => {
     if (lockedRef.current) return;
-    draggedFrameIndexRef.current = index;
+    draggedFrameIndicesRef.current = selectedFrameIndices.has(index) ? [...selectedFrameIndices].sort((a, b) => a - b) : [index];
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", String(index));
   };
 
   const handleFrameDrop = (event: DragEvent<HTMLDivElement>, index: number) => {
     event.preventDefault();
-    const fromIndex = draggedFrameIndexRef.current;
-    draggedFrameIndexRef.current = null;
-    if (fromIndex !== null) reorderFrame(fromIndex, index);
+    const fromIndices = draggedFrameIndicesRef.current;
+    draggedFrameIndicesRef.current = [];
+    if (fromIndices.length) reorderFrames(fromIndices, index);
   };
 
   const reverseFrames = () => {
@@ -2129,6 +2130,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                     <button className="icon-button" type="button" aria-label="删除首帧" title="删除首帧" disabled={!frames.length || locked} onClick={() => removeFrame(0)}><ChevronsLeft size={15} aria-hidden="true" /></button>
                     <button className="icon-button" type="button" aria-label="删除尾帧" title="删除尾帧" disabled={!frames.length || locked} onClick={() => removeFrame(frames.length - 1)}><ChevronsRight size={15} aria-hidden="true" /></button>
                     <button className="icon-button" type="button" aria-label="复制当前帧" title="复制当前帧" disabled={!selectedFrame || locked} onClick={copySelectedFrame}><Copy size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="在当前帧前插入图片" title="在当前帧前插入图片" disabled={!selectedFrame || locked} onClick={() => openFileDialog(null, selectedIndex)}><Plus size={15} aria-hidden="true" /></button>
                     <button className="icon-button" type="button" aria-label="删除选中帧" title="删除选中帧" disabled={!selectedFrameIndices.size || locked} onClick={removeSelectedFrames}><Trash2 size={15} aria-hidden="true" /></button>
                     <button className="icon-button" type="button" aria-label="倒序" title="倒序" onClick={reverseFrames}><RotateCcw size={15} aria-hidden="true" /></button>
                     <button className="icon-button" type="button" aria-label="清空帧" title="清空帧" onClick={clearFrames}><Trash2 size={15} aria-hidden="true" /></button>
@@ -2136,7 +2138,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 </div>
                 <div className="gif-frame-list" aria-label="GIF 帧列表">
                   {frames.map((frame, index) => (
-                    <div className={`gif-frame-row${selectedFrameIndices.has(index) ? " gif-frame-row-selected" : ""}`} key={frame.id} draggable={!locked} onDragStart={(event) => handleFrameDragStart(event, index)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleFrameDrop(event, index)} onDragEnd={() => { draggedFrameIndexRef.current = null; }}>
+                    <div className={`gif-frame-row${selectedFrameIndices.has(index) ? " gif-frame-row-selected" : ""}`} key={frame.id} draggable={!locked} onDragStart={(event) => handleFrameDragStart(event, index)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleFrameDrop(event, index)} onDragEnd={() => { draggedFrameIndexRef.current = null; draggedFrameIndicesRef.current = []; }}>
                       <button className="gif-frame-select" type="button" onClick={(event) => selectFrame(index, event)} aria-pressed={selectedFrameIndices.has(index)} aria-label={`选择第 ${index + 1} 帧：${frame.name}`}>
                         <span className="gif-frame-number">{String(index + 1).padStart(2, "0")}</span>
                         <img src={frame.previewUrl} alt="" />
