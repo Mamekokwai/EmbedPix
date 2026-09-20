@@ -20,6 +20,11 @@ export interface ExportQueueResult<T> {
   cancelled: boolean;
 }
 
+export interface ExportFailureDetail {
+  fileName: string;
+  message: string;
+}
+
 export interface ExportQueueOptions<T> {
   shouldCancel?: () => boolean;
   onProgress?: (progress: ExportQueueProgress<T>) => void;
@@ -68,4 +73,8 @@ export function formatExportQueueProgress(progress: ExportQueueProgress<{ file: 
 export function formatExportQueueSummary(result: Pick<ExportQueueResult<unknown>, "succeeded" | "failed" | "skipped" | "cancelled">) {
   const prefix = result.cancelled ? "已取消" : "导出完成";
   return `${prefix}：成功 ${result.succeeded.length}，失败 ${result.failed.length}，跳过 ${result.skipped.length}`;
+}
+
+export function formatExportFailureDetails(failures: ReadonlyArray<ExportFailureDetail>): string {
+  return failures.map(({ fileName, message }) => `${fileName}：${message}`).join("\n");
 }

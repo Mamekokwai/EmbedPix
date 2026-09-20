@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
+import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
 
 describe("image export queue", () => {
   it("continues after a failed item and records retryable failures", async () => {
@@ -29,5 +29,12 @@ describe("image export queue", () => {
     expect(result.skipped.map((item) => item.file.name)).toEqual(["second.png", "third.png"]);
     expect(result.cancelled).toBe(true);
     expect(formatExportQueueSummary(result)).toBe("已取消：成功 1，失败 0，跳过 2");
+  });
+
+  it("keeps complete failure filenames and reasons copyable", () => {
+    expect(formatExportFailureDetails([
+      { fileName: "very-long-image-name.bmp", message: "编码失败" },
+      { fileName: "second.png", message: "输出目录不可用" },
+    ])).toBe("very-long-image-name.bmp：编码失败\nsecond.png：输出目录不可用");
   });
 });

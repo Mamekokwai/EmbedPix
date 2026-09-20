@@ -981,6 +981,52 @@
   line-height: 1.45;
 }
 
+.export-failure-panel {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.export-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.export-failure-actions .quiet-button {
+  min-height: 28px;
+  padding-inline: 9px;
+  font-size: 10px;
+}
+
+.export-failure-details {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--qp-danger) 28%, var(--qp-border-subtle));
+  border-radius: var(--qp-radius-button);
+  background: color-mix(in srgb, var(--qp-danger) 5%, var(--qp-bg-panel));
+  padding: 7px 9px 7px 25px;
+  color: var(--qp-text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.export-failure-details li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.export-failure-details li strong {
+  color: var(--qp-text-primary);
+  font-weight: 650;
+}
+
+.export-failure-details li span::before {
+  content: "：";
+}
+
 .export-button {
   display: inline-flex;
   min-height: 40px;

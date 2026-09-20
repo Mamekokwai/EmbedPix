@@ -72,8 +72,8 @@ import type {
   RowOrder,
 } from "./types";
 import ThemeSelect from "../../shared/components/ThemeSelect";
-import { formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
-import type { ExportQueueProgress } from "./imageExportQueue";
+import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
+import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueue";
 
 type ImageExportQueueProgress = ExportQueueProgress<{ file: { name: string } }>;
 
@@ -284,6 +284,8 @@ export default function ImageConverter({
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
   const [failedExportIds, setFailedExportIds] = useState<string[]>([]);
+  const [exportFailures, setExportFailures] = useState<ExportFailureDetail[]>([]);
+  const [failureDetailsOpen, setFailureDetailsOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ImageExportQueueProgress | null>(null);
   const exportCancelRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -913,6 +915,8 @@ export default function ImageConverter({
     exportCancelRef.current = false;
     setError(null);
     setFailedExportIds([]);
+    setExportFailures([]);
+    setFailureDetailsOpen(false);
     setExportProgress(null);
     let lastOutputPath: string | null = null;
     const result = await runExportQueue(requestedImages, async (image) => {
@@ -957,11 +961,12 @@ export default function ImageConverter({
       });
     const failures = result.failed.map(({ item, error: exportError }) => {
       const message = exportError instanceof Error ? exportError.message : "导出失败，请重试。";
-      return `${item.file.name}：${message}`;
+      return { fileName: item.file.name, message };
     });
     setFailedExportIds(result.failed.map(({ item }) => item.id));
+    setExportFailures(failures);
     if (failures.length > 0) {
-      setError(failures.join("\n"));
+      setError(formatExportFailureDetails(failures));
     } else {
       setError(null);
     }
@@ -981,6 +986,18 @@ export default function ImageConverter({
     const retryImages = loadedImages.filter((image) => failedExportIds.includes(image.id));
     if (retryImages.length > 0) {
       void handleExport(retryImages);
+    }
+  };
+
+  const copyExportFailureDetails = async () => {
+    if (!exportFailures.length) return;
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择失败详情。" );
+      await navigator.clipboard.writeText(formatExportFailureDetails(exportFailures));
+      setStatus({ kind: "ready", text: "失败详情已复制" });
+    } catch (copyError) {
+      setError(copyError instanceof Error ? copyError.message : "复制失败，请手动选择失败详情。" );
+      setStatus({ kind: "error", text: "复制失败" });
     }
   };
 
@@ -1466,11 +1483,36 @@ export default function ImageConverter({
                 </div>
               ) : null}
               {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}
+              {exportFailures.length > 0 ? (
+                <div className="export-failure-panel">
+                  <div className="export-failure-actions">
+                    <button
+                      className="quiet-button export-failure-toggle"
+                      type="button"
+                      aria-expanded={failureDetailsOpen}
+                      aria-controls="export-failure-details"
+                      onClick={() => setFailureDetailsOpen((open) => !open)}
+                    >
+                      {failureDetailsOpen ? "收起失败详情" : `查看失败详情（${exportFailures.length}）`}
+                    </button>
+                    <button className="quiet-button export-failure-copy" type="button" onClick={() => void copyExportFailureDetails()}>
+                      复制错误详情
+                    </button>
+                  </div>
+                  {failureDetailsOpen ? (
+                    <ul className="export-failure-details" id="export-failure-details">
+                      {exportFailures.map(({ fileName, message }) => (
+                        <li key={`${fileName}:${message}`}><strong>{fileName}</strong><span>{message}</span></li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             <div className="footer-actions">
               {failedExportIds.length > 0 && status.kind !== "busy" ? (
                 <button className="quiet-button export-retry-button" type="button" onClick={retryFailedExports}>
-                  重试失败项（{failedExportIds.length}）
+                  仅重试失败项（{failedExportIds.length}）
                 </button>
               ) : null}
               <button
