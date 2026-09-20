@@ -115,12 +115,12 @@
 
 验收：无卡片重叠、无文字覆盖、无横向滚动条，Tab 能到达全部关键操作。
 
-### B5：统一隐藏滚动条契约
+### B5：统一隐藏滚动条契约 ✅
 
-- [ ] 统一 `min-height: 0`、`overflow` 和 `overscroll-behavior`
-- [ ] 焦点进入隐藏区域时自动滚入视口
-- [ ] 支持滚轮、PageDown、Space 和 Tab
-- [ ] 避免同一轴多层滚动
+- [x] 统一 `min-height: 0`、`overflow` 和 `overscroll-behavior`
+- [x] 焦点进入隐藏区域时自动滚入视口
+- [x] 支持滚轮、PageDown、Space 和 Tab
+- [x] 避免同一轴多层滚动
 
 验收：页面无可见滚动条，但鼠标和键盘仍能访问全部内容。
 
