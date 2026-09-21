@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   checkForUpdates,
@@ -16,6 +16,16 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+beforeEach(() => {
+  vi.stubGlobal("navigator", {
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    userAgentData: {
+      platform: "Windows",
+      architecture: "x86-64",
+    },
+  });
+});
+
 function response(payload: unknown, ok = true, status = 200): Response {
   return { ok, status, json: async () => payload } as Response;
 }
@@ -31,14 +41,6 @@ describe("update gateway", () => {
   });
 
   it("maps a valid GitHub release and detects a newer version", async () => {
-    vi.stubGlobal("navigator", {
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-      userAgentData: {
-        platform: "Windows",
-        architecture: "x86-64",
-      },
-    });
-
     const result = await checkForUpdates(
       async () => response({
         tag_name: "v0.2.0",
