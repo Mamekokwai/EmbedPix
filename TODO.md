@@ -267,11 +267,13 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 ## 通用验收门禁
 
-- [ ] `npm test`
-- [ ] `npm run build`
-- [ ] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml --locked`
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml --locked`
-- [ ] `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings`
-- [ ] 工作区无未提交残留
-- [ ] 通过后 push 到 `main`
+- [x] `npm test`
+- [x] `npm run build`
+- [x] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --locked`
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml --locked`
+- [x] `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings`
+- [x] 工作区无未提交残留
+- [x] 通过后 push 到 `main`
+
+证据：CI run 35862950286 三个平台全部通过，本地回归验证通过。
