@@ -2227,7 +2227,7 @@ mod tests {
 
     #[test]
     fn output_path_selection_supports_safe_locations_without_eager_directory_creation() {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::commands::test_temp_dir().join(format!(
             "embedpix-image-output-path-test-{}",
             std::process::id()
         ));
@@ -2298,7 +2298,7 @@ mod tests {
     fn output_paths_reject_symlinked_directories_without_creating_children() {
         use std::os::unix::fs::symlink;
 
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::commands::test_temp_dir().join(format!(
             "embedpix-image-output-symlink-test-{}",
             std::process::id()
         ));
@@ -2346,8 +2346,8 @@ mod tests {
 
     #[test]
     fn overwrite_moves_old_output_to_bak_and_deletes_source_after_write() {
-        let directory =
-            std::env::temp_dir().join(format!("embedpix-output-test-{}", std::process::id()));
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-output-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
         let source = directory.join("source.png");
@@ -2380,7 +2380,7 @@ mod tests {
 
     #[test]
     fn overwrite_same_name_replaces_output_without_persisting_a_backup() {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-direct-overwrite-test-{}",
             std::process::id()
         ));
@@ -2414,7 +2414,7 @@ mod tests {
 
     #[test]
     fn overwrite_same_name_restores_output_when_source_deletion_fails() {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-direct-overwrite-rollback-test-{}",
             std::process::id()
         ));
@@ -2448,7 +2448,7 @@ mod tests {
 
     #[test]
     fn deleting_source_does_not_delete_replacement_output() {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-source-replacement-test-{}",
             std::process::id()
         ));
@@ -2481,7 +2481,7 @@ mod tests {
 
     #[test]
     fn original_output_backs_up_source_and_existing_new_extension() {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-original-output-test-{}",
             std::process::id()
         ));
@@ -2509,7 +2509,7 @@ mod tests {
 
     #[test]
     fn original_output_restores_source_when_write_fails() {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-original-rollback-test-{}",
             std::process::id()
         ));
@@ -2530,7 +2530,7 @@ mod tests {
 
     #[test]
     fn original_output_same_extension_backs_up_source_before_writeback() {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-original-same-extension-test-{}",
             std::process::id()
         ));
@@ -2551,7 +2551,7 @@ mod tests {
 
     #[test]
     fn failed_source_deletion_rolls_back_new_output_and_previous_output() {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-source-delete-rollback-test-{}",
             std::process::id()
         ));

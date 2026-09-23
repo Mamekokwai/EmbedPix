@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn rejects_a_file_as_an_output_directory() {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::commands::test_temp_dir().join(format!(
             "embedpix-output-directory-test-{}",
             std::process::id()
         ));
@@ -510,7 +510,7 @@ mod tests {
 
     #[test]
     fn rejects_a_file_in_an_output_directory_path() {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::commands::test_temp_dir().join(format!(
             "embedpix-output-directory-parent-test-{}",
             std::process::id()
         ));
@@ -536,8 +536,8 @@ mod tests {
 
     #[test]
     fn oversized_temporary_output_is_removed_before_publish() {
-        let directory =
-            std::env::temp_dir().join(format!("embedpix-output-limit-test-{}", std::process::id()));
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-output-limit-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir(&directory).expect("create test directory");
         let output = directory.join("animation.gif");
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn cancelled_temporary_output_is_removed_before_publish() {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-output-cancel-test-{}",
             std::process::id()
         ));

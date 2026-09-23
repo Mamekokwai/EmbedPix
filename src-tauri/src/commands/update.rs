@@ -1190,8 +1190,8 @@ mod tests {
 
     #[test]
     fn rejects_a_file_as_the_update_cache_directory() {
-        let path =
-            std::env::temp_dir().join(format!("embedpix-update-cache-test-{}", std::process::id()));
+        let path = crate::commands::test_temp_dir()
+            .join(format!("embedpix-update-cache-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::write(&path, b"not a directory").expect("test cache marker");
         assert!(validate_update_cache_dir(&path).is_err());
@@ -1200,7 +1200,7 @@ mod tests {
 
     #[test]
     fn verifies_cached_package_path_and_digest_before_install() {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::commands::test_temp_dir().join(format!(
             "embedpix-update-install-precheck-test-{}",
             std::process::id()
         ));
@@ -1231,7 +1231,7 @@ mod tests {
 
     #[test]
     fn rejects_cached_package_without_signature() {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::commands::test_temp_dir().join(format!(
             "embedpix-update-signature-precheck-test-{}",
             std::process::id()
         ));
@@ -1253,7 +1253,7 @@ mod tests {
         let bytes = b"test";
         assert!(verify_signature(bytes, &encoded_signature, &encoded_public_key).is_ok());
 
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::commands::test_temp_dir().join(format!(
             "embedpix-update-local-fixture-{}",
             std::process::id()
         ));

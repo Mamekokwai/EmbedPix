@@ -448,7 +448,7 @@ mod tests {
         fn new() -> Self {
             static NEXT: AtomicUsize = AtomicUsize::new(0);
             loop {
-                let path = std::env::temp_dir().join(format!(
+                let path = crate::commands::test_temp_dir().join(format!(
                     "embedpix-sequence-test-{}-{}",
                     std::process::id(),
                     NEXT.fetch_add(1, Ordering::Relaxed)

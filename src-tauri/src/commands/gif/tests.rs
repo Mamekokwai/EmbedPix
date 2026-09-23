@@ -19,7 +19,7 @@ impl TestDirectory {
     fn new() -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         loop {
-            let path = std::env::temp_dir().join(format!(
+            let path = crate::commands::test_temp_dir().join(format!(
                 "embedpix-gif-test-{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
@@ -43,7 +43,10 @@ impl TestDirectory {
 
 impl Drop for TestDirectory {
     fn drop(&mut self) {
-        assert_eq!(self.0.parent(), Some(std::env::temp_dir().as_path()));
+        assert_eq!(
+            self.0.parent(),
+            Some(crate::commands::test_temp_dir().as_path())
+        );
         assert!(self
             .0
             .file_name()
