@@ -104,7 +104,8 @@ jobs:
         shell: bash
         env:
           TAURI_BUNDLE_TARGET: ${{ matrix.bundle_target }}
-        run: npm run tauri -- build --bundles "$TAURI_BUNDLE_TARGET"
+          TAURI_SMOKE_CONFIG: '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: npm run tauri -- build --bundles "$TAURI_BUNDLE_TARGET" --config "$TAURI_SMOKE_CONFIG"
 
       - name: Verify Tauri bundle artifact
         if: steps.tauri.outputs.available == 'true'
