@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 dist-codex-smoke/
+benchmarks/cli-test/
 artifacts/
 tmp/
 .tmp/
