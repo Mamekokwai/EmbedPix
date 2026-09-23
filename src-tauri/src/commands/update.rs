@@ -510,7 +510,7 @@ pub async fn install_update(
         }
         #[cfg(not(windows))]
         {
-            let _ = Command::new(&package_path);
+            let _ = Command::new(package_path);
             Err("当前平台暂不支持启动 Windows 更新安装程序。".to_string())
         }
     })
