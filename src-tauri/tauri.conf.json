@@ -44,5 +44,10 @@
         "startMenuFolder": "EmbedPix"
       }
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "RWTka0Ii72z1MFDxHL6NiaCyOUplkvKFH6oe++EnjKOg9Eb3P68kDjTx"
+    }
   }
 }
