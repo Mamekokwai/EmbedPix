@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "environment": {
+    "os": "windows",
+    "arch": "x86_64",
+    "pointerWidth": "64",
+    "generator": "deterministic-rgba-frame-generator"
+  },
+  "presets": [
+    {
+      "preset": "high-quality",
+      "width": 640,
+      "height": 360,
+      "fps": 24,
+      "colorCount": 256,
+      "frames": 120,
+      "encodingSpeed": 1,
+      "ditherMode": "floydSteinberg",
+      "paletteStrategy": "per-frame NeuQuant adaptive palette",
+      "searchStrategy": "fixed high-quality preset; no candidate search",
+      "outputBytes": 10297623,
+      "elapsedMs": 22020,
+      "peakMemoryBytes": 29089792,
+      "qualityMaeRgb": 3
+    },
+    {
+      "preset": "balanced",
+      "width": 480,
+      "height": 270,
+      "fps": 20,
+      "colorCount": 128,
+      "frames": 80,
+      "encodingSpeed": 10,
+      "ditherMode": "none",
+      "paletteStrategy": "per-frame NeuQuant adaptive palette",
+      "searchStrategy": "fixed balanced preset; no candidate search",
+      "outputBytes": 943695,
+      "elapsedMs": 618,
+      "peakMemoryBytes": 29089792,
+      "qualityMaeRgb": 4
+    },
+    {
+      "preset": "small-size",
+      "width": 320,
+      "height": 180,
+      "fps": 12,
+      "colorCount": 64,
+      "frames": 48,
+      "encodingSpeed": 20,
+      "ditherMode": "none",
+      "paletteStrategy": "per-frame NeuQuant adaptive palette",
+      "searchStrategy": "fixed small-size preset; no candidate search",
+      "outputBytes": 259005,
+      "elapsedMs": 109,
+      "peakMemoryBytes": 29089792,
+      "qualityMaeRgb": 5
+    }
+  ]
+}

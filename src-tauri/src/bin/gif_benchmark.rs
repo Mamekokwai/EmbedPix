@@ -8,7 +8,8 @@ use std::{
 };
 
 use embedpix_lib::commands::gif::benchmark::{
-    default_output_dir, run_case, BenchmarkSample, CASES,
+    default_output_dir, run_case, run_quality_preset_case, BenchmarkSample, QualityPresetSample,
+    CASES, QUALITY_PRESETS,
 };
 use serde::Serialize;
 
@@ -32,6 +33,14 @@ struct Environment {
     generator: &'static str,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QualityReport {
+    schema_version: u32,
+    environment: Environment,
+    presets: Vec<QualityPresetSample>,
+}
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("gif benchmark failed: {error}");
@@ -44,6 +53,9 @@ fn run() -> Result<(), String> {
     let output_dir = argument(&args, "--output-dir")
         .map(PathBuf::from)
         .unwrap_or_else(default_output_dir);
+    if let Some(quality_dir) = argument(&args, "--quality-output-dir") {
+        return run_quality_report(PathBuf::from(quality_dir));
+    }
     fs::create_dir_all(&output_dir)
         .map_err(|error| format!("cannot create benchmark directory: {error}"))?;
 
@@ -110,6 +122,71 @@ fn run() -> Result<(), String> {
         .map_err(|error| format!("cannot write baseline JSON: {error}"))?;
     write_csv(&output_dir, &baseline.samples)?;
     Ok(())
+}
+
+fn run_quality_report(output_dir: PathBuf) -> Result<(), String> {
+    fs::create_dir_all(&output_dir)
+        .map_err(|error| format!("cannot create quality directory: {error}"))?;
+    let mut presets = Vec::with_capacity(QUALITY_PRESETS.len());
+    for preset in QUALITY_PRESETS {
+        let sample = run_quality_preset_case(preset.name, &output_dir)?;
+        println!(
+            "{}: {}x{} @ {} FPS, {} colors, {} frames, speed {}, {} bytes, {} ms, MAE {}, peak {} bytes",
+            sample.preset,
+            sample.width,
+            sample.height,
+            sample.fps,
+            sample.color_count,
+            sample.frames,
+            sample.encoding_speed,
+            sample.output_bytes,
+            sample.elapsed_ms,
+            sample.quality_mae_rgb,
+            sample
+                .peak_memory_bytes
+                .map_or_else(|| "unsupported".to_string(), |bytes| bytes.to_string()),
+        );
+        presets.push(sample);
+    }
+    let report = QualityReport {
+        schema_version: 1,
+        environment: Environment {
+            os: std::env::consts::OS,
+            arch: std::env::consts::ARCH,
+            pointer_width: if cfg!(target_pointer_width = "64") {
+                "64"
+            } else {
+                "32"
+            },
+            generator: "deterministic-rgba-frame-generator",
+        },
+        presets,
+    };
+    let json = serde_json::to_string_pretty(&report).map_err(|error| error.to_string())?;
+    fs::write(output_dir.join("quality-report.json"), format!("{json}\n"))
+        .map_err(|error| format!("cannot write quality JSON: {error}"))?;
+    let mut csv = String::from("preset,width,height,fps,color_count,frames,encoding_speed,dither_mode,output_bytes,elapsed_ms,peak_memory_bytes,quality_mae_rgb\n");
+    for sample in &report.presets {
+        csv.push_str(&format!(
+            "{},{},{},{},{},{},{},{},{},{},{},{}\n",
+            sample.preset,
+            sample.width,
+            sample.height,
+            sample.fps,
+            sample.color_count,
+            sample.frames,
+            sample.encoding_speed,
+            sample.dither_mode,
+            sample.output_bytes,
+            sample.elapsed_ms,
+            sample
+                .peak_memory_bytes
+                .map_or_else(String::new, |bytes| bytes.to_string()),
+            sample.quality_mae_rgb,
+        ));
+    }
+    fs::write(output_dir.join("quality-report.csv"), csv)
+        .map_err(|error| format!("cannot write quality CSV: {error}"))
 }
 
 fn run_worker(name: &str, output_dir: &PathBuf) -> Result<BenchmarkSample, String> {

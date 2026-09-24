@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "presets": {
+    "high-quality": { "maxElapsedMs": 60000, "maxOutputBytes": 16777216, "maxPeakMemoryBytes": 67108864, "maxQualityMaeRgb": 8 },
+    "balanced": { "maxElapsedMs": 5000, "maxOutputBytes": 4194304, "maxPeakMemoryBytes": 67108864, "maxQualityMaeRgb": 12 },
+    "small-size": { "maxElapsedMs": 1000, "maxOutputBytes": 1048576, "maxPeakMemoryBytes": 67108864, "maxQualityMaeRgb": 20 }
+  }
+}

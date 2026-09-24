@@ -107,6 +107,59 @@ pub const CASES: &[BenchmarkSpec] = &[
     },
 ];
 
+#[derive(Clone, Copy, Debug)]
+pub struct QualityPresetSpec {
+    pub name: &'static str,
+    pub width: u32,
+    pub height: u32,
+    pub fps: u32,
+    pub color_count: u16,
+    pub frames: usize,
+    pub encoding_speed: i32,
+    pub dither_mode: &'static str,
+    pub palette_strategy: &'static str,
+    pub search_strategy: &'static str,
+}
+
+pub const QUALITY_PRESETS: &[QualityPresetSpec] = &[
+    QualityPresetSpec {
+        name: "high-quality",
+        width: 640,
+        height: 360,
+        fps: 24,
+        color_count: 256,
+        frames: 120,
+        encoding_speed: 1,
+        dither_mode: "floydSteinberg",
+        palette_strategy: "per-frame NeuQuant adaptive palette",
+        search_strategy: "fixed high-quality preset; no candidate search",
+    },
+    QualityPresetSpec {
+        name: "balanced",
+        width: 480,
+        height: 270,
+        fps: 20,
+        color_count: 128,
+        frames: 80,
+        encoding_speed: 10,
+        dither_mode: "none",
+        palette_strategy: "per-frame NeuQuant adaptive palette",
+        search_strategy: "fixed balanced preset; no candidate search",
+    },
+    QualityPresetSpec {
+        name: "small-size",
+        width: 320,
+        height: 180,
+        fps: 12,
+        color_count: 64,
+        frames: 48,
+        encoding_speed: 20,
+        dither_mode: "none",
+        palette_strategy: "per-frame NeuQuant adaptive palette",
+        search_strategy: "fixed small-size preset; no candidate search",
+    },
+];
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BenchmarkSample {
@@ -120,6 +173,25 @@ pub struct BenchmarkSample {
     pub peak_disk_bytes: u64,
     pub elapsed_ms: u128,
     pub peak_memory_bytes: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QualityPresetSample {
+    pub preset: String,
+    pub width: u32,
+    pub height: u32,
+    pub fps: u32,
+    pub color_count: u16,
+    pub frames: usize,
+    pub encoding_speed: i32,
+    pub dither_mode: String,
+    pub palette_strategy: String,
+    pub search_strategy: String,
+    pub output_bytes: u64,
+    pub elapsed_ms: u128,
+    pub peak_memory_bytes: Option<u64>,
+    pub quality_mae_rgb: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -270,6 +342,99 @@ pub fn run_experiment_case(
         elapsed_ms: started.elapsed().as_millis(),
         quality_mae_rgb,
         peak_memory_bytes: current_peak_memory_bytes(),
+    })
+}
+
+pub fn run_quality_preset_case(
+    name: &str,
+    output_dir: &Path,
+) -> Result<QualityPresetSample, String> {
+    let preset = QUALITY_PRESETS
+        .iter()
+        .find(|candidate| candidate.name == name)
+        .copied()
+        .ok_or_else(|| format!("未知 GIF 质量预设：{name}"))?;
+    std::fs::create_dir_all(output_dir)
+        .map_err(|error| format!("无法创建质量基准输出目录：{error}"))?;
+    let source_spec = BenchmarkSpec {
+        name: "quality-source",
+        width: preset.width,
+        height: preset.height,
+        fps: preset.fps,
+        color_count: preset.color_count,
+        frames: preset.frames,
+        pattern: Pattern::LongVideo,
+    };
+    let duration_ms = (1000 / preset.fps / 10 * 10).max(10);
+    let source_first = encode_sample_frame(&source_spec, 0)?;
+    let frames = (0..preset.frames)
+        .map(|index| {
+            Ok(GifFrameRequest {
+                data: encode_sample_frame(&source_spec, index)?,
+                duration_ms,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let output_path = output_dir.join(format!("{}.gif", preset.name));
+    let request = GifExportRequest {
+        output_path: output_path.to_string_lossy().into_owned(),
+        output_location: None,
+        source_path: None,
+        output_subdirectory: None,
+        output_directory: None,
+        file_name: None,
+        width: preset.width,
+        height: preset.height,
+        loop_mode: "infinite".to_string(),
+        loop_count: 0,
+        encoding_speed: preset.encoding_speed,
+        color_count: preset.color_count,
+        dither_mode: preset.dither_mode.to_string(),
+        frames,
+        spool_id: None,
+        spool_durations: Vec::new(),
+        overwrite_existing: true,
+        job_id: None,
+    };
+    let started = Instant::now();
+    export_gif_blocking_with_job(request, None)?;
+    let output =
+        std::fs::read(&output_path).map_err(|error| format!("无法读取质量基准 GIF：{error}"))?;
+    let decoded = GifDecoder::new(Cursor::new(output.clone()))
+        .map_err(|error| format!("无法解码质量基准 GIF：{error}"))?
+        .into_frames()
+        .next()
+        .ok_or_else(|| "质量基准 GIF 没有首帧。".to_string())?
+        .map_err(|error| format!("无法读取质量基准首帧：{error}"))?
+        .into_buffer();
+    let source = image::load_from_memory(&source_first)
+        .map_err(|error| format!("无法解码质量基准源帧：{error}"))?
+        .to_rgba8();
+    let quality_mae_rgb = source
+        .pixels()
+        .zip(decoded.pixels())
+        .map(|(left, right)| {
+            u64::from(left[0].abs_diff(right[0]))
+                + u64::from(left[1].abs_diff(right[1]))
+                + u64::from(left[2].abs_diff(right[2]))
+        })
+        .sum::<u64>()
+        / u64::from(preset.width * preset.height * 3);
+    Ok(QualityPresetSample {
+        preset: preset.name.to_string(),
+        width: preset.width,
+        height: preset.height,
+        fps: preset.fps,
+        color_count: preset.color_count,
+        frames: preset.frames,
+        encoding_speed: preset.encoding_speed,
+        dither_mode: preset.dither_mode.to_string(),
+        palette_strategy: preset.palette_strategy.to_string(),
+        search_strategy: preset.search_strategy.to_string(),
+        output_bytes: output.len() as u64,
+        elapsed_ms: started.elapsed().as_millis(),
+        peak_memory_bytes: current_peak_memory_bytes(),
+        quality_mae_rgb,
     })
 }
 

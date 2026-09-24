@@ -1,0 +1,4 @@
+preset,width,height,fps,color_count,frames,encoding_speed,dither_mode,output_bytes,elapsed_ms,peak_memory_bytes,quality_mae_rgb
+high-quality,640,360,24,256,120,1,floydSteinberg,10297623,22020,29089792,3
+balanced,480,270,20,128,80,10,none,943695,618,29089792,4
+small-size,320,180,12,64,48,20,none,259005,109,29089792,5
