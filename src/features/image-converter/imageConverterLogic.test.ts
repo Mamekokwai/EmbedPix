@@ -163,6 +163,27 @@ describe("image file and display helpers", () => {
 });
 
 describe("batch image export helpers", () => {
+  it("preflights duplicate targets and reports deterministic item reasons", async () => {
+    const { getExportPreflight } = await import("./imageConverterLogic");
+    const result = getExportPreflight(
+      { targetPaths: ["E:\\out\\same.png", "E:\\out\\same.png", "E:\\out\\other.png"] },
+      { existingTargetPaths: new Set(["E:\\out\\other.png"]), availableBytes: 10, estimatedBytes: 20 },
+    );
+
+    expect(result).toMatchObject({ total: 3, expectedSuccesses: 0, expectedFailures: 3, diskSpaceChecked: true });
+    expect(result.items[0].reasons[0].code).toBe("duplicate-target");
+    expect(result.items[2].reasons.map(({ code }) => code)).toEqual(["target-exists", "insufficient-disk-space"]);
+  });
+
+  it("keeps preflight clean when optional filesystem probes are unavailable", async () => {
+    const { getExportPreflight } = await import("./imageConverterLogic");
+    const result = getExportPreflight({ targetPaths: ["E:\\out\\one.png"] });
+
+    expect(result.expectedSuccesses).toBe(1);
+    expect(result.diskSpaceChecked).toBe(false);
+    expect(result.items[0].reasons).toEqual([]);
+  });
+
   const images = [
     { file: { name: "first.png" }, sourcePath: "C:\\Images\\first.png" },
     { file: { name: "second.png" }, sourcePath: null },

@@ -294,6 +294,65 @@ export interface ExportSafetyPlan {
   overwriteMode: "original" | "same-name" | null;
 }
 
+export type ExportPreflightFailureCode = "duplicate-target" | "target-exists" | "output-directory-missing" | "output-directory-not-writable" | "insufficient-disk-space";
+
+export interface ExportPreflightItem {
+  targetPath: string;
+  ok: boolean;
+  reasons: ReadonlyArray<{ code: ExportPreflightFailureCode; message: string }>;
+}
+
+export interface ExportPreflightResult {
+  total: number;
+  expectedSuccesses: number;
+  expectedFailures: number;
+  items: ExportPreflightItem[];
+  diskSpaceChecked: boolean;
+}
+
+export interface ExportPreflightOptions {
+  existingTargetPaths?: ReadonlySet<string>;
+  outputDirectoryExists?: boolean;
+  outputDirectoryWritable?: boolean;
+  availableBytes?: number;
+  estimatedBytes?: number;
+}
+
+export function getExportPreflight(
+  plan: Pick<ExportSafetyPlan, "targetPaths">,
+  options: ExportPreflightOptions = {},
+): ExportPreflightResult {
+  const targetCounts = new Map<string, number>();
+  plan.targetPaths.forEach((path) => targetCounts.set(path, (targetCounts.get(path) ?? 0) + 1));
+  const diskSpaceChecked = options.availableBytes !== undefined && options.estimatedBytes !== undefined;
+  const items = plan.targetPaths.map((targetPath) => {
+    const reasons: Array<{ code: ExportPreflightFailureCode; message: string }> = [];
+    if ((targetCounts.get(targetPath) ?? 0) > 1) {
+      reasons.push({ code: "duplicate-target", message: `输出目标重复：${targetPath}` });
+    }
+    if (options.existingTargetPaths?.has(targetPath)) {
+      reasons.push({ code: "target-exists", message: `输出文件已存在：${targetPath}` });
+    }
+    if (options.outputDirectoryExists === false) {
+      reasons.push({ code: "output-directory-missing", message: "输出目录不存在。" });
+    }
+    if (options.outputDirectoryWritable === false) {
+      reasons.push({ code: "output-directory-not-writable", message: "输出目录不可写。" });
+    }
+    if (diskSpaceChecked && (options.availableBytes ?? 0) < (options.estimatedBytes ?? 0)) {
+      reasons.push({ code: "insufficient-disk-space", message: "可用磁盘空间不足。" });
+    }
+    return { targetPath, ok: reasons.length === 0, reasons };
+  });
+  return {
+    total: items.length,
+    expectedSuccesses: items.filter((item) => item.ok).length,
+    expectedFailures: items.filter((item) => !item.ok).length,
+    items,
+    diskSpaceChecked,
+  };
+}
+
 interface ExportSafetyPlanOptions {
   outputFormat: OutputFormat;
   outputLocation: OutputLocation;

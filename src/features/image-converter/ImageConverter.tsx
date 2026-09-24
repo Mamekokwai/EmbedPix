@@ -45,6 +45,7 @@ import {
   getOutputLabel,
   getOutputParameterNote,
   getExportSafetyPlan,
+  getExportPreflight,
   getCropInputValidation,
   getTransformedSourceDimensions,
   formatExportSafetyConfirmation,
@@ -905,6 +906,16 @@ export default function ImageConverter({
       overwriteSameName,
       deleteSource,
     });
+    const preflight = getExportPreflight(safetyPlan);
+    if (preflight.expectedFailures > 0) {
+      const details = preflight.items
+        .filter((item) => !item.ok)
+        .map((item) => `${item.targetPath}：${item.reasons.map(({ message }) => message).join("；")}`)
+        .join("\n");
+      setError(details);
+      setStatus({ kind: "error", text: `导出预检失败：${preflight.expectedFailures} 项` });
+      return;
+    }
     const confirmationMessage = formatExportSafetyConfirmation(safetyPlan);
     if (confirmationMessage && !window.confirm(confirmationMessage)) {
       setError(null);
