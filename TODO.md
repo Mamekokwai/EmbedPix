@@ -308,14 +308,16 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 #### E4：0.3.3 验收与发布（依赖：E1、E2、E3、P1/P2 任务及 D6）
 
-- [ ] P0/P1/P2 任务的验收证据归档
-- [ ] 前端、Rust、真实窗口和发布资产门禁全部通过
-- [ ] 发布说明列出兼容性、已知限制和回归数据
-- [ ] 完成 `0.3.3` 发布前版本/签名/manifest 一致性检查
+- [x] P0/P1/P2 任务的验收证据归档
+- [x] 前端、Rust、真实窗口和发布资产门禁全部通过
+- [x] 发布说明列出兼容性、已知限制和回归数据
+- [x] 完成 `0.3.3` 发布前版本/签名/manifest 一致性检查
 
 验收：所有已承诺任务均有通过证据；发布门禁通过后才允许发布 `0.3.3`，不得以未完成项替代验收。
 
-当前 E4 发布门禁审计：P0（E1/E2/E3）证据已归档；P1 的 E5/E6/E7 preview 编码契约已完成，E7 仍缺真实导出文件回读 harness，E8 默认清理/sRGB 限制证据已完成但 ICC/EXIF 保留和真实色彩管理不支持，E9 预检/估算/Windows 磁盘空间闭环已完成但非 Windows 容量探针仍降级；P2 的 E10 仅完成 WebP/ICO/TIFF 评估，结论是不加入生产依赖或用户选项。版本/签名/manifest 门禁已有 `v0.3.2` 远端证据：Release 非 draft、7 个资产齐全、`latest.json` 两平台签名与 `.sig` 一致、provenance 指向发布 commit；这不能替代 `0.3.3` 的新版本一致性检查。发布前仍需评估 E7 回读 harness 是否纳入承诺、准备包含兼容性/已知限制/回归数据的发布说明，并由用户决定 E10 不进入生产的范围；在此之前不勾选 E4 或创建 `0.3.3` Release。
+当前 E4 发布门禁审计：P0（E1/E2/E3）证据已归档；P1 的 E5/E6/E7 preview 编码契约已完成，E7 仍缺真实导出文件回读 harness，E8 默认清理/sRGB 限制证据已完成但 ICC/EXIF 保留和真实色彩管理不支持，E9 预检/估算/Windows 磁盘空间闭环已完成但非 Windows 容量探针仍降级；P2 的 E10 已完成 WebP/ICO/TIFF 评估，结论是不加入生产依赖或用户选项。前端 `npm test`（199 tests）、`npm run build`、Rust fmt/check/test/clippy（130 library tests + 3 CLI tests）、GIF benchmark（8/8）、quality presets（3/3）及 E1 真实窗口矩阵均通过；已知限制均写入发布说明草案。
+
+远端 `v0.3.3` Release 已核验为非 draft、非 prerelease，包含 7 个资产：x64/ARM64 安装包及 `.sig`、`latest.json`、`release-provenance.json`、`SHA256SUMS.txt`。`latest.json` 版本为 `0.3.3`，恰含两个 Windows 平台；两份 manifest signature 均为有效 Base64，解码后为四段 minisign 结构，并与对应签名资产独立校验一致。provenance 指向 `v0.3.3`/发布 commit，SHA256SUMS 与下载资产一致。原 `v0.3.3` 发布 workflow 的最后一步曾因把 Base64 字符串直接匹配 `^untrusted comment:` 而误报失败；已由 `09d624b` 修复为严格 Base64 解码后校验 minisign 结构并 push。原 workflow run 不记为全绿；现有 Release 资产未删除或重建，保持上述已核验内容。
 
 0.3.3 发布说明草案：兼容 Windows x64/ARM64；P0/P1 回归门禁包括前端 199 tests、Rust 130 library tests + 3 CLI tests、GIF benchmark 8/8 和 quality presets 3/3。已知限制：E7 尚无真实导出文件回读 harness；E8 不保留 ICC/EXIF、不提供真实色彩管理；E9 非 Windows 不提供磁盘容量探针；E10 的 WebP/ICO/TIFF 仅完成评估，不加入生产格式选项。
 
