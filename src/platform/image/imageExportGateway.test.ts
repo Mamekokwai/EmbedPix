@@ -48,6 +48,11 @@ describe("image export raw IPC envelope", () => {
     await expect(exportImage(createRequest(new Uint8Array([1])))).resolves.toMatchObject({ outputPath: "E:\\out\\icon.bmp", outputBytes: 4096, width: 128, height: 64, bitDepth: 24 });
   });
 
+  it("does not turn a native export error into a successful result", async () => {
+    vi.mocked(invoke).mockRejectedValue(new Error("输出目录不可写"));
+    await expect(exportImage(createRequest(new Uint8Array([1])))).rejects.toThrow("输出目录不可写");
+  });
+
   it("uses the native preflight command in desktop mode", async () => {
     vi.mocked(invoke).mockResolvedValue({ supported: true, diskSpaceChecked: false, availableBytes: null, diskSpaceSufficient: null, items: [] });
     await preflightImageExports(["E:\\out\\one.png"], 128);

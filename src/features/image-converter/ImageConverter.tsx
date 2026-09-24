@@ -1602,7 +1602,7 @@ export default function ImageConverter({
               ) : null}
               {nativePreflightStatus ? <p className="export-progress-summary" role="status">{nativePreflightStatus}</p> : null}
               {actualExportResult?.outputPath && status.kind === "success" ? <p className="export-progress-summary export-actual-result" role="status">
-                实际导出：{actualExportResult.outputPath} · {actualExportResult.width && actualExportResult.height ? `${actualExportResult.width} × ${actualExportResult.height} px` : "尺寸由桌面端返回"} · {actualExportResult.format?.toUpperCase() ?? "格式由桌面端返回"} · {actualExportResult.bitDepth ? `${actualExportResult.bitDepth} 位` : "位深由桌面端返回"} · 文件体积需由桌面端回读
+                实际导出：{actualExportResult.outputPath} · {actualExportResult.width && actualExportResult.height ? `${actualExportResult.width} × ${actualExportResult.height} px` : "尺寸由桌面端返回"} · {actualExportResult.format?.toUpperCase() ?? "格式由桌面端返回"} · {actualExportResult.bitDepth ? `${actualExportResult.bitDepth} 位` : "位深由桌面端返回"} · {typeof actualExportResult.outputBytes === "number" ? `实际体积 ${formatFileSize(actualExportResult.outputBytes)}` : "文件体积由桌面端返回"}
               </p> : null}
             </div>
             <div className="footer-actions">
