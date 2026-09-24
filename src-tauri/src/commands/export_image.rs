@@ -553,12 +553,7 @@ pub async fn preview_image_export(request: Request<'_>) -> Result<ImagePreviewRe
         tauri::async_runtime::spawn_blocking(move || convert_image(&preview_request))
             .await
             .map_err(|error| format!("image preview task failed: {error}"))??;
-    if data.len() > MAX_PREVIEW_BYTES {
-        return Err(format!(
-            "image preview exceeds the {} MiB limit",
-            MAX_PREVIEW_BYTES / (1024 * 1024)
-        ));
-    }
+    enforce_preview_limit(&data)?;
     let output_bytes = data.len() as u64;
     Ok(ImagePreviewResult {
         data,
@@ -568,6 +563,16 @@ pub async fn preview_image_export(request: Request<'_>) -> Result<ImagePreviewRe
         bit_depth,
         output_bytes,
     })
+}
+
+fn enforce_preview_limit(data: &[u8]) -> Result<(), String> {
+    if data.len() > MAX_PREVIEW_BYTES {
+        return Err(format!(
+            "image preview exceeds the {} MiB limit",
+            MAX_PREVIEW_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
 }
 
 pub fn export_image_cli(payload: &[u8]) -> Result<ExportImageResult, String> {
@@ -1943,6 +1948,21 @@ mod tests {
             encode_jpg(sample_image(), Rgba([255, 255, 255, 255]), 100).unwrap();
 
         assert_ne!(low_quality, high_quality);
+        assert!(image::load_from_memory(&low_quality).is_ok());
+        assert!(image::load_from_memory(&high_quality).is_ok());
+    }
+
+    #[test]
+    fn preview_contract_keeps_transparent_png_alpha_and_rejects_oversized_payloads() {
+        let mut image = RgbaImage::new(1, 1);
+        image.put_pixel(0, 0, Rgba([20, 40, 60, 17]));
+        let (bytes, bit_depth) = encode_png(image, 32, Rgba([255, 255, 255, 255])).unwrap();
+        let decoded = image::load_from_memory(&bytes).unwrap().to_rgba8();
+        assert_eq!(bit_depth, 32);
+        assert_eq!(decoded.get_pixel(0, 0)[3], 17);
+        assert_eq!(enforce_preview_limit(&bytes), Ok(()));
+        let oversized = vec![0; MAX_PREVIEW_BYTES + 1];
+        assert!(enforce_preview_limit(&oversized).is_err());
     }
 
     #[test]
