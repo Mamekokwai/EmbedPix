@@ -317,6 +317,8 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 当前 E4 发布门禁审计：P0（E1/E2/E3）证据已归档；P1 的 E5/E6/E7 preview 编码契约已完成，E7 仍缺真实导出文件回读 harness，E8 默认清理/sRGB 限制证据已完成但 ICC/EXIF 保留和真实色彩管理不支持，E9 预检/估算/Windows 磁盘空间闭环已完成但非 Windows 容量探针仍降级；P2 的 E10 仅完成 WebP/ICO/TIFF 评估，结论是不加入生产依赖或用户选项。版本/签名/manifest 门禁已有 `v0.3.2` 远端证据：Release 非 draft、7 个资产齐全、`latest.json` 两平台签名与 `.sig` 一致、provenance 指向发布 commit；这不能替代 `0.3.3` 的新版本一致性检查。发布前仍需评估 E7 回读 harness 是否纳入承诺、准备包含兼容性/已知限制/回归数据的发布说明，并由用户决定 E10 不进入生产的范围；在此之前不勾选 E4 或创建 `0.3.3` Release。
 
+0.3.3 发布说明草案：兼容 Windows x64/ARM64；P0/P1 回归门禁包括前端 199 tests、Rust 130 library tests + 3 CLI tests、GIF benchmark 8/8 和 quality presets 3/3。已知限制：E7 尚无真实导出文件回读 harness；E8 不保留 ICC/EXIF、不提供真实色彩管理；E9 非 Windows 不提供磁盘容量探针；E10 的 WebP/ICO/TIFF 仅完成评估，不加入生产格式选项。
+
 ### P1：核心转换体验
 
 #### E5：GIF 输出质量预设（依赖：C4、C5、E3）
