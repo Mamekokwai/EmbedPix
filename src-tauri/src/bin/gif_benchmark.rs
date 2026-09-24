@@ -38,6 +38,10 @@ struct Environment {
 struct QualityReport {
     schema_version: u32,
     environment: Environment,
+    source_width: u32,
+    source_height: u32,
+    source_fps: u32,
+    source_frames: usize,
     presets: Vec<QualityPresetSample>,
 }
 
@@ -160,21 +164,26 @@ fn run_quality_report(output_dir: PathBuf) -> Result<(), String> {
             },
             generator: "deterministic-rgba-frame-generator",
         },
+        source_width: 640,
+        source_height: 360,
+        source_fps: 15,
+        source_frames: 120,
         presets,
     };
     let json = serde_json::to_string_pretty(&report).map_err(|error| error.to_string())?;
     fs::write(output_dir.join("quality-report.json"), format!("{json}\n"))
         .map_err(|error| format!("cannot write quality JSON: {error}"))?;
-    let mut csv = String::from("preset,width,height,fps,color_count,frames,encoding_speed,dither_mode,output_bytes,elapsed_ms,peak_memory_bytes,quality_mae_rgb\n");
+    let mut csv = String::from("preset,width,height,fps,color_count,frames,sampling_every,encoding_speed,dither_mode,output_bytes,elapsed_ms,peak_memory_bytes,quality_mae_rgb\n");
     for sample in &report.presets {
         csv.push_str(&format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
             sample.preset,
             sample.width,
             sample.height,
             sample.fps,
             sample.color_count,
             sample.frames,
+            sample.sampling_every,
             sample.encoding_speed,
             sample.dither_mode,
             sample.output_bytes,

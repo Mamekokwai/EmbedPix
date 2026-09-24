@@ -5,7 +5,8 @@ use std::{
 };
 
 use image::{
-    codecs::gif::GifDecoder, AnimationDecoder, DynamicImage, ImageOutputFormat, Rgba, RgbaImage,
+    codecs::gif::GifDecoder, imageops::FilterType, AnimationDecoder, DynamicImage,
+    ImageOutputFormat, Rgba, RgbaImage,
 };
 use serde::{Deserialize, Serialize};
 
@@ -73,9 +74,9 @@ pub const CASES: &[BenchmarkSpec] = &[
         name: "long-video",
         width: 640,
         height: 360,
-        fps: 24,
+        fps: 15,
         color_count: 128,
-        frames: 120,
+        frames: 96,
         pattern: Pattern::LongVideo,
     },
     BenchmarkSpec {
@@ -115,6 +116,7 @@ pub struct QualityPresetSpec {
     pub fps: u32,
     pub color_count: u16,
     pub frames: usize,
+    pub sampling_every: usize,
     pub encoding_speed: i32,
     pub dither_mode: &'static str,
     pub palette_strategy: &'static str,
@@ -126,11 +128,12 @@ pub const QUALITY_PRESETS: &[QualityPresetSpec] = &[
         name: "high-quality",
         width: 640,
         height: 360,
-        fps: 24,
+        fps: 15,
         color_count: 256,
         frames: 120,
+        sampling_every: 1,
         encoding_speed: 1,
-        dither_mode: "floydSteinberg",
+        dither_mode: "none",
         palette_strategy: "per-frame NeuQuant adaptive palette",
         search_strategy: "fixed high-quality preset; no candidate search",
     },
@@ -138,11 +141,12 @@ pub const QUALITY_PRESETS: &[QualityPresetSpec] = &[
         name: "balanced",
         width: 480,
         height: 270,
-        fps: 20,
+        fps: 12,
         color_count: 128,
-        frames: 80,
+        frames: 96,
+        sampling_every: 1,
         encoding_speed: 10,
-        dither_mode: "none",
+        dither_mode: "floydSteinberg",
         palette_strategy: "per-frame NeuQuant adaptive palette",
         search_strategy: "fixed balanced preset; no candidate search",
     },
@@ -150,10 +154,11 @@ pub const QUALITY_PRESETS: &[QualityPresetSpec] = &[
         name: "small-size",
         width: 320,
         height: 180,
-        fps: 12,
+        fps: 8,
         color_count: 64,
-        frames: 48,
-        encoding_speed: 20,
+        frames: 32,
+        sampling_every: 2,
+        encoding_speed: 30,
         dither_mode: "none",
         palette_strategy: "per-frame NeuQuant adaptive palette",
         search_strategy: "fixed small-size preset; no candidate search",
@@ -184,6 +189,7 @@ pub struct QualityPresetSample {
     pub fps: u32,
     pub color_count: u16,
     pub frames: usize,
+    pub sampling_every: usize,
     pub encoding_speed: i32,
     pub dither_mode: String,
     pub palette_strategy: String,
@@ -358,19 +364,24 @@ pub fn run_quality_preset_case(
         .map_err(|error| format!("无法创建质量基准输出目录：{error}"))?;
     let source_spec = BenchmarkSpec {
         name: "quality-source",
-        width: preset.width,
-        height: preset.height,
-        fps: preset.fps,
-        color_count: preset.color_count,
-        frames: preset.frames,
+        width: 640,
+        height: 360,
+        fps: 15,
+        color_count: 256,
+        frames: 120,
         pattern: Pattern::LongVideo,
     };
     let duration_ms = (1000 / preset.fps / 10 * 10).max(10);
-    let source_first = encode_sample_frame(&source_spec, 0)?;
-    let frames = (0..preset.frames)
-        .map(|index| {
+    let source_frames = (0..source_spec.frames)
+        .map(|index| encode_sample_frame(&source_spec, index))
+        .collect::<Result<Vec<_>, String>>()?;
+    let source_first = resize_frame_to_png(&source_frames[0], preset.width, preset.height)?;
+    let frames = source_frames
+        .iter()
+        .step_by(preset.sampling_every)
+        .map(|data| {
             Ok(GifFrameRequest {
-                data: encode_sample_frame(&source_spec, index)?,
+                data: resize_frame_to_png(data, preset.width, preset.height)?,
                 duration_ms,
             })
         })
@@ -427,6 +438,7 @@ pub fn run_quality_preset_case(
         fps: preset.fps,
         color_count: preset.color_count,
         frames: preset.frames,
+        sampling_every: preset.sampling_every,
         encoding_speed: preset.encoding_speed,
         dither_mode: preset.dither_mode.to_string(),
         palette_strategy: preset.palette_strategy.to_string(),
@@ -527,6 +539,17 @@ fn encode_sample_frame(spec: &BenchmarkSpec, index: usize) -> Result<Vec<u8>, St
     DynamicImage::ImageRgba8(image)
         .write_to(&mut output, ImageOutputFormat::Png)
         .map_err(|error| format!("无法生成基准 PNG 帧：{error}"))?;
+    Ok(output.into_inner())
+}
+
+fn resize_frame_to_png(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+    let image = image::load_from_memory(data)
+        .map_err(|error| format!("无法解码质量基准源帧：{error}"))?
+        .resize_exact(width, height, FilterType::Lanczos3);
+    let mut output = Cursor::new(Vec::new());
+    image
+        .write_to(&mut output, ImageOutputFormat::Png)
+        .map_err(|error| format!("无法缩放质量基准源帧：{error}"))?;
     Ok(output.into_inner())
 }
 
