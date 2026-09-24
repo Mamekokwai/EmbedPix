@@ -362,11 +362,23 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 #### E10：图片格式扩展评估（依赖：E3、E8）
 
-- [ ] 评估 WebP、ICO、TIFF 的许可证和维护风险
-- [ ] 对比体积、编码耗时、色彩/透明度/元数据兼容性
-- [ ] 先提交评估结论，再决定是否实现生产支持
+- [x] 评估 WebP、ICO、TIFF 的许可证和维护风险
+- [x] 对比体积、编码耗时、色彩/透明度/元数据兼容性
+- [x] 先提交评估结论，再决定是否实现生产支持
 
 验收：每种格式都有许可证、体积、兼容性和测试成本结论；未通过评估前不增加生产依赖或用户可见格式选项。
+
+评估结论（2026-09-25）：暂不加入生产依赖或用户可见选项。优先级建议为 WebP P2（已有基础，需先补齐质量/元数据契约）；ICO P3（仅适合图标管线）；TIFF P3（面向归档/专业图像，范围和测试成本最大）。
+
+| 格式 | 现有链路与许可证/维护风险 | 兼容性与测试成本 | 结论 |
+| --- | --- | --- | --- |
+| WebP | `image 0.24.9` 已启用 `webp` feature；当前 image-rs 0.24 文档/变更记录表明 WebP 编码为无损路径，仓库另有 `webp-animation 0.10`/`libwebp-sys2`（MIT OR Apache-2.0 / BSD-3-Clause）。上游成熟但 C 库绑定带来跨平台构建和安全更新跟踪成本。 | 支持透明度，适合网页体积；需明确 lossy/lossless、动画、ICC/EXIF/XMP 保留策略。需补充 RGBA 往返、质量/体积回归、metadata/恶意文件限制测试。 | P2 评估后再做；不能把现有 WebP 动画能力等同于静态有损编码能力。 |
+| ICO | 当前生产 `image` feature 未启用 `ico`；Cargo 元数据中的 `ico 0.5.0` 为 MIT，维护面小，且 ICO 有 256×256 尺寸上限和多尺寸/位深组合语义。 | 透明度可由 PNG 图像承载，但多尺寸、热点/调色板和 Windows 图标兼容性需要专门契约；应覆盖 16/32/48/256 多尺寸、alpha、损坏目录和 Windows shell 读取。 | P3，仅在明确需要应用图标导出时考虑，不作为通用图片格式。 |
+| TIFF | 当前生产 `image` feature 未启用 `tiff`；image-rs 通过 TIFF 依赖提供能力，许可证/压缩组合和维护风险需按实际 feature 锁定后复核。 | 可表达高位深、灰度/CMYK、alpha、ICC/EXIF，但压缩、页/帧、BigTIFF、色彩解释差异大；需覆盖多页、CMYK、ICC、16-bit、压缩变体、资源上限和 round-trip。 | P3，除非产品出现归档/专业印刷需求，否则测试与兼容矩阵不值得进入当前导出链。 |
+
+可复现实测（仅工具链量级参考，非生产编码链）：Windows 本机用 FFmpeg `testsrc2` 生成固定 320×180 PNG（7,448 bytes）；WebP 用 `cwebp -q 80`，TIFF/ICO 用 FFmpeg 默认编码。单次 `Measure-Command` 结果：WebP 4,154 bytes / 42.8 ms，TIFF 174,084 bytes / 56.7 ms；ICO 因 320×180 超过 256×256 限制失败，改用 256×144 后为 115,388 bytes / 57.6 ms。该样本不是同编码器、不是质量等价比较，耗时受进程启动影响，只用于暴露尺寸和典型成本；没有据此宣称生产性能。来源与复现：`ffmpeg -f lavfi -i testsrc2=size=320x180:rate=1 -frames:v 1 fixture.png`、`cwebp -q 80 fixture.png -o fixture.webp`、`ffmpeg -i fixture.png fixture.tiff`；上游格式能力参考 [image-rs codecs](https://docs.rs/image/latest/image/codecs/)、[image-rs 0.24 变更记录](https://github.com/image-rs/image/blob/main/CHANGES.md)、[libwebp BSD 许可](https://github.com/webmproject/libwebp)。
+
+未决项：若未来进入实现，先固定目标格式、质量/压缩参数、ICC/EXIF/XMP 保留规则和资源上限，再补跨平台 round-trip、恶意输入、体积/耗时基准；本条评估不改变生产依赖、导出实现或 UI 选项。
 
 ## 通用验收门禁
 
