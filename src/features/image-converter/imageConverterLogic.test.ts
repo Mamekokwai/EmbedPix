@@ -26,6 +26,7 @@ import {
   getMissingSourcePathFileName,
   getPixelError,
   getImageTransformError,
+  getImagePreviewComparison,
   getTransformedSourceDimensions,
   isImageFile,
   normalizeDimension,
@@ -77,6 +78,19 @@ describe("image converter dimensions", () => {
 });
 
 describe("image converter output rules", () => {
+  it("describes the output preview using the same format, bit depth and background parameters", () => {
+    expect(getImagePreviewComparison("jpg", 320, 240, 32, "#abc123")).toMatchObject({
+      dimensions: "320 × 240 px",
+      format: "JPG",
+      bitDepth: "24 位",
+      color: "背景 #ABC123",
+      fileSize: "导出后显示实际体积",
+    });
+    expect(getImagePreviewComparison("bmp", 128, 64, 24, "#ffffff").bitDepth).toBe("24 位");
+    expect(getImagePreviewComparison("rgb565", 128, 64, 32, "#000000")).toMatchObject({ format: "RGB565 BIN", bitDepth: "16 位" });
+    expect(getImagePreviewComparison("png", 128, 64, 32, "#000000").color).toBe("保留透明度");
+  });
+
   it("exposes the exact supported bit-depth choices", () => {
     expect(getBitDepths("bmp")).toEqual(BMP_BIT_DEPTHS);
     expect(getBitDepths("png")).toEqual(PNG_BIT_DEPTHS);

@@ -36,6 +36,7 @@ import {
   constrainDimensions,
   formatFileSize,
   formatMebibytes,
+  getImagePreviewComparison,
   getBackgroundNote,
   getBitDepthNote,
   getBitDepths,
@@ -412,6 +413,10 @@ export default function ImageConverter({
     const summaryBitDepth = getEffectiveBitDepth(outputFormat, bitDepth);
     return `${width} × ${height} · ${getOutputLabel(outputFormat)} · ${summaryBitDepth} 位`;
   }, [bitDepth, file, height, outputFormat, width]);
+  const outputPreviewComparison = useMemo(
+    () => getImagePreviewComparison(outputFormat, width, height, bitDepth, backgroundColor),
+    [backgroundColor, bitDepth, height, outputFormat, width],
+  );
 
   const resetImageTransform = (source: ImageDimensions | null = dimensions) => {
     setRotation(0);
@@ -1095,6 +1100,18 @@ export default function ImageConverter({
                     transform: `rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`,
                   }}
                 /> : null}
+              </div>
+              <div className="preview-comparison" aria-label="输出预览对比">
+                <div className="preview-comparison-heading"><strong>输出预览</strong><span>参数模拟，非已导出文件</span></div>
+                <div className="preview-frame preview-frame-output" style={{ backgroundColor }}>
+                  {previewUrl ? <img src={previewUrl} alt={`输出预览：${file.name}`} style={{ transform: `rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})` }} /> : null}
+                </div>
+                <div className="preview-comparison-meta">
+                  <span>{outputPreviewComparison.dimensions}</span>
+                  <span>{outputPreviewComparison.format} · {outputPreviewComparison.bitDepth}</span>
+                  <span>{outputPreviewComparison.color}</span>
+                  <span>{outputPreviewComparison.fileSize}</span>
+                </div>
               </div>
               {hasImageTransform ? <p className="preview-edit-note">
                 {previewAppliedTransforms.length > 0 ? `预览已应用${previewAppliedTransforms.join("、")}；` : "裁剪预览受限；"}

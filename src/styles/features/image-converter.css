@@ -272,6 +272,13 @@
   transition: transform var(--qp-motion-fast) var(--qp-motion-ease);
 }
 
+.preview-comparison { display: grid; gap: 6px; min-width: 0; }
+.preview-comparison-heading { display: flex; justify-content: space-between; gap: 8px; color: var(--qp-text-secondary); font-size: 11px; }
+.preview-comparison-heading span { color: var(--qp-text-tertiary); font-size: 10px; }
+.preview-frame-output { min-height: 120px; }
+.preview-frame-output img { max-height: 120px; }
+.preview-comparison-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--qp-text-tertiary); font-size: 10px; }
+
 .preview-edit-note {
   margin: -4px 2px 0;
   color: var(--qp-text-tertiary);

@@ -56,6 +56,33 @@ export function formatMebibytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
+export interface ImagePreviewComparison {
+  dimensions: string;
+  format: string;
+  bitDepth: string;
+  color: string;
+  fileSize: string;
+}
+
+export function getImagePreviewComparison(
+  outputFormat: OutputFormat,
+  width: number,
+  height: number,
+  bitDepth: BmpBitDepth,
+  backgroundColor: string,
+): ImagePreviewComparison {
+  const effectiveBitDepth = getEffectiveBitDepth(outputFormat, bitDepth);
+  return {
+    dimensions: `${width} × ${height} px`,
+    format: getOutputLabel(outputFormat),
+    bitDepth: `${effectiveBitDepth} 位`,
+    color: outputFormat === "jpg" || effectiveBitDepth !== 32
+      ? `背景 ${backgroundColor.toUpperCase()}`
+      : "保留透明度",
+    fileSize: "导出后显示实际体积",
+  };
+}
+
 export function normalizeDimension(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) {
