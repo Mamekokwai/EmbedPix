@@ -536,7 +536,11 @@ jobs:
             throw "Published release assets do not match expected set. Actual: $($actual -join ', ')"
           }
           $latestAsset = $release.assets | Where-Object name -eq 'latest.json'
-          $latest = Invoke-RestMethod -Headers $headers -Uri $latestAsset.url
+          if (-not $latestAsset -or -not $latestAsset.browser_download_url) {
+            throw 'Published latest.json asset has no browser download URL.'
+          }
+          $downloadHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; 'User-Agent' = 'EmbedPix release verifier' }
+          $latest = Invoke-RestMethod -Headers $downloadHeaders -Uri $latestAsset.browser_download_url
           if ($latest.version -ne $env:RELEASE_VERSION -or @($latest.platforms.PSObject.Properties.Name).Count -ne 2) {
             throw 'Published latest.json version or platform count is invalid.'
           }
