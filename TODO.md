@@ -250,11 +250,11 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 - [x] 固化独立 verifier 源码和 lockfile
 - [x] 所有第三方 Action 固定 SHA
-- [ ] 生产环境增加审批和受保护 tag
+- [x] 生产环境增加审批和受保护 tag
 - [x] 发布后回读 GitHub Release 资产摘要
 - [x] 强制 package/Cargo/Tauri/tag 版本一致
 
-验收：篡改版本、commit、资产、签名或 manifest 任一字段都会阻止发布；生产审批和受保护 tag 仍需 GitHub Settings 配置 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则。
+验收：篡改版本、commit、资产、签名或 manifest 任一字段都会阻止发布；GitHub Settings 已配置并通过 API 验证 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则。
 
 ### D6：0.3.1 验收与发布
 
@@ -263,7 +263,7 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 供应链门禁通过
 - [ ] 发布 `0.3.1`
 
-内部验收证据：CLI 已通过无桌面 smoke/契约测试及 image、gif、pngSequence 三类端到端操作；更新协议已通过本地 HTTP fixture，覆盖下载、大小、SHA-256、签名和缓存复核；仓库内 verifier、Action SHA 固定、版本一致性、tag/commit 与发布后资产回读门禁已通过。仍阻塞：GitHub Settings 中 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则未配置/未验证；`0.3.1` 尚未发布。
+内部验收证据：CLI 已通过无桌面 smoke/契约测试及 image、gif、pngSequence 三类端到端操作；更新协议已通过本地 HTTP fixture，覆盖下载、大小、SHA-256、签名和缓存复核；仓库内 verifier、Action SHA 固定、版本一致性、tag/commit 与发布后资产回读门禁已通过；GitHub Settings 的 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则已通过 API 验证。仍阻塞：`0.3.1` 尚未发布。
 
 ## 通用验收门禁
 
