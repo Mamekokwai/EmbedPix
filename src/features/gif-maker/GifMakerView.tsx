@@ -67,6 +67,18 @@ const GIF_SOURCE_MODES: ReadonlyArray<GifSourceMode> = ["image", "video"];
 const GIF_SETTINGS_GROUPS: ReadonlyArray<GifSettingsGroup> = ["timing", "canvas", "export"];
 export const GIF_ERROR_DETAILS_THRESHOLD = 72;
 
+export function clampGifTimelineRange(start: number, end: number, frameCount: number): { start: number; end: number } {
+  if (frameCount <= 0) return { start: 0, end: 0 };
+  const last = frameCount - 1;
+  const nextStart = Math.min(last, Math.max(0, Math.floor(start)));
+  const nextEnd = Math.min(last, Math.max(nextStart, Math.floor(end)));
+  return { start: nextStart, end: nextEnd };
+}
+
+export function getGifTimelineZoomLabel(zoom: number): string {
+  return `${Math.round(zoom * 100)}%`;
+}
+
 export function shouldOfferGifErrorDetails(message: string): boolean {
   return message.trim().length > GIF_ERROR_DETAILS_THRESHOLD;
 }
@@ -472,6 +484,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [frames, setFrames] = useState<GifFrameModel[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedFrameIndices, setSelectedFrameIndices] = useState<Set<number>>(new Set());
+  const [timelineStartIndex, setTimelineStartIndex] = useState(0);
+  const [timelineEndIndex, setTimelineEndIndex] = useState(0);
+  const [timelineZoom, setTimelineZoom] = useState(1);
   const selectionAnchorRef = useRef(0);
   const [canvasWidth, setCanvasWidth] = useState(savedPreferences.canvasWidth);
   const [canvasHeight, setCanvasHeight] = useState(savedPreferences.canvasHeight);
@@ -638,6 +653,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, targetSizeKiB]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
+
+  useEffect(() => {
+    const range = clampGifTimelineRange(timelineStartIndex, timelineEndIndex || frames.length - 1, frames.length);
+    setTimelineStartIndex(range.start);
+    setTimelineEndIndex(range.end);
+  }, [frames.length, timelineEndIndex, timelineStartIndex]);
   const sourcePath = useMemo(() => getGifSourcePath(frames), [frames]);
   const outputLocationError = useMemo(
     () => getGifOutputLocationError(outputLocation, sourcePath, outputSubdirectory, outputDirectory, isTauriEnvironment()),
@@ -1413,7 +1434,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const renderExportFrames = async (size: GifCanvasSize, signal?: AbortSignal): Promise<GifExportFrame[]> => {
-    validateGifPixels(size, frames.length);
+    const selectedFrames = frames.slice(timelineStartIndex, timelineEndIndex + 1);
+    validateGifPixels(size, selectedFrames.length);
     throwIfAborted(signal);
     const exportCanvas = document.createElement("canvas");
     exportCanvas.width = size.width;
@@ -1422,16 +1444,16 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     if (!context) throw new Error("当前环境无法创建 GIF 画布。");
     const rendered: GifExportFrame[] = [];
     try {
-      for (const [index, frame] of frames.entries()) {
+      for (const [index, frame] of selectedFrames.entries()) {
         throwIfAborted(signal);
         let data: Uint8Array;
         const image = await loadImage(frame.previewUrl);
         throwIfAborted(signal);
         drawGifFrame(context, image, size, fitMode, contentAlignment, contentMargins, background, customBackgroundColor);
         data = await canvasToBytes(exportCanvas, signal);
-        const holdDuration = frames.length === 1
+        const holdDuration = selectedFrames.length === 1
           ? firstFrameHoldDuration + lastFrameHoldDuration
-          : index === 0 ? firstFrameHoldDuration : index === frames.length - 1 ? lastFrameHoldDuration : 0;
+          : index === 0 ? firstFrameHoldDuration : index === selectedFrames.length - 1 ? lastFrameHoldDuration : 0;
         rendered.push({ data, durationMs: calculateBoundaryFrameDuration(frame.durationMs, holdDuration) });
       }
       validateGifFiles(rendered.map((entry) => ({ size: entry.data.byteLength })));
@@ -2186,7 +2208,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <div className={`gif-canvas-stage gif-background-${background}`} style={background === "custom" ? { backgroundColor: customBackgroundColor } : undefined}>
                 {selectedFrame ? <canvas ref={canvasRef} className="gif-preview-canvas" aria-label={`第 ${selectedIndex + 1} 帧预览`} /> : <div className="gif-preview-empty"><Film size={28} aria-hidden="true" /><span>导入图片后预览动画</span></div>}
               </div>
-              {frames.length ? <div className="gif-timeline"><input type="range" min="0" max={Math.max(0, frames.length - 1)} step="1" value={selectedIndex} aria-label="动画时间轴" onChange={(event) => seekPreviewFrame(Number(event.target.value))} /><span aria-label={`当前时间 ${formatGifTimelineTime(timeline.currentMs)}，总时长 ${formatGifTimelineTime(timeline.totalMs)}`}>当前 {formatGifTimelineTime(timeline.currentMs)} / 总计 {formatGifTimelineTime(timeline.totalMs)}</span></div> : null}
+              {frames.length ? <div className="gif-timeline" style={{ gap: `${Math.max(0.5, timelineZoom)}rem` }}>
+                <label>定位 <input type="range" min="0" max={Math.max(0, frames.length - 1)} step="1" value={selectedIndex} aria-label="动画时间轴" onChange={(event) => seekPreviewFrame(Number(event.target.value))} /></label>
+                <label>起始帧 <input type="number" min="1" max={frames.length} value={timelineStartIndex + 1} onChange={(event) => { const next = clampGifTimelineRange(Number(event.target.value) - 1, timelineEndIndex, frames.length); setTimelineStartIndex(next.start); setTimelineEndIndex(next.end); }} /></label>
+                <label>结束帧 <input type="number" min="1" max={frames.length} value={timelineEndIndex + 1} onChange={(event) => { const next = clampGifTimelineRange(timelineStartIndex, Number(event.target.value) - 1, frames.length); setTimelineStartIndex(next.start); setTimelineEndIndex(next.end); }} /></label>
+                <label>缩放 <select aria-label="时间轴缩放" value={timelineZoom} onChange={(event) => setTimelineZoom(Number(event.target.value))}><option value="0.75">75%</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
+                <span aria-label={`当前时间 ${formatGifTimelineTime(timeline.currentMs)}，总时长 ${formatGifTimelineTime(timeline.totalMs)}`}>当前 {formatGifTimelineTime(timeline.currentMs)} / 总计 {formatGifTimelineTime(timeline.totalMs)} · 导出第 {timelineStartIndex + 1}–{timelineEndIndex + 1} 帧</span>
+              </div> : null}
               <div className="gif-preview-footer"><span>{frames.length ? `第 ${selectedIndex + 1} / ${frames.length} 帧` : "未选择帧"}</span><span>{sourceHint}</span><span>{canvasSize.width} × {canvasSize.height} px 画布</span></div>
             </section>
 

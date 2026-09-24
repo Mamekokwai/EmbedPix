@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canRequestGifExportCancel, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifOutputLocationError, getGifSourcePath, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
+import { canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifOutputLocationError, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("defines quality, balanced, and small presets without touching other formats", () => {
@@ -12,6 +12,13 @@ describe("GIF export presets", () => {
 });
 
 describe("GIF settings layout defaults", () => {
+  it("clamps the export time range and exposes readable zoom steps", () => {
+    expect(clampGifTimelineRange(-2, 99, 4)).toEqual({ start: 0, end: 3 });
+    expect(clampGifTimelineRange(3, 1, 4)).toEqual({ start: 3, end: 3 });
+    expect(clampGifTimelineRange(0, 0, 0)).toEqual({ start: 0, end: 0 });
+    expect(getGifTimelineZoomLabel(1.5)).toBe("150%");
+  });
+
   it("starts with the parameter groups folded so the workspace keeps its preview height", () => {
     expect(DEFAULT_GIF_SETTINGS_GROUP).toBeNull();
   });
