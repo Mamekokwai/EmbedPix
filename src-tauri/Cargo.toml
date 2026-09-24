@@ -1,5 +1,6 @@
 [package]
 name = "embedpix"
+default-run = "embedpix"
 version = "0.3.1"
 description = "Local image format conversion tool"
 authors = ["ZeroThrax"]
