@@ -20,11 +20,12 @@ import {
   pickImageFiles,
   pickOutputDirectory,
   preflightImageExports,
+  previewImageExport,
   readImageFile,
   type NativeImageFile,
 } from "../../platform/image/imageExportGateway";
 import type { ImageExportPreflightResult } from "../../platform/image/imageExportGateway";
-import type { ExportImageResponse } from "./types";
+import type { ExportImageResponse, ImagePreviewResponse } from "./types";
 import {
   DEFAULT_C_ARRAY_NAME,
   DEFAULT_JPEG_QUALITY,
@@ -295,11 +296,15 @@ export default function ImageConverter({
   const [exportPreflight, setExportPreflight] = useState<ExportPreflightResult | null>(null);
   const [nativePreflightStatus, setNativePreflightStatus] = useState<string | null>(null);
   const [actualExportResult, setActualExportResult] = useState<ExportImageResponse | null>(null);
+  const [realPreview, setRealPreview] = useState<ImagePreviewResponse | null>(null);
+  const [realPreviewUrl, setRealPreviewUrl] = useState<string | null>(null);
+  const [realPreviewError, setRealPreviewError] = useState<string | null>(null);
   const [failureDetailsOpen, setFailureDetailsOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ImageExportQueueProgress | null>(null);
   const exportCancelRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const realPreviewUrlRef = useRef<string | null>(null);
   const loadIdRef = useRef(0);
   const imageIdRef = useRef(0);
   const loadedImagesRef = useRef<LoadedImage[]>([]);
@@ -313,6 +318,10 @@ export default function ImageConverter({
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
         previewUrlRef.current = null;
+      }
+      if (realPreviewUrlRef.current) {
+        URL.revokeObjectURL(realPreviewUrlRef.current);
+        realPreviewUrlRef.current = null;
       }
       loadedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
@@ -342,7 +351,7 @@ export default function ImageConverter({
   const dimensionError = widthError ?? heightError ?? (file ? getPixelError(widthInput, heightInput) : null);
   const cropValidationError = file && cropEnabled ? getCropInputValidation(cropInputs, dimensions) : null;
   const errorMessage = dimensionError ?? cropValidationError ?? error;
-  const imageTransform: ImageTransform = {
+  const imageTransform: ImageTransform = useMemo(() => ({
     rotation,
     flipHorizontal,
     flipVertical,
@@ -354,7 +363,7 @@ export default function ImageConverter({
           height: parseCropInput(cropInputs.height) ?? 0,
         }
       : null,
-  };
+  }), [cropEnabled, cropInputs.height, cropInputs.width, cropInputs.x, cropInputs.y, flipHorizontal, flipVertical, rotation]);
   const transformedSourceDimensions = dimensions
     ? getTransformedSourceDimensions(dimensions, imageTransform)
     : null;
@@ -423,6 +432,62 @@ export default function ImageConverter({
     () => getImagePreviewComparison(outputFormat, width, height, bitDepth, backgroundColor),
     [backgroundColor, bitDepth, height, outputFormat, width],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const requestPreview = async () => {
+      if (realPreviewUrlRef.current) URL.revokeObjectURL(realPreviewUrlRef.current);
+      realPreviewUrlRef.current = null;
+      setRealPreviewUrl(null);
+      if (!file || !dimensions || !isTauriEnvironment() || dimensionError || cropValidationError) {
+        setRealPreview(null);
+        setRealPreviewError(!isTauriEnvironment() && file ? "桌面真实编码预览仅在 Tauri 应用中可用。" : null);
+        return;
+      }
+      setRealPreviewError(null);
+      try {
+        const targetSourceDimensions = getTransformedSourceDimensions(dimensions, imageTransform);
+        const targetDimensions = keepAspectRatio
+          ? constrainAspectDimensions("width", width, targetSourceDimensions)
+          : { width, height };
+        const response = await previewImageExport({
+          fileName: file.name,
+          inputData: new Uint8Array(await file.arrayBuffer()),
+          outputFormat,
+          width: targetDimensions.width,
+          height: targetDimensions.height,
+          keepAspectRatio,
+          bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
+          backgroundColor,
+          jpegQuality,
+          byteOrder,
+          channelOrder,
+          rowOrder,
+          rowAlignment,
+          cArrayName: normalizeCArrayName(cArrayName),
+          transform: imageTransform,
+          metadataPolicy,
+        });
+        if (cancelled) return;
+        const visualFormat = response.format === "png" || response.format === "jpg" || response.format === "bmp";
+        if (visualFormat) {
+          const url = URL.createObjectURL(new Blob([new Uint8Array(response.data)], { type: `image/${response.format === "jpg" ? "jpeg" : response.format}` }));
+          realPreviewUrlRef.current = url;
+          setRealPreviewUrl(url);
+        } else {
+          setRealPreviewUrl(null);
+        }
+        setRealPreview(response);
+      } catch (previewError) {
+        if (cancelled) return;
+        setRealPreviewUrl(null);
+        setRealPreview(null);
+        setRealPreviewError(previewError instanceof Error ? previewError.message : "真实编码预览失败，可直接继续正式导出。 ");
+      }
+    };
+    void requestPreview();
+    return () => { cancelled = true; };
+  }, [backgroundColor, bitDepth, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, height, imageTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
 
   const resetImageTransform = (source: ImageDimensions | null = dimensions) => {
     setRotation(0);
@@ -1159,6 +1224,12 @@ export default function ImageConverter({
                   <span>{outputPreviewComparison.color}</span>
                   <span>{outputPreviewComparison.fileSize}</span>
                 </div>
+                {realPreviewError ? <p className="preview-edit-note" role="status">{realPreviewError}</p> : null}
+                {realPreview ? <>
+                  <div className="preview-comparison-heading"><strong>桌面真实编码预览</strong><span>{realPreview.outputBytes} B</span></div>
+                  {realPreviewUrl ? <div className="preview-frame preview-frame-output"><img src={realPreviewUrl} alt={`真实编码预览：${file.name}`} /></div> : <p className="preview-edit-note">该格式没有可显示的图像像素，已显示真实编码参数和体积。</p>}
+                  <div className="preview-comparison-meta"><span>{realPreview.width} × {realPreview.height} px</span><span>{realPreview.format.toUpperCase()} · {realPreview.bitDepth} 位</span><span>真实体积 {formatFileSize(realPreview.outputBytes)}</span></div>
+                </> : null}
               </div>
               {hasImageTransform ? <p className="preview-edit-note">
                 {previewAppliedTransforms.length > 0 ? `预览已应用${previewAppliedTransforms.join("、")}；` : "裁剪预览受限；"}
