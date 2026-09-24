@@ -10,6 +10,7 @@
     "test": "npm run check:types && npm run check:lint && vitest run",
     "check:types": "tsc --noEmit -p tsconfig.json",
     "check:lint": "eslint . --max-warnings 0",
+    "check:gif-benchmark": "node scripts/check-gif-benchmark.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

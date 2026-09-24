@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "maxFailureRate": 0,
+  "cases": {
+    "landscape": { "maxElapsedMs": 1000, "maxPeakMemoryBytes": 16777216, "maxOutputBytes": 1048576, "maxPeakDiskBytes": 1048576 },
+    "portrait": { "maxElapsedMs": 1000, "maxPeakMemoryBytes": 16777216, "maxOutputBytes": 1048576, "maxPeakDiskBytes": 1048576 },
+    "transparent-png": { "maxElapsedMs": 1000, "maxPeakMemoryBytes": 16777216, "maxOutputBytes": 1048576, "maxPeakDiskBytes": 1048576 },
+    "game-recording": { "maxElapsedMs": 3000, "maxPeakMemoryBytes": 33554432, "maxOutputBytes": 8388608, "maxPeakDiskBytes": 8388608 },
+    "long-video": { "maxElapsedMs": 5000, "maxPeakMemoryBytes": 33554432, "maxOutputBytes": 8388608, "maxPeakDiskBytes": 8388608 },
+    "large-image": { "maxElapsedMs": 2000, "maxPeakMemoryBytes": 67108864, "maxOutputBytes": 4194304, "maxPeakDiskBytes": 4194304 },
+    "two-hundred-frames": { "maxElapsedMs": 10000, "maxPeakMemoryBytes": 67108864, "maxOutputBytes": 16777216, "maxPeakDiskBytes": 16777216 },
+    "mixed-sizes": { "maxElapsedMs": 3000, "maxPeakMemoryBytes": 33554432, "maxOutputBytes": 4194304, "maxPeakDiskBytes": 4194304 }
+  }
+}

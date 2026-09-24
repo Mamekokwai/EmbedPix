@@ -16,7 +16,20 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 struct Baseline {
     schema_version: u32,
+    environment: Environment,
+    case_count: usize,
+    failure_count: usize,
+    failure_rate: f64,
     samples: Vec<BenchmarkSample>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Environment {
+    os: &'static str,
+    arch: &'static str,
+    pointer_width: &'static str,
+    generator: &'static str,
 }
 
 fn main() {
@@ -44,10 +57,18 @@ fn run() -> Result<(), String> {
     }
 
     let mut samples = Vec::with_capacity(CASES.len());
+    let mut failure_count = 0usize;
     for case in CASES {
-        let mut sample = run_worker(case.name, &output_dir)?;
+        let mut sample = match run_worker(case.name, &output_dir) {
+            Ok(sample) => sample,
+            Err(error) => {
+                failure_count += 1;
+                eprintln!("{}: failed: {error}", case.name);
+                continue;
+            }
+        };
         println!(
-            "{}: {}x{} @ {} FPS, {} colors, {} frames, {} bytes, {} ms, peak {} bytes",
+            "{}: {}x{} @ {} FPS, {} colors, {} frames, {} bytes, {} ms, peak memory {} bytes, peak disk {} bytes",
             sample.name,
             sample.width,
             sample.height,
@@ -59,6 +80,7 @@ fn run() -> Result<(), String> {
             sample
                 .peak_memory_bytes
                 .map_or_else(|| "unsupported".to_string(), |bytes| bytes.to_string()),
+            sample.peak_disk_bytes,
         );
         if sample.peak_memory_bytes.is_none() {
             sample.peak_memory_bytes = peak_memory_bytes(std::process::id());
@@ -67,7 +89,20 @@ fn run() -> Result<(), String> {
     }
 
     let baseline = Baseline {
-        schema_version: 1,
+        schema_version: 2,
+        environment: Environment {
+            os: std::env::consts::OS,
+            arch: std::env::consts::ARCH,
+            pointer_width: if cfg!(target_pointer_width = "64") {
+                "64"
+            } else {
+                "32"
+            },
+            generator: "deterministic-rgba-frame-generator",
+        },
+        case_count: CASES.len(),
+        failure_count,
+        failure_rate: failure_count as f64 / CASES.len() as f64,
         samples,
     };
     let json = serde_json::to_string_pretty(&baseline).map_err(|error| error.to_string())?;
@@ -125,11 +160,11 @@ fn run_worker(name: &str, output_dir: &PathBuf) -> Result<BenchmarkSample, Strin
 
 fn write_csv(output_dir: &Path, samples: &[BenchmarkSample]) -> Result<(), String> {
     let mut csv = String::from(
-        "name,width,height,fps,color_count,frames,output_bytes,elapsed_ms,peak_memory_bytes\n",
+        "name,width,height,fps,color_count,frames,output_bytes,peak_disk_bytes,elapsed_ms,peak_memory_bytes\n",
     );
     for sample in samples {
         csv.push_str(&format!(
-            "{},{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{}\n",
             sample.name,
             sample.width,
             sample.height,
@@ -137,6 +172,7 @@ fn write_csv(output_dir: &Path, samples: &[BenchmarkSample]) -> Result<(), Strin
             sample.color_count,
             sample.frames,
             sample.output_bytes,
+            sample.peak_disk_bytes,
             sample.elapsed_ms,
             sample
                 .peak_memory_bytes

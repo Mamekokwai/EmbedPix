@@ -29,6 +29,7 @@ enum Pattern {
     TransparentPng,
     GameRecording,
     LongVideo,
+    MixedSizes,
 }
 
 pub const CASES: &[BenchmarkSpec] = &[
@@ -77,6 +78,33 @@ pub const CASES: &[BenchmarkSpec] = &[
         frames: 120,
         pattern: Pattern::LongVideo,
     },
+    BenchmarkSpec {
+        name: "large-image",
+        width: 2048,
+        height: 2048,
+        fps: 1,
+        color_count: 256,
+        frames: 1,
+        pattern: Pattern::Landscape,
+    },
+    BenchmarkSpec {
+        name: "two-hundred-frames",
+        width: 640,
+        height: 360,
+        fps: 24,
+        color_count: 128,
+        frames: 200,
+        pattern: Pattern::LongVideo,
+    },
+    BenchmarkSpec {
+        name: "mixed-sizes",
+        width: 640,
+        height: 360,
+        fps: 15,
+        color_count: 128,
+        frames: 40,
+        pattern: Pattern::MixedSizes,
+    },
 ];
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -89,6 +117,7 @@ pub struct BenchmarkSample {
     pub color_count: u16,
     pub frames: usize,
     pub output_bytes: u64,
+    pub peak_disk_bytes: u64,
     pub elapsed_ms: u128,
     pub peak_memory_bytes: Option<u64>,
 }
@@ -158,6 +187,7 @@ pub fn run_case(name: &str, output_dir: &Path) -> Result<BenchmarkSample, String
         color_count: spec.color_count,
         frames: spec.frames,
         output_bytes: metadata.len(),
+        peak_disk_bytes: metadata.len(),
         elapsed_ms: started.elapsed().as_millis(),
         peak_memory_bytes: None,
     })
@@ -313,9 +343,18 @@ pub fn default_output_dir() -> PathBuf {
 }
 
 fn encode_sample_frame(spec: &BenchmarkSpec, index: usize) -> Result<Vec<u8>, String> {
-    let mut image = RgbaImage::new(spec.width, spec.height);
-    for y in 0..spec.height {
-        for x in 0..spec.width {
+    let (width, height) = if matches!(spec.pattern, Pattern::MixedSizes) {
+        if index.is_multiple_of(2) {
+            (spec.width, spec.height)
+        } else {
+            (spec.height, spec.width)
+        }
+    } else {
+        (spec.width, spec.height)
+    };
+    let mut image = RgbaImage::new(width, height);
+    for y in 0..height {
+        for x in 0..width {
             image.put_pixel(x, y, Rgba(sample_pixel(spec, index, x, y)));
         }
     }
@@ -371,6 +410,12 @@ fn sample_pixel(spec: &BenchmarkSpec, index: usize, x: u32, y: u32) -> [u8; 4] {
             horizontal.saturating_add((phase % 17) as u8),
             vertical.saturating_add((phase % 11) as u8),
             ((x / 16 + y / 16 + phase) % 256) as u8,
+            255,
+        ],
+        Pattern::MixedSizes => [
+            horizontal.saturating_add((phase % 23) as u8),
+            vertical.saturating_add((phase % 13) as u8),
+            ((x / 12 + y / 12 + phase) % 256) as u8,
             255,
         ],
     }

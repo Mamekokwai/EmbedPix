@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 2,
+  "environment": {
+    "os": "windows",
+    "arch": "x86_64",
+    "pointerWidth": "64",
+    "generator": "deterministic-rgba-frame-generator"
+  },
+  "caseCount": 8,
+  "failureCount": 0,
+  "failureRate": 0.0,
+  "samples": [
+    {
+      "name": "landscape",
+      "width": 320,
+      "height": 180,
+      "fps": 15,
+      "colorCount": 256,
+      "frames": 30,
+      "outputBytes": 258069,
+      "peakDiskBytes": 258069,
+      "elapsedMs": 114,
+      "peakMemoryBytes": 6537216
+    },
+    {
+      "name": "portrait",
+      "width": 180,
+      "height": 320,
+      "fps": 15,
+      "colorCount": 128,
+      "frames": 30,
+      "outputBytes": 281069,
+      "peakDiskBytes": 281069,
+      "elapsedMs": 124,
+      "peakMemoryBytes": 6991872
+    },
+    {
+      "name": "transparent-png",
+      "width": 320,
+      "height": 180,
+      "fps": 10,
+      "colorCount": 256,
+      "frames": 20,
+      "outputBytes": 273376,
+      "peakDiskBytes": 273376,
+      "elapsedMs": 82,
+      "peakMemoryBytes": 6737920
+    },
+    {
+      "name": "game-recording",
+      "width": 640,
+      "height": 360,
+      "fps": 30,
+      "colorCount": 256,
+      "frames": 60,
+      "outputBytes": 2477929,
+      "peakDiskBytes": 2477929,
+      "elapsedMs": 838,
+      "peakMemoryBytes": 8196096
+    },
+    {
+      "name": "long-video",
+      "width": 640,
+      "height": 360,
+      "fps": 24,
+      "colorCount": 128,
+      "frames": 120,
+      "outputBytes": 1910765,
+      "peakDiskBytes": 1910765,
+      "elapsedMs": 1506,
+      "peakMemoryBytes": 8859648
+    },
+    {
+      "name": "large-image",
+      "width": 2048,
+      "height": 2048,
+      "fps": 1,
+      "colorCount": 256,
+      "frames": 1,
+      "outputBytes": 500837,
+      "peakDiskBytes": 500837,
+      "elapsedMs": 235,
+      "peakMemoryBytes": 27365376
+    },
+    {
+      "name": "two-hundred-frames",
+      "width": 640,
+      "height": 360,
+      "fps": 24,
+      "colorCount": 128,
+      "frames": 200,
+      "outputBytes": 3182281,
+      "peakDiskBytes": 3182281,
+      "elapsedMs": 2537,
+      "peakMemoryBytes": 9822208
+    },
+    {
+      "name": "mixed-sizes",
+      "width": 640,
+      "height": 360,
+      "fps": 15,
+      "colorCount": 128,
+      "frames": 40,
+      "outputBytes": 593881,
+      "peakDiskBytes": 593881,
+      "elapsedMs": 615,
+      "peakMemoryBytes": 10489856
+    }
+  ]
+}
