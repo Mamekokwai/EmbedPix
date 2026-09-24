@@ -19,6 +19,16 @@ const ORPHAN_GRACE_PERIOD: Duration = Duration::from_secs(60);
 pub struct GifFrameSpoolState {
     root: PathBuf,
     entries: Mutex<HashMap<String, SpoolEntry>>,
+    cleanup_snapshot: Mutex<Option<CleanupSnapshot>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CleanupSnapshot {
+    scanned: usize,
+    removed: usize,
+    skipped_active: usize,
+    skipped_grace_period: usize,
+    elapsed_ms: u128,
 }
 
 struct SpoolEntry {
@@ -32,6 +42,7 @@ impl Default for GifFrameSpoolState {
         Self {
             root: std::env::temp_dir().join("embedpix-gif-spool"),
             entries: Mutex::new(HashMap::new()),
+            cleanup_snapshot: Mutex::new(None),
         }
     }
 }
@@ -113,13 +124,20 @@ impl GifFrameSpoolState {
             .collect();
         let mut scanned = 0usize;
         let mut removed = 0usize;
+        let mut skipped_active = 0usize;
+        let mut skipped_grace_period = 0usize;
         for item in
             fs::read_dir(&self.root).map_err(|error| format!("无法扫描 GIF 临时目录：{error}"))?
         {
             let path = item
                 .map_err(|error| format!("无法读取 GIF 临时目录项：{error}"))?
                 .path();
-            if !path.is_dir() || active_directories.iter().any(|active| active == &path) {
+            if !path.is_dir() {
+                continue;
+            }
+            scanned += 1;
+            if active_directories.iter().any(|active| active == &path) {
+                skipped_active += 1;
                 continue;
             }
             let recently_created = fs::metadata(&path)
@@ -128,18 +146,36 @@ impl GifFrameSpoolState {
                 .and_then(|modified| SystemTime::now().duration_since(modified).ok())
                 .is_some_and(|age| age < grace_period);
             if recently_created {
+                skipped_grace_period += 1;
                 continue;
             }
-            scanned += 1;
             fs::remove_dir_all(&path)
                 .map_err(|error| format!("无法清理 GIF 孤儿临时目录：{error}"))?;
             removed += 1;
         }
+        let snapshot = CleanupSnapshot {
+            scanned,
+            removed,
+            skipped_active,
+            skipped_grace_period,
+            elapsed_ms: started_at.elapsed().as_millis(),
+        };
+        if let Ok(mut latest) = self.cleanup_snapshot.lock() {
+            *latest = Some(snapshot.clone());
+        }
         eprintln!(
-            "GIF 临时目录扫描：发现 {scanned} 个孤儿目录，清理 {removed} 个，耗时 {} ms。",
-            started_at.elapsed().as_millis()
+            "GIF 临时目录扫描：扫描 {scanned} 个目录，清理 {removed} 个，跳过活跃 {skipped_active} 个、宽限期 {skipped_grace_period} 个，耗时 {} ms。",
+            snapshot.elapsed_ms
         );
         Ok(())
+    }
+
+    #[cfg(test)]
+    fn latest_cleanup_snapshot(&self) -> Option<CleanupSnapshot> {
+        self.cleanup_snapshot
+            .lock()
+            .ok()
+            .and_then(|latest| latest.clone())
     }
 
     pub(super) fn take_frames(
@@ -218,6 +254,7 @@ mod tests {
                 std::process::id()
             )),
             entries: Mutex::new(HashMap::new()),
+            cleanup_snapshot: Mutex::new(None),
         }
     }
 
@@ -252,9 +289,31 @@ mod tests {
         fs::create_dir_all(&orphan).unwrap();
         let active_id = state.create().unwrap();
         state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        let snapshot = state.latest_cleanup_snapshot().unwrap();
+        assert_eq!(snapshot.removed, 1);
+        assert_eq!(snapshot.skipped_active, 1);
+        assert_eq!(snapshot.skipped_grace_period, 0);
+        assert!(snapshot.elapsed_ms < 1_000);
         assert!(!orphan.exists());
         assert!(state.root.join(&active_id).exists());
         state.discard(&active_id).unwrap();
+        let _ = fs::remove_dir_all(state.root);
+    }
+
+    #[test]
+    fn records_grace_period_skips_without_exposing_paths() {
+        let state = test_state("grace-period");
+        fs::create_dir_all(&state.root).unwrap();
+        let fresh = state.root.join("fresh");
+        fs::create_dir_all(&fresh).unwrap();
+        state
+            .cleanup_orphaned_directories(ORPHAN_GRACE_PERIOD)
+            .unwrap();
+        let snapshot = state.latest_cleanup_snapshot().unwrap();
+        assert_eq!(snapshot.removed, 0);
+        assert_eq!(snapshot.skipped_active, 0);
+        assert_eq!(snapshot.skipped_grace_period, 1);
+        assert!(fresh.exists());
         let _ = fs::remove_dir_all(state.root);
     }
 }
