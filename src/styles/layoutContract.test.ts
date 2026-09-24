@@ -54,8 +54,8 @@ describe("compact layout viewport contract", () => {
   });
 
   it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {
-    expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 761px)");
-    expect(gifCss).toContain(".gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 136px minmax(300px, auto); overflow: visible; }");
-    expect(gifCss).toContain(".gif-main-column, .gif-preview-card { min-height: 300px; }");
+    expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 621px)");
+    expect(gifCss).toContain(".gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 128px minmax(220px, auto); overflow: visible; }");
+    expect(gifCss).toContain(".gif-main-column, .gif-preview-card { min-height: 220px; }");
   });
 });

@@ -222,7 +222,7 @@
 }
 @media (max-width: 760px) {
   .gif-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: 136px minmax(0, 1fr); gap: 8px; }
-  .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(160px, auto) minmax(160px, 1fr); }
+  .gif-source-video .gif-workspace-grid { flex: 0 0 auto; grid-template-rows: minmax(160px, auto) minmax(160px, 1fr); }
   .gif-assets-card { display: flex; flex-direction: column; gap: 4px; padding: 6px; }
   .gif-assets-card > .gif-card-heading { position: relative; flex: 0 0 28px; min-height: 28px; }
   .gif-assets-card > .gif-card-heading .gif-count-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
@@ -242,12 +242,18 @@
 }
 
 /* Keep the narrow workspace in normal document flow so expanded settings push the preview down. */
-@media (max-width: 760px) and (min-height: 761px) {
+@media (max-width: 760px) and (min-height: 621px) {
   .gif-maker-content.page-content { flex: 0 0 auto; overflow: visible; }
-  .gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 136px minmax(300px, auto); overflow: visible; }
+  .gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 128px minmax(220px, auto); overflow: visible; }
+  .gif-source-video .gif-workspace-grid { flex: 0 0 auto; grid-template-rows: minmax(160px, auto) minmax(220px, auto); }
+  .gif-main-column, .gif-preview-card { min-height: 220px; }
+  .gif-settings-card { max-height: none; overflow: visible; }
+}
+
+@media (max-width: 760px) and (min-height: 761px) {
+  .gif-workspace-grid { grid-template-rows: 136px minmax(300px, auto); }
   .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(160px, auto) minmax(300px, auto); }
   .gif-main-column, .gif-preview-card { min-height: 300px; }
-  .gif-settings-card { max-height: none; overflow: visible; }
 }
 @media (max-width: 620px) {
   .gif-maker-toolbar > span { display: none; }
