@@ -487,6 +487,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [timelineStartIndex, setTimelineStartIndex] = useState(0);
   const [timelineEndIndex, setTimelineEndIndex] = useState(0);
   const [timelineZoom, setTimelineZoom] = useState(1);
+  const timelineFrameCountRef = useRef(0);
   const selectionAnchorRef = useRef(0);
   const [canvasWidth, setCanvasWidth] = useState(savedPreferences.canvasWidth);
   const [canvasHeight, setCanvasHeight] = useState(savedPreferences.canvasHeight);
@@ -655,7 +656,16 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const selectedFrame = frames[selectedIndex] ?? null;
 
   useEffect(() => {
-    const range = clampGifTimelineRange(timelineStartIndex, timelineEndIndex || frames.length - 1, frames.length);
+    if (frames.length === 0) {
+      timelineFrameCountRef.current = 0;
+      setTimelineStartIndex(0);
+      setTimelineEndIndex(0);
+      return;
+    }
+    const range = timelineFrameCountRef.current !== frames.length
+      ? { start: 0, end: frames.length - 1 }
+      : clampGifTimelineRange(timelineStartIndex, timelineEndIndex, frames.length);
+    timelineFrameCountRef.current = frames.length;
     setTimelineStartIndex(range.start);
     setTimelineEndIndex(range.end);
   }, [frames.length, timelineEndIndex, timelineStartIndex]);
@@ -685,8 +695,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return {
       currentMs: durations.slice(0, selectedIndex).reduce((total, duration) => total + duration, 0),
       totalMs: durations.reduce((total, duration) => total + duration, 0),
+      selectionMs: durations.slice(timelineStartIndex, timelineEndIndex + 1).reduce((total, duration) => total + duration, 0),
     };
-  }, [firstFrameHoldDuration, frames, lastFrameHoldDuration, selectedIndex]);
+  }, [firstFrameHoldDuration, frames, lastFrameHoldDuration, selectedIndex, timelineEndIndex, timelineStartIndex]);
   const exportParameterSummary = useMemo(() => {
     const format = outputFormat === "png-sequence" ? "PNG 帧序列" : outputFormat === "webp" ? "WebP 动图" : outputFormat === "apng" ? "APNG 动图" : "GIF 动图";
     const fit = fitMode === "contain" ? "适应画布" : fitMode === "cover" ? "裁剪填充" : "拉伸填满";
@@ -694,7 +705,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const margins = `${contentMargins.top}/${contentMargins.right}/${contentMargins.bottom}/${contentMargins.left}`;
     const mergeEnabled = mergeIdenticalFrames && outputFormat !== "png-sequence";
     const frameCount = exportFrameSummary?.frameCount ?? frames.length;
-    const totalDurationMs = exportFrameSummary?.totalDurationMs ?? timeline.totalMs;
+    const totalDurationMs = exportFrameSummary?.totalDurationMs ?? timeline.selectionMs;
     const frameSummary = mergeEnabled
       ? exportFrameSummary ? `${frameCount} 帧（已合并）` : `${frames.length} 帧（导出时合并）`
       : `${frameCount} 帧`;
@@ -718,7 +729,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       if (maxSizeKiB.trim()) details.push(`上限 ≤ ${maxSizeKiB.trim()} KiB`);
     }
     return `${format} · ${details.join(" · ")}`;
-  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, exportFrameSummary, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, overwriteExisting, targetSizeKiB, timeline.totalMs]);
+  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, exportFrameSummary, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, overwriteExisting, targetSizeKiB, timeline.selectionMs]);
   const compressionComparisonSummary = useMemo(() => {
     if (!sizeComparison) return null;
     const summary = compareGifSizes(sizeComparison);
@@ -2213,7 +2224,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <label>起始帧 <input type="number" min="1" max={frames.length} value={timelineStartIndex + 1} onChange={(event) => { const next = clampGifTimelineRange(Number(event.target.value) - 1, timelineEndIndex, frames.length); setTimelineStartIndex(next.start); setTimelineEndIndex(next.end); }} /></label>
                 <label>结束帧 <input type="number" min="1" max={frames.length} value={timelineEndIndex + 1} onChange={(event) => { const next = clampGifTimelineRange(timelineStartIndex, Number(event.target.value) - 1, frames.length); setTimelineStartIndex(next.start); setTimelineEndIndex(next.end); }} /></label>
                 <label>缩放 <select aria-label="时间轴缩放" value={timelineZoom} onChange={(event) => setTimelineZoom(Number(event.target.value))}><option value="0.75">75%</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
-                <span aria-label={`当前时间 ${formatGifTimelineTime(timeline.currentMs)}，总时长 ${formatGifTimelineTime(timeline.totalMs)}`}>当前 {formatGifTimelineTime(timeline.currentMs)} / 总计 {formatGifTimelineTime(timeline.totalMs)} · 导出第 {timelineStartIndex + 1}–{timelineEndIndex + 1} 帧</span>
+                <span aria-label={`当前源时间 ${formatGifTimelineTime(timeline.currentMs)}，选区时长 ${formatGifTimelineTime(timeline.selectionMs)}，源总时长 ${formatGifTimelineTime(timeline.totalMs)}`}>当前源时间 {formatGifTimelineTime(timeline.currentMs)} · 选区 {formatGifTimelineTime(timeline.selectionMs)} / 源总计 {formatGifTimelineTime(timeline.totalMs)} · 导出第 {timelineStartIndex + 1}–{timelineEndIndex + 1} 帧</span>
               </div> : null}
               <div className="gif-preview-footer"><span>{frames.length ? `第 ${selectedIndex + 1} / ${frames.length} 帧` : "未选择帧"}</span><span>{sourceHint}</span><span>{canvasSize.width} × {canvasSize.height} px 画布</span></div>
             </section>
