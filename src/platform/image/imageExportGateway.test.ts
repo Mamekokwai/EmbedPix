@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import {
   encodeExportEnvelope,
+  exportImage,
   MAX_RAW_IMAGE_BYTES,
   MAX_SOURCE_FILE_NAME_BYTES,
   pickOutputDirectory,
@@ -42,6 +43,11 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("image export raw IPC envelope", () => {
+  it("keeps native dimensions and bit depth for the post-export comparison", async () => {
+    vi.mocked(invoke).mockResolvedValue({ outputPath: "E:\\out\\icon.bmp", width: 128, height: 64, format: "bmp", bitDepth: 24 });
+    await expect(exportImage(createRequest(new Uint8Array([1])))).resolves.toMatchObject({ outputPath: "E:\\out\\icon.bmp", width: 128, height: 64, bitDepth: 24 });
+  });
+
   it("uses the native preflight command in desktop mode", async () => {
     vi.mocked(invoke).mockResolvedValue({ supported: true, diskSpaceChecked: false, availableBytes: null, diskSpaceSufficient: null, items: [] });
     await preflightImageExports(["E:\\out\\one.png"], 128);

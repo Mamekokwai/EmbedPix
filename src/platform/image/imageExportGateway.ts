@@ -169,10 +169,10 @@ export async function exportImage(request: ExportImageRequest) {
     );
 
     if (typeof response === "string") {
-      return response;
+      return { outputPath: response };
     }
 
-    return response?.outputPath ?? null;
+    return response;
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }

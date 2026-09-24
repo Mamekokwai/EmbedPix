@@ -56,6 +56,10 @@ export interface ExportImageRequest {
 
 export interface ExportImageResponse {
   outputPath?: string;
+  width?: number;
+  height?: number;
+  format?: string;
+  bitDepth?: number;
 }
 
 export interface ImageDimensions {

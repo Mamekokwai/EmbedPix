@@ -24,6 +24,7 @@ import {
   type NativeImageFile,
 } from "../../platform/image/imageExportGateway";
 import type { ImageExportPreflightResult } from "../../platform/image/imageExportGateway";
+import type { ExportImageResponse } from "./types";
 import {
   DEFAULT_C_ARRAY_NAME,
   DEFAULT_JPEG_QUALITY,
@@ -293,6 +294,7 @@ export default function ImageConverter({
   const [exportFailures, setExportFailures] = useState<ExportFailureDetail[]>([]);
   const [exportPreflight, setExportPreflight] = useState<ExportPreflightResult | null>(null);
   const [nativePreflightStatus, setNativePreflightStatus] = useState<string | null>(null);
+  const [actualExportResult, setActualExportResult] = useState<ExportImageResponse | null>(null);
   const [failureDetailsOpen, setFailureDetailsOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ImageExportQueueProgress | null>(null);
   const exportCancelRef = useRef(false);
@@ -918,6 +920,7 @@ export default function ImageConverter({
       deleteSource,
     });
     setNativePreflightStatus(null);
+    setActualExportResult(null);
     const preflight = getExportPreflight(safetyPlan);
     setExportPreflight(preflight);
     if (preflight.expectedFailures > 0) {
@@ -1012,7 +1015,9 @@ export default function ImageConverter({
           metadataPolicy,
           transform: imageTransform,
         };
-        lastOutputPath = await exportImage(request);
+        const exportResult = await exportImage(request);
+        lastOutputPath = exportResult?.outputPath ?? null;
+        setActualExportResult(exportResult);
       }, {
         shouldCancel: () => exportCancelRef.current,
         onProgress: (progress) => {
@@ -1596,6 +1601,9 @@ export default function ImageConverter({
                 </p>
               ) : null}
               {nativePreflightStatus ? <p className="export-progress-summary" role="status">{nativePreflightStatus}</p> : null}
+              {actualExportResult?.outputPath && status.kind === "success" ? <p className="export-progress-summary export-actual-result" role="status">
+                实际导出：{actualExportResult.outputPath} · {actualExportResult.width && actualExportResult.height ? `${actualExportResult.width} × ${actualExportResult.height} px` : "尺寸由桌面端返回"} · {actualExportResult.format?.toUpperCase() ?? "格式由桌面端返回"} · {actualExportResult.bitDepth ? `${actualExportResult.bitDepth} 位` : "位深由桌面端返回"} · 文件体积需由桌面端回读
+              </p> : null}
             </div>
             <div className="footer-actions">
               {failedExportIds.length > 0 && status.kind !== "busy" ? (
