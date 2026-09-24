@@ -6,6 +6,7 @@ import type {
 
 export const EXPORT_IMAGE_COMMAND = "export_image" as const;
 export const PICK_OUTPUT_DIRECTORY_COMMAND = "pick_gif_sequence_output" as const;
+export const PREFLIGHT_IMAGE_EXPORTS_COMMAND = "preflight_image_exports" as const;
 export const MAX_METADATA_BYTES = 64 * 1024;
 export const MAX_RAW_IMAGE_BYTES = 32 * 1024 * 1024;
 export const MAX_SOURCE_FILE_NAME_BYTES = 1024;
@@ -14,6 +15,20 @@ export interface NativeImageFile {
   path: string;
   fileName: string;
   data: number[];
+}
+
+export interface ImageExportPreflightResult {
+  supported: boolean;
+  diskSpaceChecked: boolean;
+  availableBytes: number | null;
+  diskSpaceSufficient: boolean | null;
+  items: Array<{
+    targetPath: string;
+    targetExists: boolean;
+    parentExists: boolean;
+    parentWritable: boolean;
+    reason: string | null;
+  }>;
 }
 
 const EXPORT_ENVELOPE_MAGIC = new Uint8Array([0x45, 0x47, 0x46, 0x31]);
@@ -101,6 +116,23 @@ export function isTauriEnvironment() {
 
 export async function pickImageFile(): Promise<NativeImageFile | null> {
   return invoke<NativeImageFile | null>("pick_image");
+}
+
+export async function preflightImageExports(targetPaths: ReadonlyArray<string>, estimatedBytes = 0): Promise<ImageExportPreflightResult> {
+  if (!isTauriEnvironment()) {
+    return {
+      supported: false,
+      diskSpaceChecked: false,
+      availableBytes: null,
+      diskSpaceSufficient: null,
+      items: targetPaths.map((targetPath) => ({ targetPath, targetExists: false, parentExists: false, parentWritable: false, reason: "当前预览环境不支持文件系统预检。" })),
+    };
+  }
+  try {
+    return await invoke<ImageExportPreflightResult>(PREFLIGHT_IMAGE_EXPORTS_COMMAND, { request: { targetPaths, estimatedBytes } });
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
 }
 
 export async function pickImageFiles(): Promise<NativeImageFile[]> {

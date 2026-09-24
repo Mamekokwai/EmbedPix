@@ -6,6 +6,8 @@ import {
   MAX_SOURCE_FILE_NAME_BYTES,
   pickOutputDirectory,
   PICK_OUTPUT_DIRECTORY_COMMAND,
+  PREFLIGHT_IMAGE_EXPORTS_COMMAND,
+  preflightImageExports,
   validateExportEnvelopeInput,
 } from "./imageExportGateway";
 import type { ExportImageRequest } from "../../features/image-converter/types";
@@ -40,6 +42,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("image export raw IPC envelope", () => {
+  it("uses the native preflight command in desktop mode", async () => {
+    vi.mocked(invoke).mockResolvedValue({ supported: true, diskSpaceChecked: false, availableBytes: null, diskSpaceSufficient: null, items: [] });
+    await preflightImageExports(["E:\\out\\one.png"], 128);
+    expect(invoke).toHaveBeenCalledWith(PREFLIGHT_IMAGE_EXPORTS_COMMAND, {
+      request: { targetPaths: ["E:\\out\\one.png"], estimatedBytes: 128 },
+    });
+  });
+
+  it("reports unsupported preflight explicitly outside Tauri", async () => {
+    vi.stubGlobal("window", {});
+    const result = await preflightImageExports(["/tmp/one.png"]);
+    expect(result.supported).toBe(false);
+    expect(result.items[0].reason).toContain("不支持文件系统预检");
+  });
+
   it("encodes Unicode metadata, a little-endian length, and unchanged image bytes", () => {
     const inputData = new Uint8Array([0, 1, 127, 128, 254, 255]);
     const request = createRequest(inputData, { fileName: "屏幕图标 🚀.png" });

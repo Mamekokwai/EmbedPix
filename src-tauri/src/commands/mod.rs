@@ -1,4 +1,5 @@
 pub mod export_image;
+pub mod export_preflight;
 pub mod gif;
 pub(crate) mod path_security;
 pub mod update;

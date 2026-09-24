@@ -27,6 +27,7 @@ pub fn run() {
             commands::export_image::pick_image,
             commands::export_image::pick_images,
             commands::export_image::read_image_file,
+            commands::export_preflight::preflight_image_exports,
             commands::update::check_update,
             commands::update::get_update_download_progress,
             commands::update::download_update,
