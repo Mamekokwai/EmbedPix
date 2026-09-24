@@ -1703,6 +1703,33 @@ mod tests {
         image
     }
 
+    fn preview_request(output_format: OutputFormat, bit_depth: u16) -> ExportRequest {
+        let (input_data, _) = encode_png(sample_image(), 32, Rgba([255, 255, 255, 255])).unwrap();
+        ExportRequest {
+            input_data,
+            source_file_name: "preview.png".to_string(),
+            output_format,
+            width: 2,
+            height: 1,
+            keep_aspect_ratio: false,
+            background_color: Rgba([255, 255, 255, 255]),
+            bit_depth,
+            jpeg_quality: 90,
+            raw_options: raw::RawOptions::parse(None, None, None, None).unwrap(),
+            c_array_name: "preview".to_string(),
+            output_location: OutputLocation::Dialog,
+            source_path: None,
+            output_subdirectory: None,
+            output_directory: None,
+            overwrite_existing: false,
+            overwrite_same_name: false,
+            transform: ImageTransformOptions::default(),
+            watermark: None,
+            delete_source: false,
+            metadata_policy: MetadataPolicy::Strip,
+        }
+    }
+
     #[test]
     fn raw_metadata_parses_image_transform_options() {
         let metadata: ExportMetadata = serde_json::from_str(
@@ -1963,6 +1990,25 @@ mod tests {
         assert_eq!(enforce_preview_limit(&bytes), Ok(()));
         let oversized = vec![0; MAX_PREVIEW_BYTES + 1];
         assert!(enforce_preview_limit(&oversized).is_err());
+    }
+
+    #[test]
+    fn preview_contract_encodes_bmp_with_requested_bit_depth() {
+        let request = preview_request(OutputFormat::Bmp, 24);
+        let (bytes, bit_depth) = convert_image(&request).unwrap();
+        assert_eq!(bit_depth, 24);
+        assert_eq!(&bytes[0..2], b"BM");
+        assert_eq!(u16::from_le_bytes([bytes[28], bytes[29]]), 24);
+    }
+
+    #[test]
+    fn preview_contract_encodes_rgb565_with_golden_length_and_samples() {
+        let request = preview_request(OutputFormat::Rgb565, 16);
+        let (bytes, bit_depth) = convert_image(&request).unwrap();
+        assert_eq!(bit_depth, 16);
+        assert_eq!(bytes.len(), 4);
+        assert_eq!(&bytes[0..2], &[0x00, 0xF8]);
+        assert_eq!(&bytes[2..4], &[0xE0, 0x07]);
     }
 
     #[test]
