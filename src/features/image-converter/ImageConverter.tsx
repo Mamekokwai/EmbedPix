@@ -41,6 +41,7 @@ import {
   formatFileSize,
   formatMebibytes,
   getImagePreviewComparison,
+  estimateImageExportBytes,
   getBackgroundNote,
   getBitDepthNote,
   getBitDepths,
@@ -986,6 +987,7 @@ export default function ImageConverter({
     });
     setNativePreflightStatus(null);
     setActualExportResult(null);
+    const estimatedBytes = estimateImageExportBytes(requestedImages, width, height, outputFormat, getEffectiveBitDepth(outputFormat, bitDepth));
     const preflight = getExportPreflight(safetyPlan);
     setExportPreflight(preflight);
     if (preflight.expectedFailures > 0) {
@@ -999,8 +1001,10 @@ export default function ImageConverter({
     }
     let nativePreflight: ImageExportPreflightResult | null = null;
     try {
-      nativePreflight = await preflightImageExports(safetyPlan.targetPaths, 0);
-      setNativePreflightStatus(nativePreflight.supported ? "已执行原生目录与权限预检；磁盘空间未检查" : "未执行原生文件系统预检（当前不是桌面应用）");
+      nativePreflight = await preflightImageExports(safetyPlan.targetPaths, estimatedBytes ?? 0);
+      setNativePreflightStatus(nativePreflight.supported
+        ? `已执行原生目录与权限预检；${nativePreflight.diskSpaceChecked ? `预估 ${formatFileSize(estimatedBytes ?? 0)}，可用 ${formatFileSize(nativePreflight.availableBytes ?? 0)}` : "磁盘空间未检查"}`
+        : "未执行原生文件系统预检（当前不是桌面应用）");
     } catch (probeError) {
       const probeMessage = "原生预检失败，已阻止导出：" + (probeError instanceof Error ? probeError.message : "无法调用预检");
       setNativePreflightStatus(probeMessage);
@@ -1015,6 +1019,7 @@ export default function ImageConverter({
         if (!item.parentExists) reasons.push({ code: "output-directory-missing" as const, message: item.reason ?? "输出目录不存在。" });
         else if (!item.parentWritable) reasons.push({ code: "output-directory-not-writable" as const, message: item.reason ?? "输出目录不可写。" });
         if (item.targetExists && !allowExisting) reasons.push({ code: "target-exists" as const, message: item.reason ?? "输出文件已存在。" });
+        if (nativePreflight?.diskSpaceSufficient === false) reasons.push({ code: "insufficient-disk-space" as const, message: `磁盘空间不足：预估需要 ${formatFileSize(estimatedBytes ?? 0)}，可用 ${formatFileSize(nativePreflight.availableBytes ?? 0)}。` });
         return { targetPath: item.targetPath, ok: reasons.length === 0, reasons };
       });
       const nativeFailures = nativeItems.filter((item) => !item.ok);

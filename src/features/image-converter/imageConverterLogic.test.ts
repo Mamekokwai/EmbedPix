@@ -27,6 +27,7 @@ import {
   getPixelError,
   getImageTransformError,
   getImagePreviewComparison,
+  estimateImageExportBytes,
   getTransformedSourceDimensions,
   isImageFile,
   normalizeDimension,
@@ -78,6 +79,13 @@ describe("image converter dimensions", () => {
 });
 
 describe("image converter output rules", () => {
+  it("estimates conservative preflight bytes and leaves invalid inputs unknown", () => {
+    const images = [{ file: { size: 100 } }, { file: { size: 200 } }];
+    expect(estimateImageExportBytes(images, 10, 10, "rgb565", 16)).toBe(300 + 2 * (200 + 64));
+    expect(estimateImageExportBytes(images, 10, 10, "png", 32)).toBe(300 + 2 * (400 + 65_536));
+    expect(estimateImageExportBytes([], 10, 10, "bmp", 24)).toBeUndefined();
+  });
+
   it("describes the output preview using the same format, bit depth and background parameters", () => {
     expect(getImagePreviewComparison("jpg", 320, 240, 32, "#abc123")).toMatchObject({
       dimensions: "320 × 240 px",

@@ -56,6 +56,31 @@ export function formatMebibytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
+export function estimateImageExportBytes(
+  images: ReadonlyArray<{ file: { size: number } }>,
+  width: number,
+  height: number,
+  outputFormat: OutputFormat,
+  bitDepth: BmpBitDepth,
+): number | undefined {
+  if (!images.length || !Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) return undefined;
+  const pixels = width * height;
+  if (!Number.isSafeInteger(pixels)) return undefined;
+  const effectiveBitDepth = getEffectiveBitDepth(outputFormat, bitDepth);
+  let encodedBytes: number;
+  switch (outputFormat) {
+    case "bmp": encodedBytes = Math.ceil(pixels * effectiveBitDepth / 8) + 1024; break;
+    case "png": encodedBytes = pixels * (effectiveBitDepth === 32 ? 4 : 3) + 65_536; break;
+    case "jpg": encodedBytes = pixels * 3 + 131_072; break;
+    case "rgb565": encodedBytes = pixels * 2 + 64; break;
+    case "c-array": encodedBytes = pixels * 2 + pixels * 4 + 4096; break;
+    default: return undefined;
+  }
+  const inputBytes = images.reduce((total, image) => total + (Number.isFinite(image.file.size) && image.file.size > 0 ? image.file.size : 0), 0);
+  const estimate = encodedBytes * images.length + inputBytes;
+  return Number.isSafeInteger(estimate) ? estimate : undefined;
+}
+
 export interface ImagePreviewComparison {
   dimensions: string;
   format: string;
