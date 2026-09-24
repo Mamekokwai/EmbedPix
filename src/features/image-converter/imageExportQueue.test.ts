@@ -16,6 +16,29 @@ describe("image export queue", () => {
     expect(formatExportQueueProgress({ item: items[0], index: 1, total: 3, succeeded: 0, failed: 0, skipped: 0 })).toContain("正在导出 1/3");
   });
 
+  it("retries only failed items without exporting successful items again", async () => {
+    const attempts = new Map<string, number>();
+    const exportItem = vi.fn(async (item: { file: { name: string } }) => {
+      const attempt = (attempts.get(item.file.name) ?? 0) + 1;
+      attempts.set(item.file.name, attempt);
+      if (item.file.name === "bad.png" && attempt === 1) throw new Error("编码失败");
+    });
+    const items = ["ok.png", "bad.png", "last.png"].map((name) => ({ file: { name } }));
+
+    const firstRun = await runExportQueue(items, exportItem);
+    const retryRun = await runExportQueue(firstRun.failed.map(({ item }) => item), exportItem);
+
+    expect(retryRun.failed).toEqual([]);
+    expect(retryRun.succeeded.map((item) => item.file.name)).toEqual(["bad.png"]);
+    expect(exportItem.mock.calls.map(([item]) => item.file.name)).toEqual([
+      "ok.png", "bad.png", "last.png", "bad.png",
+    ]);
+    expect(formatExportFailureDetails(firstRun.failed.map(({ item, error }) => ({
+      fileName: item.file.name,
+      message: error instanceof Error ? error.message : "导出失败，请重试。",
+    })))).toBe("bad.png：编码失败");
+  });
+
   it("stops before the next item when cancellation is requested", async () => {
     let cancel = false;
     const exportItem = vi.fn(async (item: { file: { name: string } }) => {
