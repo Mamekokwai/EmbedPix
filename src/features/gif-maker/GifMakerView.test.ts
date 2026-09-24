@@ -4,9 +4,9 @@ import { canRequestGifExportCancel, createGifExportJobId, DEFAULT_GIF_SETTINGS_G
 describe("GIF export presets", () => {
   it("defines quality, balanced, and small presets without touching other formats", () => {
     expect(GIF_PRESETS).toEqual({
-      high: { label: "高质量", encodingQuality: "high", colorCount: 256, ditherMode: "none", canvasPreset: "source" },
-      balanced: { label: "平衡", encodingQuality: "balanced", colorCount: 128, ditherMode: "floydSteinberg", canvasPreset: "75" },
-      small: { label: "小体积", encodingQuality: "fast", colorCount: 64, ditherMode: "none", canvasPreset: "50" },
+      high: { label: "高质量", description: "原尺寸 · 256 色 · 15 FPS · 不跳帧", encodingQuality: "high", colorCount: 256, ditherMode: "none", canvasPreset: "source", videoFps: 15, videoEveryNthFrame: 1 },
+      balanced: { label: "平衡", description: "75% 画布 · 128 色 · 12 FPS · 不跳帧", encodingQuality: "balanced", colorCount: 128, ditherMode: "floydSteinberg", canvasPreset: "75", videoFps: 12, videoEveryNthFrame: 1 },
+      small: { label: "小体积", description: "50% 画布 · 64 色 · 8 FPS · 每 2 帧采样", encodingQuality: "fast", colorCount: 64, ditherMode: "none", canvasPreset: "50", videoFps: 8, videoEveryNthFrame: 2 },
     });
   });
 });

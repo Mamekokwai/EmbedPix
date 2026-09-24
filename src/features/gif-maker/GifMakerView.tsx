@@ -45,16 +45,19 @@ export type GifPreset = GifMakerPreset;
 
 export interface GifPresetConfig {
   label: string;
+  description: string;
   encodingQuality: GifEncodingQuality;
   colorCount: GifColorCount;
   ditherMode: GifDitherMode;
   canvasPreset: Exclude<GifCanvasPreset, "custom">;
+  videoFps: number;
+  videoEveryNthFrame: number;
 }
 
 export const GIF_PRESETS: Record<Exclude<GifPreset, "custom">, GifPresetConfig> = {
-  high: { label: "高质量", encodingQuality: "high", colorCount: 256, ditherMode: "none", canvasPreset: "source" },
-  balanced: { label: "平衡", encodingQuality: "balanced", colorCount: 128, ditherMode: "floydSteinberg", canvasPreset: "75" },
-  small: { label: "小体积", encodingQuality: "fast", colorCount: 64, ditherMode: "none", canvasPreset: "50" },
+  high: { label: "高质量", description: "原尺寸 · 256 色 · 15 FPS · 不跳帧", encodingQuality: "high", colorCount: 256, ditherMode: "none", canvasPreset: "source", videoFps: 15, videoEveryNthFrame: 1 },
+  balanced: { label: "平衡", description: "75% 画布 · 128 色 · 12 FPS · 不跳帧", encodingQuality: "balanced", colorCount: 128, ditherMode: "floydSteinberg", canvasPreset: "75", videoFps: 12, videoEveryNthFrame: 1 },
+  small: { label: "小体积", description: "50% 画布 · 64 色 · 8 FPS · 每 2 帧采样", encodingQuality: "fast", colorCount: 64, ditherMode: "none", canvasPreset: "50", videoFps: 8, videoEveryNthFrame: 2 },
 };
 export type GifSettingsGroup = "timing" | "canvas" | "export";
 export const DEFAULT_GIF_SETTINGS_GROUP: GifSettingsGroup | null = null;
@@ -1313,6 +1316,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setEncodingQuality(config.encodingQuality);
     setColorCount(config.colorCount);
     setDitherMode(config.ditherMode);
+    setVideoFps(config.videoFps);
+    setVideoEveryNthFrame(config.videoEveryNthFrame);
+    markVideoFramesStale();
     setMeasuredSizeBytes(null);
     applyCanvasPreset(config.canvasPreset, true);
   };
@@ -2075,9 +2081,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <div className="gif-video-grid">
                   <label className="gif-field"><span>开始时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoStart} onChange={(event) => { setVideoStart(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0))); markVideoFramesStale(); }} /></label>
                   <label className="gif-field"><span>结束时间 · 秒</span><input type="number" min="0" max={videoSource.duration} step="0.01" value={videoEnd} onChange={(event) => { setVideoEnd(Math.max(0, Math.min(videoSource.duration, Number(event.target.value) || 0))); markVideoFramesStale(); }} /></label>
-                  <label className="gif-field"><span>帧率 · FPS</span><input type="number" min="1" max="30" step="1" value={videoFps} onChange={(event) => { setVideoFps(clampVideoFps(Number(event.target.value))); markVideoFramesStale(); }} /></label>
-                  <label className="gif-field"><span>每隔 N 帧</span><input type="number" min="1" max="200" step="1" value={videoEveryNthFrame} onChange={(event) => { setVideoEveryNthFrame(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value) || 1)))); markVideoFramesStale(); }} /></label>
-                  <label className="gif-field"><span>最大帧数</span><input type="number" min="1" max={MAX_VIDEO_FRAME_LIMIT} step="1" value={videoMaxFrames} onChange={(event) => { setVideoMaxFrames(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value) || 1)))); markVideoFramesStale(); }} /></label>
+                  <label className="gif-field"><span>帧率 · FPS</span><input type="number" min="1" max="30" step="1" value={videoFps} onChange={(event) => { setVideoFps(clampVideoFps(Number(event.target.value))); setGifPreset("custom"); markVideoFramesStale(); }} /></label>
+                  <label className="gif-field"><span>每隔 N 帧</span><input type="number" min="1" max="200" step="1" value={videoEveryNthFrame} onChange={(event) => { setVideoEveryNthFrame(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value) || 1)))); setGifPreset("custom"); markVideoFramesStale(); }} /></label>
+                  <label className="gif-field"><span>最大帧数</span><input type="number" min="1" max={MAX_VIDEO_FRAME_LIMIT} step="1" value={videoMaxFrames} onChange={(event) => { setVideoMaxFrames(Math.min(MAX_VIDEO_FRAME_LIMIT, Math.max(1, Math.floor(Number(event.target.value) || 1)))); setGifPreset("custom"); markVideoFramesStale(); }} /></label>
                   <SelectField id="gif-video-crop" label="裁剪区域" value={videoCropPreset} options={[{ value: "original" as const, label: "原始画面" }, { value: "center16x9" as const, label: "居中 16:9" }, { value: "center1x1" as const, label: "居中 1:1" }, { value: "custom" as const, label: "自定义" }]} onChange={(value) => updateVideoTransform(value, videoRotation)} />
                   <SelectField id="gif-video-rotation" label="旋转" value={videoRotation} options={[{ value: 0 as const, label: "0°" }, { value: 90 as const, label: "90°" }, { value: 180 as const, label: "180°" }, { value: 270 as const, label: "270°" }]} onChange={(value) => updateVideoTransform(videoCropPreset, value)} />
                   {videoCropPreset === "custom" ? <div className="gif-video-custom-crop" aria-label="自定义裁剪区域">
@@ -2247,7 +2253,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <SelectField id="gif-loop-mode" label="循环方式" value={loopMode} options={[{ value: "infinite" as const, label: "无限循环" }, { value: "finite" as const, label: "有限重复" }]} onChange={(value) => { setIsPlaying(false); setLoopMode(value); setGifPreset("custom"); }} />
               <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); setGifPreset("custom"); }} /><small>次</small></div></label>
               {outputFormat === "gif" ? <>
-                <SelectField id="gif-preset" label="常用预设" value={gifPreset} options={[{ value: "high" as const, label: GIF_PRESETS.high.label }, { value: "balanced" as const, label: GIF_PRESETS.balanced.label }, { value: "small" as const, label: GIF_PRESETS.small.label }, { value: "custom" as const, label: "自定义" }]} onChange={(value) => { if (value === "custom") setGifPreset(value); else applyGifPreset(value); }} />
+                <SelectField id="gif-preset" label="常用预设" value={gifPreset} options={[{ value: "high" as const, label: GIF_PRESETS.high.label }, { value: "balanced" as const, label: GIF_PRESETS.balanced.label }, { value: "small" as const, label: "小体积" }, { value: "custom" as const, label: "自定义" }]} onChange={(value) => { if (value === "custom") setGifPreset(value); else applyGifPreset(value); }} />
+                {gifPreset !== "custom" ? <p className="gif-format-note">当前预设：{GIF_PRESETS[gifPreset].description}。单独修改颜色、抖动、画布或视频采样参数后自动转为“自定义”。</p> : null}
                 <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={updateGifEncodingQuality} />
                 <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }, { value: 32 as const, label: "32 色（更小体积）" }, { value: 16 as const, label: "16 色（极小体积）" }, { value: 2 as const, label: "2 色（单色设备）" }]} onChange={updateGifColorCount} />
                 <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={updateGifDitherMode} />
