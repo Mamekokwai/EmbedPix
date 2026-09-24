@@ -173,6 +173,17 @@ describe("image export raw IPC envelope", () => {
     });
   });
 
+  it("defaults metadata handling to omission, and serializes explicit cleanup policy", () => {
+    const readMetadata = (payload: Uint8Array) => {
+      const length = new DataView(payload.buffer, payload.byteOffset, payload.byteLength).getUint32(4, true);
+      return JSON.parse(new TextDecoder().decode(payload.subarray(8, 8 + length)));
+    };
+    const stripped = readMetadata(encodeExportEnvelope(createRequest(new Uint8Array([1]))));
+    const explicit = readMetadata(encodeExportEnvelope(createRequest(new Uint8Array([1]), { metadataPolicy: "strip" })));
+    expect(stripped).not.toHaveProperty("metadataPolicy");
+    expect(explicit.metadataPolicy).toBe("strip");
+  });
+
   it("rejects empty and oversized image data before allocating an envelope", () => {
     expect(() => validateExportEnvelopeInput(0, "icon.png")).toThrow("图片数据不能为空");
     expect(() => validateExportEnvelopeInput(MAX_RAW_IMAGE_BYTES, "icon.png")).not.toThrow();

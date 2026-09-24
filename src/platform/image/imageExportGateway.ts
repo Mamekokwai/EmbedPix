@@ -61,6 +61,7 @@ function getExportMetadata(request: ExportImageRequest) {
     } : {}),
     ...(request.deleteSource ? { deleteSource: true } : {}),
     ...(request.transform ? { transform: request.transform } : {}),
+    ...(request.metadataPolicy ? { metadataPolicy: request.metadataPolicy } : {}),
   };
 }
 

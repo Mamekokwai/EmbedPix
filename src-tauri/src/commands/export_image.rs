@@ -121,6 +121,32 @@ struct ExportRequest {
     transform: ImageTransformOptions,
     watermark: Option<WatermarkOptions>,
     delete_source: bool,
+    metadata_policy: MetadataPolicy,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+enum MetadataPolicy {
+    #[default]
+    Strip,
+    Preserve,
+}
+
+impl MetadataPolicy {
+    fn parse(value: Option<&str>) -> Result<Self, String> {
+        match value
+            .unwrap_or("strip")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "strip" => Ok(Self::Strip),
+            "preserve" => Ok(Self::Preserve),
+            other => Err(format!(
+                "unsupported metadataPolicy `{other}`; expected strip or preserve"
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -241,6 +267,8 @@ struct ExportMetadata {
     watermark_font_size: Option<u16>,
     #[serde(default)]
     delete_source: bool,
+    #[serde(default)]
+    metadata_policy: Option<String>,
 }
 
 impl ExportMetadata {
@@ -270,6 +298,10 @@ impl ExportMetadata {
         )?;
         let transform = self.transform.unwrap_or_default();
         transform.validate()?;
+        let metadata_policy = MetadataPolicy::parse(self.metadata_policy.as_deref())?;
+        if metadata_policy == MetadataPolicy::Preserve {
+            return Err("metadataPolicy=preserve is not supported yet; use strip to remove EXIF/ICC metadata safely".to_string());
+        }
         Ok(ExportRequest {
             input_data,
             source_file_name: source_file_name.clone(),
@@ -300,6 +332,7 @@ impl ExportMetadata {
             transform,
             watermark,
             delete_source: self.delete_source,
+            metadata_policy,
         })
     }
 }
@@ -517,6 +550,9 @@ pub fn export_image_cli(payload: &[u8]) -> Result<ExportImageResult, String> {
 }
 
 fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
+    if request.metadata_policy == MetadataPolicy::Preserve {
+        return Err("metadataPolicy=preserve is not supported yet; use strip to remove EXIF/ICC metadata safely".to_string());
+    }
     validate_dimensions(request.width, request.height)?;
     validate_bit_depth(request.output_format, request.bit_depth)?;
 
@@ -1962,6 +1998,7 @@ mod tests {
             watermark_opacity: None,
             watermark_font_size: None,
             delete_source: false,
+            metadata_policy: None,
         };
         let payload = raw_payload(&metadata, &[0x89, 0x50, 0x4e, 0x47]);
         let request = parse_raw_payload(&payload).unwrap();
@@ -1998,6 +2035,7 @@ mod tests {
             watermark_opacity: None,
             watermark_font_size: None,
             delete_source: false,
+            metadata_policy: None,
         };
         let request = parse_raw_payload(&raw_payload(&metadata, &[1, 2, 3])).unwrap();
 
@@ -2072,6 +2110,7 @@ mod tests {
             watermark_opacity: None,
             watermark_font_size: None,
             delete_source: false,
+            metadata_policy: None,
         };
         assert!(parse_raw_payload(&raw_payload(&metadata, &[]))
             .unwrap_err()
@@ -2109,6 +2148,7 @@ mod tests {
             watermark_opacity: None,
             watermark_font_size: None,
             delete_source: false,
+            metadata_policy: None,
         };
 
         assert!(create_metadata(String::new())
@@ -2222,6 +2262,7 @@ mod tests {
             transform: ImageTransformOptions::default(),
             watermark: None,
             delete_source: false,
+            metadata_policy: MetadataPolicy::Strip,
         }
     }
 

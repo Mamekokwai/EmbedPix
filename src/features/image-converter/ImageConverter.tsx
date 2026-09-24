@@ -285,6 +285,7 @@ export default function ImageConverter({
   const [outputDirectory, setOutputDirectory] = useState("");
   const [overwriteSameName, setOverwriteSameName] = useState(false);
   const [deleteSource, setDeleteSource] = useState(false);
+  const [metadataPolicy, setMetadataPolicy] = useState<"strip" | "preserve">("strip");
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "等待导入图片" });
   const [error, setError] = useState<string | null>(null);
@@ -1008,6 +1009,7 @@ export default function ImageConverter({
           outputDirectory: outputDirectory.trim() || undefined,
           overwriteSameName,
           deleteSource,
+          metadataPolicy,
           transform: imageTransform,
         };
         lastOutputPath = await exportImage(request);
@@ -1522,6 +1524,14 @@ export default function ImageConverter({
                   </div>
                 </div>
               )}
+            </div>
+            <div className="setting-group">
+              <label className="toggle-row">
+                <input type="checkbox" checked={metadataPolicy === "strip"} onChange={(event) => setMetadataPolicy(event.target.checked ? "strip" : "preserve")} />
+                <span className="toggle-track" aria-hidden="true"><span /></span>
+                <span>清理 EXIF/ICC 元数据</span>
+              </label>
+              <p className="field-help">默认清理；保留元数据当前不支持，关闭后导出会被拒绝。</p>
             </div>
                 </div>
               </details>
