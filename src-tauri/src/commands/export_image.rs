@@ -392,6 +392,7 @@ fn parse_watermark(
 #[serde(rename_all = "camelCase")]
 pub struct ExportImageResult {
     pub output_path: String,
+    pub output_bytes: u64,
     pub width: u32,
     pub height: u32,
     pub format: String,
@@ -513,8 +514,18 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
         )
     })?;
 
+    let output_bytes = fs::metadata(&output_path)
+        .map_err(|error| {
+            format!(
+                "failed to inspect published output `{}`: {error}",
+                output_path.display()
+            )
+        })?
+        .len();
+
     Ok(ExportImageResult {
         output_path: output_path.to_string_lossy().into_owned(),
+        output_bytes,
         width,
         height,
         format: output_format.name().to_string(),
@@ -540,8 +551,17 @@ pub fn export_image_cli(payload: &[u8]) -> Result<ExportImageResult, String> {
             replace_original: request.output_location == OutputLocation::Original,
         },
     )?;
+    let output_bytes = fs::metadata(&output_path)
+        .map_err(|error| {
+            format!(
+                "failed to inspect published output `{}`: {error}",
+                output_path.display()
+            )
+        })?
+        .len();
     Ok(ExportImageResult {
         output_path: output_path.to_string_lossy().into_owned(),
+        output_bytes,
         width: request.width,
         height: request.height,
         format: output_format.name().to_string(),

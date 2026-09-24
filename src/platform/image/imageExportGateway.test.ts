@@ -44,8 +44,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("image export raw IPC envelope", () => {
   it("keeps native dimensions and bit depth for the post-export comparison", async () => {
-    vi.mocked(invoke).mockResolvedValue({ outputPath: "E:\\out\\icon.bmp", width: 128, height: 64, format: "bmp", bitDepth: 24 });
-    await expect(exportImage(createRequest(new Uint8Array([1])))).resolves.toMatchObject({ outputPath: "E:\\out\\icon.bmp", width: 128, height: 64, bitDepth: 24 });
+    vi.mocked(invoke).mockResolvedValue({ outputPath: "E:\\out\\icon.bmp", outputBytes: 4096, width: 128, height: 64, format: "bmp", bitDepth: 24 });
+    await expect(exportImage(createRequest(new Uint8Array([1])))).resolves.toMatchObject({ outputPath: "E:\\out\\icon.bmp", outputBytes: 4096, width: 128, height: 64, bitDepth: 24 });
   });
 
   it("uses the native preflight command in desktop mode", async () => {

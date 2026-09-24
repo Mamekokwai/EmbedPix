@@ -56,6 +56,7 @@ export interface ExportImageRequest {
 
 export interface ExportImageResponse {
   outputPath?: string;
+  outputBytes?: number;
   width?: number;
   height?: number;
   format?: string;
