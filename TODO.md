@@ -137,7 +137,7 @@
 
 - [x] 前端测试覆盖进度、失败详情、帧操作和响应式 ViewModel
 - [x] 增加四种窗口尺寸的可重复 CSS/source contract（320×480、360×500、480×640、1280×800）
-- [ ] 真实窗口矩阵 E2E（当前仅完成 CSS 断点审查与当前窗口图片/视频模式实测）
+- [x] 真实窗口矩阵 E2E（E1 已完成五种 viewport、图片/视频双模式、连续 Tab、长中文文件名及受控失败状态实测）
 - [x] 发布 `0.2.2`
 
 ## 0.2.3 编码质量和体积优化
@@ -261,9 +261,9 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] CLI 无桌面测试通过
 - [x] 更新协议端到端测试通过
 - [x] 供应链门禁通过
-- [ ] 发布 `0.3.2`
+- [x] 发布 `0.3.2`
 
-内部验收证据：CLI 已通过无桌面 smoke/契约测试及 image、gif、pngSequence 三类端到端操作；更新协议已通过本地 HTTP fixture，覆盖下载、大小、SHA-256、签名和缓存复核；仓库内 verifier、Action SHA 固定、版本一致性、tag/commit 与发布后资产回读门禁已通过；GitHub Settings 的 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则已通过 API 验证。仍阻塞：`0.3.2` 尚未发布。
+内部验收证据：CLI 已通过无桌面 smoke/契约测试及 image、gif、pngSequence 三类端到端操作；更新协议已通过本地 HTTP fixture，覆盖下载、大小、SHA-256、签名和缓存复核；仓库内 verifier、Action SHA 固定、版本一致性、tag/commit 与发布后资产回读门禁已通过；GitHub Settings 的 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则已通过 API 验证。远端审计确认 `v0.3.2` Release 非 draft，7 个资产齐全，`latest.json` 为 0.3.2 且包含两个平台，两个 manifest 签名与对应 `.sig` 资产一致，provenance 指向 `dbb07ce`。
 
 ## 0.3.3 GIF 与图片转换体验/稳定性
 
@@ -314,6 +314,8 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [ ] 完成 `0.3.3` 发布前版本/签名/manifest 一致性检查
 
 验收：所有已承诺任务均有通过证据；发布门禁通过后才允许发布 `0.3.3`，不得以未完成项替代验收。
+
+当前 E4 发布门禁缺口：P0/P1/P2 尚有未完成项（包括 E7 像素级真实编码对比、E8 ICC/色彩管理、E9 磁盘空间探针及 E10 评估后的生产决策）；需归档这些任务的通过证据，补齐前端/Rust/真实窗口/发布资产全套门禁，并准备包含兼容性、已知限制和回归数据的发布说明；最后再对 package/Cargo/Cargo.lock/Tauri、tag、签名、manifest、Release 资产和 provenance 做 0.3.3 一致性检查。
 
 ### P1：核心转换体验
 
