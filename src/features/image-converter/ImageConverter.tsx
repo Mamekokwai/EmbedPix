@@ -19,9 +19,11 @@ import {
   isTauriEnvironment,
   pickImageFiles,
   pickOutputDirectory,
+  preflightImageExports,
   readImageFile,
   type NativeImageFile,
 } from "../../platform/image/imageExportGateway";
+import type { ImageExportPreflightResult } from "../../platform/image/imageExportGateway";
 import {
   DEFAULT_C_ARRAY_NAME,
   DEFAULT_JPEG_QUALITY,
@@ -289,6 +291,7 @@ export default function ImageConverter({
   const [failedExportIds, setFailedExportIds] = useState<string[]>([]);
   const [exportFailures, setExportFailures] = useState<ExportFailureDetail[]>([]);
   const [exportPreflight, setExportPreflight] = useState<ExportPreflightResult | null>(null);
+  const [nativePreflightStatus, setNativePreflightStatus] = useState<string | null>(null);
   const [failureDetailsOpen, setFailureDetailsOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ImageExportQueueProgress | null>(null);
   const exportCancelRef = useRef(false);
@@ -913,6 +916,7 @@ export default function ImageConverter({
       overwriteSameName,
       deleteSource,
     });
+    setNativePreflightStatus(null);
     const preflight = getExportPreflight(safetyPlan);
     setExportPreflight(preflight);
     if (preflight.expectedFailures > 0) {
@@ -923,6 +927,42 @@ export default function ImageConverter({
       setError(details);
       setStatus({ kind: "error", text: `导出预检：预计成功 ${preflight.expectedSuccesses}，失败 ${preflight.expectedFailures}` });
       return;
+    }
+    let nativePreflight: ImageExportPreflightResult | null = null;
+    try {
+      nativePreflight = await preflightImageExports(safetyPlan.targetPaths, 0);
+      setNativePreflightStatus(nativePreflight.supported ? "已执行原生目录与权限预检；磁盘空间未检查" : "未执行原生文件系统预检（当前不是桌面应用）");
+    } catch (probeError) {
+      const probeMessage = "原生预检失败，已阻止导出：" + (probeError instanceof Error ? probeError.message : "无法调用预检");
+      setNativePreflightStatus(probeMessage);
+      setError(probeMessage);
+      setStatus({ kind: "error", text: "导出预检失败" });
+      return;
+    }
+    if (nativePreflight?.supported) {
+      const allowExisting = overwriteSameName || outputLocation === "original";
+      const nativeItems = nativePreflight.items.map((item) => {
+        const reasons = [];
+        if (!item.parentExists) reasons.push({ code: "output-directory-missing" as const, message: item.reason ?? "输出目录不存在。" });
+        else if (!item.parentWritable) reasons.push({ code: "output-directory-not-writable" as const, message: item.reason ?? "输出目录不可写。" });
+        if (item.targetExists && !allowExisting) reasons.push({ code: "target-exists" as const, message: item.reason ?? "输出文件已存在。" });
+        return { targetPath: item.targetPath, ok: reasons.length === 0, reasons };
+      });
+      const nativeFailures = nativeItems.filter((item) => !item.ok);
+      const mergedPreflight: ExportPreflightResult = {
+        total: nativeItems.length,
+        expectedSuccesses: nativeItems.filter((item) => item.ok).length,
+        expectedFailures: nativeFailures.length,
+        items: nativeItems,
+        diskSpaceChecked: nativePreflight.diskSpaceChecked,
+      };
+      setExportPreflight(mergedPreflight);
+      if (nativeFailures.length > 0) {
+        const details = nativeFailures.map((item) => `${item.targetPath}：${item.reasons.map(({ message }) => message).join("；")}`).join("\n");
+        setError(details);
+        setStatus({ kind: "error", text: `原生导出预检：预计成功 ${mergedPreflight.expectedSuccesses}，失败 ${mergedPreflight.expectedFailures}` });
+        return;
+      }
     }
     const confirmationMessage = formatExportSafetyConfirmation(safetyPlan);
     if (confirmationMessage && !window.confirm(confirmationMessage)) {
@@ -1545,6 +1585,7 @@ export default function ImageConverter({
                   {exportPreflight.diskSpaceChecked ? " · 已检查磁盘空间" : " · 未检查磁盘空间（当前平台无可靠探针）"}
                 </p>
               ) : null}
+              {nativePreflightStatus ? <p className="export-progress-summary" role="status">{nativePreflightStatus}</p> : null}
             </div>
             <div className="footer-actions">
               {failedExportIds.length > 0 && status.kind !== "busy" ? (
