@@ -549,10 +549,13 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
 pub async fn preview_image_export(request: Request<'_>) -> Result<ImagePreviewResult, String> {
     let request = parse_raw_request(request)?;
     let preview_request = request.clone();
-    let (data, bit_depth) =
-        tauri::async_runtime::spawn_blocking(move || convert_image(&preview_request))
-            .await
-            .map_err(|error| format!("image preview task failed: {error}"))??;
+    tauri::async_runtime::spawn_blocking(move || build_image_preview(&preview_request))
+        .await
+        .map_err(|error| format!("image preview task failed: {error}"))?
+}
+
+fn build_image_preview(request: &ExportRequest) -> Result<ImagePreviewResult, String> {
+    let (data, bit_depth) = convert_image(request)?;
     enforce_preview_limit(&data)?;
     let output_bytes = data.len() as u64;
     Ok(ImagePreviewResult {
@@ -1983,7 +1986,14 @@ mod tests {
     fn preview_contract_keeps_transparent_png_alpha_and_rejects_oversized_payloads() {
         let mut image = RgbaImage::new(1, 1);
         image.put_pixel(0, 0, Rgba([20, 40, 60, 17]));
-        let (bytes, bit_depth) = encode_png(image, 32, Rgba([255, 255, 255, 255])).unwrap();
+        let (input_data, _) = encode_png(image, 32, Rgba([255, 255, 255, 255])).unwrap();
+        let mut request = preview_request(OutputFormat::Png, 32);
+        request.input_data = input_data;
+        request.width = 1;
+        request.height = 1;
+        let preview = build_image_preview(&request).unwrap();
+        let bit_depth = preview.bit_depth;
+        let bytes = preview.data;
         let decoded = image::load_from_memory(&bytes).unwrap().to_rgba8();
         assert_eq!(bit_depth, 32);
         assert_eq!(decoded.get_pixel(0, 0)[3], 17);
@@ -1995,7 +2005,9 @@ mod tests {
     #[test]
     fn preview_contract_encodes_bmp_with_requested_bit_depth() {
         let request = preview_request(OutputFormat::Bmp, 24);
-        let (bytes, bit_depth) = convert_image(&request).unwrap();
+        let preview = build_image_preview(&request).unwrap();
+        let bit_depth = preview.bit_depth;
+        let bytes = preview.data;
         assert_eq!(bit_depth, 24);
         assert_eq!(&bytes[0..2], b"BM");
         assert_eq!(u16::from_le_bytes([bytes[28], bytes[29]]), 24);
@@ -2004,7 +2016,9 @@ mod tests {
     #[test]
     fn preview_contract_encodes_rgb565_with_golden_length_and_samples() {
         let request = preview_request(OutputFormat::Rgb565, 16);
-        let (bytes, bit_depth) = convert_image(&request).unwrap();
+        let preview = build_image_preview(&request).unwrap();
+        let bit_depth = preview.bit_depth;
+        let bytes = preview.data;
         assert_eq!(bit_depth, 16);
         assert_eq!(bytes.len(), 4);
         assert_eq!(&bytes[0..2], &[0x00, 0xF8]);
