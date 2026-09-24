@@ -6,6 +6,8 @@ import {
   MAX_RAW_IMAGE_BYTES,
   MAX_SOURCE_FILE_NAME_BYTES,
   pickOutputDirectory,
+  previewImageExport,
+  PREVIEW_IMAGE_EXPORT_COMMAND,
   PICK_OUTPUT_DIRECTORY_COMMAND,
   PREFLIGHT_IMAGE_EXPORTS_COMMAND,
   preflightImageExports,
@@ -43,6 +45,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("image export raw IPC envelope", () => {
+  it("sends preview requests through the native command without an output path", async () => {
+    vi.mocked(invoke).mockResolvedValue({ data: [1, 2], width: 1, height: 1, format: "bmp", bitDepth: 24, outputBytes: 2 });
+    await expect(previewImageExport(createRequest(new Uint8Array([1])))).resolves.toMatchObject({ outputBytes: 2 });
+    expect(invoke).toHaveBeenCalledWith(PREVIEW_IMAGE_EXPORT_COMMAND, expect.any(Uint8Array));
+  });
+
   it("keeps native dimensions and bit depth for the post-export comparison", async () => {
     vi.mocked(invoke).mockResolvedValue({ outputPath: "E:\\out\\icon.bmp", outputBytes: 4096, width: 128, height: 64, format: "bmp", bitDepth: 24 });
     await expect(exportImage(createRequest(new Uint8Array([1])))).resolves.toMatchObject({ outputPath: "E:\\out\\icon.bmp", outputBytes: 4096, width: 128, height: 64, bitDepth: 24 });

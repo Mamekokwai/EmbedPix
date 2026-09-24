@@ -63,6 +63,15 @@ export interface ExportImageResponse {
   bitDepth?: number;
 }
 
+export interface ImagePreviewResponse {
+  data: number[];
+  width: number;
+  height: number;
+  format: OutputFormat;
+  bitDepth: number;
+  outputBytes: number;
+}
+
 export interface ImageDimensions {
   width: number;
   height: number;

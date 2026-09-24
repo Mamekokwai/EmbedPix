@@ -25,6 +25,7 @@ const MAX_IMAGE_DIMENSION: u32 = 8_192;
 const MAX_IMAGE_PIXELS: u64 = 16_777_216;
 const MAX_DECODER_ALLOC_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 128 * 1024 * 1024;
+const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OutputFormat {
@@ -401,6 +402,17 @@ pub struct ExportImageResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ImagePreviewResult {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub format: String,
+    pub bit_depth: u16,
+    pub output_bytes: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NativeImageFile {
     pub path: String,
     pub file_name: String,
@@ -530,6 +542,31 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
         height,
         format: output_format.name().to_string(),
         bit_depth: actual_bit_depth,
+    })
+}
+
+#[tauri::command]
+pub async fn preview_image_export(request: Request<'_>) -> Result<ImagePreviewResult, String> {
+    let request = parse_raw_request(request)?;
+    let preview_request = request.clone();
+    let (data, bit_depth) =
+        tauri::async_runtime::spawn_blocking(move || convert_image(&preview_request))
+            .await
+            .map_err(|error| format!("image preview task failed: {error}"))??;
+    if data.len() > MAX_PREVIEW_BYTES {
+        return Err(format!(
+            "image preview exceeds the {} MiB limit",
+            MAX_PREVIEW_BYTES / (1024 * 1024)
+        ));
+    }
+    let output_bytes = data.len() as u64;
+    Ok(ImagePreviewResult {
+        data,
+        width: request.width,
+        height: request.height,
+        format: request.output_format.name().to_string(),
+        bit_depth,
+        output_bytes,
     })
 }
 

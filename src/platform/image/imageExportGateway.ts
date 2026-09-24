@@ -2,9 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ExportImageRequest,
   ExportImageResponse,
+  ImagePreviewResponse,
 } from "../../features/image-converter/types";
 
 export const EXPORT_IMAGE_COMMAND = "export_image" as const;
+export const PREVIEW_IMAGE_EXPORT_COMMAND = "preview_image_export" as const;
 export const PICK_OUTPUT_DIRECTORY_COMMAND = "pick_gif_sequence_output" as const;
 export const PREFLIGHT_IMAGE_EXPORTS_COMMAND = "preflight_image_exports" as const;
 export const MAX_METADATA_BYTES = 64 * 1024;
@@ -173,6 +175,17 @@ export async function exportImage(request: ExportImageRequest) {
     }
 
     return response;
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+export async function previewImageExport(request: ExportImageRequest): Promise<ImagePreviewResponse> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持编码预览，请在桌面应用中执行。");
+  }
+  try {
+    return await invoke<ImagePreviewResponse>(PREVIEW_IMAGE_EXPORT_COMMAND, encodeExportEnvelope(request));
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }

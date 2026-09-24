@@ -24,6 +24,7 @@ pub fn run() {
             commands::gif::export_apng,
             commands::gif::estimate_animation_size,
             commands::export_image::export_image,
+            commands::export_image::preview_image_export,
             commands::export_image::pick_image,
             commands::export_image::pick_images,
             commands::export_image::read_image_file,
