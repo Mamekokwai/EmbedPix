@@ -1,6 +1,6 @@
 # EmbedPix 分阶段升级 TODO
 
-目标：从 `0.1.9` 稳定推进到 `0.3.1`。
+目标：从 `0.1.9` 稳定推进到 `0.3.2`。
 
 执行规则：一次只做一个编号任务；任务完成后必须通过对应验收、提交并 push，再开始下一项。未完成任务不得标记为完成。
 
@@ -201,7 +201,7 @@
 - [x] 第三方许可证和 notices 完整
 - [x] 发布 `0.2.3`
 
-## 0.3.1 自动化与平台能力
+## 0.3.2 自动化与平台能力
 
 ### D1：CLI 最小入口
 
@@ -256,14 +256,14 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 验收：篡改版本、commit、资产、签名或 manifest 任一字段都会阻止发布；GitHub Settings 已配置并通过 API 验证 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则。
 
-### D6：0.3.1 验收与发布
+### D6：0.3.2 验收与发布
 
 - [x] CLI 无桌面测试通过
 - [x] 更新协议端到端测试通过
 - [x] 供应链门禁通过
-- [ ] 发布 `0.3.1`
+- [ ] 发布 `0.3.2`
 
-内部验收证据：CLI 已通过无桌面 smoke/契约测试及 image、gif、pngSequence 三类端到端操作；更新协议已通过本地 HTTP fixture，覆盖下载、大小、SHA-256、签名和缓存复核；仓库内 verifier、Action SHA 固定、版本一致性、tag/commit 与发布后资产回读门禁已通过；GitHub Settings 的 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则已通过 API 验证。仍阻塞：`0.3.1` 尚未发布。
+内部验收证据：CLI 已通过无桌面 smoke/契约测试及 image、gif、pngSequence 三类端到端操作；更新协议已通过本地 HTTP fixture，覆盖下载、大小、SHA-256、签名和缓存复核；仓库内 verifier、Action SHA 固定、版本一致性、tag/commit 与发布后资产回读门禁已通过；GitHub Settings 的 `production` required reviewers、`main` 分支保护和 `v*` tag 保护规则已通过 API 验证。仍阻塞：`0.3.2` 尚未发布。
 
 ## 通用验收门禁
 
