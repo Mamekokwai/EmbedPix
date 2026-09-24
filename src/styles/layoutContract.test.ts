@@ -52,4 +52,10 @@ describe("compact layout viewport contract", () => {
     expect((gifView.match(/<strong>自动压缩到目标大小<\/strong>/g) ?? []).length).toBe(3);
     expect(gifCss).toContain(".gif-export-grid { grid-template-columns: minmax(0, 1fr); }");
   });
+
+  it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {
+    expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 761px)");
+    expect(gifCss).toContain(".gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 136px minmax(300px, auto); overflow: visible; }");
+    expect(gifCss).toContain(".gif-main-column, .gif-preview-card { min-height: 300px; }");
+  });
 });

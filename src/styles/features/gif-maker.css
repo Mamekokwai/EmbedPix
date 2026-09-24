@@ -240,6 +240,15 @@
   .gif-card-kicker { display: none; }
   .gif-preview-card { padding: 6px; gap: 5px; }
 }
+
+/* Keep the narrow workspace in normal document flow so expanded settings push the preview down. */
+@media (max-width: 760px) and (min-height: 761px) {
+  .gif-maker-content.page-content { flex: 0 0 auto; overflow: visible; }
+  .gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 136px minmax(300px, auto); overflow: visible; }
+  .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(160px, auto) minmax(300px, auto); }
+  .gif-main-column, .gif-preview-card { min-height: 300px; }
+  .gif-settings-card { max-height: none; overflow: visible; }
+}
 @media (max-width: 620px) {
   .gif-maker-toolbar > span { display: none; }
   .gif-maker-header .page-eyebrow { display: none; }
