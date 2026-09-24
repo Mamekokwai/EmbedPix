@@ -544,6 +544,23 @@ jobs:
           if ($latest.version -ne $env:RELEASE_VERSION -or @($latest.platforms.PSObject.Properties.Name).Count -ne 2) {
             throw 'Published latest.json version or platform count is invalid.'
           }
-          if ($latest.platforms.'windows-x86_64'.signature -notmatch '^untrusted comment:') { throw 'Published x64 signature is invalid.' }
-          if ($latest.platforms.'windows-aarch64'.signature -notmatch '^untrusted comment:') { throw 'Published ARM64 signature is invalid.' }
+          function Assert-TauriSignature($encoded, $label) {
+            if ([string]::IsNullOrWhiteSpace($encoded)) { throw "Published $label signature is empty." }
+            try {
+              $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
+            } catch {
+              throw "Published $label signature is not valid base64."
+            }
+            $lines = @($decoded -split "\r?\n" | Where-Object { $_ -ne '' })
+            $base64Line = '^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$'
+            if ($lines.Count -lt 4 -or
+                $lines[0] -notmatch '^untrusted comment: .+$' -or
+                $lines[1] -notmatch $base64Line -or
+                $lines[2] -notmatch '^trusted comment: .+$' -or
+                $lines[3] -notmatch $base64Line) {
+              throw "Published $label signature does not have a valid minisign structure."
+            }
+          }
+          Assert-TauriSignature $latest.platforms.'windows-x86_64'.signature 'x64'
+          Assert-TauriSignature $latest.platforms.'windows-aarch64'.signature 'ARM64'
           Write-Host "Published release assets and latest.json verified for $env:RELEASE_TAG."
