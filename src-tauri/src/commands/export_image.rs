@@ -2026,6 +2026,42 @@ mod tests {
     }
 
     #[test]
+    fn srgb_png_and_jpeg_outputs_do_not_emit_icc_or_exif_markers() {
+        let (png, _) = encode_png(sample_image(), 32, Rgba([255, 255, 255, 255])).unwrap();
+        assert!(!png
+            .windows(4)
+            .any(|chunk| chunk == b"iCCP" || chunk == b"eXIf"));
+
+        let (jpeg, _) = encode_jpg(sample_image(), Rgba([255, 255, 255, 255]), 90).unwrap();
+        assert!(!jpeg.windows(4).any(|marker| marker == b"ICC_"));
+        assert!(!jpeg.windows(2).any(|marker| marker == [0xFF, 0xE1]));
+    }
+
+    #[test]
+    fn metadata_policy_preserve_is_rejected_while_legacy_requests_default_to_strip() {
+        let preserve: ExportMetadata = serde_json::from_str(
+            r#"{
+                "fileName":"source.png","outputFormat":"png","width":1,"height":1,
+                "keepAspectRatio":false,"metadataPolicy":"preserve"
+            }"#,
+        )
+        .unwrap();
+        assert!(preserve
+            .into_request(vec![1])
+            .unwrap_err()
+            .contains("metadataPolicy=preserve"));
+
+        let legacy: ExportMetadata = serde_json::from_str(
+            r#"{"fileName":"source.png","outputFormat":"png","width":1,"height":1,"keepAspectRatio":false}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            legacy.into_request(vec![1]).unwrap().metadata_policy,
+            MetadataPolicy::Strip
+        );
+    }
+
+    #[test]
     fn watermark_defaults_trim_text_and_validate_output_formats() {
         let watermark = parse_watermark(
             OutputFormat::Png,
