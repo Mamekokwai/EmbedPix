@@ -75,6 +75,7 @@ import type {
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
 import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueue";
+import type { ExportPreflightResult } from "./imageConverterLogic";
 
 type ImageExportQueueProgress = ExportQueueProgress<{ file: { name: string } }>;
 
@@ -286,6 +287,7 @@ export default function ImageConverter({
   const [error, setError] = useState<string | null>(null);
   const [failedExportIds, setFailedExportIds] = useState<string[]>([]);
   const [exportFailures, setExportFailures] = useState<ExportFailureDetail[]>([]);
+  const [exportPreflight, setExportPreflight] = useState<ExportPreflightResult | null>(null);
   const [failureDetailsOpen, setFailureDetailsOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ImageExportQueueProgress | null>(null);
   const exportCancelRef = useRef(false);
@@ -907,13 +909,14 @@ export default function ImageConverter({
       deleteSource,
     });
     const preflight = getExportPreflight(safetyPlan);
+    setExportPreflight(preflight);
     if (preflight.expectedFailures > 0) {
       const details = preflight.items
         .filter((item) => !item.ok)
         .map((item) => `${item.targetPath}：${item.reasons.map(({ message }) => message).join("；")}`)
         .join("\n");
       setError(details);
-      setStatus({ kind: "error", text: `导出预检失败：${preflight.expectedFailures} 项` });
+      setStatus({ kind: "error", text: `导出预检：预计成功 ${preflight.expectedSuccesses}，失败 ${preflight.expectedFailures}` });
       return;
     }
     const confirmationMessage = formatExportSafetyConfirmation(safetyPlan);
@@ -982,7 +985,7 @@ export default function ImageConverter({
       setError(null);
     }
     if (result.cancelled || failures.length > 0) {
-      setStatus({ kind: failures.length > 0 ? "error" : "ready", text: formatExportQueueSummary(result) });
+      setStatus({ kind: failures.length > 0 ? "error" : "ready", text: `${formatExportQueueSummary(result)} · 预检预计成功 ${preflight.expectedSuccesses} 项` });
     } else {
       setStatus({
         kind: "success",
@@ -1518,6 +1521,12 @@ export default function ImageConverter({
                     </ul>
                   ) : null}
                 </div>
+              ) : null}
+              {exportPreflight ? (
+                <p className="export-progress-summary" role="status">
+                  预检：预计成功 {exportPreflight.expectedSuccesses} · 失败 {exportPreflight.expectedFailures}
+                  {exportPreflight.diskSpaceChecked ? " · 已检查磁盘空间" : " · 未检查磁盘空间（当前平台无可靠探针）"}
+                </p>
               ) : null}
             </div>
             <div className="footer-actions">
