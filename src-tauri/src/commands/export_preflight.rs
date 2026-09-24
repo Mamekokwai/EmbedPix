@@ -22,6 +22,12 @@ pub struct ExportPreflightItem {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct DiskSpace {
+    available_bytes: u64,
+    sufficient: bool,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportPreflightResult {
@@ -36,18 +42,76 @@ pub struct ExportPreflightResult {
 pub fn preflight_image_exports(
     request: ExportPreflightRequest,
 ) -> Result<ExportPreflightResult, String> {
-    let items = request
+    let disk_space = if request.estimated_bytes == 0 {
+        None
+    } else {
+        request
+            .target_paths
+            .iter()
+            .filter_map(|target| disk_space_for_path(Path::new(target), request.estimated_bytes))
+            .next()
+    };
+    let mut items = request
         .target_paths
         .iter()
         .map(|target| inspect_target(Path::new(target)))
-        .collect();
+        .collect::<Vec<_>>();
+    if let Some(_space) = disk_space.filter(|space| !space.sufficient) {
+        for item in &mut items {
+            if item.parent_exists {
+                item.reason = Some("可用磁盘空间不足。".to_string());
+            }
+        }
+    }
     Ok(ExportPreflightResult {
         supported: true,
-        disk_space_checked: false,
-        available_bytes: None,
-        disk_space_sufficient: None,
+        disk_space_checked: disk_space.is_some(),
+        available_bytes: disk_space.map(|space| space.available_bytes),
+        disk_space_sufficient: disk_space.map(|space| space.sufficient),
         items,
     })
+}
+
+#[cfg(any(windows, test))]
+#[allow(dead_code)]
+fn evaluate_disk_space(available_bytes: u64, estimated_bytes: u64) -> DiskSpace {
+    DiskSpace {
+        available_bytes,
+        sufficient: available_bytes >= estimated_bytes,
+    }
+}
+
+fn disk_space_for_path(path: &Path, estimated_bytes: u64) -> Option<DiskSpace> {
+    let mut existing = path.to_path_buf();
+    while !existing.exists() {
+        if !existing.pop() {
+            return None;
+        }
+    }
+    disk_space_for_existing_path(&existing, estimated_bytes)
+}
+
+#[cfg(windows)]
+fn disk_space_for_existing_path(path: &Path, estimated_bytes: u64) -> Option<DiskSpace> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
+    wide.push(0);
+    let mut available = 0u64;
+    let success = unsafe {
+        GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut available,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    (success != 0).then_some(evaluate_disk_space(available, estimated_bytes))
+}
+
+#[cfg(not(windows))]
+fn disk_space_for_existing_path(_path: &Path, _estimated_bytes: u64) -> Option<DiskSpace> {
+    None
 }
 
 fn inspect_target(path: &Path) -> ExportPreflightItem {
@@ -119,6 +183,18 @@ mod tests {
         assert!(item.parent_writable);
         assert_eq!(item.reason.as_deref(), Some("输出文件已存在。"));
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn evaluates_low_and_high_space_estimates_without_touching_disk() {
+        assert!(evaluate_disk_space(100, 99).sufficient);
+        assert!(!evaluate_disk_space(100, 101).sufficient);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn leaves_disk_space_unchecked_when_native_api_is_unavailable() {
+        assert!(disk_space_for_existing_path(Path::new("."), 1).is_none());
     }
 
     fn tempfile_dir() -> PathBuf {

@@ -32,3 +32,6 @@ ctrlc = "3.4"
 apng = { version = "0.3.4", features = ["png"] }
 webp-animation = { version = "0.10", features = ["static"] }
 rfd = "0.15.4"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }

@@ -991,6 +991,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tokio",
  "webp-animation",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
