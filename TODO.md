@@ -315,7 +315,7 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 验收：所有已承诺任务均有通过证据；发布门禁通过后才允许发布 `0.3.3`，不得以未完成项替代验收。
 
-当前 E4 发布门禁审计：P0（E1/E2/E3）证据已归档；P1 的 E5/E6 已完成，E7 的 JPEG/透明 PNG preview 证据已增强但 BMP/RGB565 仍未从 preview 入口做像素断言，E8 的 ICC/色彩管理仍未完成，E9 的磁盘空间探针仍未完成；P2 的 E10 仅完成 WebP/ICO/TIFF 评估，结论是不加入生产依赖或用户选项。版本/签名/manifest 门禁已有 `v0.3.2` 远端证据：Release 非 draft、7 个资产齐全、`latest.json` 两平台签名与 `.sig` 一致、provenance 指向发布 commit；这不能替代 `0.3.3` 的新版本一致性检查。发布前仍需闭合 E7 preview 矩阵、归档 E8/E9 证据，准备包含兼容性、已知限制和回归数据的发布说明，并由用户决定是否接受 E8/E9 未完成项及 E10 不进入生产的范围；在此之前不勾选 E4 或创建 `0.3.3` Release。
+当前 E4 发布门禁审计：P0（E1/E2/E3）证据已归档；P1 的 E5/E6/E7 preview 编码契约已完成，E7 仍缺真实导出文件回读 harness，E8 的 ICC/色彩管理仍未完成，E9 的磁盘空间探针仍未完成；P2 的 E10 仅完成 WebP/ICO/TIFF 评估，结论是不加入生产依赖或用户选项。版本/签名/manifest 门禁已有 `v0.3.2` 远端证据：Release 非 draft、7 个资产齐全、`latest.json` 两平台签名与 `.sig` 一致、provenance 指向发布 commit；这不能替代 `0.3.3` 的新版本一致性检查。发布前仍需归档 E8/E9 证据，准备包含兼容性、已知限制和回归数据的发布说明，并由用户决定是否接受 E7 回读 harness、E8/E9 未完成项及 E10 不进入生产的范围；在此之前不勾选 E4 或创建 `0.3.3` Release。
 
 ### P1：核心转换体验
 
@@ -338,13 +338,13 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 
 #### E7：图片输出真实预览（依赖：E1）
 
-- [ ] 预览 JPEG 质量、RGB565、BMP 位深和透明背景的像素级编码差异
+- [x] 预览 JPEG 质量、RGB565、BMP 位深和透明背景的像素级编码差异
 - [x] 增加导出前输出参数对比卡：尺寸、格式、有效位深、背景/透明度状态实时同步；文件体积明确标注“导出后显示实际体积”
 - [x] 预览参数摘要与导出请求共用当前格式、尺寸、位深和背景状态；导出失败仍保持参数模拟标识，不显示成功文件预览
 
-验收：参数对比卡已覆盖 JPEG、RGB565、BMP 和透明 PNG 的有效位深/背景语义，并补充四类参数逻辑测试；真实编码后的像素级并排对比和实际导出文件体积回读仍需桌面端导出 harness，暂不勾选完整验收。Blob URL 生命周期继续沿用现有 revoke 清理路径。
+验收：参数对比卡已覆盖 JPEG、RGB565、BMP 和透明 PNG 的有效位深/背景语义；`3a92751` 让 BMP/RGB565/透明 PNG 测试直接走 `build_image_preview`（`preview_image_export` 的唯一构造 helper），JPEG 质量输出可解码且差异可验证，8 MiB 限制有测试。像素编码契约已完成；真实导出文件回读 harness 仍未补齐，不影响本项 preview 编码契约验收。Blob URL 生命周期继续沿用现有 revoke 清理路径。
 
-现有证据：`58ecf15` 增加 Rust `preview_image_export`、gateway 调用和响应字段测试，`019fc9a` 接入桌面真实编码预览；`51a64db` 直接覆盖 preview 编码路径的 JPEG 质量差异/可解码、透明 PNG alpha 和 8 MiB 限制，既有 Rust 测试覆盖 BMP 1/4/8/16/24/32 位及 RGB565 golden。仍不足以勾选像素级条目：BMP/RGB565 测试并未通过 `preview_image_export` 入口断言 preview bytes，且没有真实导出文件回读 harness；因此 JPEG/透明 PNG 的 preview 证据充分，但第一项要求的完整格式矩阵仍未闭合。限制已明确：preview 输出上限 8 MiB；C-array/RGB565 是原始数据，不能作为图像视觉显示；浏览器环境不支持原生 preview，失败时只显示参数/错误，不冒充成功图像。
+现有证据：`58ecf15` 增加 Rust `preview_image_export`、gateway 调用和响应字段测试，`019fc9a` 接入桌面真实编码预览；`51a64db` 直接覆盖 preview 编码路径的 JPEG 质量差异/可解码、透明 PNG alpha 和 8 MiB 限制，`3a92751` 将 BMP 位深和 RGB565 golden 断言统一路由到 `build_image_preview`。限制已明确：preview 输出上限 8 MiB；C-array/RGB565 是原始数据，不能作为图像视觉显示；浏览器环境不支持原生 preview，失败时只显示参数/错误，不冒充成功图像；真实导出文件回读 harness 仍是后续增强项。
 
 #### E8：图片色彩与元数据（依赖：E7）
 
