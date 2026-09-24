@@ -3,7 +3,7 @@ use std::{
     fs,
     path::PathBuf,
     sync::Mutex,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use base64::Engine;
@@ -13,6 +13,8 @@ use super::GifFrameRequest;
 const MAX_SPOOL_FRAMES: usize = 200;
 const MAX_SPOOL_FRAME_BYTES: usize = 32 * 1024 * 1024;
 const MAX_SPOOL_TOTAL_BYTES: usize = 128 * 1024 * 1024;
+const MAX_SPOOL_FRAME_BASE64_BYTES: usize = MAX_SPOOL_FRAME_BYTES.div_ceil(3) * 4;
+const ORPHAN_GRACE_PERIOD: Duration = Duration::from_secs(60);
 
 pub struct GifFrameSpoolState {
     root: PathBuf,
@@ -38,6 +40,7 @@ impl GifFrameSpoolState {
     pub(super) fn create(&self) -> Result<String, String> {
         fs::create_dir_all(&self.root)
             .map_err(|error| format!("无法创建 GIF 临时目录：{error}"))?;
+        self.cleanup_orphaned_directories(ORPHAN_GRACE_PERIOD)?;
         for attempt in 0..8 {
             let id = spool_id(attempt);
             let directory = self.root.join(&id);
@@ -63,6 +66,9 @@ impl GifFrameSpoolState {
     }
 
     pub(super) fn write_frame(&self, id: &str, encoded: &str) -> Result<(), String> {
+        if encoded.len() > MAX_SPOOL_FRAME_BASE64_BYTES {
+            return Err("GIF 临时帧数据超过单帧内存上限。".to_string());
+        }
         let data = base64::engine::general_purpose::STANDARD
             .decode(encoded)
             .map_err(|_| "GIF 临时帧数据无效。".to_string())?;
@@ -92,6 +98,47 @@ impl GifFrameSpoolState {
         fs::write(path, data).map_err(|error| format!("无法写入 GIF 临时帧：{error}"))?;
         entry.next_index += 1;
         entry.total_bytes = next_total;
+        Ok(())
+    }
+
+    fn cleanup_orphaned_directories(&self, grace_period: Duration) -> Result<(), String> {
+        let started_at = Instant::now();
+        let entries = self
+            .entries
+            .lock()
+            .map_err(|_| "GIF 临时帧状态已损坏。".to_string())?;
+        let active_directories: Vec<PathBuf> = entries
+            .values()
+            .map(|entry| entry.directory.clone())
+            .collect();
+        let mut scanned = 0usize;
+        let mut removed = 0usize;
+        for item in
+            fs::read_dir(&self.root).map_err(|error| format!("无法扫描 GIF 临时目录：{error}"))?
+        {
+            let path = item
+                .map_err(|error| format!("无法读取 GIF 临时目录项：{error}"))?
+                .path();
+            if !path.is_dir() || active_directories.iter().any(|active| active == &path) {
+                continue;
+            }
+            let recently_created = fs::metadata(&path)
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                .is_some_and(|age| age < grace_period);
+            if recently_created {
+                continue;
+            }
+            scanned += 1;
+            fs::remove_dir_all(&path)
+                .map_err(|error| format!("无法清理 GIF 孤儿临时目录：{error}"))?;
+            removed += 1;
+        }
+        eprintln!(
+            "GIF 临时目录扫描：发现 {scanned} 个孤儿目录，清理 {removed} 个，耗时 {} ms。",
+            started_at.elapsed().as_millis()
+        );
         Ok(())
     }
 
@@ -158,4 +205,56 @@ fn spool_id(attempt: u32) -> String {
         }
     });
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(seed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_state(name: &str) -> GifFrameSpoolState {
+        GifFrameSpoolState {
+            root: std::env::temp_dir().join(format!(
+                "embedpix-gif-spool-test-{name}-{}",
+                std::process::id()
+            )),
+            entries: Mutex::new(HashMap::new()),
+        }
+    }
+
+    #[test]
+    fn creates_and_cleans_a_200_frame_spool() {
+        let state = test_state("frame-limit");
+        let spool_id = state.create().unwrap();
+        for _ in 0..MAX_SPOOL_FRAMES {
+            state
+                .write_frame(
+                    &spool_id,
+                    &base64::engine::general_purpose::STANDARD.encode([1u8]),
+                )
+                .unwrap();
+        }
+        assert!(state
+            .write_frame(
+                &spool_id,
+                &base64::engine::general_purpose::STANDARD.encode([1u8])
+            )
+            .is_err());
+        state.discard(&spool_id).unwrap();
+        assert!(!state.root.join(&spool_id).exists());
+        let _ = fs::remove_dir_all(state.root);
+    }
+
+    #[test]
+    fn removes_orphaned_directories_without_touching_active_spools() {
+        let state = test_state("orphan-cleanup");
+        fs::create_dir_all(&state.root).unwrap();
+        let orphan = state.root.join("orphaned");
+        fs::create_dir_all(&orphan).unwrap();
+        let active_id = state.create().unwrap();
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        assert!(!orphan.exists());
+        assert!(state.root.join(&active_id).exists());
+        state.discard(&active_id).unwrap();
+        let _ = fs::remove_dir_all(state.root);
+    }
 }
