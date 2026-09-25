@@ -48,6 +48,19 @@ impl Default for GifFrameSpoolState {
 }
 
 impl GifFrameSpoolState {
+    #[cfg(test)]
+    fn active_resource_snapshot(&self) -> (usize, usize) {
+        self.entries
+            .lock()
+            .map(|entries| {
+                (
+                    entries.values().map(|entry| entry.next_index).sum(),
+                    entries.values().map(|entry| entry.total_bytes).sum(),
+                )
+            })
+            .unwrap_or_default()
+    }
+
     pub(super) fn create(&self) -> Result<String, String> {
         fs::create_dir_all(&self.root)
             .map_err(|error| format!("无法创建 GIF 临时目录：{error}"))?;
@@ -270,6 +283,10 @@ mod tests {
                 )
                 .unwrap();
         }
+        assert_eq!(
+            state.active_resource_snapshot(),
+            (MAX_SPOOL_FRAMES, MAX_SPOOL_FRAMES)
+        );
         assert!(state
             .write_frame(
                 &spool_id,
@@ -277,7 +294,19 @@ mod tests {
             )
             .is_err());
         state.discard(&spool_id).unwrap();
+        assert_eq!(state.active_resource_snapshot(), (0, 0));
         assert!(!state.root.join(&spool_id).exists());
+        let _ = fs::remove_dir_all(state.root);
+    }
+
+    #[test]
+    fn failed_frame_write_does_not_leak_active_resource_counts() {
+        let state = test_state("failed-write");
+        let spool_id = state.create().unwrap();
+        assert!(state.write_frame(&spool_id, "not-base64").is_err());
+        assert_eq!(state.active_resource_snapshot(), (0, 0));
+        state.discard(&spool_id).unwrap();
+        assert_eq!(state.active_resource_snapshot(), (0, 0));
         let _ = fs::remove_dir_all(state.root);
     }
 
