@@ -564,3 +564,9 @@ jobs:
           Assert-TauriSignature $latest.platforms.'windows-x86_64'.signature 'x64'
           Assert-TauriSignature $latest.platforms.'windows-aarch64'.signature 'ARM64'
           Write-Host "Published release assets and latest.json verified for $env:RELEASE_TAG."
+
+      - name: Run published release download and installer smoke
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: .\scripts\release-smoke.ps1 -Repository '${{ github.repository }}' -Tag $env:RELEASE_TAG
