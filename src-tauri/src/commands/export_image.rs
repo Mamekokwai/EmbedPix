@@ -5,8 +5,11 @@ use std::{
 };
 
 use image::{
-    codecs::jpeg::JpegEncoder, imageops::FilterType, io::Reader as ImageReader, DynamicImage,
-    GenericImage, GenericImageView, ImageFormat, Rgba, RgbaImage,
+    codecs::ico::{IcoEncoder, IcoFrame},
+    codecs::jpeg::JpegEncoder,
+    imageops::FilterType,
+    io::Reader as ImageReader,
+    DynamicImage, GenericImage, GenericImageView, ImageFormat, Rgba, RgbaImage,
 };
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{InvokeBody, Request};
@@ -32,6 +35,7 @@ enum OutputFormat {
     Png,
     Webp,
     Tiff,
+    Ico,
     Jpg,
     Bmp,
     Rgb565,
@@ -73,6 +77,7 @@ impl OutputFormat {
             "png" => Ok(Self::Png),
             "webp" => Ok(Self::Webp),
             "tiff" | "tif" => Ok(Self::Tiff),
+            "ico" => Ok(Self::Ico),
             "jpg" | "jpeg" => Ok(Self::Jpg),
             "bmp" => Ok(Self::Bmp),
             "rgb565" => Ok(Self::Rgb565),
@@ -88,6 +93,7 @@ impl OutputFormat {
             Self::Png => "png",
             Self::Webp => "webp",
             Self::Tiff => "tiff",
+            Self::Ico => "ico",
             Self::Jpg => "jpg",
             Self::Bmp => "bmp",
             Self::Rgb565 => "bin",
@@ -100,6 +106,7 @@ impl OutputFormat {
             Self::Png => "png",
             Self::Webp => "webp",
             Self::Tiff => "tiff",
+            Self::Ico => "ico",
             Self::Jpg => "jpg",
             Self::Bmp => "bmp",
             Self::Rgb565 => "rgb565",
@@ -647,6 +654,7 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
         OutputFormat::Png => encode_png(image, request.bit_depth, request.background_color),
         OutputFormat::Webp => encode_webp(image, request.bit_depth, request.background_color),
         OutputFormat::Tiff => encode_tiff(image, request.bit_depth, request.background_color),
+        OutputFormat::Ico => encode_ico(image, request.background_color),
         OutputFormat::Jpg => encode_jpg(image, request.background_color, request.jpeg_quality),
         OutputFormat::Bmp => bmp::encode(&image, request.bit_depth, request.background_color),
         OutputFormat::Rgb565 => {
@@ -888,6 +896,7 @@ fn validate_bit_depth(format: OutputFormat, bit_depth: u16) -> Result<(), String
         OutputFormat::Png => (matches!(bit_depth, 24 | 32), "24 or 32"),
         OutputFormat::Webp => (matches!(bit_depth, 24 | 32), "24 or 32"),
         OutputFormat::Tiff => (matches!(bit_depth, 24 | 32), "24 or 32"),
+        OutputFormat::Ico => (bit_depth == 32, "32"),
         OutputFormat::Jpg => (bit_depth == 24, "24"),
         OutputFormat::Bmp => return bmp::validate_bit_depth(bit_depth),
         OutputFormat::Rgb565 | OutputFormat::CArray => (bit_depth == 16, "16"),
@@ -1220,6 +1229,27 @@ fn encode_tiff(
         .write_to(&mut bytes, ImageFormat::Tiff)
         .map_err(|error| format!("failed to encode tiff: {error}"))?;
     Ok((bytes.into_inner(), bit_depth))
+}
+
+fn encode_ico(image: RgbaImage, background_color: Rgba<u8>) -> Result<(Vec<u8>, u16), String> {
+    let mut bytes = LimitedCursor::new(MAX_OUTPUT_BYTES);
+    let mut frames = Vec::new();
+    for size in [16u32, 32, 48, 256] {
+        let resized = image::imageops::resize(&image, size, size, FilterType::Lanczos3);
+        let mut png = Cursor::new(Vec::new());
+        DynamicImage::ImageRgba8(resized)
+            .write_to(&mut png, ImageFormat::Png)
+            .map_err(|error| format!("failed to encode ICO frame: {error}"))?;
+        frames.push(
+            IcoFrame::with_encoded(png.into_inner(), size, size, image::ColorType::Rgba8)
+                .map_err(|error| error.to_string())?,
+        );
+    }
+    IcoEncoder::new(&mut bytes)
+        .encode_images(&frames)
+        .map_err(|error| format!("failed to encode ico: {error}"))?;
+    let _ = background_color;
+    Ok((bytes.into_inner(), 32))
 }
 
 fn composite_over_background(image: RgbaImage, background_color: Rgba<u8>) -> RgbaImage {
@@ -2089,6 +2119,16 @@ mod tests {
         let decoded = image::load_from_memory(&preview.data).unwrap().to_rgba8();
         assert_eq!(preview.bit_depth, 32);
         assert_eq!(decoded.get_pixel(0, 0)[3], 33);
+    }
+
+    #[test]
+    fn preview_contract_encodes_multi_size_ico_with_alpha() {
+        let request = preview_request(OutputFormat::Ico, 32);
+        let preview = build_image_preview(&request).unwrap();
+        assert_eq!(preview.bit_depth, 32);
+        assert_eq!(&preview.data[0..4], &[0, 0, 1, 0]);
+        assert_eq!(u16::from_le_bytes([preview.data[4], preview.data[5]]), 4);
+        assert!(image::load_from_memory(&preview.data).is_ok());
     }
 
     #[test]

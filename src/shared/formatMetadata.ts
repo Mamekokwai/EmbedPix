@@ -7,6 +7,7 @@ export type SharedFormatId =
   | "gif"
   | "webp"
   | "tiff"
+  | "ico"
   | "apng"
   | "png-sequence";
 
@@ -29,11 +30,12 @@ export const FORMAT_METADATA: ReadonlyArray<SharedFormatMetadata> = [
   { id: "gif", label: "GIF 动图", hint: "动画 · 兼容", description: "适合通用预览的 GIF 动画输出。", category: "动画输出" },
   { id: "webp", label: "WebP 动图", hint: "动画 · 高压缩", description: "体积较小的 WebP 动画输出。", category: "动画输出" },
   { id: "tiff", label: "TIFF", hint: "24 / 32 位", description: "静态 TIFF；当前输出 8 位 RGB/RGBA，保留透明度但不保留输入元数据。", category: "静态图片" },
+  { id: "ico", label: "ICO", hint: "16/32/48/256", description: "Windows 图标容器；输出 16、32、48、256 多尺寸 PNG 帧并保留透明度。", category: "静态图片" },
   { id: "apng", label: "APNG 动图", hint: "动画 · 无损", description: "保留透明度的无损 APNG 动画输出。", category: "动画输出" },
   { id: "png-sequence", label: "PNG 帧序列", hint: "逐帧 · 无损", description: "按帧输出 PNG 文件序列。", category: "动画输出" },
 ];
 
-export const IMAGE_OUTPUT_FORMAT_IDS: ReadonlyArray<SharedFormatId> = ["bmp", "png", "jpg", "webp", "tiff", "rgb565", "c-array"];
+export const IMAGE_OUTPUT_FORMAT_IDS: ReadonlyArray<SharedFormatId> = ["bmp", "png", "jpg", "webp", "tiff", "ico", "rgb565", "c-array"];
 export const GIF_OUTPUT_FORMAT_IDS: ReadonlyArray<SharedFormatId> = ["gif", "webp", "apng", "png-sequence"];
 
 export function getFormatMetadata(id: SharedFormatId): SharedFormatMetadata {
