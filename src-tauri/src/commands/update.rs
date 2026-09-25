@@ -1121,11 +1121,11 @@ fn parse_sha256(value: &str) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_versions, is_trusted_release_page_url, normalize_version,
-        open_verified_package_file, parse_sha256, select_trusted_asset_for_target,
-        should_append_partial, signature_url_for_asset, validate_asset_url,
-        validate_cached_package_path, validate_update_cache_dir, verify_cached_package_signature,
-        verify_signature, ReleaseAsset, UpdateTarget,
+        compare_versions, download_package_with_resume, is_trusted_release_page_url,
+        normalize_version, open_verified_package_file, parse_sha256,
+        select_trusted_asset_for_target, should_append_partial, signature_url_for_asset,
+        validate_asset_url, validate_cached_package_path, validate_update_cache_dir,
+        verify_cached_package_signature, verify_signature, ReleaseAsset, UpdateTarget,
     };
     use base64::Engine;
     use sha2::Digest;
@@ -1147,6 +1147,49 @@ mod tests {
             4,
             Some("bytes 0-9/10")
         ));
+    }
+
+    #[test]
+    fn local_http_fixture_resumes_existing_part_with_matching_etag() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request);
+            write!(
+                stream,
+                "HTTP/1.1 206 Partial Content\r\nContent-Length: 2\r\nContent-Range: bytes 2-3/4\r\nETag: \"stable\"\r\nConnection: close\r\n\r\nst"
+            )
+            .unwrap();
+        });
+        let root = crate::commands::test_temp_dir()
+            .join(format!("embedpix-update-range-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let part = root.join("package.part");
+        let etag = root.join("package.etag");
+        std::fs::write(&part, b"te").unwrap();
+        std::fs::write(&etag, "\"stable\"").unwrap();
+        let url = reqwest::Url::parse(&format!("http://{address}/asset.exe")).unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let result = runtime.block_on(download_package_with_resume(
+            &reqwest::Client::new(),
+            &url,
+            &part,
+            &etag,
+            "0.4.1",
+            Some(4),
+            |_downloaded, _total| {},
+        ));
+        assert_eq!(result.unwrap().0, 4);
+        assert_eq!(std::fs::read(&part).unwrap(), b"test");
+        server.join().unwrap();
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
