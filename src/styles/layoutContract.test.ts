@@ -15,6 +15,9 @@ const VIEWPORT_MATRIX = [
   { name: "small portrait", width: 360, height: 500 },
   { name: "tablet portrait", width: 480, height: 640 },
   { name: "narrow tall", width: 700, height: 1100 },
+  { name: "wide short", width: 900, height: 700 },
+  { name: "desktop short", width: 1280, height: 720 },
+  { name: "landscape narrow", width: 560, height: 420 },
   { name: "regular desktop", width: 1280, height: 800 },
 ] as const;
 
@@ -62,6 +65,18 @@ describe("compact layout viewport contract", () => {
     expect((gifView.match(/<span>最大文件大小<\/span>/g) ?? []).length).toBe(3);
     expect((gifView.match(/<strong>自动压缩到目标大小<\/strong>/g) ?? []).length).toBe(3);
     expect(gifCss).toContain(".gif-export-grid { grid-template-columns: minmax(0, 1fr); }");
+    expect(gifView).toContain("WebP/APNG 动图使用当前画布和帧时长导出");
+    expect(gifView).toContain("PNG 帧序列按当前画布逐帧输出 PNG");
+    expect(gifView).toContain("仅调用原生规划，不会修改参数或自动压缩正式导出");
+  });
+
+  it("keeps focus styling and text wrapping explicit for narrow and short windows", () => {
+    expect(gifCss).toContain(":focus-visible");
+    expect(gifCss).toContain("overflow-wrap: anywhere");
+    expect(gifCss).toContain("flex-wrap: wrap");
+    expect(converterCss).toContain(":focus-visible");
+    expect(converterCss).toContain("overflow-wrap: anywhere");
+    expect(converterCss).toContain("overflow-x: hidden;");
   });
 
   it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {
