@@ -11,7 +11,7 @@ describe("shared format metadata", () => {
   });
 
   it("keeps image converter formats and animation formats distinguishable", () => {
-    expect(IMAGE_OUTPUT_FORMAT_IDS).toEqual(["bmp", "png", "jpg", "rgb565", "c-array"]);
+    expect(IMAGE_OUTPUT_FORMAT_IDS).toEqual(["bmp", "png", "jpg", "webp", "rgb565", "c-array"]);
     expect(getFormatMetadata("png-sequence").label).toBe("PNG 帧序列");
     expect(getFormatMetadata("webp").category).toBe("动画输出");
   });

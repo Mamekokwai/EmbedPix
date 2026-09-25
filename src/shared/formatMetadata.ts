@@ -31,7 +31,7 @@ export const FORMAT_METADATA: ReadonlyArray<SharedFormatMetadata> = [
   { id: "png-sequence", label: "PNG 帧序列", hint: "逐帧 · 无损", description: "按帧输出 PNG 文件序列。", category: "动画输出" },
 ];
 
-export const IMAGE_OUTPUT_FORMAT_IDS: ReadonlyArray<SharedFormatId> = ["bmp", "png", "jpg", "rgb565", "c-array"];
+export const IMAGE_OUTPUT_FORMAT_IDS: ReadonlyArray<SharedFormatId> = ["bmp", "png", "jpg", "webp", "rgb565", "c-array"];
 export const GIF_OUTPUT_FORMAT_IDS: ReadonlyArray<SharedFormatId> = ["gif", "webp", "apng", "png-sequence"];
 
 export function getFormatMetadata(id: SharedFormatId): SharedFormatMetadata {

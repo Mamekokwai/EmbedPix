@@ -19,9 +19,9 @@ export const OUTPUT_FORMATS: ReadonlyArray<{
     const format = FORMAT_METADATA.find((item) => item.id === id);
     return {
       value: id as OutputFormat,
-      label: format?.label ?? id,
-      hint: format?.hint ?? "",
-      description: format?.description ?? "",
+      label: id === "webp" ? "WebP" : format?.label ?? id,
+      hint: id === "webp" ? "24 / 32 位" : format?.hint ?? "",
+      description: id === "webp" ? "静态 WebP；24 位使用背景色合成，32 位保留透明度。" : format?.description ?? "",
     };
   }),
 ];
@@ -72,6 +72,7 @@ export function estimateImageExportBytes(
     case "bmp": encodedBytes = Math.ceil(pixels * effectiveBitDepth / 8) + 1024; break;
     case "png": encodedBytes = pixels * (effectiveBitDepth === 32 ? 4 : 3) + 65_536; break;
     case "jpg": encodedBytes = pixels * 3 + 131_072; break;
+    case "webp": encodedBytes = pixels * (effectiveBitDepth === 32 ? 4 : 3) + 65_536; break;
     case "rgb565": encodedBytes = pixels * 2 + 64; break;
     case "c-array": encodedBytes = pixels * 2 + pixels * 4 + 4096; break;
     default: return undefined;
@@ -101,7 +102,7 @@ export function getImagePreviewComparison(
     dimensions: `${width} × ${height} px`,
     format: getOutputLabel(outputFormat),
     bitDepth: `${effectiveBitDepth} 位`,
-    color: outputFormat === "jpg" || effectiveBitDepth !== 32
+    color: (outputFormat === "jpg") || effectiveBitDepth !== 32
       ? `背景 ${backgroundColor.toUpperCase()}`
       : "保留透明度",
     fileSize: "导出后显示实际体积",
@@ -249,6 +250,10 @@ export function getBitDepths(format: OutputFormat): ReadonlyArray<BmpBitDepth> {
     return [24];
   }
 
+  if (format === "webp") {
+    return [24, 32];
+  }
+
   if (format === "rgb565" || format === "c-array") {
     return [16];
   }
@@ -271,13 +276,17 @@ export function getFormatInfo(format: OutputFormat) {
 }
 
 export function getBackgroundNote(format: OutputFormat, bitDepth: BmpBitDepth) {
-  const keepsTransparency = (format === "png" && bitDepth === 32) || (format === "bmp" && bitDepth === 32);
+  const keepsTransparency = ((format === "png" || format === "webp") && bitDepth === 32) || (format === "bmp" && bitDepth === 32);
   return keepsTransparency ? "留白区域使用此颜色；源图透明度保留" : "透明区域使用此颜色";
 }
 
 export function getBitDepthNote(format: OutputFormat, bitDepth: BmpBitDepth) {
   if (format === "jpg") {
     return "JPG 始终输出 24 位。";
+  }
+
+  if (format === "webp") {
+    return bitDepth === 32 ? "32 位 WebP 保留透明度。" : "24 位 WebP 不含透明度，透明区域使用背景色。";
   }
 
   if (bitDepth === 32) {

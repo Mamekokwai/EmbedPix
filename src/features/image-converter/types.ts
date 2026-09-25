@@ -1,4 +1,4 @@
-export type OutputFormat = "bmp" | "png" | "jpg" | "rgb565" | "c-array";
+export type OutputFormat = "bmp" | "png" | "jpg" | "webp" | "rgb565" | "c-array";
 
 export type ByteOrder = "little" | "big";
 export type ChannelOrder = "rgb" | "bgr";
