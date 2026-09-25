@@ -72,6 +72,14 @@ try {
   } | ConvertTo-Json | Set-Content (Join-Path $root 'startup.json')
   if ($app.HasExited -and $app.ExitCode -ne 0) { throw "Installed application exited with code $($app.ExitCode)." }
   if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+  $uninstaller = @(
+    (Join-Path (Split-Path $candidates[0]) 'uninstall.exe'),
+    (Join-Path $env:LOCALAPPDATA 'EmbedPix\uninstall.exe')
+  ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+  if (-not $uninstaller) { throw 'Installed uninstaller was not found.' }
+  $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/S /LOG=\"$(Join-Path $root 'uninstaller.log')\"" -PassThru -Wait
+  if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with code $($uninstall.ExitCode)." }
+  if (Test-Path -LiteralPath $candidates[0]) { throw 'Installer smoke left the application installed.' }
   Write-Host "Release download, verification, installation, and startup smoke passed for $Tag."
 } catch {
   New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
