@@ -62,10 +62,11 @@ try {
     (Join-Path $env:LOCALAPPDATA 'EmbedPix\EmbedPix.exe')
   ) | Where-Object { Test-Path -LiteralPath $_ }
   if (-not $candidates) { throw 'Installed EmbedPix executable was not found.' }
-  $app = Start-Process -FilePath $candidates[0] -PassThru
+  $installedExecutable = $candidates | Select-Object -First 1
+  $app = Start-Process -FilePath $installedExecutable -PassThru
   Start-Sleep -Seconds 8
   [ordered]@{
-    executable = $candidates[0]
+    executable = $installedExecutable
     process_id = $app.Id
     exited = $app.HasExited
     exit_code = if ($app.HasExited) { $app.ExitCode } else { $null }
@@ -73,14 +74,14 @@ try {
   if ($app.HasExited -and $app.ExitCode -ne 0) { throw "Installed application exited with code $($app.ExitCode)." }
   if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
   $uninstaller = @(
-    (Join-Path (Split-Path $candidates[0]) 'uninstall.exe'),
+    (Join-Path (Split-Path $installedExecutable) 'uninstall.exe'),
     (Join-Path $env:LOCALAPPDATA 'EmbedPix\uninstall.exe')
   ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
   if (-not $uninstaller) { throw 'Installed uninstaller was not found.' }
   $uninstallerLog = Join-Path $root 'uninstaller.log'
   $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/S', "/LOG=$uninstallerLog") -PassThru -Wait
   if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with code $($uninstall.ExitCode)." }
-  if (Test-Path -LiteralPath $candidates[0]) { throw 'Installer smoke left the application installed.' }
+  if (Test-Path -LiteralPath $installedExecutable) { throw 'Installer smoke left the application installed.' }
   Write-Host "Release download, verification, installation, and startup smoke passed for $Tag."
 } catch {
   New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
