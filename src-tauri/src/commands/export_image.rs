@@ -165,6 +165,13 @@ impl MetadataPolicy {
     }
 }
 
+fn metadata_preserve_unsupported_reason(format: OutputFormat) -> String {
+    format!(
+        "metadataPolicy=preserve is unsupported for {} output: metadata is stripped because safe bounded copying is not implemented; use strip",
+        format.name()
+    )
+}
+
 #[derive(Debug, Clone, Copy)]
 enum WatermarkPosition {
     TopLeft,
@@ -316,7 +323,7 @@ impl ExportMetadata {
         transform.validate()?;
         let metadata_policy = MetadataPolicy::parse(self.metadata_policy.as_deref())?;
         if metadata_policy == MetadataPolicy::Preserve {
-            return Err("metadataPolicy=preserve is not supported yet; use strip to remove EXIF/ICC metadata safely".to_string());
+            return Err(metadata_preserve_unsupported_reason(output_format));
         }
         Ok(ExportRequest {
             input_data,
@@ -631,7 +638,7 @@ pub fn export_image_cli(payload: &[u8]) -> Result<ExportImageResult, String> {
 
 fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
     if request.metadata_policy == MetadataPolicy::Preserve {
-        return Err("metadataPolicy=preserve is not supported yet; use strip to remove EXIF/ICC metadata safely".to_string());
+        return Err(metadata_preserve_unsupported_reason(request.output_format));
     }
     validate_dimensions(request.width, request.height)?;
     validate_bit_depth(request.output_format, request.bit_depth)?;
@@ -2155,7 +2162,7 @@ mod tests {
         assert!(preserve
             .into_request(vec![1])
             .unwrap_err()
-            .contains("metadataPolicy=preserve"));
+            .contains("metadataPolicy=preserve is unsupported for png output"));
 
         let legacy: ExportMetadata = serde_json::from_str(
             r#"{"fileName":"source.png","outputFormat":"png","width":1,"height":1,"keepAspectRatio":false}"#,

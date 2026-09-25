@@ -1612,7 +1612,7 @@ export default function ImageConverter({
                 <span className="toggle-track" aria-hidden="true"><span /></span>
                 <span>清理 EXIF/ICC 元数据</span>
               </label>
-              <p className="field-help">默认清理；保留元数据当前不支持，关闭后导出会被拒绝。</p>
+              <p className="field-help">默认清理；当前所有输出格式均不支持安全受限复制，关闭后会明确拒绝导出。PNG/JPEG 的 EXIF/ICC 不会被原样写入。</p>
             </div>
                 </div>
               </details>
