@@ -251,6 +251,7 @@ pub fn run_case(name: &str, output_dir: &Path) -> Result<BenchmarkSample, String
         spool_durations: Vec::new(),
         overwrite_existing: true,
         job_id: None,
+        target_bytes: None,
     };
 
     let started = Instant::now();
@@ -316,6 +317,7 @@ pub fn run_experiment_case(
         spool_durations: Vec::new(),
         overwrite_existing: true,
         job_id: None,
+        target_bytes: None,
     };
     let started = Instant::now();
     export_gif_blocking_with_job(request, None)?;
@@ -406,6 +408,7 @@ pub fn run_quality_preset_case(
         spool_durations: Vec::new(),
         overwrite_existing: true,
         job_id: None,
+        target_bytes: None,
     };
     let started = Instant::now();
     export_gif_blocking_with_job(request, None)?;

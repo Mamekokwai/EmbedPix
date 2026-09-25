@@ -403,7 +403,7 @@ pub(super) fn job_mark_published(job: &ExportJob, output_path: String) {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GifExportRequest {
     #[serde(default)]
@@ -438,6 +438,8 @@ pub struct GifExportRequest {
     overwrite_existing: bool,
     #[serde(default)]
     job_id: Option<String>,
+    #[serde(default)]
+    target_bytes: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -478,6 +480,7 @@ impl From<GifSizeEstimateRequest> for GifExportRequest {
             spool_durations: Vec::new(),
             overwrite_existing: false,
             job_id: None,
+            target_bytes: None,
         }
     }
 }
@@ -867,6 +870,11 @@ fn export_gif_blocking_with_job(
     job_report(&job, "validating", 0);
     job_checkpoint(&job)?;
     validate_request(&request)?;
+    let request = if request.target_bytes.is_some() {
+        select_export_candidate(request, &job)?
+    } else {
+        request
+    };
     let output_path = resolve_output_path(&request)?;
     job_report(&job, "encoding", 0);
     let publish_job = job.clone();
@@ -882,6 +890,42 @@ fn export_gif_blocking_with_job(
         move || job_mark_published(&completed_job, completed_path),
     )?;
     Ok(output_path.to_string_lossy().into_owned())
+}
+
+fn select_export_candidate(
+    request: GifExportRequest,
+    job: &ExportJob,
+) -> Result<GifExportRequest, String> {
+    let target_bytes = request
+        .target_bytes
+        .ok_or_else(|| "targetBytes is required".to_string())?;
+    job_checkpoint(job)?;
+    let plan = plan_gif_compression_blocking(GifCompressionRequest {
+        width: request.width,
+        height: request.height,
+        loop_mode: request.loop_mode.clone(),
+        loop_count: request.loop_count,
+        encoding_speed: request.encoding_speed,
+        color_count: request.color_count,
+        dither_mode: request.dither_mode.clone(),
+        frames: request.frames.clone(),
+        target_bytes,
+        max_candidates: None,
+    })?;
+    let candidate = plan.selected.ok_or_else(|| {
+        plan.reason
+            .unwrap_or_else(|| "GIF 目标体积不可达".to_string())
+    })?;
+    job_checkpoint(job)?;
+    let mut selected = request;
+    selected.width = candidate.width;
+    selected.height = candidate.height;
+    selected.color_count = candidate.color_count;
+    if candidate.frame_count < selected.frames.len() {
+        selected.frames = selected.frames.into_iter().step_by(2).collect();
+    }
+    selected.target_bytes = None;
+    Ok(selected)
 }
 
 fn estimate_gif_size_blocking(

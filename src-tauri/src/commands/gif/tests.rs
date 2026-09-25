@@ -95,6 +95,7 @@ fn request(path: &Path) -> GifExportRequest {
         spool_durations: Vec::new(),
         overwrite_existing: false,
         job_id: None,
+        target_bytes: None,
         frames: vec![
             frame([255, 0, 0, 255], 19),
             frame([0, 255, 0, 255], 25),
@@ -372,6 +373,26 @@ fn compression_planner_returns_real_candidate_estimates_and_target_selection() {
         .iter()
         .all(|candidate| candidate.estimated_bytes > 0));
     assert!(plan.selected.is_some());
+}
+
+#[test]
+fn export_candidate_selection_changes_request_without_publishing() {
+    let mut request = request(Path::new("not-written.gif"));
+    request.target_bytes = Some(10_000);
+    let selected = select_export_candidate(request, &None).unwrap();
+    assert!(selected.width <= 3);
+    assert!(selected.color_count <= 256);
+    assert!(selected.target_bytes.is_none());
+    assert!(!Path::new("not-written.gif").exists());
+}
+
+#[test]
+fn export_candidate_selection_rejects_unreachable_target_before_publish() {
+    let mut request = request(Path::new("not-written.gif"));
+    request.target_bytes = Some(1);
+    let error = select_export_candidate(request, &None).unwrap_err();
+    assert!(error.contains("不可达"));
+    assert!(!Path::new("not-written.gif").exists());
 }
 
 #[test]
