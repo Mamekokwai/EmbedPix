@@ -322,9 +322,6 @@ impl ExportMetadata {
         let transform = self.transform.unwrap_or_default();
         transform.validate()?;
         let metadata_policy = MetadataPolicy::parse(self.metadata_policy.as_deref())?;
-        if metadata_policy == MetadataPolicy::Preserve {
-            return Err(metadata_preserve_unsupported_reason(output_format));
-        }
         Ok(ExportRequest {
             input_data,
             source_file_name: source_file_name.clone(),
@@ -637,13 +634,13 @@ pub fn export_image_cli(payload: &[u8]) -> Result<ExportImageResult, String> {
 }
 
 fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
-    if request.metadata_policy == MetadataPolicy::Preserve {
-        return Err(metadata_preserve_unsupported_reason(request.output_format));
-    }
     validate_dimensions(request.width, request.height)?;
     validate_bit_depth(request.output_format, request.bit_depth)?;
 
     validate_input_size(&request.input_data)?;
+    if request.metadata_policy == MetadataPolicy::Preserve {
+        return passthrough_preserved_input(request);
+    }
     let source = apply_image_transform(decode_input(&request.input_data)?, &request.transform)?;
     let mut image = resize_image(
         source,
@@ -673,6 +670,51 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
             raw::encode_c_array(&bytes, image.width(), image.height(), &request.c_array_name)
         }
     }
+}
+
+fn passthrough_preserved_input(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
+    if request.transform != ImageTransformOptions::default()
+        || request.watermark.is_some()
+        || request.keep_aspect_ratio
+    {
+        return Err(format!(
+            "metadataPolicy=preserve is unsupported for {} output when transforming, resizing, or watermarking; use strip",
+            request.output_format.name()
+        ));
+    }
+    let input_format = image::guess_format(&request.input_data).map_err(|_| {
+        "metadataPolicy=preserve requires a recognized source image format; use strip".to_string()
+    })?;
+    let expected_format = match request.output_format {
+        OutputFormat::Png => ImageFormat::Png,
+        OutputFormat::Jpg => ImageFormat::Jpeg,
+        OutputFormat::Webp => ImageFormat::WebP,
+        OutputFormat::Tiff => ImageFormat::Tiff,
+        OutputFormat::Ico => ImageFormat::Ico,
+        _ => return Err(metadata_preserve_unsupported_reason(request.output_format)),
+    };
+    if input_format != expected_format {
+        return Err(format!(
+            "metadataPolicy=preserve requires matching source and {} output formats; use strip",
+            request.output_format.name()
+        ));
+    }
+    let image = ImageReader::new(Cursor::new(&request.input_data))
+        .with_guessed_format()
+        .map_err(|_| {
+            "metadataPolicy=preserve could not inspect the source image; use strip".to_string()
+        })?
+        .decode()
+        .map_err(|_| {
+            "metadataPolicy=preserve could not decode the source image; use strip".to_string()
+        })?;
+    if image.dimensions() != (request.width, request.height) {
+        return Err(format!(
+            "metadataPolicy=preserve requires unchanged dimensions for {} output; use strip",
+            request.output_format.name()
+        ));
+    }
+    Ok((request.input_data.clone(), request.bit_depth))
 }
 
 fn normalize_optional_path(value: Option<String>, field: &str) -> Result<Option<String>, String> {
@@ -2151,7 +2193,7 @@ mod tests {
     }
 
     #[test]
-    fn metadata_policy_preserve_is_rejected_while_legacy_requests_default_to_strip() {
+    fn metadata_policy_preserve_allows_only_safe_same_format_passthrough() {
         let preserve: ExportMetadata = serde_json::from_str(
             r#"{
                 "fileName":"source.png","outputFormat":"png","width":1,"height":1,
@@ -2159,10 +2201,16 @@ mod tests {
             }"#,
         )
         .unwrap();
-        assert!(preserve
-            .into_request(vec![1])
+        let request = preserve.into_request(vec![1]).unwrap();
+        assert!(convert_image(&request)
             .unwrap_err()
-            .contains("metadataPolicy=preserve is unsupported for png output"));
+            .contains("recognized source image format"));
+
+        let mut transformed = request.clone();
+        transformed.transform.rotation = 90;
+        assert!(convert_image(&transformed)
+            .unwrap_err()
+            .contains("transforming, resizing, or watermarking"));
 
         let legacy: ExportMetadata = serde_json::from_str(
             r#"{"fileName":"source.png","outputFormat":"png","width":1,"height":1,"keepAspectRatio":false}"#,
