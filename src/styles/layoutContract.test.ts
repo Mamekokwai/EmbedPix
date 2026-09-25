@@ -9,6 +9,7 @@ const gifCss = readSource(new URL("./features/gif-maker.css", import.meta.url));
 const converterCss = readSource(new URL("./features/image-converter.css", import.meta.url));
 const gifView = readSource(new URL("../features/gif-maker/GifMakerView.tsx", import.meta.url));
 const converterView = readSource(new URL("../features/image-converter/ImageConverter.tsx", import.meta.url));
+const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -35,6 +36,7 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".converter-app {\n  width: min(1180px, 100%);");
     expect(converterCss).toContain("overflow-x: hidden;");
     expect(converterCss).toContain(".preview-content { min-height: 210px; }");
+    expect(themeSelectCss).toContain(".theme-select-option:focus-visible");
   });
 
   it("keeps export and cancellation controls represented in both workspaces", () => {
@@ -89,6 +91,12 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl))");
     expect(gifView).toContain("videoImportRequestRef.current += 1");
     expect(gifView).toContain("正在取消导出");
+    expect(converterView).toContain("if (!active || !file || !dimensions");
+  });
+
+  it("flips custom dropdowns above the trigger in short windows", () => {
+    expect(themeSelectCss).toContain("@media (max-height: 620px)");
+    expect(themeSelectCss).toContain("bottom: calc(100% + 5px);");
   });
 
   it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {

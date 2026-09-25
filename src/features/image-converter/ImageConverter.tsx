@@ -447,9 +447,9 @@ export default function ImageConverter({
       if (realPreviewUrlRef.current) URL.revokeObjectURL(realPreviewUrlRef.current);
       realPreviewUrlRef.current = null;
       setRealPreviewUrl(null);
-      if (!file || !dimensions || !isTauriEnvironment() || dimensionError || cropValidationError) {
+      if (!active || !file || !dimensions || !isTauriEnvironment() || dimensionError || cropValidationError) {
         setRealPreview(null);
-        setRealPreviewError(!isTauriEnvironment() && file ? "桌面真实编码预览仅在 Tauri 应用中可用。" : null);
+        setRealPreviewError(active && !isTauriEnvironment() && file ? "桌面真实编码预览仅在 Tauri 应用中可用。" : null);
         return;
       }
       setRealPreviewError(null);
@@ -495,7 +495,7 @@ export default function ImageConverter({
     };
     void requestPreview();
     return () => { cancelled = true; };
-  }, [backgroundColor, bitDepth, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, height, imageTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
+  }, [active, backgroundColor, bitDepth, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, height, imageTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
 
   const resetImageTransform = (source: ImageDimensions | null = dimensions) => {
     setRotation(0);

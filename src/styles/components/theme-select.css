@@ -92,6 +92,11 @@
   outline: none;
 }
 
+.theme-select-option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent);
+  outline-offset: -2px;
+}
+
 .theme-select-option-selected {
   border-color: color-mix(in srgb, var(--qp-accent-default) 45%, var(--qp-border-subtle));
   background: var(--qp-accent-muted);
@@ -105,5 +110,13 @@
 @media (max-width: 620px) {
   .settings-select {
     width: 100%;
+  }
+}
+
+@media (max-height: 620px) {
+  .theme-select-list {
+    top: auto;
+    bottom: calc(100% + 5px);
+    max-height: 180px;
   }
 }
