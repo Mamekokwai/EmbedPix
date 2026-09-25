@@ -83,6 +83,9 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain("URL.revokeObjectURL(realPreviewUrlRef.current)");
     expect(converterView).toContain("loadedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl))");
     expect(converterView).toContain("仅重试失败项");
+    expect(converterView).toContain("暂停队列");
+    expect(converterView).toContain("继续导出");
+    expect(converterView).toContain("原子导出不会被中断");
     expect(gifView).toContain("framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl))");
     expect(gifView).toContain("videoImportRequestRef.current += 1");
     expect(gifView).toContain("正在取消导出");

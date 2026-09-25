@@ -27,6 +27,8 @@ export interface ExportFailureDetail {
 
 export interface ExportQueueOptions<T> {
   shouldCancel?: () => boolean;
+  shouldPause?: () => boolean;
+  waitForResume?: () => Promise<void>;
   onProgress?: (progress: ExportQueueProgress<T>) => void;
 }
 
@@ -41,6 +43,9 @@ export async function runExportQueue<T>(
   let cancelled = false;
 
   for (const [index, item] of items.entries()) {
+    if (options.shouldPause?.() && options.waitForResume) {
+      await options.waitForResume();
+    }
     if (options.shouldCancel?.()) {
       skipped.push(...items.slice(index));
       cancelled = true;

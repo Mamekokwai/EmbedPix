@@ -302,7 +302,10 @@ export default function ImageConverter({
   const [realPreviewError, setRealPreviewError] = useState<string | null>(null);
   const [failureDetailsOpen, setFailureDetailsOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState<ImageExportQueueProgress | null>(null);
+  const [exportPaused, setExportPaused] = useState(false);
   const exportCancelRef = useRef(false);
+  const exportPauseRef = useRef(false);
+  const exportResumeRef = useRef<(() => void) | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const realPreviewUrlRef = useRef<string | null>(null);
@@ -316,6 +319,10 @@ export default function ImageConverter({
   useEffect(() => {
     return () => {
       loadIdRef.current += 1;
+      exportCancelRef.current = true;
+      exportPauseRef.current = false;
+      exportResumeRef.current?.();
+      exportResumeRef.current = null;
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
         previewUrlRef.current = null;
@@ -955,7 +962,25 @@ export default function ImageConverter({
       return;
     }
     exportCancelRef.current = true;
+    exportResumeRef.current?.();
+    exportResumeRef.current = null;
+    setExportPaused(false);
     setStatus({ kind: "busy", text: "正在等待当前文件完成，之后将停止队列…" });
+  };
+
+  const toggleExportPause = () => {
+    if (status.kind !== "busy") return;
+    if (!exportPaused) {
+      exportPauseRef.current = true;
+      setExportPaused(true);
+      setStatus({ kind: "busy", text: "已暂停：当前文件完成后等待继续，原子导出不会被中断。" });
+      return;
+    }
+    exportPauseRef.current = false;
+    exportResumeRef.current?.();
+    exportResumeRef.current = null;
+    setExportPaused(false);
+    setStatus({ kind: "busy", text: "正在继续批量导出…" });
   };
 
   const handleExport = async (requestedImages: ReadonlyArray<LoadedImage> = loadedImages) => {
@@ -1046,6 +1071,8 @@ export default function ImageConverter({
     }
 
     exportCancelRef.current = false;
+    exportPauseRef.current = false;
+    setExportPaused(false);
     setError(null);
     setFailedExportIds([]);
     setExportFailures([]);
@@ -1090,6 +1117,8 @@ export default function ImageConverter({
         setActualExportResult(exportResult);
       }, {
         shouldCancel: () => exportCancelRef.current,
+        shouldPause: () => exportPauseRef.current,
+        waitForResume: () => new Promise<void>((resolve) => { exportResumeRef.current = resolve; }),
         onProgress: (progress) => {
           setExportProgress(progress);
           setStatus({ kind: "busy", text: formatExportQueueProgress(progress) });
@@ -1612,7 +1641,7 @@ export default function ImageConverter({
                 <span className="toggle-track" aria-hidden="true"><span /></span>
                 <span>清理 EXIF/ICC 元数据</span>
               </label>
-              <p className="field-help">默认清理；当前所有输出格式均不支持安全受限复制，关闭后会明确拒绝导出。PNG/JPEG 的 EXIF/ICC 不会被原样写入。</p>
+              <p className="field-help">保留仅支持同格式、原尺寸、无裁剪旋转和无水印时的原始字节直通；其他情况会明确拒绝。关闭后默认清理 EXIF/ICC。</p>
             </div>
                 </div>
               </details>
@@ -1642,6 +1671,7 @@ export default function ImageConverter({
                     <span className="export-progress-value" style={{ width: `${Math.min(100, ((exportProgress.succeeded + exportProgress.failed + exportProgress.skipped) / Math.max(1, exportProgress.total)) * 100)}%` }} />
                   </div>
                   <span className="export-progress-summary">成功 {exportProgress.succeeded} · 失败 {exportProgress.failed} · 跳过 {exportProgress.skipped}</span>
+                  <button className="quiet-button export-pause-button" type="button" onClick={toggleExportPause}>{exportPaused ? "继续导出" : "暂停队列"}</button>
                 </div>
               ) : null}
               {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}

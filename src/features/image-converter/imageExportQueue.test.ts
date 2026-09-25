@@ -54,6 +54,25 @@ describe("image export queue", () => {
     expect(formatExportQueueSummary(result)).toBe("已取消：成功 1，失败 0，跳过 2");
   });
 
+  it("pauses only between atomic items and resumes without re-exporting success", async () => {
+    let paused = true;
+    let releaseResume!: () => void;
+    const resume = new Promise<void>((resolve) => { releaseResume = resolve; });
+    const exportItem = vi.fn(async () => undefined);
+    const items = ["first.png", "second.png"].map((name) => ({ file: { name } }));
+    const run = runExportQueue(items, exportItem, {
+      shouldPause: () => paused,
+      waitForResume: () => resume,
+    });
+    await Promise.resolve();
+    expect(exportItem).not.toHaveBeenCalled();
+    paused = false;
+    releaseResume();
+    const result = await run;
+    expect(exportItem).toHaveBeenCalledTimes(2);
+    expect(result.succeeded).toEqual(items);
+  });
+
   it("keeps complete failure filenames and reasons copyable", () => {
     expect(formatExportFailureDetails([
       { fileName: "very-long-image-name.bmp", message: "编码失败" },
