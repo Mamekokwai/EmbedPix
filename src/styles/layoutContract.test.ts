@@ -79,6 +79,15 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain("overflow-x: hidden;");
   });
 
+  it("keeps resource cleanup and failed-item retry paths explicit", () => {
+    expect(converterView).toContain("URL.revokeObjectURL(realPreviewUrlRef.current)");
+    expect(converterView).toContain("loadedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl))");
+    expect(converterView).toContain("仅重试失败项");
+    expect(gifView).toContain("framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl))");
+    expect(gifView).toContain("videoImportRequestRef.current += 1");
+    expect(gifView).toContain("正在取消导出");
+  });
+
   it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {
     expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 621px)");
     expect(gifCss).toContain(".gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 128px minmax(220px, auto); overflow: visible; }");
