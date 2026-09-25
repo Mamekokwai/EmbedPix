@@ -714,7 +714,8 @@ fn passthrough_preserved_input(request: &ExportRequest) -> Result<(Vec<u8>, u16)
             request.output_format.name()
         ));
     }
-    Ok((request.input_data.clone(), request.bit_depth))
+    let actual_bit_depth = image.color().bits_per_pixel();
+    Ok((request.input_data.clone(), actual_bit_depth))
 }
 
 fn normalize_optional_path(value: Option<String>, field: &str) -> Result<Option<String>, String> {
@@ -2220,6 +2221,16 @@ mod tests {
             legacy.into_request(vec![1]).unwrap().metadata_policy,
             MetadataPolicy::Strip
         );
+    }
+
+    #[test]
+    fn preserved_input_reports_decoded_source_color_depth() {
+        let (input_data, _) = encode_png(sample_image(), 32, Rgba([255, 255, 255, 255])).unwrap();
+        let mut request = preview_request(OutputFormat::Png, 32);
+        request.input_data = input_data;
+        request.metadata_policy = MetadataPolicy::Preserve;
+        let (_, bit_depth) = convert_image(&request).unwrap();
+        assert_eq!(bit_depth, 32);
     }
 
     #[test]

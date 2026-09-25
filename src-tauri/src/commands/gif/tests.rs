@@ -770,6 +770,15 @@ fn spool_rejects_unknown_and_mismatched_ids_without_path_access() {
 }
 
 #[test]
+fn spool_removes_directory_after_failed_take_and_allows_discard_retry() {
+    let state = GifFrameSpoolState::default();
+    let id = state.create().unwrap();
+    state.write_frame(&id, "AQI=").unwrap();
+    assert!(state.take_frames(&id, &[10, 10]).is_err());
+    assert!(state.discard(&id).is_ok());
+}
+
+#[test]
 fn parses_safe_gif_output_location_fields_in_the_camel_case_contract() {
     let req: GifExportRequest = serde_json::from_value(serde_json::json!({
         "outputLocation": "subfolder",
