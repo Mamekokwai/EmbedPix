@@ -14,6 +14,7 @@ const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
   { name: "small portrait", width: 360, height: 500 },
   { name: "tablet portrait", width: 480, height: 640 },
+  { name: "narrow tall", width: 700, height: 1100 },
   { name: "regular desktop", width: 1280, height: 800 },
 ] as const;
 
@@ -39,6 +40,16 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("getGifCancelButtonLabel");
     expect(converterView).toContain("export-button");
     expect(converterView).toContain("requestExportCancel");
+  });
+
+  it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {
+    expect(gifView).toContain("素材帧");
+    expect(gifView).toContain("动画预览");
+    expect(gifView).toContain("画布");
+    expect(gifView).toContain("帧时长");
+    expect(gifView).toContain("导出设置");
+    expect(gifView).toContain("selectedFrameIndices");
+    expect(gifView).toContain("批量设置选中帧时长");
   });
 
   it("does not reintroduce a horizontal scrolling frame list", () => {
