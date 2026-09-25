@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { getFormatMetadata, GIF_OUTPUT_FORMAT_IDS } from "../../shared/formatMetadata";
-import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, revealGifOutput } from "../../platform/gif/gifGateway";
+import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, planGifCompression, revealGifOutput } from "../../platform/gif/gifGateway";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
@@ -517,6 +517,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
   const [sizeComparison, setSizeComparison] = useState<GifSizeComparisonState | null>(null);
   const [compressionSummary, setCompressionSummary] = useState<string | null>(null);
+  const [compressionPlan, setCompressionPlan] = useState<Awaited<ReturnType<typeof planGifCompression>> | null>(null);
+  const [compressionPlanError, setCompressionPlanError] = useState<string | null>(null);
+  const [compressionPlanBusy, setCompressionPlanBusy] = useState(false);
   const [exportFrameSummary, setExportFrameSummary] = useState<GifExportFrameSummary | null>(null);
   const [fileName, setFileName] = useState(() => defaultGifFileName(savedPreferences.outputFormat));
   const [outputLocation, setOutputLocation] = useState<GifOutputLocation>("path");
@@ -1799,6 +1802,38 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
   };
 
+  const planCompressionBeforeExport = async () => {
+    if (lockedRef.current || !frames.length || outputFormat !== "gif") return;
+    const targetBytes = parseSizeBytes(targetSizeKiB) ?? parseSizeBytes(maxSizeKiB);
+    if (targetBytes === undefined) {
+      setCompressionPlanError("请先填写有效的目标或最大文件大小。");
+      return;
+    }
+    setCompressionPlanBusy(true);
+    setCompressionPlanError(null);
+    try {
+      const plannedFrames = await renderExportFrames(canvasSize);
+      const result = await planGifCompression({
+        width: canvasSize.width,
+        height: canvasSize.height,
+        loopMode,
+        loopCount: loopMode === "finite" ? Math.max(1, Math.round(loopCount)) : 0,
+        encodingSpeed: encodingQuality === "high" ? 1 : encodingQuality === "balanced" ? 10 : 30,
+        colorCount,
+        ditherMode,
+        frames: plannedFrames,
+        targetBytes,
+        maxCandidates: 8,
+      });
+      setCompressionPlan(result);
+    } catch (planError) {
+      setCompressionPlan(null);
+      setCompressionPlanError(planError instanceof Error ? planError.message : "压缩规划失败，可继续正式导出。");
+    } finally {
+      setCompressionPlanBusy(false);
+    }
+  };
+
   const estimateAnimationSizeBeforeExport = async () => {
     if (lockedRef.current || !frames.length || (outputFormat !== "webp" && outputFormat !== "apng")) return;
     const controller = new AbortController();
@@ -2299,7 +2334,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <SelectField id="gif-dither-mode" label="抖动方式" value={ditherMode} options={[{ value: "none" as const, label: "无" }, { value: "floydSteinberg" as const, label: "Floyd-Steinberg" }, { value: "atkinson" as const, label: "Atkinson" }]} onChange={updateGifDitherMode} />
                 <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => { setTargetSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
                 <label className="gif-field"><span>最大文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={maxSizeKiB} onChange={(event) => { setMaxSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
-                <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => { setAutoCompress(event.target.checked); setGifPreset("custom"); }} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
+              <label className="gif-check-row gif-compression-toggle"><input type="checkbox" checked={autoCompress} onChange={(event) => { setAutoCompress(event.target.checked); setGifPreset("custom"); }} /><span><strong>自动压缩到目标大小</strong><small>颜色 → 跳帧 → 75% / 50% 画布</small></span></label>
+              <div className="gif-compression-plan">
+                <button className="quiet-button gif-estimate-button" type="button" disabled={!frames.length || locked || compressionPlanBusy} onClick={() => void planCompressionBeforeExport()}>{compressionPlanBusy ? "正在规划…" : "规划压缩候选"}</button>
+                <small>仅调用原生规划，不会修改参数或自动压缩正式导出。</small>
+                {compressionPlanError ? <span className="gif-error-message" role="alert">{compressionPlanError}</span> : null}
+                {compressionPlan ? <span className="gif-measured-size">{compressionPlan.selected ? `候选：${compressionPlan.selected.width} × ${compressionPlan.selected.height} · ${compressionPlan.selected.colorCount} 色 · ${compressionPlan.selected.frameCount} 帧 · 预计 ${formatGifBytes(compressionPlan.selected.estimatedBytes)}${compressionPlan.selected.meetsTarget ? "（达到目标）" : "（未达到目标）"}` : (compressionPlan.reason ?? "没有可达候选")}</span> : null}
+              </div>
               </> : <p className="gif-format-note">WebP/APNG 动图使用当前画布和帧时长导出；GIF 专属颜色和抖动参数不适用。</p>}
               {outputFormat === "webp" || outputFormat === "apng" ? <>
                 <label className="gif-field"><span>目标文件大小</span><div className="gif-input-with-suffix"><input type="number" min="1" step="1" value={targetSizeKiB} onChange={(event) => { setTargetSizeKiB(event.target.value); setGifPreset("custom"); }} placeholder="可选" /><small>KiB</small></div></label>
