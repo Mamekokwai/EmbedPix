@@ -2076,6 +2076,22 @@ mod tests {
     }
 
     #[test]
+    fn preview_contract_encodes_decodable_tiff_with_alpha() {
+        let mut request = preview_request(OutputFormat::Tiff, 32);
+        let mut source = RgbaImage::new(1, 1);
+        source.put_pixel(0, 0, Rgba([10, 20, 30, 33]));
+        request.input_data = encode_png(source, 32, Rgba([255, 255, 255, 255]))
+            .unwrap()
+            .0;
+        request.width = 1;
+        request.height = 1;
+        let preview = build_image_preview(&request).unwrap();
+        let decoded = image::load_from_memory(&preview.data).unwrap().to_rgba8();
+        assert_eq!(preview.bit_depth, 32);
+        assert_eq!(decoded.get_pixel(0, 0)[3], 33);
+    }
+
+    #[test]
     fn srgb_png_and_jpeg_outputs_do_not_emit_icc_or_exif_markers() {
         let (png, _) = encode_png(sample_image(), 32, Rgba([255, 255, 255, 255])).unwrap();
         assert!(!png
