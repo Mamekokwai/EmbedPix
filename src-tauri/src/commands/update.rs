@@ -25,6 +25,7 @@ const MAX_UPDATE_BYTES: u64 = 128 * 1024 * 1024;
 const UPDATE_CACHE_DIR: &str = "updates";
 const UPDATE_FILE_PREFIX: &str = "EmbedPix-update-";
 const UPDATE_PUBLIC_KEY: &str = include_str!("../../update-public-key.txt");
+const MAX_DOWNLOAD_ATTEMPTS: usize = 3;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -108,6 +109,140 @@ struct TrustedAsset {
 struct VerifiedPackage {
     path: PathBuf,
     _file: File,
+}
+
+fn content_range_start(value: Option<&str>) -> Option<u64> {
+    let value = value?.strip_prefix("bytes ")?;
+    let (range, _) = value.split_once('/')?;
+    range.split_once('-')?.0.parse().ok()
+}
+
+fn should_append_partial(
+    status: reqwest::StatusCode,
+    offset: u64,
+    content_range: Option<&str>,
+) -> bool {
+    offset > 0
+        && status == reqwest::StatusCode::PARTIAL_CONTENT
+        && content_range_start(content_range) == Some(offset)
+}
+
+async fn download_package_with_resume(
+    client: &reqwest::Client,
+    url: &Url,
+    part_path: &Path,
+    etag_path: &Path,
+    _version: &str,
+    expected_size: Option<u64>,
+    mut report_progress: impl FnMut(u64, Option<u64>),
+) -> Result<(u64, Option<u64>), String> {
+    for attempt in 0..MAX_DOWNLOAD_ATTEMPTS {
+        let mut offset = tokio::fs::metadata(part_path)
+            .await
+            .map(|metadata| metadata.len())
+            .unwrap_or(0);
+        let etag = tokio::fs::read_to_string(etag_path)
+            .await
+            .ok()
+            .map(|value| value.trim().to_string());
+        if offset > MAX_UPDATE_BYTES {
+            let _ = tokio::fs::remove_file(part_path).await;
+            offset = 0;
+        }
+        let mut request = client.get(url.clone());
+        if offset > 0 {
+            if let Some(etag) = etag.as_deref().filter(|value| !value.is_empty()) {
+                request = request.header(reqwest::header::RANGE, format!("bytes={offset}-"));
+                request = request.header(reqwest::header::IF_RANGE, etag);
+            } else {
+                let _ = tokio::fs::remove_file(part_path).await;
+                offset = 0;
+            }
+        }
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(_error) if attempt + 1 < MAX_DOWNLOAD_ATTEMPTS => continue,
+            Err(error) => return Err(format!("无法下载更新：{error}")),
+        };
+        // The caller validates the initial URL and configures a redirect policy before entering this helper.
+        let status = response.status();
+        let content_range = response
+            .headers()
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|value| value.to_str().ok());
+        let append = should_append_partial(status, offset, content_range);
+        if offset > 0 && !append {
+            let _ = tokio::fs::remove_file(part_path).await;
+            if status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE
+                || status == reqwest::StatusCode::OK
+            {
+                continue;
+            }
+        }
+        if !status.is_success() {
+            if attempt + 1 < MAX_DOWNLOAD_ATTEMPTS {
+                continue;
+            }
+            return Err(format!("更新下载服务返回 HTTP {}。", status));
+        }
+        let response_size = response.content_length();
+        let total_bytes = expected_size.or_else(|| {
+            response_size.map(|size| size.saturating_add(if append { offset } else { 0 }))
+        });
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(!append)
+            .append(append)
+            .open(part_path)
+            .await
+            .map_err(|error| format!("无法打开更新临时文件：{error}"))?;
+        if let Some(etag) = response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|value| value.to_str().ok())
+        {
+            tokio::fs::write(etag_path, etag)
+                .await
+                .map_err(|error| format!("无法保存更新校验标记：{error}"))?;
+        }
+        let mut downloaded = if append { offset } else { 0 };
+        report_progress(downloaded, total_bytes);
+        let mut response = response;
+        let write_result = async {
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|error| format!("更新下载中断：{error}"))?
+            {
+                downloaded = downloaded
+                    .checked_add(chunk.len() as u64)
+                    .ok_or_else(|| "更新安装包大小无效。".to_string())?;
+                if downloaded > MAX_UPDATE_BYTES {
+                    return Err("更新安装包超过安全大小限制。".to_string());
+                }
+                file.write_all(&chunk)
+                    .await
+                    .map_err(|error| format!("无法保存更新安装包：{error}"))?;
+                report_progress(downloaded, total_bytes);
+            }
+            file.flush()
+                .await
+                .map_err(|error| format!("无法完成更新安装包写入：{error}"))?;
+            file.sync_all()
+                .await
+                .map_err(|error| format!("无法同步更新安装包：{error}"))?;
+            Ok::<(), String>(())
+        }
+        .await;
+        drop(file);
+        match write_result {
+            Ok(()) => return Ok((downloaded, total_bytes)),
+            Err(_error) if attempt + 1 < MAX_DOWNLOAD_ATTEMPTS => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err("更新下载失败，请稍后重试。".to_string())
 }
 
 fn decode_signature_text(value: &str) -> Result<String, String> {
@@ -322,14 +457,7 @@ async fn download_update_inner(
     let signature_path = PathBuf::from(format!("{}.sig", path.to_string_lossy()));
     let signature_part_path = PathBuf::from(format!("{}.part", signature_path.to_string_lossy()));
     // A previous process can leave only the temporary download marker behind; it is safe to replace it because downloads are serialized by the app state.
-    let _ = tokio::fs::remove_file(&part_path).await;
     let _ = tokio::fs::remove_file(&signature_part_path).await;
-    let mut file = tokio::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&part_path)
-        .await
-        .map_err(|error| format!("无法创建更新临时文件：{error}"))?;
     let mut signature_committed = false;
     let mut package_committed = false;
 
@@ -369,68 +497,29 @@ async fn download_update_inner(
             .map_err(|error| format!("无法读取更新签名：{error}"))?;
         let _ = decode_signature_text(&signature_text)?;
 
-        let response = client
-            .get(validated_url)
-            .send()
-            .await
-            .map_err(|error| format!("无法下载更新：{error}"))?;
-        if !response.status().is_success()
-            || !is_allowed_final_download_url(response.url(), version)
-        {
-            return Err(format!("更新下载服务返回 HTTP {}。", response.status()));
-        }
-
-        let response_size = response.content_length();
-        validate_download_size(response_size, expected_size)?;
-        let total_bytes = expected_size.or(response_size);
-        let mut downloaded_bytes = 0_u64;
-        let mut hasher = Sha256::new();
-        let mut response = response;
-        set_progress(app, state, "downloading", 0, total_bytes, None);
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|error| format!("更新下载中断：{error}"))?
-        {
-            downloaded_bytes = downloaded_bytes
-                .checked_add(chunk.len() as u64)
-                .ok_or_else(|| "更新安装包大小无效。".to_string())?;
-            if downloaded_bytes > MAX_UPDATE_BYTES {
-                return Err("更新安装包超过安全大小限制。".to_string());
-            }
-            hasher.update(&chunk);
-            file.write_all(&chunk)
-                .await
-                .map_err(|error| format!("无法保存更新安装包：{error}"))?;
-            set_progress(
-                app,
-                state,
-                "downloading",
-                downloaded_bytes,
-                total_bytes,
-                None,
-            );
-        }
-        file.flush()
-            .await
-            .map_err(|error| format!("无法完成更新安装包写入：{error}"))?;
-        file.sync_all()
-            .await
-            .map_err(|error| format!("无法同步更新安装包：{error}"))?;
-        drop(file);
-
+        let etag_path = PathBuf::from(format!("{}.etag", path.to_string_lossy()));
+        let (downloaded_bytes, total_bytes) = download_package_with_resume(
+            &client,
+            &validated_url,
+            &part_path,
+            &etag_path,
+            version,
+            expected_size,
+            |downloaded, total| set_progress(app, state, "downloading", downloaded, total, None),
+        )
+        .await?;
         if expected_size.is_some_and(|size| size != downloaded_bytes)
-            || response_size.is_some_and(|size| size != downloaded_bytes)
+            || total_bytes.is_some_and(|size| size != downloaded_bytes)
         {
             return Err("更新安装包大小校验失败，请重新下载。".to_string());
         }
-        let actual_digest = hasher.finalize();
+        let package_bytes = tokio::fs::read(&part_path)
+            .await
+            .map_err(|error| format!("无法读取更新安装包进行校验：{error}"))?;
+        let actual_digest = Sha256::digest(&package_bytes);
         if actual_digest.as_slice() != expected_digest.as_slice() {
             return Err("更新安装包校验失败，请重新检查更新。".to_string());
         }
-        let package_bytes = tokio::fs::read(&part_path)
-            .await
-            .map_err(|error| format!("无法读取更新安装包进行签名验证：{error}"))?;
         verify_update_signature(&package_bytes, &signature_text)?;
 
         let mut signature_file = tokio::fs::OpenOptions::new()
@@ -456,6 +545,7 @@ async fn download_update_inner(
             .await
             .map_err(|error| format!("无法原子提交更新安装包：{error}"))?;
         package_committed = true;
+        let _ = tokio::fs::remove_file(&etag_path).await;
         Ok(DownloadedUpdate {
             path: path.to_string_lossy().into_owned(),
             size_bytes: downloaded_bytes,
@@ -466,6 +556,8 @@ async fn download_update_inner(
     if result.is_err() {
         let _ = tokio::fs::remove_file(&part_path).await;
         let _ = tokio::fs::remove_file(&signature_part_path).await;
+        let _ =
+            tokio::fs::remove_file(PathBuf::from(format!("{}.etag", path.to_string_lossy()))).await;
         if signature_committed {
             let _ = tokio::fs::remove_file(&signature_path).await;
         }
@@ -594,10 +686,6 @@ fn is_allowed_redirect_url(url: &Url, version: &str) -> bool {
         return false;
     }
     url.host_str() != Some(RELEASE_HOST) || is_trusted_release_asset_url(url, version)
-}
-
-fn is_allowed_final_download_url(url: &Url, version: &str) -> bool {
-    is_allowed_redirect_url(url, version)
 }
 
 fn is_allowed_download_host(url: &Url) -> bool {
@@ -1035,12 +1123,31 @@ mod tests {
     use super::{
         compare_versions, is_trusted_release_page_url, normalize_version,
         open_verified_package_file, parse_sha256, select_trusted_asset_for_target,
-        signature_url_for_asset, validate_asset_url, validate_cached_package_path,
-        validate_update_cache_dir, verify_cached_package_signature, verify_signature, ReleaseAsset,
-        UpdateTarget,
+        should_append_partial, signature_url_for_asset, validate_asset_url,
+        validate_cached_package_path, validate_update_cache_dir, verify_cached_package_signature,
+        verify_signature, ReleaseAsset, UpdateTarget,
     };
     use base64::Engine;
     use sha2::Digest;
+
+    #[test]
+    fn resumes_only_from_matching_partial_content_range() {
+        assert!(should_append_partial(
+            reqwest::StatusCode::PARTIAL_CONTENT,
+            4,
+            Some("bytes 4-9/10")
+        ));
+        assert!(!should_append_partial(
+            reqwest::StatusCode::OK,
+            4,
+            Some("bytes 4-9/10")
+        ));
+        assert!(!should_append_partial(
+            reqwest::StatusCode::PARTIAL_CONTENT,
+            4,
+            Some("bytes 0-9/10")
+        ));
+    }
 
     #[test]
     fn verifies_minisign_signature_and_rejects_tampering() {
