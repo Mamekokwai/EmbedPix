@@ -55,7 +55,7 @@ try {
   if ($env:RUNNER_OS -ne 'Windows' -and $PSVersionTable.Platform -ne 'Win32NT') { throw 'Installer smoke requires Windows.' }
   $installer = Join-Path $root "EmbedPix_${version}_x64-setup.exe"
   $installerLog = Join-Path $root 'installer.log'
-  $process = Start-Process -FilePath $installer -ArgumentList "/S /LOG=\"$installerLog\"" -PassThru -Wait
+  $process = Start-Process -FilePath $installer -ArgumentList @('/S', "/LOG=$installerLog") -PassThru -Wait
   if ($process.ExitCode -ne 0) { throw "Installer exited with code $($process.ExitCode)." }
   $candidates = @(
     (Join-Path $env:LOCALAPPDATA 'Programs\EmbedPix\EmbedPix.exe'),
@@ -77,7 +77,8 @@ try {
     (Join-Path $env:LOCALAPPDATA 'EmbedPix\uninstall.exe')
   ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
   if (-not $uninstaller) { throw 'Installed uninstaller was not found.' }
-  $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/S /LOG=\"$(Join-Path $root 'uninstaller.log')\"" -PassThru -Wait
+  $uninstallerLog = Join-Path $root 'uninstaller.log'
+  $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/S', "/LOG=$uninstallerLog") -PassThru -Wait
   if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with code $($uninstall.ExitCode)." }
   if (Test-Path -LiteralPath $candidates[0]) { throw 'Installer smoke left the application installed.' }
   Write-Host "Release download, verification, installation, and startup smoke passed for $Tag."
