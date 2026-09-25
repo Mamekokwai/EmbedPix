@@ -113,7 +113,7 @@ describe("image converter output rules", () => {
   });
 
   it("keeps format descriptions tied to every selectable format", () => {
-    expect(OUTPUT_FORMATS.map(({ value }) => value)).toEqual(["bmp", "png", "jpg", "webp", "rgb565", "c-array"]);
+    expect(OUTPUT_FORMATS.map(({ value }) => value)).toEqual(["bmp", "png", "jpg", "webp", "tiff", "rgb565", "c-array"]);
     expect(OUTPUT_FORMATS.every(({ description }) => description.length > 0)).toBe(true);
     expect(OUTPUT_FORMATS.find(({ value }) => value === "jpg")?.description).toContain("固定 24 位");
     expect(OUTPUT_FORMATS.find(({ value }) => value === "rgb565")?.label).toBe("RGB565 BIN");

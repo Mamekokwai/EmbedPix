@@ -31,6 +31,7 @@ const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 enum OutputFormat {
     Png,
     Webp,
+    Tiff,
     Jpg,
     Bmp,
     Rgb565,
@@ -71,6 +72,7 @@ impl OutputFormat {
         match value.trim().to_ascii_lowercase().as_str() {
             "png" => Ok(Self::Png),
             "webp" => Ok(Self::Webp),
+            "tiff" | "tif" => Ok(Self::Tiff),
             "jpg" | "jpeg" => Ok(Self::Jpg),
             "bmp" => Ok(Self::Bmp),
             "rgb565" => Ok(Self::Rgb565),
@@ -85,6 +87,7 @@ impl OutputFormat {
         match self {
             Self::Png => "png",
             Self::Webp => "webp",
+            Self::Tiff => "tiff",
             Self::Jpg => "jpg",
             Self::Bmp => "bmp",
             Self::Rgb565 => "bin",
@@ -96,6 +99,7 @@ impl OutputFormat {
         match self {
             Self::Png => "png",
             Self::Webp => "webp",
+            Self::Tiff => "tiff",
             Self::Jpg => "jpg",
             Self::Bmp => "bmp",
             Self::Rgb565 => "rgb565",
@@ -642,6 +646,7 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
     match request.output_format {
         OutputFormat::Png => encode_png(image, request.bit_depth, request.background_color),
         OutputFormat::Webp => encode_webp(image, request.bit_depth, request.background_color),
+        OutputFormat::Tiff => encode_tiff(image, request.bit_depth, request.background_color),
         OutputFormat::Jpg => encode_jpg(image, request.background_color, request.jpeg_quality),
         OutputFormat::Bmp => bmp::encode(&image, request.bit_depth, request.background_color),
         OutputFormat::Rgb565 => {
@@ -882,6 +887,7 @@ fn validate_bit_depth(format: OutputFormat, bit_depth: u16) -> Result<(), String
     let (supported, formats) = match format {
         OutputFormat::Png => (matches!(bit_depth, 24 | 32), "24 or 32"),
         OutputFormat::Webp => (matches!(bit_depth, 24 | 32), "24 or 32"),
+        OutputFormat::Tiff => (matches!(bit_depth, 24 | 32), "24 or 32"),
         OutputFormat::Jpg => (bit_depth == 24, "24"),
         OutputFormat::Bmp => return bmp::validate_bit_depth(bit_depth),
         OutputFormat::Rgb565 | OutputFormat::CArray => (bit_depth == 16, "16"),
@@ -1194,6 +1200,25 @@ fn encode_webp(
     image
         .write_to(&mut bytes, ImageFormat::WebP)
         .map_err(|error| format!("failed to encode webp: {error}"))?;
+    Ok((bytes.into_inner(), bit_depth))
+}
+
+fn encode_tiff(
+    image: RgbaImage,
+    bit_depth: u16,
+    background_color: Rgba<u8>,
+) -> Result<(Vec<u8>, u16), String> {
+    let mut bytes = LimitedCursor::new(MAX_OUTPUT_BYTES);
+    let image = if bit_depth == 24 {
+        DynamicImage::ImageRgb8(
+            DynamicImage::ImageRgba8(composite_over_background(image, background_color)).to_rgb8(),
+        )
+    } else {
+        DynamicImage::ImageRgba8(image)
+    };
+    image
+        .write_to(&mut bytes, ImageFormat::Tiff)
+        .map_err(|error| format!("failed to encode tiff: {error}"))?;
     Ok((bytes.into_inner(), bit_depth))
 }
 
