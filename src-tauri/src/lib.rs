@@ -16,6 +16,7 @@ pub fn run() {
             commands::gif::cancel_gif_export,
             commands::gif::get_gif_export_progress,
             commands::gif::estimate_gif_size,
+            commands::gif::plan_gif_compression,
             commands::gif::pick_gif_sequence_output,
             commands::gif::export_png_sequence,
             commands::gif::estimate_png_sequence_size,

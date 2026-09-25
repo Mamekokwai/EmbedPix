@@ -494,10 +494,49 @@ fn default_dither_mode() -> String {
     "none".to_string()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GifFrameRequest {
     data: Vec<u8>,
     duration_ms: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GifCompressionRequest {
+    width: u32,
+    height: u32,
+    loop_mode: String,
+    loop_count: u16,
+    #[serde(default = "default_encoding_speed")]
+    encoding_speed: i32,
+    #[serde(default = "default_color_count")]
+    color_count: u16,
+    #[serde(default = "default_dither_mode")]
+    dither_mode: String,
+    frames: Vec<GifFrameRequest>,
+    target_bytes: u64,
+    #[serde(default)]
+    max_candidates: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GifCompressionCandidate {
+    pub width: u32,
+    pub height: u32,
+    pub color_count: u16,
+    pub frame_count: usize,
+    pub estimated_bytes: u64,
+    pub meets_target: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GifCompressionResult {
+    pub target_bytes: u64,
+    pub selected: Option<GifCompressionCandidate>,
+    pub candidates: Vec<GifCompressionCandidate>,
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -636,6 +675,97 @@ pub async fn estimate_gif_size(
     })
     .await
     .map_err(|error| format!("GIF 体积测量任务失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn plan_gif_compression(
+    state: State<'_, GifExportJobState>,
+    request: GifCompressionRequest,
+) -> Result<GifCompressionResult, String> {
+    let encoder_slots = state.encoder_slots();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _encoding_permit = encoder_slots.acquire();
+        plan_gif_compression_blocking(request)
+    })
+    .await
+    .map_err(|error| format!("GIF 压缩规划任务失败：{error}"))?
+}
+
+fn plan_gif_compression_blocking(
+    request: GifCompressionRequest,
+) -> Result<GifCompressionResult, String> {
+    if request.target_bytes == 0 {
+        return Err("targetBytes must be greater than zero".to_string());
+    }
+    let budget = request.max_candidates.unwrap_or(4).clamp(1, 8);
+    let mut candidates = Vec::new();
+    for index in 0..budget {
+        let color_count = match index {
+            0 => request.color_count,
+            1 => (request.color_count / 2).max(MIN_COLOR_COUNT),
+            _ => (request.color_count / 4).max(MIN_COLOR_COUNT),
+        };
+        let step = if index >= 2 { 2 } else { 1 };
+        let frames = request
+            .frames
+            .iter()
+            .cloned()
+            .step_by(step)
+            .collect::<Vec<_>>();
+        let estimate = GifSizeEstimateRequest {
+            width: if index >= 3 {
+                (request.width / 2).max(1)
+            } else {
+                request.width
+            },
+            height: if index >= 3 {
+                (request.height / 2).max(1)
+            } else {
+                request.height
+            },
+            loop_mode: request.loop_mode.clone(),
+            loop_count: request.loop_count,
+            encoding_speed: request.encoding_speed,
+            color_count,
+            dither_mode: request.dither_mode.clone(),
+            frames,
+        };
+        let estimated_bytes = estimate_gif_size_blocking(estimate)?.bytes;
+        candidates.push(GifCompressionCandidate {
+            width: if index >= 3 {
+                (request.width / 2).max(1)
+            } else {
+                request.width
+            },
+            height: if index >= 3 {
+                (request.height / 2).max(1)
+            } else {
+                request.height
+            },
+            color_count,
+            frame_count: if step == 1 {
+                request.frames.len()
+            } else {
+                request.frames.len().div_ceil(step)
+            },
+            estimated_bytes,
+            meets_target: estimated_bytes <= request.target_bytes,
+        });
+    }
+    let selected = candidates
+        .iter()
+        .filter(|candidate| candidate.meets_target)
+        .min_by_key(|candidate| candidate.estimated_bytes)
+        .cloned();
+    let reason = selected
+        .is_none()
+        .then(|| "目标体积在候选预算内不可达；返回最小候选供调用方决定".to_string());
+    Ok(GifCompressionResult {
+        target_bytes: request.target_bytes,
+        selected,
+        candidates,
+        reason,
+    })
 }
 
 #[tauri::command]

@@ -60,6 +60,24 @@ export interface GifSizeEstimateResult {
   bytes: number;
 }
 
+export const PLAN_GIF_COMPRESSION_COMMAND = "plan_gif_compression" as const;
+
+export interface GifCompressionCandidate {
+  width: number;
+  height: number;
+  colorCount: number;
+  frameCount: number;
+  estimatedBytes: number;
+  meetsTarget: boolean;
+}
+
+export interface GifCompressionResult {
+  targetBytes: number;
+  selected: GifCompressionCandidate | null;
+  candidates: GifCompressionCandidate[];
+  reason: string | null;
+}
+
 // Keep temporary String.fromCharCode calls bounded while avoiding a full JS number array.
 export const GIF_IPC_BASE64_CHUNK_BYTES = 64 * 1024;
 export const GIF_SPOOL_FRAME_THRESHOLD = 64;
@@ -305,6 +323,19 @@ export async function estimateGifSize(request: GifSizeEstimateRequest): Promise<
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }
+}
+
+export async function planGifCompression(request: GifSizeEstimateRequest & { targetBytes: number; maxCandidates?: number }): Promise<GifCompressionResult> {
+  if (!isTauriEnvironment()) {
+    throw new Error("当前预览环境不支持 GIF 压缩规划，请在桌面应用中执行。");
+  }
+  return invoke<GifCompressionResult>(PLAN_GIF_COMPRESSION_COMMAND, {
+    request: {
+      ...serializeGifSizeRequest(request),
+      targetBytes: request.targetBytes,
+      ...(request.maxCandidates === undefined ? {} : { maxCandidates: request.maxCandidates }),
+    },
+  });
 }
 
 export async function estimateAnimationSize(

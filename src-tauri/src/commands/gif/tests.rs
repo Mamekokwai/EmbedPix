@@ -351,6 +351,30 @@ fn estimated_size_matches_actual_encoded_length_without_writing_output() {
 }
 
 #[test]
+fn compression_planner_returns_real_candidate_estimates_and_target_selection() {
+    let base = request(Path::new("estimate-only.gif"));
+    let plan = plan_gif_compression_blocking(GifCompressionRequest {
+        width: base.width,
+        height: base.height,
+        loop_mode: base.loop_mode,
+        loop_count: base.loop_count,
+        encoding_speed: base.encoding_speed,
+        color_count: base.color_count,
+        dither_mode: base.dither_mode,
+        frames: base.frames,
+        target_bytes: 10_000,
+        max_candidates: Some(4),
+    })
+    .unwrap();
+    assert_eq!(plan.candidates.len(), 4);
+    assert!(plan
+        .candidates
+        .iter()
+        .all(|candidate| candidate.estimated_bytes > 0));
+    assert!(plan.selected.is_some());
+}
+
+#[test]
 fn size_estimate_request_has_no_output_side_effect_fields_and_uses_defaults() {
     let request: GifSizeEstimateRequest = serde_json::from_value(serde_json::json!({
         "width": 1,
