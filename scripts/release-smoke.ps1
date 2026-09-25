@@ -24,6 +24,7 @@ if ($actual.Count -ne $expected.Count -or @($expected | Where-Object { $actual -
 }
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-release-smoke-" + [guid]::NewGuid())
+$diagnosticRoot = if ($env:GITHUB_WORKSPACE) { Join-Path $env:GITHUB_WORKSPACE 'release-smoke-diagnostics' } else { Join-Path ([IO.Path]::GetTempPath()) 'embedpix-release-smoke-diagnostics' }
 New-Item -ItemType Directory -Path $root | Out-Null
 try {
   foreach ($asset in $release.assets) {
@@ -53,7 +54,8 @@ try {
   if ($SkipInstall) { Write-Host "Release asset smoke passed for $Tag (install skipped)."; exit 0 }
   if ($env:RUNNER_OS -ne 'Windows' -and $PSVersionTable.Platform -ne 'Win32NT') { throw 'Installer smoke requires Windows.' }
   $installer = Join-Path $root "EmbedPix_${version}_x64-setup.exe"
-  $process = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -Wait
+  $installerLog = Join-Path $root 'installer.log'
+  $process = Start-Process -FilePath $installer -ArgumentList "/S /LOG=\"$installerLog\"" -PassThru -Wait
   if ($process.ExitCode -ne 0) { throw "Installer exited with code $($process.ExitCode)." }
   $candidates = @(
     (Join-Path $env:LOCALAPPDATA 'Programs\EmbedPix\EmbedPix.exe'),
@@ -62,9 +64,22 @@ try {
   if (-not $candidates) { throw 'Installed EmbedPix executable was not found.' }
   $app = Start-Process -FilePath $candidates[0] -PassThru
   Start-Sleep -Seconds 8
+  [ordered]@{
+    executable = $candidates[0]
+    process_id = $app.Id
+    exited = $app.HasExited
+    exit_code = if ($app.HasExited) { $app.ExitCode } else { $null }
+  } | ConvertTo-Json | Set-Content (Join-Path $root 'startup.json')
   if ($app.HasExited -and $app.ExitCode -ne 0) { throw "Installed application exited with code $($app.ExitCode)." }
   if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
   Write-Host "Release download, verification, installation, and startup smoke passed for $Tag."
+} catch {
+  New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
+  $_ | Out-String | Set-Content (Join-Path $diagnosticRoot 'failure.txt')
+  if (Test-Path -LiteralPath $root) {
+    Copy-Item -LiteralPath $root -Destination (Join-Path $diagnosticRoot 'run') -Recurse -Force
+  }
+  throw
 } finally {
   Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
