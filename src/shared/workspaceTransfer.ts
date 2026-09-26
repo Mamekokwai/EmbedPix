@@ -77,7 +77,7 @@ export function importWorkspaceSnapshot(serialized: string): WorkspaceRestoreRes
 }
 
 // Compatibility helpers keep lightweight page integrations on the same strict snapshot contract.
-export function exportWorkspace(bundle: { kind: "image" | "gif"; parameters: Record<string, unknown>; sourcePaths: string[]; outputLocation?: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string }): string {
+export function exportWorkspace(bundle: { kind: "image" | "gif"; parameters: Record<string, unknown>; sourcePaths: string[]; frames?: WorkspaceFrame[]; outputLocation?: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string }): string {
   const parameters = bundle.kind === "image" ? {
     defaultOutputFormat: bundle.parameters.outputFormat ?? "bmp", defaultJpegQuality: bundle.parameters.jpegQuality ?? 85, defaultBitDepth: bundle.parameters.bitDepth ?? 24,
     defaultByteOrder: bundle.parameters.byteOrder ?? "little", defaultChannelOrder: bundle.parameters.channelOrder ?? "rgb", defaultRowOrder: bundle.parameters.rowOrder ?? "top-down", defaultRowAlignment: bundle.parameters.rowAlignment ?? 1,
@@ -85,13 +85,13 @@ export function exportWorkspace(bundle: { kind: "image" | "gif"; parameters: Rec
   } : bundle.parameters as unknown as GifMakerPreferences;
   const snapshot = bundle.kind === "image"
     ? { type: "image" as const, parameters, outputLocation: (bundle.outputLocation ?? "source") as OutputLocation, outputDirectory: bundle.outputDirectory, outputSubdirectory: bundle.outputSubdirectory, namingTemplate: bundle.namingTemplate, sources: bundle.sourcePaths.map((path) => ({ path, fileName: path.split(/[\\/]/u).pop() ?? path })) }
-    : { type: "gif" as const, parameters, outputLocation: bundle.outputLocation ?? "path", outputDirectory: bundle.outputDirectory, outputSubdirectory: bundle.outputSubdirectory, namingTemplate: bundle.namingTemplate, sources: bundle.sourcePaths.map((path) => ({ path, fileName: path.split(/[\\/]/u).pop() ?? path })), frames: [] };
+    : { type: "gif" as const, parameters, outputLocation: bundle.outputLocation ?? "path", outputDirectory: bundle.outputDirectory, outputSubdirectory: bundle.outputSubdirectory, namingTemplate: bundle.namingTemplate, sources: bundle.sourcePaths.map((path) => ({ path, fileName: path.split(/[\\/]/u).pop() ?? path })), frames: bundle.frames ?? [] };
   return exportWorkspaceSnapshot([snapshot as WorkspaceSnapshot]);
 }
 
-export function importWorkspace(serialized: string, kind: "image" | "gif"): { parameters: Record<string, unknown>; sourcePaths: string[]; outputLocation: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string } {
+export function importWorkspace(serialized: string, kind: "image" | "gif"): { parameters: Record<string, unknown>; sourcePaths: string[]; frames: WorkspaceFrame[]; outputLocation: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string } {
   const result = importWorkspaceSnapshot(serialized);
   const workspace = result.workspaces.find((item) => item.type === kind);
   if (!workspace) throw new Error("工作区文件类型不匹配。");
-  return { parameters: workspace.parameters as unknown as Record<string, unknown>, sourcePaths: workspace.sources.map((source) => source.path), outputLocation: workspace.outputLocation, outputDirectory: workspace.outputDirectory, outputSubdirectory: workspace.outputSubdirectory, namingTemplate: workspace.namingTemplate };
+  return { parameters: workspace.parameters as unknown as Record<string, unknown>, sourcePaths: workspace.sources.map((source) => source.path), frames: workspace.type === "gif" ? workspace.frames : [], outputLocation: workspace.outputLocation, outputDirectory: workspace.outputDirectory, outputSubdirectory: workspace.outputSubdirectory, namingTemplate: workspace.namingTemplate };
 }
