@@ -162,7 +162,7 @@ impl GifFrameSpoolState {
                 skipped_grace_period += 1;
                 continue;
             }
-            fs::remove_dir_all(&path)
+            remove_dir_all_idempotent(&path)
                 .map_err(|error| format!("无法清理 GIF 孤儿临时目录：{error}"))?;
             removed += 1;
         }
@@ -233,10 +233,18 @@ impl GifFrameSpoolState {
             .map_err(|_| "GIF 临时帧状态已损坏。".to_string())?
             .remove(id);
         if let Some(entry) = entry {
-            fs::remove_dir_all(entry.directory)
+            remove_dir_all_idempotent(&entry.directory)
                 .map_err(|error| format!("无法清理 GIF 临时帧：{error}"))?;
         }
         Ok(())
+    }
+}
+
+fn remove_dir_all_idempotent(path: &PathBuf) -> std::io::Result<()> {
+    match fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
     }
 }
 
@@ -307,6 +315,16 @@ mod tests {
         assert_eq!(state.active_resource_snapshot(), (0, 0));
         state.discard(&spool_id).unwrap();
         assert_eq!(state.active_resource_snapshot(), (0, 0));
+        let _ = fs::remove_dir_all(state.root);
+    }
+
+    #[test]
+    fn repeated_directory_cleanup_treats_missing_directory_as_success() {
+        let state = test_state("missing-cleanup");
+        let directory = state.root.join("already-removed");
+        fs::create_dir_all(&directory).unwrap();
+        fs::remove_dir_all(&directory).unwrap();
+        assert!(remove_dir_all_idempotent(&directory).is_ok());
         let _ = fs::remove_dir_all(state.root);
     }
 
