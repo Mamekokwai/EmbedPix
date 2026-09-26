@@ -422,3 +422,10 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 发布 smoke 完成真实 x64/ARM64 minisign 验签、latest.json、provenance 和 SHA256SUMS 检查
 
 验收证据：前端 `npm test` 220 tests、`npm run build`；Rust 140 library + 3 CLI tests、fmt/check/clippy；更新器健康标记定向测试 16 项；GIF benchmark 8/8、quality presets 3/3；发布 smoke 对两平台安装包完成真实公钥验签。限制：WebP 有损质量参数不等价于外部编码器，ICC/EXIF 原样保留不支持，安装失败自动回滚未支持。
+
+## 0.5.1 发布验收
+
+- [x] 修复 GIF job expiry 测试的跨平台时间处理
+- [x] 复用 v0.5.0 的版本、更新诊断、签名 smoke 和发布资产门禁
+
+证据：基于 `ac0bce6`；本次发布前重新执行 npm/Rust 完整门禁，发布后继续核验 7 项资产、latest.json、provenance、SHA256SUMS 和 x64/ARM64 minisign 验签。v0.5.0 标签不移动、不重写。
