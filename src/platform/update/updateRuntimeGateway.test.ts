@@ -19,6 +19,7 @@ const validResult = {
   assetSha256: `sha256:${"a".repeat(64)}`,
   assetSizeBytes: 4096,
   updateAvailable: true,
+  installHealth: null,
 };
 
 describe("update runtime DTO", () => {

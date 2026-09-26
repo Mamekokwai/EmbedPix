@@ -33,6 +33,7 @@ export interface UpdateViewProps {
   downloadedBytes?: number | null;
   totalBytes?: number | null;
   errorMessage?: string;
+  installHealthMessage?: string;
   onCheckForUpdates: () => void | Promise<void>;
   onDownloadUpdate: () => void | Promise<void>;
   onInstallUpdate: () => void | Promise<void>;
@@ -163,6 +164,7 @@ export default function UpdateView({
   releaseUrl,
   assetAvailable = false,
   errorStage,
+  installHealthMessage,
   downloadedBytes,
   totalBytes,
   onCheckForUpdates,
@@ -279,6 +281,7 @@ export default function UpdateView({
             <StatusIcon status={status} offline={offline} />
             <span>{resolveUpdateStatusLabel(status, errorStage)}</span>
           </div>
+          {installHealthMessage ? <p className="update-release-open-error" role="alert">{installHealthMessage}</p> : null}
           {progress ? <UpdateProgressBar progress={progress} /> : null}
         </section>
 

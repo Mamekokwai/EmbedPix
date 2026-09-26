@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -26,6 +26,7 @@ const UPDATE_CACHE_DIR: &str = "updates";
 const UPDATE_FILE_PREFIX: &str = "EmbedPix-update-";
 const UPDATE_PUBLIC_KEY: &str = include_str!("../../update-public-key.txt");
 const MAX_DOWNLOAD_ATTEMPTS: usize = 3;
+const PENDING_INSTALL_MARKER: &str = "pending-install.json";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,7 +56,84 @@ pub struct UpdateCheckResult {
     pub asset_sha256: Option<String>,
     pub asset_size_bytes: Option<u64>,
     pub update_available: bool,
+    pub install_health: Option<InstallHealthDiagnostic>,
 }
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallHealthDiagnostic {
+    pub pending_version: String,
+    pub requested_at: u64,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct PendingInstallMarker {
+    pending_version: String,
+    requested_at: u64,
+}
+
+fn pending_install_diagnostic(
+    current_version: &str,
+    marker: PendingInstallMarker,
+) -> Option<InstallHealthDiagnostic> {
+    (marker.pending_version != current_version).then(|| InstallHealthDiagnostic {
+        pending_version: marker.pending_version,
+        requested_at: marker.requested_at,
+        message: "上一次更新未完成首次启动验证，请检查安装结果后再重试。".to_string(),
+    })
+}
+
+fn pending_install_marker_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("无法定位更新诊断目录：{error}"))?
+        .join(PENDING_INSTALL_MARKER))
+}
+
+fn write_pending_install_marker(app: &AppHandle, version: &str) -> Result<(), String> {
+    let path = pending_install_marker_path(app)?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "更新诊断目录无效。".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| format!("无法创建更新诊断目录：{error}"))?;
+    let temporary = PathBuf::from(format!("{}.part", path.to_string_lossy()));
+    let marker = PendingInstallMarker {
+        pending_version: version.to_string(),
+        requested_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    };
+    let bytes =
+        serde_json::to_vec(&marker).map_err(|error| format!("无法记录更新诊断：{error}"))?;
+    fs::write(&temporary, bytes).map_err(|error| format!("无法写入更新诊断：{error}"))?;
+    fs::rename(&temporary, &path).map_err(|error| format!("无法提交更新诊断：{error}"))
+}
+
+pub fn mark_app_started(app: &AppHandle, state: State<'_, UpdateHealthState>) {
+    let Ok(path) = pending_install_marker_path(app) else {
+        return;
+    };
+    let Ok(contents) = fs::read_to_string(&path) else {
+        return;
+    };
+    let Ok(marker) = serde_json::from_str::<PendingInstallMarker>(&contents) else {
+        return;
+    };
+    let current_version = env!("CARGO_PKG_VERSION");
+    if let Some(diagnostic) = pending_install_diagnostic(current_version, marker) {
+        if let Ok(mut value) = state.0.lock() {
+            *value = Some(diagnostic);
+        }
+    } else {
+        let _ = fs::remove_file(path);
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct UpdateHealthState(Mutex<Option<InstallHealthDiagnostic>>);
 
 #[derive(Debug)]
 struct ProgressSnapshot {
@@ -319,7 +397,10 @@ async fn fetch_latest_release(client: &reqwest::Client) -> Result<ReleaseRespons
 }
 
 #[tauri::command]
-pub async fn check_update(current_version: String) -> Result<UpdateCheckResult, String> {
+pub async fn check_update(
+    current_version: String,
+    health: State<'_, UpdateHealthState>,
+) -> Result<UpdateCheckResult, String> {
     let current_version = normalize_version(&current_version)?;
     let client = reqwest::Client::builder()
         .user_agent(format!("EmbedPix/{current_version}"))
@@ -352,6 +433,7 @@ pub async fn check_update(current_version: String) -> Result<UpdateCheckResult, 
         asset_download_url: asset.as_ref().map(|asset| asset.url.to_string()),
         asset_sha256: asset.as_ref().map(|asset| asset.digest_text.clone()),
         asset_size_bytes: asset.map(|asset| asset.size),
+        install_health: health.0.lock().ok().and_then(|value| value.clone()),
     })
 }
 
@@ -592,6 +674,7 @@ pub async fn install_update(
             expected_size,
         )?;
         let package_path = &verified.path;
+        write_pending_install_marker(&app_for_install, &version)?;
 
         #[cfg(windows)]
         {
@@ -1122,13 +1205,34 @@ fn parse_sha256(value: &str) -> Result<Vec<u8>, String> {
 mod tests {
     use super::{
         compare_versions, download_package_with_resume, is_trusted_release_page_url,
-        normalize_version, open_verified_package_file, parse_sha256,
+        normalize_version, open_verified_package_file, parse_sha256, pending_install_diagnostic,
         select_trusted_asset_for_target, should_append_partial, signature_url_for_asset,
         validate_asset_url, validate_cached_package_path, validate_update_cache_dir,
-        verify_cached_package_signature, verify_signature, ReleaseAsset, UpdateTarget,
+        verify_cached_package_signature, verify_signature, PendingInstallMarker, ReleaseAsset,
+        UpdateTarget,
     };
     use base64::Engine;
     use sha2::Digest;
+
+    #[test]
+    fn reports_pending_install_only_when_marker_version_differs() {
+        assert!(pending_install_diagnostic(
+            "0.4.2",
+            PendingInstallMarker {
+                pending_version: "0.4.3".to_string(),
+                requested_at: 123,
+            }
+        )
+        .is_some());
+        assert!(pending_install_diagnostic(
+            "0.4.2",
+            PendingInstallMarker {
+                pending_version: "0.4.2".to_string(),
+                requested_at: 123,
+            }
+        )
+        .is_none());
+    }
 
     #[test]
     fn resumes_only_from_matching_partial_content_range() {

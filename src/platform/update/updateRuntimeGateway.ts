@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event } from "@tauri-apps/api/event";
-import { isTrustedReleasePageUrl, type UpdateInfo } from "./updateGateway";
+import { isTrustedReleasePageUrl, type InstallHealthDiagnostic, type UpdateInfo } from "./updateGateway";
 
 const UPDATE_PROGRESS_EVENT = "update-download-progress";
 const UPDATE_PROGRESS_SNAPSHOT_COMMAND = "get_update_download_progress";
@@ -44,6 +44,24 @@ export function parseUpdateCheckResult(value: unknown): UpdateInfo {
     assetSha256: nullableString("assetSha256"),
     assetSizeBytes: nullableSize === undefined ? null : nullableSize as number | null,
     updateAvailable: result.updateAvailable,
+    installHealth: parseInstallHealth(result.installHealth),
+  };
+}
+
+function parseInstallHealth(value: unknown): InstallHealthDiagnostic | null {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== "object") throw new UpdateRuntimeError("更新服务返回了无效的安装诊断。");
+  const result = value as Record<string, unknown>;
+  if (typeof result.pendingVersion !== "string"
+    || typeof result.requestedAt !== "number"
+    || !Number.isSafeInteger(result.requestedAt)
+    || typeof result.message !== "string") {
+    throw new UpdateRuntimeError("更新服务返回了不完整的安装诊断。");
+  }
+  return {
+    pendingVersion: result.pendingVersion,
+    requestedAt: result.requestedAt,
+    message: result.message,
   };
 }
 

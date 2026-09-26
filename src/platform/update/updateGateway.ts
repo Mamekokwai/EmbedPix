@@ -16,6 +16,13 @@ export interface UpdateInfo {
   assetSha256: string | null;
   assetSizeBytes: number | null;
   updateAvailable: boolean;
+  installHealth: InstallHealthDiagnostic | null;
+}
+
+export interface InstallHealthDiagnostic {
+  pendingVersion: string;
+  requestedAt: number;
+  message: string;
 }
 
 export type UpdateCheckErrorKind = "network" | "server" | "invalid-response";
@@ -307,5 +314,6 @@ export async function checkForUpdates(
     assetSha256: asset?.sha256 ?? null,
     assetSizeBytes: asset?.sizeBytes ?? null,
     updateAvailable: compareVersions(latestVersion, currentVersion) > 0,
+    installHealth: null,
   };
 }

@@ -59,6 +59,7 @@ function toUpdateViewProps(state: UpdateCheckState) {
     downloadedBytes: "downloadedBytes" in state ? state.downloadedBytes : null,
     totalBytes: "totalBytes" in state ? state.totalBytes : null,
     errorMessage: state.status === "error" ? state.error : undefined,
+    installHealthMessage: info?.installHealth?.message,
   };
 }
 

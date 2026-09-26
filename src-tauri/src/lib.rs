@@ -1,10 +1,13 @@
 pub mod commands;
 
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(commands::update::UpdateProgressState::default())
+        .manage(commands::update::UpdateHealthState::default())
         .manage(commands::gif::GifExportJobState::default())
         .manage(commands::gif::GifFrameSpoolState::default())
         .invoke_handler(tauri::generate_handler![
@@ -35,6 +38,13 @@ pub fn run() {
             commands::update::download_update,
             commands::update::install_update
         ])
+        .setup(|app| {
+            commands::update::mark_app_started(
+                app.handle(),
+                app.state::<commands::update::UpdateHealthState>(),
+            );
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running EmbedPix");
 }
