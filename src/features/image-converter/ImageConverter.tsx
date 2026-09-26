@@ -18,6 +18,7 @@ import {
   exportImage,
   isTauriEnvironment,
   pickImageFiles,
+  pickImageDirectory,
   pickOutputDirectory,
   preflightImageExports,
   previewImageExport,
@@ -723,6 +724,29 @@ export default function ImageConverter({
     }
   };
 
+  const handleImportImageDirectory = async () => {
+    if (!isTauriEnvironment()) {
+      setError("导入文件夹仅在桌面应用中可用，请使用文件选择或拖放。 ");
+      setStatus({ kind: "error", text: "当前环境不支持导入文件夹" });
+      return;
+    }
+    try {
+      const result = await pickImageDirectory();
+      if (!result) { setStatus({ kind: "ready", text: "未选择图片文件夹" }); return; }
+      const existingPaths = new Set(loadedImagesRef.current.map((image) => image.sourcePath).filter((path): path is string => Boolean(path)));
+      const freshSources = result.files.filter((source) => !existingPaths.has(source.path));
+      const duplicateCount = result.files.length - freshSources.length;
+      await loadFiles(freshSources.map(createNativeFile));
+      const skippedCount = result.skipped.length + duplicateCount;
+      const summary = `文件夹扫描：载入 ${freshSources.length} 张，跳过 ${skippedCount} 张，共 ${formatFileSize(result.totalBytes)}`;
+      setStatus({ kind: skippedCount > 0 ? "error" : "ready", text: summary });
+      if (skippedCount > 0) setError(`${summary}。${result.skipped.length ? result.skipped.join("；") : "已跳过列表中已有的重复图片。"}`);
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "图片文件夹导入失败。");
+      setStatus({ kind: "error", text: "图片文件夹导入失败" });
+    }
+  };
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
@@ -1370,6 +1394,7 @@ export default function ImageConverter({
                     <Plus size={14} aria-hidden="true" />
                     继续添加
                   </button>
+                  <button className="quiet-button file-add-button" type="button" onClick={() => void handleImportImageDirectory()}>导入文件夹</button>
                   {loadedImages.length > 1 ? (
                     <button className="quiet-button file-clear-button" type="button" onClick={clearAllImages}>清空列表</button>
                   ) : null}
@@ -1402,6 +1427,8 @@ export default function ImageConverter({
             </div>
           )}
         </div>
+
+        {!file ? <button className="quiet-button directory-import-button" type="button" onClick={() => void handleImportImageDirectory()}>导入图片文件夹</button> : null}
 
         <div className="panel settings-panel">
           <div className="panel-heading">

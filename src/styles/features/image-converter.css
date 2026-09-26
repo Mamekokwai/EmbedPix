@@ -944,6 +944,8 @@
   white-space: nowrap;
 }
 
+.directory-import-button { margin-top: 8px; width: 100%; }
+
 .export-output-actions {
   display: flex;
   flex-wrap: wrap;
