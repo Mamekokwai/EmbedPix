@@ -412,3 +412,13 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 通过后 push 到 `main`
 
 证据：CI run 35862950286 三个平台全部通过，本地回归验证通过。
+
+## 0.5.0 发布验收 ✅
+
+- [x] 图片格式持久化修复、导出后打开目录/复制路径、剪贴板导入和嵌入式输出检查器完成
+- [x] 用户预设、批量命名模板/自动序号、文件夹递归导入和 GIF 预设完成
+- [x] 更新安装健康诊断完成；安装前写入待验证版本，成功启动清除，异常启动在更新状态中提示
+- [x] GIF spool 并发清理修复完成，资源生命周期测试覆盖成功、失败、取消和并发场景
+- [x] 发布 smoke 完成真实 x64/ARM64 minisign 验签、latest.json、provenance 和 SHA256SUMS 检查
+
+验收证据：前端 `npm test` 220 tests、`npm run build`；Rust 140 library + 3 CLI tests、fmt/check/clippy；更新器健康标记定向测试 16 项；GIF benchmark 8/8、quality presets 3/3；发布 smoke 对两平台安装包完成真实公钥验签。限制：WebP 有损质量参数不等价于外部编码器，ICC/EXIF 原样保留不支持，安装失败自动回滚未支持。
