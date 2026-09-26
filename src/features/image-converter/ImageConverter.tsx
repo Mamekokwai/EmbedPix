@@ -66,6 +66,7 @@ import {
   parseCropInput,
   parseDimension,
 } from "./imageConverterLogic";
+import { inspectEmbeddedOutput } from "./embeddedOutputInspector";
 import type {
   ByteOrder,
   ChannelOrder,
@@ -438,6 +439,14 @@ export default function ImageConverter({
     const summaryBitDepth = getEffectiveBitDepth(outputFormat, bitDepth);
     return `${width} × ${height} · ${getOutputLabel(outputFormat)} · ${summaryBitDepth} 位`;
   }, [bitDepth, file, height, outputFormat, width]);
+  const embeddedInspection = useMemo(() => {
+    if (!file || !["bmp", "rgb565", "c-array"].includes(outputFormat)) return null;
+    try {
+      return inspectEmbeddedOutput({ outputFormat, width, height, bitDepth, byteOrder, channelOrder, rowOrder, rowAlignment });
+    } catch {
+      return null;
+    }
+  }, [bitDepth, byteOrder, channelOrder, file, height, outputFormat, rowAlignment, rowOrder, width]);
   const outputPreviewComparison = useMemo(
     () => getImagePreviewComparison(outputFormat, width, height, bitDepth, backgroundColor),
     [backgroundColor, bitDepth, height, outputFormat, width],
@@ -1389,6 +1398,16 @@ export default function ImageConverter({
               <FormatSelector value={outputFormat} onChange={handleFormatChange} />
               <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>
             </fieldset>
+
+            {embeddedInspection ? <section className="embedded-output-inspector" aria-labelledby="embedded-output-title">
+              <div className="label-row"><span className="field-label" id="embedded-output-title">嵌入式输出检查</span><span className="field-note">CRC32 {embeddedInspection.crc32}</span></div>
+              <div className="embedded-output-grid">
+                <span>理论像素字节<strong>{embeddedInspection.pixelBytes}</strong></span>
+                <span>行 stride<strong>{embeddedInspection.rowStrideBytes} B</strong></span>
+                <span>总缓冲区<strong>{embeddedInspection.totalBufferBytes} B</strong></span>
+                <span>参数<strong>{embeddedInspection.channelOrder.toUpperCase()} · {embeddedInspection.byteOrder === "little" ? "小端" : "大端"} · {embeddedInspection.rowOrder === "top-down" ? "从上到下" : "从下到上"}</strong></span>
+              </div>
+            </section> : null}
 
             <details className="settings-module" open={pixelSettingsOpen} onToggle={(event) => setPixelSettingsOpen(event.currentTarget.open)}>
               <summary aria-expanded={pixelSettingsOpen} aria-controls="image-settings-panel" onKeyDown={(event) => handleSettingsSummaryKeyDown(event, () => setPixelSettingsOpen(false))}>画面与像素参数</summary>

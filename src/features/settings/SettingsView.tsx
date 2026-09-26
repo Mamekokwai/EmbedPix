@@ -1,4 +1,5 @@
 import { Laptop, Moon, RotateCcw, Settings2, Sun } from "lucide-react";
+import { useState } from "react";
 import { getBitDepths, OUTPUT_FORMATS } from "../image-converter/imageConverterLogic";
 import type { BmpBitDepth, ByteOrder, ChannelOrder, RowAlignment, RowOrder } from "../image-converter/types";
 import {
@@ -9,6 +10,7 @@ import {
   type ThemeMode,
 } from "../../platform/preferences/appPreferences";
 import ThemeSelect from "../../shared/components/ThemeSelect";
+import { createImageCustomPreset, loadImageCustomPresets, saveImageCustomPresets, type ImageCustomPreset } from "../image-converter/imagePresets";
 
 interface SettingsViewProps {
   preferences: AppPreferences;
@@ -54,6 +56,9 @@ function presetLabel(preset: ImagePresetId): string {
 }
 
 export default function SettingsView({ preferences, onChange, onReset }: SettingsViewProps) {
+  const [customPresets, setCustomPresets] = useState<ImageCustomPreset[]>(() => loadImageCustomPresets());
+  const [customPresetId, setCustomPresetId] = useState("");
+  const [customPresetName, setCustomPresetName] = useState("");
   const updateConverterDefaults = (next: Partial<AppPreferences>) => {
     onChange({ ...next, imagePreset: "custom" });
   };
@@ -78,6 +83,28 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
       ? preferences.defaultBitDepth
       : availableBitDepths[0] ?? 24;
     updateConverterDefaults({ defaultOutputFormat: nextFormat, defaultBitDepth: nextBitDepth });
+  };
+
+  const saveCustomPreset = () => {
+    const name = customPresetName.trim();
+    if (!name) return;
+    const next = [...customPresets, createImageCustomPreset(name, preferences)];
+    setCustomPresets(next);
+    saveImageCustomPresets(next);
+    setCustomPresetName("");
+  };
+
+  const applyCustomPreset = (id: string) => {
+    setCustomPresetId(id);
+    const preset = customPresets.find((item) => item.id === id);
+    if (preset) onChange({ ...preset.values, imagePreset: "custom" });
+  };
+
+  const deleteCustomPreset = () => {
+    const next = customPresets.filter((item) => item.id !== customPresetId);
+    setCustomPresets(next);
+    saveImageCustomPresets(next);
+    setCustomPresetId("");
   };
 
   return (
@@ -194,6 +221,15 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               aria-label="图片转换预设"
               onChange={(value) => applyPreset(value as ImagePresetId)}
             />
+          </div>
+          <div className="settings-row settings-preset-row">
+            <div><h3>自定义图片预设</h3><p>只保存在本机，可保存当前图片转换默认参数。</p></div>
+            <div className="settings-custom-preset-controls">
+              <ThemeSelect id="custom-image-preset" className="settings-select" value={customPresetId} options={[{ value: "", label: "选择本地预设" }, ...customPresets.map((preset) => ({ value: preset.id, label: preset.name }))]} aria-label="自定义图片预设" onChange={(value) => applyCustomPreset(String(value))} />
+              <input className="settings-text-input" value={customPresetName} placeholder="预设名称" aria-label="新预设名称" onChange={(event) => setCustomPresetName(event.target.value)} />
+              <button className="quiet-button" type="button" disabled={!customPresetName.trim()} onClick={saveCustomPreset}>保存</button>
+              <button className="quiet-button" type="button" disabled={!customPresetId} onClick={deleteCustomPreset}>删除</button>
+            </div>
           </div>
         </section>
 

@@ -4,6 +4,7 @@
 .settings-card h2 { margin: 0; color: var(--qp-text-primary); font-size: 14px; font-weight: 700; }
 .settings-card-header p, .settings-row p, .settings-check-row small { margin: 5px 0 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.5; }
 .settings-row { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 22px; border-top: 1px solid var(--qp-border-subtle); padding: 16px 22px; }
+.settings-custom-preset-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .settings-row h3 { margin: 0; color: var(--qp-text-secondary); font-size: 12px; font-weight: 650; }
 .theme-options { display: flex; flex: 0 0 auto; gap: 5px; }
 .theme-option { display: inline-flex; min-height: 34px; align-items: center; gap: 6px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: var(--qp-bg-panel); padding: 0 10px; color: var(--qp-text-secondary); font-size: 11px; }
