@@ -29,6 +29,7 @@ import type { GifOutputLocation } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
+import { createGifCustomPreset, loadGifCustomPresets, saveGifCustomPresets, type GifCustomPreset } from "./gifCustomPresets";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
 import { clampVideoFps, formatVideoTime, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoCropRect } from "./videoGifLogic";
@@ -509,6 +510,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [colorCount, setColorCount] = useState<GifColorCount>(savedPreferences.colorCount);
   const [ditherMode, setDitherMode] = useState<GifDitherMode>(savedPreferences.ditherMode);
   const [gifPreset, setGifPreset] = useState<GifPreset>(savedPreferences.gifPreset);
+  const [customPresets, setCustomPresets] = useState<GifCustomPreset[]>(() => loadGifCustomPresets());
+  const [customPresetId, setCustomPresetId] = useState("");
+  const [customPresetName, setCustomPresetName] = useState("");
   const [targetSizeKiB, setTargetSizeKiB] = useState(savedPreferences.targetSizeKiB);
   const [maxSizeKiB, setMaxSizeKiB] = useState(savedPreferences.maxSizeKiB);
   const [autoCompress, setAutoCompress] = useState(savedPreferences.autoCompress);
@@ -1357,6 +1361,21 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setMeasuredSizeBytes(null);
     applyCanvasPreset(config.canvasPreset, true);
   };
+
+  const currentGifPreferences = (): GifMakerPreferences => ({ canvasPreset, canvasWidth, canvasHeight, keepAspectRatio, fitMode, contentAlignment, contentMargins, globalDuration, batchDuration, firstFrameHoldDuration, lastFrameHoldDuration, playbackSpeed, background, customBackgroundColor, loopMode, loopCount, encodingQuality, colorCount, ditherMode, gifPreset, targetSizeKiB, maxSizeKiB, autoCompress, mergeIdenticalFrames, overwriteExisting, outputFormat, videoFps, videoEveryNthFrame, videoMaxFrames, videoCropPreset, videoRotation, videoReverse });
+  const saveCustomGifPreset = () => {
+    if (!customPresetName.trim()) return;
+    const next = [...customPresets, createGifCustomPreset(customPresetName, currentGifPreferences())];
+    setCustomPresets(next); saveGifCustomPresets(next); setCustomPresetName("");
+  };
+  const applyCustomGifPreset = (id: string) => {
+    setCustomPresetId(id);
+    const preset = customPresets.find((item) => item.id === id);
+    if (!preset) return;
+    const values = preset.values;
+    setCanvasPreset(values.canvasPreset); setCanvasWidth(values.canvasWidth); setCanvasHeight(values.canvasHeight); setKeepAspectRatio(values.keepAspectRatio); setFitMode(values.fitMode); setContentAlignment(values.contentAlignment); setContentMargins(values.contentMargins); setGlobalDuration(values.globalDuration); setBatchDuration(values.batchDuration); setFirstFrameHoldDuration(values.firstFrameHoldDuration); setLastFrameHoldDuration(values.lastFrameHoldDuration); setPlaybackSpeed(values.playbackSpeed); setBackground(values.background); setCustomBackgroundColor(values.customBackgroundColor); setLoopMode(values.loopMode); setLoopCount(values.loopCount); setEncodingQuality(values.encodingQuality); setColorCount(values.colorCount); setDitherMode(values.ditherMode); setGifPreset("custom"); setTargetSizeKiB(values.targetSizeKiB); setMaxSizeKiB(values.maxSizeKiB); setAutoCompress(values.autoCompress); setMergeIdenticalFrames(values.mergeIdenticalFrames); setOverwriteExisting(values.overwriteExisting); setOutputFormat(values.outputFormat); setVideoFps(values.videoFps); setVideoEveryNthFrame(values.videoEveryNthFrame); setVideoMaxFrames(values.videoMaxFrames); setVideoCropPreset(values.videoCropPreset); setVideoRotation(values.videoRotation); setVideoReverse(values.videoReverse);
+  };
+  const deleteCustomGifPreset = () => { const next = customPresets.filter((item) => item.id !== customPresetId); setCustomPresets(next); saveGifCustomPresets(next); setCustomPresetId(""); };
 
   const updateGifEncodingQuality = (value: GifEncodingQuality) => {
     setEncodingQuality(value);
@@ -2328,6 +2347,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <label className="gif-field"><span>额外重复次数{loopMode === "finite" ? ` · 共播放 ${loopCount + 1} 次` : ""}</span><div className="gif-input-with-suffix"><input type="number" min="1" max="65535" value={loopCount} disabled={loopMode === "infinite"} onChange={(event) => { setIsPlaying(false); setLoopCount(Math.min(65535, Math.max(1, Math.floor(Number(event.target.value)) || 1))); setGifPreset("custom"); }} /><small>次</small></div></label>
               {outputFormat === "gif" ? <>
                 <SelectField id="gif-preset" label="常用预设" value={gifPreset} options={[{ value: "high" as const, label: GIF_PRESETS.high.label }, { value: "balanced" as const, label: GIF_PRESETS.balanced.label }, { value: "small" as const, label: "小体积" }, { value: "custom" as const, label: "自定义" }]} onChange={(value) => { if (value === "custom") setGifPreset(value); else applyGifPreset(value); }} />
+                <div className="gif-custom-preset-controls">
+                  <ThemeSelect id="gif-custom-preset" className="gif-settings-select" value={customPresetId} options={[{ value: "", label: "选择本地 GIF 预设" }, ...customPresets.map((preset) => ({ value: preset.id, label: preset.name }))]} aria-label="自定义 GIF 预设" onChange={(value) => applyCustomGifPreset(String(value))} />
+                  <input className="gif-text-input" value={customPresetName} placeholder="预设名称" aria-label="新 GIF 预设名称" onChange={(event) => setCustomPresetName(event.target.value)} />
+                  <button className="quiet-button" type="button" disabled={!customPresetName.trim() || locked} onClick={saveCustomGifPreset}>保存</button>
+                  <button className="quiet-button" type="button" disabled={!customPresetId || locked} onClick={deleteCustomGifPreset}>删除</button>
+                </div>
                 {gifPreset !== "custom" ? <p className="gif-format-note">当前预设：{GIF_PRESETS[gifPreset].description}。单独修改颜色、抖动、画布或视频采样参数后自动转为“自定义”。</p> : null}
                 <SelectField id="gif-encoding-quality" label="编码质量" value={encodingQuality} options={[{ value: "high" as const, label: "高质量（较慢）" }, { value: "balanced" as const, label: "平衡" }, { value: "fast" as const, label: "快速" }]} onChange={updateGifEncodingQuality} />
                 <SelectField id="gif-color-count" label="颜色数量" value={colorCount} options={[{ value: 256 as const, label: "256 色（高质量）" }, { value: 128 as const, label: "128 色" }, { value: 64 as const, label: "64 色（小体积）" }, { value: 32 as const, label: "32 色（更小体积）" }, { value: 16 as const, label: "16 色（极小体积）" }, { value: 2 as const, label: "2 色（单色设备）" }]} onChange={updateGifColorCount} />

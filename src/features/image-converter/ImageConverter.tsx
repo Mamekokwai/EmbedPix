@@ -84,6 +84,7 @@ import ThemeSelect from "../../shared/components/ThemeSelect";
 import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
 import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueue";
 import type { ExportPreflightResult } from "./imageConverterLogic";
+import { planBatchConversions } from "./batchConversionPlan";
 
 type ImageExportQueueProgress = ExportQueueProgress<{ file: { name: string } }>;
 
@@ -288,6 +289,8 @@ export default function ImageConverter({
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
+  const [fileNameTemplate, setFileNameTemplate] = useState("{name}.{ext}");
+  const [autoSequence, setAutoSequence] = useState(false);
   const [overwriteSameName, setOverwriteSameName] = useState(false);
   const [deleteSource, setDeleteSource] = useState(false);
   const [metadataPolicy, setMetadataPolicy] = useState<"strip" | "preserve">("strip");
@@ -421,6 +424,14 @@ export default function ImageConverter({
       ? `“${missingPathFileName}”没有可用的源文件路径，请改用“指定目录”。`
       : null;
   }, [file, loadedImages, outputLocation, outputLocationError]);
+  const batchPlan = useMemo(() => {
+    if (!loadedImages.length) return null;
+    try {
+      return planBatchConversions(loadedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory, autoSequence });
+    } catch {
+      return null;
+    }
+  }, [autoSequence, fileNameTemplate, loadedImages, outputDirectory, outputFormat, outputLocation, outputSubdirectory]);
 
   const setSettingStatus = (nextWidthInput = widthInput, nextHeightInput = heightInput) => {
     if (!file) {
@@ -1034,6 +1045,15 @@ export default function ImageConverter({
       return;
     }
 
+    let requestedPlan;
+    try {
+      requestedPlan = planBatchConversions(requestedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory, autoSequence });
+    } catch (planError) {
+      setError(planError instanceof Error ? planError.message : "文件名模板无效。");
+      setStatus({ kind: "error", text: "请检查文件名模板" });
+      return;
+    }
+
     const safetyPlan = getExportSafetyPlan(requestedImages, {
       outputFormat,
       outputLocation,
@@ -1111,7 +1131,7 @@ export default function ImageConverter({
     setFailureDetailsOpen(false);
     setExportProgress(null);
     let lastOutputPath: string | null = null;
-    const result = await runExportQueue(requestedImages, async (image) => {
+    const result = await runExportQueue(requestedImages, async (image, queueIndex) => {
         const imageTransformError = cropEnabled ? getCropInputValidation(cropInputs, image.dimensions) : null;
         if (imageTransformError) {
           throw new Error(imageTransformError);
@@ -1121,7 +1141,7 @@ export default function ImageConverter({
           ? constrainAspectDimensions("width", width, targetSourceDimensions)
           : { width, height };
         const request: ExportImageRequest = {
-          fileName: image.file.name,
+          fileName: requestedPlan.items[queueIndex]?.targetPath.split(/[\\/]/u).pop() ?? image.file.name,
           inputData: new Uint8Array(await image.file.arrayBuffer()),
           outputFormat,
           width: targetDimensions.width,
@@ -1679,6 +1699,19 @@ export default function ImageConverter({
                       : "替换源图片并保留旧文件备份。"}
               </p>
               {outputLocationError ? <p className="error-message output-location-error" id="output-location-error" role="alert">{outputLocationError}</p> : null}
+              <label className="text-field" htmlFor="file-name-template">
+                <span>文件名模板</span>
+                <input id="file-name-template" value={fileNameTemplate} onChange={(event) => { setFileNameTemplate(event.target.value); setError(null); }} placeholder="{name}.{ext}" spellCheck={false} />
+              </label>
+              <p className="field-help">可用变量：&#123;name&#125;、&#123;ext&#125;、&#123;width&#125;、&#123;height&#125;、&#123;index&#125;。</p>
+              <label className="toggle-row output-action-toggle">
+                <input type="checkbox" checked={autoSequence} onChange={(event) => setAutoSequence(event.target.checked)} />
+                <span className="toggle-track" aria-hidden="true"><span /></span>
+                <span>重复目标自动编号</span>
+              </label>
+              {batchPlan ? <p className={`field-help${batchPlan.duplicateTargets.length > 0 ? " output-location-error" : ""}`} role={batchPlan.duplicateTargets.length > 0 ? "alert" : undefined}>
+                示例目标：{batchPlan.targetPaths[0] ?? "暂无"}{batchPlan.duplicateTargets.length > 0 ? ` · 检测到 ${batchPlan.duplicateTargets.length} 个重复目标` : ""}
+              </p> : null}
               {outputLocation === "original" ? (
                 <p className="field-help output-action-help output-action-info" id="output-original-help">导出前会列出将被覆盖的目标和待备份源文件并要求确认；旧图片会先移入同目录的 bak 文件夹，再将新文件写回原图位置。</p>
               ) : (

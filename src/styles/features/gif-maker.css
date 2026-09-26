@@ -355,3 +355,6 @@
   .gif-settings-card { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
   .gif-settings-card::-webkit-scrollbar { display: none; }
 }
+.gif-custom-preset-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
+.gif-custom-preset-controls .gif-settings-select { min-width: 150px; }
+.gif-custom-preset-controls .gif-text-input { min-width: 120px; flex: 1 1 120px; }
