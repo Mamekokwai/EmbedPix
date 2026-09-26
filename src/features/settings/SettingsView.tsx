@@ -10,6 +10,7 @@ import {
   type ThemeMode,
 } from "../../platform/preferences/appPreferences";
 import ThemeSelect from "../../shared/components/ThemeSelect";
+import { exportPresetBundle, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
 import { createImageCustomPreset, loadImageCustomPresets, saveImageCustomPresets, type ImageCustomPreset } from "../image-converter/imagePresets";
 
 interface SettingsViewProps {
@@ -59,6 +60,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
   const [customPresets, setCustomPresets] = useState<ImageCustomPreset[]>(() => loadImageCustomPresets());
   const [customPresetId, setCustomPresetId] = useState("");
   const [customPresetName, setCustomPresetName] = useState("");
+  const [presetMessage, setPresetMessage] = useState<string | null>(null);
   const updateConverterDefaults = (next: Partial<AppPreferences>) => {
     onChange({ ...next, imagePreset: "custom" });
   };
@@ -105,6 +107,20 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
     setCustomPresets(next);
     saveImageCustomPresets(next);
     setCustomPresetId("");
+  };
+
+  const downloadImagePresets = () => {
+    const url = URL.createObjectURL(new Blob([exportPresetBundle(customPresets, [])], { type: "application/json" }));
+    const link = document.createElement("a"); link.href = url; link.download = "embedpix-image-presets.json"; link.click(); URL.revokeObjectURL(url);
+    setPresetMessage("图片预设 JSON 已导出");
+  };
+  const importImagePresetFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const incoming = importPresetBundle(await file.text()).image;
+      const next = mergeImportedPresets(customPresets, incoming, "skip"); setCustomPresets(next); saveImageCustomPresets(next);
+      setPresetMessage(`已导入 ${next.length - customPresets.length} 个图片预设，重复名称已跳过`);
+    } catch (error) { setPresetMessage(error instanceof Error ? error.message : "图片预设导入失败。"); }
   };
 
   return (
@@ -229,8 +245,11 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               <input className="settings-text-input" value={customPresetName} placeholder="预设名称" aria-label="新预设名称" onChange={(event) => setCustomPresetName(event.target.value)} />
               <button className="quiet-button" type="button" disabled={!customPresetName.trim()} onClick={saveCustomPreset}>保存</button>
               <button className="quiet-button" type="button" disabled={!customPresetId} onClick={deleteCustomPreset}>删除</button>
+              <button className="quiet-button" type="button" onClick={downloadImagePresets}>导出 JSON</button>
+              <label className="quiet-button settings-file-button">导入 JSON<input type="file" accept="application/json,.json" hidden onChange={(event) => { void importImagePresetFile(event.target.files?.[0]); event.target.value = ""; }} /></label>
             </div>
           </div>
+          {presetMessage ? <p className="settings-preset-message" role="status">{presetMessage}</p> : null}
         </section>
 
         <section className="settings-card" aria-labelledby="raw-defaults-title">

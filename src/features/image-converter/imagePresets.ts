@@ -46,3 +46,15 @@ export function saveImageCustomPresets(presets: ImageCustomPreset[], storage: Pi
 export function createImageCustomPreset(name: string, values: ImageConverterDefaults): ImageCustomPreset {
   return { id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: name.trim(), values, createdAt: new Date().toISOString() };
 }
+
+export function exportImagePresetsJson(presets: ImageCustomPreset[]): string {
+  return JSON.stringify({ version: SCHEMA_VERSION, presets }, null, 2);
+}
+
+export function importImagePresetsJson(value: string): ImageCustomPreset[] {
+  const parsed = JSON.parse(value) as Partial<StoredImagePresets> | null;
+  if (parsed?.version !== SCHEMA_VERSION || !Array.isArray(parsed.presets)) throw new Error("图片预设文件版本不兼容或格式无效。");
+  const presets = parsed.presets.filter(isPreset);
+  if (presets.length !== parsed.presets.length) throw new Error("图片预设文件包含无效项目。");
+  return presets;
+}

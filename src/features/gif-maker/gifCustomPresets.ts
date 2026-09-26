@@ -25,3 +25,12 @@ export function saveGifCustomPresets(presets: GifCustomPreset[], storage: Pick<S
 export function createGifCustomPreset(name: string, values: GifMakerPreferences): GifCustomPreset {
   return { id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: name.trim(), values, createdAt: new Date().toISOString() };
 }
+
+export function exportGifPresetsJson(presets: GifCustomPreset[]): string { return JSON.stringify({ version: SCHEMA_VERSION, presets }, null, 2); }
+export function importGifPresetsJson(value: string): GifCustomPreset[] {
+  const parsed = JSON.parse(value) as { version?: number; presets?: unknown } | null;
+  if (parsed?.version !== SCHEMA_VERSION || !Array.isArray(parsed.presets)) throw new Error("GIF 预设文件版本不兼容或格式无效。");
+  const presets = parsed.presets.filter(isPreset);
+  if (presets.length !== parsed.presets.length) throw new Error("GIF 预设文件包含无效项目。");
+  return presets;
+}
