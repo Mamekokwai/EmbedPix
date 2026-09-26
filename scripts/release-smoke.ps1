@@ -11,6 +11,7 @@ $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repo
 if ($release.draft -or $release.prerelease) { throw "Release $Tag is draft or prerelease." }
 
 $version = $Tag.TrimStart('v')
+$publicKeyPath = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-updater-public-key-" + [guid]::NewGuid() + '.pub')
 $expected = @(
   "EmbedPix_${version}_x64-setup.exe",
   "EmbedPix_${version}_x64-setup.exe.sig",
@@ -45,11 +46,42 @@ try {
       throw "$platform signature does not have a valid minisign structure."
     }
   }
+  $provenance = Get-Content -Raw (Join-Path $root 'release-provenance.json') | ConvertFrom-Json
+  if ($provenance.repository -ne $Repository -or $provenance.release_tag -ne $Tag -or
+      $provenance.workflow_ref -ne "refs/tags/$Tag" -or
+      $provenance.release_commit -notmatch '^[0-9a-fA-F]{40}$' -or
+      $provenance.workflow_sha -notmatch '^[0-9a-fA-F]{40}$') {
+    throw 'release-provenance.json does not match the published tag or immutable commit format.'
+  }
   $checks = Get-Content (Join-Path $root 'SHA256SUMS.txt')
+  $checkedNames = @()
   foreach ($line in $checks) {
     if ($line -notmatch '^([0-9a-fA-F]{64})\s+(.+)$') { throw "Invalid SHA256SUMS line: $line" }
-    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $root $Matches[2])).Hash
-    if ($actualHash -ine $Matches[1]) { throw "SHA256 mismatch for $($Matches[2])." }
+    $assetName = $Matches[2]
+    if ($checkedNames -contains $assetName -or -not ($expected -contains $assetName)) { throw "Unexpected or duplicate SHA256SUMS asset: $assetName" }
+    $checkedNames += $assetName
+    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $root $assetName)).Hash
+    if ($actualHash -ine $Matches[1]) { throw "SHA256 mismatch for $assetName." }
+  }
+  $checksumExpected = @($expected | Where-Object { $_ -ne 'SHA256SUMS.txt' })
+  $checkedSet = (@($checkedNames | Sort-Object) -join ',')
+  $expectedSet = (@($checksumExpected | Sort-Object) -join ',')
+  if ($checkedSet -ne $expectedSet) {
+    throw 'SHA256SUMS.txt does not cover the expected published assets.'
+  }
+  $decodedPublicKey = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String((Get-Content -Raw 'src-tauri/update-public-key.txt').Trim()))
+  [IO.File]::WriteAllText($publicKeyPath, $decodedPublicKey, (New-Object Text.UTF8Encoding($false)))
+  cargo build --manifest-path tools/minisign-verifier/Cargo.toml --release --locked --quiet
+  $verifierBase = Join-Path $PSScriptRoot '..\tools\minisign-verifier\target\release\embedpix-minisign-verifier'
+  $verifier = @("$verifierBase.exe", $verifierBase) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+  if (-not (Test-Path -LiteralPath $verifier)) { throw 'Independent minisign verifier was not built.' }
+  foreach ($installerName in @("EmbedPix_${version}_x64-setup.exe", "EmbedPix_${version}_arm64-setup.exe")) {
+    $signatureName = "$installerName.sig"
+    $rawSignaturePath = Join-Path $root "$signatureName.raw"
+    $rawSignature = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String((Get-Content -Raw (Join-Path $root $signatureName)).Trim()))
+    [IO.File]::WriteAllText($rawSignaturePath, $rawSignature, (New-Object Text.UTF8Encoding($false)))
+    & $verifier $publicKeyPath (Join-Path $root $installerName) $rawSignaturePath
+    if ($LASTEXITCODE -ne 0) { throw "Independent minisign verification failed for $installerName." }
   }
   if ($SkipInstall) { Write-Host "Release asset smoke passed for $Tag (install skipped)."; exit 0 }
   if ($env:RUNNER_OS -ne 'Windows' -and $PSVersionTable.Platform -ne 'Win32NT') { throw 'Installer smoke requires Windows.' }
@@ -92,4 +124,5 @@ try {
   throw
 } finally {
   Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $publicKeyPath -Force -ErrorAction SilentlyContinue
 }
