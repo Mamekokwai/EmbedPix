@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type {
   ExportImageRequest,
   ExportImageResponse,
@@ -12,6 +13,17 @@ export const PREFLIGHT_IMAGE_EXPORTS_COMMAND = "preflight_image_exports" as cons
 export const MAX_METADATA_BYTES = 64 * 1024;
 export const MAX_RAW_IMAGE_BYTES = 32 * 1024 * 1024;
 export const MAX_SOURCE_FILE_NAME_BYTES = 1024;
+
+export async function revealImageOutput(outputPath: string): Promise<void> {
+  if (!isTauriEnvironment()) throw new Error("当前预览环境不支持打开导出文件夹，请在桌面应用中执行。");
+  const normalizedPath = outputPath.trim();
+  if (!normalizedPath) throw new Error("导出路径为空，无法打开文件夹。");
+  try {
+    await revealItemInDir(normalizedPath);
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : String(error));
+  }
+}
 
 export interface NativeImageFile {
   path: string;

@@ -97,7 +97,7 @@ export const IMAGE_PRESETS: Record<Exclude<ImagePresetId, "custom">, ImageConver
 };
 
 const STORAGE_KEY = "embedpix.app-preferences.v1";
-const OUTPUT_FORMATS = new Set<OutputFormat>(["bmp", "png", "jpg", "rgb565", "c-array"]);
+const OUTPUT_FORMATS = new Set<OutputFormat>(["bmp", "png", "jpg", "webp", "tiff", "ico", "rgb565", "c-array"]);
 const IMAGE_PRESETS_SET = new Set<ImagePresetId>(["high-quality", "balanced", "small-size", "custom"]);
 const BIT_DEPTHS = new Set<BmpBitDepth>([1, 4, 8, 16, 24, 32]);
 const BYTE_ORDERS = new Set<ByteOrder>(["little", "big"]);

@@ -11,6 +11,7 @@ import {
   PICK_OUTPUT_DIRECTORY_COMMAND,
   PREFLIGHT_IMAGE_EXPORTS_COMMAND,
   preflightImageExports,
+  revealImageOutput,
   validateExportEnvelopeInput,
 } from "./imageExportGateway";
 import type { ExportImageRequest } from "../../features/image-converter/types";
@@ -36,6 +37,7 @@ function createRequest(inputData: Uint8Array, overrides: Partial<ExportImageRequ
 }
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: vi.fn() }));
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -59,6 +61,13 @@ describe("image export raw IPC envelope", () => {
   it("does not turn a native export error into a successful result", async () => {
     vi.mocked(invoke).mockRejectedValue(new Error("输出目录不可写"));
     await expect(exportImage(createRequest(new Uint8Array([1])))).rejects.toThrow("输出目录不可写");
+  });
+
+  it("reveals a completed image export in its containing folder", async () => {
+    const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+    vi.mocked(revealItemInDir).mockResolvedValueOnce(undefined);
+    await expect(revealImageOutput("E:\\out\\icon.bmp")).resolves.toBeUndefined();
+    expect(revealItemInDir).toHaveBeenCalledWith("E:\\out\\icon.bmp");
   });
 
   it("uses the native preflight command in desktop mode", async () => {

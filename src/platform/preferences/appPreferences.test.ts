@@ -56,6 +56,15 @@ describe("app preferences", () => {
     );
   });
 
+  it("preserves all selectable image formats across reloads", () => {
+    for (const format of ["webp", "tiff", "ico"] as const) {
+      const storage = createStorage({
+        "embedpix.app-preferences.v1": JSON.stringify({ defaultOutputFormat: format }),
+      });
+      expect(loadAppPreferences(storage).defaultOutputFormat).toBe(format);
+    }
+  });
+
   it("persists preferences and resolves system appearance", () => {
     const storage = createStorage();
     saveAppPreferences({

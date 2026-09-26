@@ -22,6 +22,7 @@ import {
   preflightImageExports,
   previewImageExport,
   readImageFile,
+  revealImageOutput,
   type NativeImageFile,
 } from "../../platform/image/imageExportGateway";
 import type { ImageExportPreflightResult } from "../../platform/image/imageExportGateway";
@@ -315,6 +316,7 @@ export default function ImageConverter({
   const replaceImageIdRef = useRef<string | null>(null);
   loadedImagesRef.current = loadedImages;
   const loadNativeImageRef = useRef<(paths?: string[]) => void>(() => undefined);
+  const loadFilesRef = useRef<(files: File[], replaceImageId?: string | null) => Promise<void>>(async () => undefined);
 
   useEffect(() => {
     return () => {
@@ -612,6 +614,8 @@ export default function ImageConverter({
     }
   };
 
+  loadFilesRef.current = loadFiles;
+
   const loadNativeImages = async (paths?: string[], replaceImageId: string | null = null) => {
     try {
       const sources: NativeImageFile[] = [];
@@ -661,6 +665,25 @@ export default function ImageConverter({
       return undefined;
     }
     return () => unlisten?.();
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    const handlePaste = (event: ClipboardEvent) => {
+      const files = Array.from(event.clipboardData?.files ?? []);
+      const imageFiles = files.filter(isImageFile);
+      if (imageFiles.length > 0) {
+        event.preventDefault();
+        void loadFilesRef.current(imageFiles, replaceImageIdRef.current);
+        return;
+      }
+      if (files.length > 0 || (event.clipboardData?.items.length ?? 0) > 0) {
+        setError("剪贴板中没有可导入的图片，请复制图片后再试。 ");
+        setStatus({ kind: "error", text: "剪贴板没有图片" });
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
   }, [active]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1163,6 +1186,31 @@ export default function ImageConverter({
     } catch (copyError) {
       setError(copyError instanceof Error ? copyError.message : "复制失败，请手动选择失败详情。" );
       setStatus({ kind: "error", text: "复制失败" });
+    }
+  };
+
+  const copyExportPath = async () => {
+    const outputPath = actualExportResult?.outputPath;
+    if (!outputPath) return;
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择输出路径。 ");
+      await navigator.clipboard.writeText(outputPath);
+      setStatus({ kind: "ready", text: "输出路径已复制" });
+    } catch (copyError) {
+      setError(copyError instanceof Error ? copyError.message : "复制失败，请手动选择输出路径。 ");
+      setStatus({ kind: "error", text: "复制失败" });
+    }
+  };
+
+  const revealExportFolder = async () => {
+    const outputPath = actualExportResult?.outputPath;
+    if (!outputPath) return;
+    try {
+      await revealImageOutput(outputPath);
+      setStatus({ kind: "ready", text: "已打开输出文件夹" });
+    } catch (openError) {
+      setError(openError instanceof Error ? openError.message : "打开输出文件夹失败。 ");
+      setStatus({ kind: "error", text: "打开失败" });
     }
   };
 
@@ -1710,6 +1758,10 @@ export default function ImageConverter({
               {actualExportResult?.outputPath && status.kind === "success" ? <p className="export-progress-summary export-actual-result" role="status">
                 实际导出：{actualExportResult.outputPath} · {actualExportResult.width && actualExportResult.height ? `${actualExportResult.width} × ${actualExportResult.height} px` : "尺寸由桌面端返回"} · {actualExportResult.format?.toUpperCase() ?? "格式由桌面端返回"} · {actualExportResult.bitDepth ? `${actualExportResult.bitDepth} 位` : "位深由桌面端返回"} · {typeof actualExportResult.outputBytes === "number" ? `实际体积 ${formatFileSize(actualExportResult.outputBytes)}` : "文件体积由桌面端返回"}
               </p> : null}
+              {actualExportResult?.outputPath && status.kind === "success" ? <div className="export-output-actions">
+                <button className="quiet-button" type="button" onClick={() => void revealExportFolder()}>打开所在文件夹</button>
+                <button className="quiet-button" type="button" onClick={() => void copyExportPath()}>复制输出路径</button>
+              </div> : null}
             </div>
             <div className="footer-actions">
               {failedExportIds.length > 0 && status.kind !== "busy" ? (
