@@ -31,6 +31,7 @@ pub fn run() {
             commands::export_image::preview_image_export,
             commands::export_image::pick_image,
             commands::export_image::pick_images,
+            commands::export_image::pick_image_directory,
             commands::export_image::read_image_file,
             commands::export_preflight::preflight_image_exports,
             commands::update::check_update,

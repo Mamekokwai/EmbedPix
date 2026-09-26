@@ -9,8 +9,10 @@ import {
   previewImageExport,
   PREVIEW_IMAGE_EXPORT_COMMAND,
   PICK_OUTPUT_DIRECTORY_COMMAND,
+  PICK_IMAGE_DIRECTORY_COMMAND,
   PREFLIGHT_IMAGE_EXPORTS_COMMAND,
   preflightImageExports,
+  pickImageDirectory,
   revealImageOutput,
   validateExportEnvelopeInput,
 } from "./imageExportGateway";
@@ -83,6 +85,17 @@ describe("image export raw IPC envelope", () => {
     const result = await preflightImageExports(["/tmp/one.png"]);
     expect(result.supported).toBe(false);
     expect(result.items[0].reason).toContain("不支持文件系统预检");
+  });
+
+  it("picks an image directory through the native command", async () => {
+    vi.mocked(invoke).mockResolvedValue({ root: "E:\\images", files: [], skipped: ["x.txt：跳过"], totalBytes: 0 });
+    await expect(pickImageDirectory()).resolves.toMatchObject({ root: "E:\\images", skipped: ["x.txt：跳过"] });
+    expect(invoke).toHaveBeenCalledWith(PICK_IMAGE_DIRECTORY_COMMAND);
+  });
+
+  it("reports directory picking as unsupported outside Tauri", async () => {
+    vi.stubGlobal("window", {});
+    await expect(pickImageDirectory()).rejects.toThrow("不支持选择图片文件夹");
   });
 
   it("encodes Unicode metadata, a little-endian length, and unchanged image bytes", () => {

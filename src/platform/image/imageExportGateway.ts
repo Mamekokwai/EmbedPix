@@ -10,6 +10,7 @@ export const EXPORT_IMAGE_COMMAND = "export_image" as const;
 export const PREVIEW_IMAGE_EXPORT_COMMAND = "preview_image_export" as const;
 export const PICK_OUTPUT_DIRECTORY_COMMAND = "pick_gif_sequence_output" as const;
 export const PREFLIGHT_IMAGE_EXPORTS_COMMAND = "preflight_image_exports" as const;
+export const PICK_IMAGE_DIRECTORY_COMMAND = "pick_image_directory" as const;
 export const MAX_METADATA_BYTES = 64 * 1024;
 export const MAX_RAW_IMAGE_BYTES = 32 * 1024 * 1024;
 export const MAX_SOURCE_FILE_NAME_BYTES = 1024;
@@ -29,6 +30,13 @@ export interface NativeImageFile {
   path: string;
   fileName: string;
   data: number[];
+}
+
+export interface ImageDirectoryImportResult {
+  root: string;
+  files: NativeImageFile[];
+  skipped: string[];
+  totalBytes: number;
 }
 
 export interface ImageExportPreflightResult {
@@ -152,6 +160,15 @@ export async function preflightImageExports(targetPaths: ReadonlyArray<string>, 
 
 export async function pickImageFiles(): Promise<NativeImageFile[]> {
   return invoke<NativeImageFile[]>("pick_images");
+}
+
+export async function pickImageDirectory(): Promise<ImageDirectoryImportResult | null> {
+  if (!isTauriEnvironment()) throw new Error("当前预览环境不支持选择图片文件夹，请在桌面应用中执行。");
+  try {
+    return await invoke<ImageDirectoryImportResult | null>(PICK_IMAGE_DIRECTORY_COMMAND);
+  } catch (error) {
+    throw new Error(getErrorMessage(error));
+  }
 }
 
 export async function readImageFile(path: string): Promise<NativeImageFile> {

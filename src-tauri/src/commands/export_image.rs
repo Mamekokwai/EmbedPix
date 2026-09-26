@@ -20,6 +20,8 @@ mod bmp;
 mod raw;
 
 const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
+const MAX_DIRECTORY_FILES: usize = 1_000;
+const MAX_DIRECTORY_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 64 * 1024;
 const MAX_SOURCE_FILE_NAME_BYTES: usize = 1024;
 const MAX_DEFAULT_STEM_CHARS: usize = 120;
@@ -438,6 +440,15 @@ pub struct NativeImageFile {
     pub data: Vec<u8>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageDirectoryImportResult {
+    pub root: String,
+    pub files: Vec<NativeImageFile>,
+    pub skipped: Vec<String>,
+    pub total_bytes: u64,
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn pick_image() -> Result<Option<NativeImageFile>, String> {
     let path = rfd::FileDialog::new()
@@ -467,6 +478,95 @@ pub async fn pick_images() -> Result<Vec<NativeImageFile>, String> {
     })
     .await
     .map_err(|error| format!("image read task failed: {error}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn pick_image_directory() -> Result<Option<ImageDirectoryImportResult>, String> {
+    let Some(path) = rfd::FileDialog::new()
+        .set_title("选择图片文件夹")
+        .pick_folder()
+    else {
+        return Ok(None);
+    };
+    tauri::async_runtime::spawn_blocking(move || scan_image_directory(path))
+        .await
+        .map_err(|error| format!("image directory scan task failed: {error}"))?
+        .map(Some)
+}
+
+fn scan_image_directory(root: PathBuf) -> Result<ImageDirectoryImportResult, String> {
+    path_security::validate_source_path(&root)
+        .map_err(|error| format_image_path_error(error, "selected image directory"))?;
+    let metadata =
+        fs::symlink_metadata(&root).map_err(|error| format!("无法检查图片目录：{error}"))?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err("图片目录必须是普通目录，不能是符号链接。".to_string());
+    }
+    let mut pending = vec![root.clone()];
+    let mut files = Vec::new();
+    let mut skipped = Vec::new();
+    let mut total_bytes = 0u64;
+    while let Some(directory) = pending.pop() {
+        for entry in
+            fs::read_dir(&directory).map_err(|error| format!("无法读取图片目录：{error}"))?
+        {
+            let entry = entry.map_err(|error| format!("无法读取图片目录项：{error}"))?;
+            let path = entry.path();
+            let metadata = fs::symlink_metadata(&path)
+                .map_err(|error| format!("无法检查图片目录项：{error}"))?;
+            if metadata.file_type().is_symlink() {
+                skipped.push(format!("{}：跳过符号链接", path.display()));
+                continue;
+            }
+            if metadata.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if !metadata.is_file() || !is_supported_image_path(&path) {
+                continue;
+            }
+            if files.len() >= MAX_DIRECTORY_FILES {
+                return Err(format!(
+                    "图片目录文件数超过 {} 个上限。",
+                    MAX_DIRECTORY_FILES
+                ));
+            }
+            let size = metadata.len();
+            let next_total = total_bytes
+                .checked_add(size)
+                .ok_or_else(|| "图片目录总大小溢出。".to_string())?;
+            if next_total > MAX_DIRECTORY_TOTAL_BYTES {
+                return Err(format!(
+                    "图片目录总大小超过 {} MiB 上限。",
+                    MAX_DIRECTORY_TOTAL_BYTES / (1024 * 1024)
+                ));
+            }
+            match read_image_file_from_path(path.clone()) {
+                Ok(file) => {
+                    total_bytes = next_total;
+                    files.push(file);
+                }
+                Err(error) => skipped.push(format!("{}：{}", path.display(), error)),
+            }
+        }
+    }
+    Ok(ImageDirectoryImportResult {
+        root: root.to_string_lossy().into_owned(),
+        files,
+        skipped,
+        total_bytes,
+    })
+}
+
+fn is_supported_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp"
+            )
+        })
 }
 
 #[tauri::command(rename_all = "camelCase")]
