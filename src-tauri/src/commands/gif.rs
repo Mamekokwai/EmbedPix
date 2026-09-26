@@ -9,6 +9,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(test)]
+use std::sync::atomic::AtomicBool;
+
 use base64::Engine;
 use color_quant::NeuQuant;
 use gif::{DisposalMethod, Encoder, Frame as GifFrame, Repeat};
@@ -78,6 +81,8 @@ pub(super) struct GifExportJob {
     phase: AtomicU8,
     progress: Mutex<GifExportProgress>,
     terminal_at: Mutex<Option<Instant>>,
+    #[cfg(test)]
+    forced_expired: AtomicBool,
 }
 
 struct EncodingSemaphore {
@@ -159,6 +164,8 @@ impl GifExportJob {
                 error: None,
             }),
             terminal_at: Mutex::new(None),
+            #[cfg(test)]
+            forced_expired: AtomicBool::new(false),
         }
     }
 
@@ -169,6 +176,10 @@ impl GifExportJob {
     }
 
     fn is_expired(&self, now: Instant) -> bool {
+        #[cfg(test)]
+        if self.forced_expired.load(Ordering::Acquire) {
+            return true;
+        }
         self.terminal_at
             .lock()
             .ok()
@@ -178,9 +189,7 @@ impl GifExportJob {
 
     #[cfg(test)]
     fn expire_for_test(&self) {
-        if let Ok(mut terminal_at) = self.terminal_at.lock() {
-            *terminal_at = Some(Instant::now() - JOB_RETENTION - Duration::from_secs(1));
-        }
+        self.forced_expired.store(true, Ordering::Release);
     }
 
     fn is_active(&self) -> bool {
