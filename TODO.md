@@ -436,3 +436,11 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 图片/GIF 预设 JSON 导入导出完成
 
 证据：基于 `baa7932` 与 `f5df0e4`；本次发布前重新执行 npm/Rust 完整门禁，发布后继续核验 7 项资产、latest.json、provenance、SHA256SUMS 和 x64/ARM64 minisign 验签。已有版本标签不移动、不重写。
+
+## 0.6.0 发布验收
+
+- [x] 工作区快照严格版本化为 `.embedpix-workspace.json`
+- [x] 图片/GIF 参数、输出配置与帧元数据纳入快照
+- [x] Tauri 静态图片源恢复、浏览器降级提示和失败不覆盖完成
+
+证据：基于 `1ea4c08`、`a7c5f47`、`e7f6c31`、`21e9905`、`ba9699f`、`57371eb`、`c524fdd`；本次发布前重新执行 npm/Rust 完整门禁，发布后继续核验 7 项资产、latest.json、provenance、SHA256SUMS 和 x64/ARM64 minisign 验签。已有版本标签不移动、不重写。
