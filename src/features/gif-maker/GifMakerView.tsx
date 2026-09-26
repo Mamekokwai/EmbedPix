@@ -34,6 +34,7 @@ import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, G
 import { clampVideoFps, formatVideoTime, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoCropRect } from "./videoGifLogic";
 import { extractVideoFrameBlobs } from "./videoFrameExtraction";
+import { readImageFile, type NativeImageFile } from "../../platform/image/imageExportGateway";
 import { exportPresetBundle, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
 import { exportWorkspace, importWorkspace } from "../../shared/workspaceTransfer";
 import { loadVideoMetadata } from "./videoMetadata";
@@ -45,6 +46,12 @@ export type GifLoopMode = GifMakerLoopMode;
 export type GifEncodingQuality = GifMakerEncodingQuality;
 export type GifDitherMode = GifMakerDitherMode;
 export type GifPreset = GifMakerPreset;
+
+export function nativeImageFileToGifFile(image: NativeImageFile): File {
+  const extension = image.fileName.split(".").pop()?.toLowerCase();
+  const type = extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/bmp";
+  return new File([Uint8Array.from(image.data)], image.fileName, { type });
+}
 
 export interface GifPresetConfig {
   label: string;
@@ -1086,7 +1093,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       });
   };
 
-  const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null, insertAt: number | null = null) => {
+  const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null, insertAt: number | null = null, replaceAll = false) => {
     if (lockedRef.current || !inputFiles.length) return;
     const imageFiles = inputFiles.filter(isImageFile);
     if (imageFiles.length !== inputFiles.length) {
@@ -1102,7 +1109,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setStatus({ kind: "importing", text: `正在读取 ${filesToRead.length} 张图片…` });
     try {
       await importQueueRef.current.run(async (isCurrent) => {
-        const retained = replaceFrameId ? framesRef.current.filter((frame) => frame.id !== replaceFrameId) : framesRef.current;
+        const retained = replaceAll ? [] : replaceFrameId ? framesRef.current.filter((frame) => frame.id !== replaceFrameId) : framesRef.current;
         validateGifFiles([...retained.map((frame) => frame.file), ...filesToRead]);
         let pixels = retained.reduce((sum, frame) => sum + frame.width * frame.height, 0);
         const loadedFrames = await readGifBatch(filesToRead, async (file) => {
@@ -1129,14 +1136,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           setCanvasPreset("source");
         }
         const insertionIndex = insertAt === null ? current.length : Math.max(0, Math.min(current.length, Math.floor(insertAt)));
-        const next = replaceFrameId ? current.map((frame, i) => i === index ? { ...loadedFrames[0], durationMs: frame.durationMs } : frame) : insertAt === null ? [...current, ...loadedFrames] : [...current.slice(0, insertionIndex), ...loadedFrames, ...current.slice(insertionIndex)];
-        if (index >= 0) URL.revokeObjectURL(current[index].previewUrl);
+        const next = replaceAll ? loadedFrames : replaceFrameId ? current.map((frame, i) => i === index ? { ...loadedFrames[0], durationMs: frame.durationMs } : frame) : insertAt === null ? [...current, ...loadedFrames] : [...current.slice(0, insertionIndex), ...loadedFrames, ...current.slice(insertionIndex)];
+        if (replaceAll) current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
+        else if (index >= 0) URL.revokeObjectURL(current[index].previewUrl);
         framesRef.current = next;
         setFrames(next);
         const nextIndex = replaceFrameId ? index : insertionIndex;
         setSelectedIndex(nextIndex);
         setSelectedFrameIndices(new Set([nextIndex]));
-        setStatus({ kind: "ready", text: replaceFrameId ? "已替换帧" : insertAt === null ? `已加入 ${loadedFrames.length} 张图片` : `已插入 ${loadedFrames.length} 张图片` });
+        setStatus({ kind: "ready", text: replaceAll ? `已恢复 ${loadedFrames.length} 张图片` : replaceFrameId ? "已替换帧" : insertAt === null ? `已加入 ${loadedFrames.length} 张图片` : `已插入 ${loadedFrames.length} 张图片` });
       });
     } catch (loadError) {
       setError(getErrorMessage(loadError));
@@ -1380,7 +1388,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
   const deleteCustomGifPreset = () => { const next = customPresets.filter((item) => item.id !== customPresetId); setCustomPresets(next); saveGifCustomPresets(next); setCustomPresetId(""); };
   const saveWorkspace = () => { const data = exportWorkspace({ kind: "gif", outputLocation, outputDirectory, outputSubdirectory, sourcePaths: frames.map((frame) => frame.sourcePath).filter((path): path is string => Boolean(path)), parameters: { canvasWidth, canvasHeight, canvasPreset, keepAspectRatio, fitMode, contentAlignment, contentMargins, globalDuration, batchDuration, firstFrameHoldDuration, lastFrameHoldDuration, playbackSpeed, background, customBackgroundColor, loopMode, loopCount, encodingQuality, colorCount, ditherMode, targetSizeKiB, maxSizeKiB, autoCompress, mergeIdenticalFrames, overwriteExisting, outputFormat, videoFps, videoEveryNthFrame, videoMaxFrames, videoCropPreset, videoRotation, videoReverse } }); const url = URL.createObjectURL(new Blob([data], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "embedpix-workspace.json"; link.click(); URL.revokeObjectURL(url); setStatus({ kind: "ready", text: "工作区已保存" }); };
-  const openWorkspace = async (file: File | undefined) => { if (!file) return; try { const bundle = importWorkspace(await file.text(), "gif"); const p = bundle.parameters; if (typeof p.canvasWidth === "number") setCanvasWidth(p.canvasWidth); if (typeof p.canvasHeight === "number") setCanvasHeight(p.canvasHeight); if (typeof p.keepAspectRatio === "boolean") setKeepAspectRatio(p.keepAspectRatio); if (p.background === "transparent" || p.background === "white" || p.background === "black" || p.background === "custom") setBackground(p.background); if (typeof p.globalDuration === "number") setGlobalDuration(p.globalDuration); if (typeof p.outputFormat === "string") setOutputFormat(p.outputFormat as GifMakerOutputFormat); setStatus({ kind: "ready", text: bundle.sourcePaths.length ? "参数已恢复，源帧请重新选择" : "工作区参数已恢复" }); if (bundle.sourcePaths.length) setError("浏览器不会自动读取工作区源文件，请重新选择 GIF 源帧。 "); } catch (error) { setError(error instanceof Error ? error.message : "工作区打开失败。"); setStatus({ kind: "error", text: "工作区打开失败" }); } };
+  const openWorkspace = async (file: File | undefined) => { if (!file) return; try { const bundle = importWorkspace(await file.text(), "gif"); const nativeFiles = await Promise.all(bundle.sourcePaths.map((path) => readImageFile(path))); const importedFiles = nativeFiles.map(nativeImageFileToGifFile); if (importedFiles.length) { await importFiles(importedFiles, null, null, true); const restoredFrames = framesRef.current.map((frame, index) => ({ ...frame, durationMs: bundle.frames[index]?.durationMs ?? frame.durationMs })); framesRef.current = restoredFrames; setFrames(restoredFrames); } const p = bundle.parameters; if (typeof p.canvasWidth === "number") setCanvasWidth(p.canvasWidth); if (typeof p.canvasHeight === "number") setCanvasHeight(p.canvasHeight); if (typeof p.keepAspectRatio === "boolean") setKeepAspectRatio(p.keepAspectRatio); if (p.background === "transparent" || p.background === "white" || p.background === "black" || p.background === "custom") setBackground(p.background); if (typeof p.globalDuration === "number") setGlobalDuration(p.globalDuration); if (typeof p.outputFormat === "string") setOutputFormat(p.outputFormat as GifMakerOutputFormat); setStatus({ kind: "ready", text: importedFiles.length ? `已恢复 ${importedFiles.length} 张图片` : "工作区参数已恢复" }); } catch (error) { setError(error instanceof Error ? error.message : "工作区打开失败。"); setStatus({ kind: "error", text: error instanceof Error && /视频|video|读取|read/i.test(error.message) ? "请重新导入视频或图片源" : "工作区打开失败" }); } };
   const downloadGifPresets = () => { const url = URL.createObjectURL(new Blob([exportPresetBundle([], customPresets)], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "embedpix-gif-presets.json"; link.click(); URL.revokeObjectURL(url); setCustomPresetMessage("GIF 预设 JSON 已导出"); };
   const importGifPresetFile = async (file: File | undefined) => {
     if (!file) return;

@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { nativeImageFileToGifFile } from "./GifMakerView";
 import { canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifOutputLocationError, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
+  it("converts native image bytes into a browser File without changing the payload", async () => {
+    const file = nativeImageFileToGifFile({ path: "E:\\a.png", fileName: "a.png", data: [1, 2, 255] });
+    expect(file.name).toBe("a.png");
+    expect(file.type).toBe("image/png");
+    expect(Array.from(new Uint8Array(await file.arrayBuffer()))).toEqual([1, 2, 255]);
+  });
   it("defines quality, balanced, and small presets without touching other formats", () => {
     expect(GIF_PRESETS).toEqual({
       high: { label: "高质量", description: "原尺寸 · 256 色 · 15 FPS · 不跳帧", encodingQuality: "high", colorCount: 256, ditherMode: "none", canvasPreset: "source", videoFps: 15, videoEveryNthFrame: 1 },
