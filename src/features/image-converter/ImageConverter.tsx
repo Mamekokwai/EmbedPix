@@ -86,6 +86,7 @@ import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueu
 import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueue";
 import type { ExportPreflightResult } from "./imageConverterLogic";
 import { planBatchConversions } from "./batchConversionPlan";
+import { exportWorkspace, importWorkspace } from "../../shared/workspaceTransfer";
 
 type ImageExportQueueProgress = ExportQueueProgress<{ file: { name: string } }>;
 
@@ -745,6 +746,21 @@ export default function ImageConverter({
       setError(importError instanceof Error ? importError.message : "图片文件夹导入失败。");
       setStatus({ kind: "error", text: "图片文件夹导入失败" });
     }
+  };
+
+  const saveWorkspace = () => {
+    const data = exportWorkspace({ kind: "image", sourcePaths: loadedImages.map((image) => image.sourcePath).filter((path): path is string => Boolean(path)), parameters: { outputFormat, bitDepth, jpegQuality, byteOrder, channelOrder, rowOrder, rowAlignment, cArrayName, keepAspectRatio, backgroundColor, width, height, fileNameTemplate, autoSequence } });
+    const url = URL.createObjectURL(new Blob([data], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "embedpix-workspace.json"; link.click(); URL.revokeObjectURL(url);
+    setStatus({ kind: "ready", text: "工作区已保存" });
+  };
+  const openWorkspace = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const bundle = importWorkspace(await file.text(), "image"); const p = bundle.parameters;
+      if (typeof p.defaultOutputFormat === "string") setOutputFormat(p.defaultOutputFormat as OutputFormat); if (typeof p.defaultBitDepth === "number") setBitDepth(p.defaultBitDepth as BmpBitDepth); if (typeof p.defaultJpegQuality === "number") setJpegQuality(p.defaultJpegQuality); if (p.defaultByteOrder === "little" || p.defaultByteOrder === "big") setByteOrder(p.defaultByteOrder); if (p.defaultChannelOrder === "rgb" || p.defaultChannelOrder === "bgr") setChannelOrder(p.defaultChannelOrder); if (p.defaultRowOrder === "top-down" || p.defaultRowOrder === "bottom-up") setRowOrder(p.defaultRowOrder); if (p.defaultRowAlignment === 1 || p.defaultRowAlignment === 2 || p.defaultRowAlignment === 4) setRowAlignment(p.defaultRowAlignment); if (typeof p.defaultCArrayName === "string") setCArrayName(p.defaultCArrayName); if (typeof p.keepAspectRatio === "boolean") setKeepAspectRatio(p.keepAspectRatio); if (typeof p.defaultBackgroundColor === "string") setBackgroundColor(p.defaultBackgroundColor); if (typeof p.fileNameTemplate === "string") setFileNameTemplate(p.fileNameTemplate); if (typeof p.autoSequence === "boolean") setAutoSequence(p.autoSequence);
+      setStatus({ kind: "ready", text: bundle.sourcePaths.length ? "参数已恢复，源图片请重新选择" : "工作区参数已恢复" });
+      if (bundle.sourcePaths.length) setError("浏览器不会自动读取工作区源文件，请重新选择图片。 ");
+    } catch (error) { setError(error instanceof Error ? error.message : "工作区打开失败。"); setStatus({ kind: "error", text: "工作区打开失败" }); }
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -1859,6 +1875,7 @@ export default function ImageConverter({
                 {status.kind === "busy" ? "取消导出" : `导出 ${getOutputLabel(outputFormat)}`}
               </button>
             </div>
+            <div className="workspace-transfer-actions"><button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><label className="quiet-button workspace-file-button">打开工作区<input type="file" accept="application/json,.json" hidden onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} /></label></div>
           </div>
         </div>
       </section>

@@ -359,3 +359,4 @@
 .gif-custom-preset-controls .gif-settings-select { min-width: 150px; }
 .gif-custom-preset-controls .gif-text-input { min-width: 120px; flex: 1 1 120px; }
 .gif-file-button { cursor: pointer; }
+.workspace-file-button { cursor: pointer; }
