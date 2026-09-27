@@ -112,6 +112,12 @@ fn write_pending_install_marker(app: &AppHandle, version: &str) -> Result<(), St
     fs::rename(&temporary, &path).map_err(|error| format!("无法提交更新诊断：{error}"))
 }
 
+fn clear_pending_install_marker(app: &AppHandle) {
+    if let Ok(path) = pending_install_marker_path(app) {
+        let _ = fs::remove_file(path);
+    }
+}
+
 pub fn mark_app_started(app: &AppHandle, state: State<'_, UpdateHealthState>) {
     let Ok(path) = pending_install_marker_path(app) else {
         return;
@@ -678,9 +684,10 @@ pub async fn install_update(
 
         #[cfg(windows)]
         {
-            Command::new(package_path)
-                .spawn()
-                .map_err(|error| format!("无法启动更新安装程序：{error}"))?;
+            if let Err(error) = Command::new(package_path).spawn() {
+                clear_pending_install_marker(&app_for_install);
+                return Err(format!("无法启动更新安装程序：{error}"));
+            }
             Ok::<(), String>(())
         }
         #[cfg(not(windows))]
