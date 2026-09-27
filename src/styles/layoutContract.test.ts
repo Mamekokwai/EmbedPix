@@ -51,6 +51,9 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain("打开工作区");
     expect(gifCss).toContain(".gif-header-note { display: flex; flex-wrap: wrap;");
     expect(converterCss).toContain(".workspace-transfer-actions > * { flex: 1 1 0;");
+    expect(gifView).toContain("gif-status-${status.kind}");
+    expect(gifView).toContain("formatGifExportProgress");
+    expect(converterView).toContain("export-progress-panel");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {
