@@ -35,11 +35,20 @@ describe("compression gateway", () => {
   });
 
   it("uses preflight and single-image compression command contracts", async () => {
-    vi.mocked(invoke).mockResolvedValueOnce({ outputPath: "C:/icon.webp", overwritesExisting: false }).mockResolvedValueOnce({ jobId: "compression-test", outputPath: "C:/icon.webp" });
+    vi.mocked(invoke).mockResolvedValueOnce({ outputPath: "C:/icon.webp", overwritesExisting: false }).mockResolvedValueOnce({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "completed", skippedReason: null, inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: true });
     await preflightCompression(request);
     await compressImage(request);
     expect(invoke).toHaveBeenNthCalledWith(1, PREFLIGHT_COMPRESSION_COMMAND, expect.any(Uint8Array));
     expect(invoke).toHaveBeenNthCalledWith(2, COMPRESS_IMAGE_COMMAND, expect.any(Uint8Array));
+  });
+
+  it("keeps skipped results distinct from completed output", async () => {
+    vi.mocked(invoke).mockResolvedValue({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "skipped", skippedReason: "compressed output is larger than the source; output was not published", inputBytes: 3, outputBytes: 5, savedBytes: -2, savingsPercent: -66.7, width: 1, height: 1, format: "webp", lossless: true });
+    const result = await compressImage(request);
+    expect(result.status).toBe("skipped");
+    expect(result.skippedReason).toContain("not published");
+    expect(result.outputBytes).toBe(5);
+    expect(result.savedBytes).toBe(-2);
   });
 
   it("serializes source subfolder and directory output locations without unsupported fields", () => {

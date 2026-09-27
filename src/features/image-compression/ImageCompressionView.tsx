@@ -25,7 +25,9 @@ interface CompressionResultStats {
   skipped: number;
   failed: number;
   inputBytes: number;
+  processedInputBytes: number;
   outputBytes: number;
+  savedBytes: number;
 }
 
 function fileTypeForPath(path: string): string {
@@ -69,7 +71,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [estimateNote, setEstimateNote] = useState("等待导入图片");
   const [message, setMessage] = useState("");
   const [failures, setFailures] = useState<string[]>([]);
-  const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, outputBytes: 0 });
+  const [skipReasons, setSkipReasons] = useState<string[]>([]);
+  const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
   const activeJobIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
 
@@ -86,8 +89,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   }), [format, quality, lossless, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, overwrite]);
 
   const outputLocationError = useMemo(() => getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, !isTauriEnvironment() || (items.length > 0 && items.every((item) => Boolean(item.sourcePath)))), [items, outputDirectory, outputLocation, outputSubdirectory]);
-  const actualSavedBytes = Math.max(0, resultStats.inputBytes - resultStats.outputBytes);
-  const actualSavingsPercent = resultStats.inputBytes > 0 ? (actualSavedBytes / resultStats.inputBytes) * 100 : 0;
+  const actualSavedBytes = resultStats.savedBytes;
+  const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
 
   useEffect(() => {
     if (!active) return;
@@ -109,7 +112,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     });
     setMessage("");
     setFailures([]);
-    setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, outputBytes: 0 });
+    setSkipReasons([]);
+    setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
     setStatus("ready");
   };
 
@@ -125,7 +129,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     }
     if (imported.length > 0) {
       setItems((current) => [...current, ...imported]);
-      setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, outputBytes: 0 });
+      setSkipReasons([]);
+      setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
       setStatus("ready");
     }
     if (skipped.length > 0) {
@@ -221,8 +226,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setStage("preflight");
     const queue = failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : items;
     setFailures([]);
+    setSkipReasons([]);
     cancelRequestedRef.current = false;
-    setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), outputBytes: 0 });
+    setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
     setProgress({ current: 0, total: queue.length });
     const failedNames: string[] = [];
     let lastError = "";
@@ -234,6 +240,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         const preflight = await preflightCompression(request);
         if (preflight.overwritesExisting && !options.overwrite) {
           setResultStats((current) => ({ ...current, skipped: current.skipped + 1 }));
+          setSkipReasons((current) => [...current, `${item.file.name}：同名目标已存在`]);
           setMessage(`已跳过同名目标：${item.file.name}`);
           setProgress({ current: index + 1, total: queue.length });
           continue;
@@ -243,7 +250,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         const result = await compressImage(request);
         activeJobIdRef.current = null;
         await progressPoll;
-        setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, outputBytes: current.outputBytes + result.outputBytes }));
+        if (result.status === "skipped") {
+          setResultStats((current) => ({ ...current, skipped: current.skipped + 1 }));
+          setSkipReasons((current) => [...current, `${item.file.name}：${result.skippedReason || "原生压缩策略跳过，未发布输出"}`]);
+          setMessage(`已跳过 ${item.file.name}：${result.skippedReason || "未发布输出"}`);
+        } else {
+          setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes }));
+        }
       } catch (error) {
         activeJobIdRef.current = null;
         const detail = errorMessage(error);
@@ -354,7 +367,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className="compression-summary-stat"><span>跳过</span><strong>{resultStats.skipped}</strong></div>
         <div className="compression-summary-stat"><span>失败</span><strong className={resultStats.failed > 0 ? "compression-failure" : undefined}>{resultStats.failed}</strong></div>
         <div className="compression-summary-stat"><span>实际节省</span><strong className="compression-saving">{formatCompressionBytes(actualSavedBytes)} · {actualSavingsPercent.toFixed(0)}%</strong></div>
-        <span className="compression-estimate-note">输出 {formatCompressionBytes(resultStats.outputBytes)} / 输入 {formatCompressionBytes(resultStats.inputBytes)}</span>
+        <span className="compression-estimate-note">输出 {formatCompressionBytes(resultStats.outputBytes)} / 已处理输入 {formatCompressionBytes(resultStats.processedInputBytes)}</span>
+        {skipReasons.length > 0 ? <div className="compression-skip-details"><strong>跳过原因</strong>{skipReasons.map((reason) => <span key={reason}>{reason}</span>)}</div> : null}
       </section>
 
       <footer className="compression-footer">

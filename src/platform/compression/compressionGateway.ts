@@ -22,7 +22,21 @@ export interface CompressionEnvelopeRequest {
 }
 
 export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; }
-export interface CompressionResult { jobId: string; outputPath: string; outputBytes: number; width: number; height: number; format: string; }
+export type CompressionResultStatus = "completed" | "skipped";
+export interface CompressionResult {
+  jobId: string;
+  outputPath: string;
+  status: CompressionResultStatus;
+  skippedReason: string | null;
+  inputBytes: number;
+  outputBytes: number;
+  savedBytes: number;
+  savingsPercent: number;
+  width: number;
+  height: number;
+  format: string;
+  lossless: boolean;
+}
 export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; }
 
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
