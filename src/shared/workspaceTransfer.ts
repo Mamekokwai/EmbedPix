@@ -12,7 +12,7 @@ export interface ImageWorkspaceSnapshot { type: "image"; parameters: ImageConver
 export interface GifWorkspaceSnapshot { type: "gif"; parameters: GifMakerPreferences; outputLocation: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string; sources: WorkspaceSource[]; frames: WorkspaceFrame[]; }
 export type WorkspaceSnapshot = ImageWorkspaceSnapshot | GifWorkspaceSnapshot;
 export interface WorkspaceTransferDocument { schema: typeof WORKSPACE_SCHEMA; version: typeof WORKSPACE_VERSION; workspaces: WorkspaceSnapshot[]; }
-export interface WorkspaceRestoreIssue { workspaceIndex: number; kind: "missing-path" | "unrecoverable-field"; path?: string; field?: string; message: string; }
+export interface WorkspaceRestoreIssue { workspaceIndex: number; kind: "missing-path" | "frame-metadata-mismatch" | "unrecoverable-field"; path?: string; field?: string; message: string; }
 export interface WorkspaceRestoreResult { workspaces: WorkspaceSnapshot[]; issues: WorkspaceRestoreIssue[]; }
 
 const IMAGE_PARAMETER_KEYS = ["defaultOutputFormat", "defaultJpegQuality", "defaultBitDepth", "defaultByteOrder", "defaultChannelOrder", "defaultRowOrder", "defaultRowAlignment", "defaultCArrayName", "defaultBackgroundColor", "keepAspectRatio"] as const;
@@ -71,6 +71,7 @@ export function importWorkspaceSnapshot(serialized: string): WorkspaceRestoreRes
       const snapshot = item.type === "gif" ? { ...item, sources, frames: Array.isArray(item.frames) ? item.frames.map(validateFrame) : [] } : { ...item, sources };
       workspaces.push(snapshot as WorkspaceSnapshot);
       sources.forEach((source, sourceIndex) => { if (source.path.startsWith("/missing/") || source.path.startsWith("missing:")) issues.push({ workspaceIndex, kind: "missing-path", path: source.path, message: `source ${sourceIndex + 1} path may no longer exist` }); });
+      if (item.type === "gif" && Array.isArray(item.frames) && item.frames.length !== sources.length) issues.push({ workspaceIndex, kind: "frame-metadata-mismatch", message: `GIF frame metadata count (${item.frames.length}) does not match source count (${sources.length})` });
     } catch (error) { issues.push({ workspaceIndex, kind: "unrecoverable-field", field: "workspace", message: error instanceof Error ? error.message : String(error) }); }
   });
   return { workspaces, issues };

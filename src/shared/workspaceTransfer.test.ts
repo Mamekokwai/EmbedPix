@@ -22,4 +22,9 @@ describe("workspace transfer", () => {
     const restored = importWorkspaceSnapshot(exportWorkspaceSnapshot([{ ...image, sources: [{ ...image.sources[0], path: "missing:E:\\old.png" }] }]));
     expect(restored.workspaces).toHaveLength(1); expect(restored.issues[0]).toMatchObject({ kind: "missing-path" });
   });
+  it("reports GIF frame metadata mismatches without discarding the workspace", () => {
+    const restored = importWorkspaceSnapshot(exportWorkspaceSnapshot([{ ...gif, frames: [] }]));
+    expect(restored.workspaces).toHaveLength(1);
+    expect(restored.issues).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "frame-metadata-mismatch" })]));
+  });
 });
