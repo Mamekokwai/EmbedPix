@@ -67,6 +67,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [items, setItems] = useState<CompressionItem[]>([]);
   const [format, setFormat] = useState<CompressionFormat>("webp");
   const [quality, setQuality] = useState(82);
+  const [pngOptimizationLevel, setPngOptimizationLevel] = useState(2);
   const [targetSizeKiB, setTargetSizeKiB] = useState("");
   const [lossless, setLossless] = useState(false);
   const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicy>("strip");
@@ -105,6 +106,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     format,
     quality,
     lossless,
+    pngOptimizationLevel,
     metadataPolicy,
     outputLocation,
     outputSubdirectory: outputLocation === "subfolder" ? outputSubdirectory.trim() || undefined : undefined,
@@ -112,7 +114,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     overwrite,
     maxOutputBytes,
     maxCandidates: maxOutputBytes ? 8 : undefined,
-  }), [format, quality, lossless, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, overwrite, maxOutputBytes]);
+  }), [format, quality, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, overwrite, maxOutputBytes]);
 
   const outputLocationError = useMemo(() => getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, !isTauriEnvironment() || (items.length > 0 && items.every((item) => Boolean(item.sourcePath)))), [items, outputDirectory, outputLocation, outputSubdirectory]);
   const actualSavedBytes = resultStats.savedBytes;
@@ -440,6 +442,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <aside className="compression-card compression-settings-card">
           <div className="compression-card-heading"><div><span className="compression-card-kicker">02 / OPTIONS</span><h2>压缩参数</h2></div></div>
           <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => { const nextFormat = event.target.value as CompressionFormat; setFormat(nextFormat); if (nextFormat === "jpg") setLossless(false); }} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label className="compression-field"><span>PNG 优化级别</span><select value={pngOptimizationLevel} onChange={(event) => setPngOptimizationLevel(Number(event.target.value))} disabled={busy || format !== "png"}>{[0, 1, 2, 3, 4, 5, 6].map((level) => <option key={level} value={level}>{level}</option>)}</select><small className="compression-field-hint">{format === "png" ? "0 最快，6 压缩更积极；默认 2" : "仅 PNG 有效，当前格式不可用"}</small></label>
           <label className="compression-field"><span className="compression-label-row"><span>质量（仅 JPEG）</span><strong>{format === "jpg" ? quality : "—"}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => setQuality(Number(event.target.value))} disabled={busy || lossless || format !== "jpg"} /></label>
           <label className="compression-check"><input type="checkbox" checked={lossless} onChange={(event) => setLossless(event.target.checked)} disabled={busy || format === "jpg"} /><span><strong>PNG/WebP 无损模式</strong><small>{format === "jpg" ? "JPEG 不支持无损模式" : format === "webp" ? "当前核心 WebP 编码固定为无损" : "PNG 编码天然无损"}</small></span></label>
           <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（仅 JPEG）</span><strong>{format === "jpg" && targetSizeKiB ? `${targetSizeKiB} KiB` : "—"}</strong></span><input type="number" min="1" max={MAX_TARGET_SIZE_KIB} step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="留空：不设目标" disabled={busy || format !== "jpg"} aria-invalid={Boolean(targetSizeError)} /><small className="compression-field-hint">{format === "jpg" ? `可选，核心最多尝试 8 个质量候选（1–${MAX_TARGET_SIZE_KIB.toLocaleString()} KiB）` : "PNG 和无损 WebP 不支持目标体积控制"}</small></label>

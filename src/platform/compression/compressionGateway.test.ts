@@ -13,6 +13,7 @@ const request = {
   overwriteExisting: false,
   jpegQuality: 82,
   lossless: true,
+  pngOptimizationLevel: 2,
   metadataPolicy: "strip" as const,
   jobId: "compression-test",
 };
@@ -32,7 +33,11 @@ describe("compression gateway", () => {
     expect(Array.from(encoded.slice(0, 4))).toEqual([0x45, 0x47, 0x46, 0x31]);
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
-    expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip" });
+    expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip", pngOptimizationLevel: 2 });
+  });
+
+  it("rejects PNG optimization levels outside the native contract", () => {
+    expect(() => encodeCompressionEnvelope({ ...request, pngOptimizationLevel: 7 })).toThrow("pngOptimizationLevel");
   });
 
   it("passes JPEG target-size candidates through raw metadata", () => {

@@ -4,7 +4,7 @@ import { estimateFallback, filterCompressionFiles, getCompressionOutputLocationE
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
     const file = new File([new Uint8Array(1000)], "a.png", { type: "image/png" });
-    expect(estimateFallback([{ id: "a", file, size: 1000 }], { format: "webp", quality: 80, lossless: false, metadataPolicy: "strip", outputLocation: "source", overwrite: false }).estimatedBytes).toBeLessThan(1000);
+    expect(estimateFallback([{ id: "a", file, size: 1000 }], { format: "webp", quality: 80, lossless: false, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", overwrite: false }).estimatedBytes).toBeLessThan(1000);
   });
 
   it("filters unsupported files", () => {

@@ -84,6 +84,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("最大输出体积（仅 JPEG）");
     expect(compressionView).toContain("maxCandidates: maxOutputBytes ? 8 : undefined");
     expect(compressionView).toContain("selectedQuality");
+    expect(compressionView).toContain("PNG 优化级别");
+    expect(compressionView).toContain("pngOptimizationLevel");
     expect(compressionCss).toContain(".compression-preview-grid");
     expect(compressionView).toContain("同名目标会拒绝写入");
     expect(compressionCss).toContain(".compression-progress");

@@ -19,6 +19,7 @@ export interface CompressionEnvelopeRequest {
   overwriteExisting: boolean;
   jpegQuality: number;
   lossless: boolean;
+  pngOptimizationLevel: number;
   maxOutputBytes?: number;
   maxCandidates?: number;
   metadataPolicy: MetadataPolicy;
@@ -71,6 +72,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     overwriteExisting: request.overwriteExisting,
     jpegQuality: request.jpegQuality,
     lossless: request.lossless,
+    pngOptimizationLevel: request.pngOptimizationLevel,
     ...(request.maxOutputBytes ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates ? { maxCandidates: request.maxCandidates } : {}),
     metadataPolicy: "strip",
@@ -80,6 +82,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
 
 export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): Uint8Array {
   if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
+  if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
   if ((request.outputLocation === "source" || request.outputLocation === "subfolder") && !request.sourcePath) throw new Error("源文件夹输出需要源文件路径。");
   if (request.outputLocation === "subfolder" && !request.outputSubdirectory) throw new Error("源文件夹子目录不能为空。");
   if (request.outputLocation === "directory" && !request.outputDirectory) throw new Error("指定目录输出需要目录路径。");
@@ -115,6 +118,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     overwriteExisting: options.overwrite,
     jpegQuality: options.quality,
     lossless: options.lossless,
+    pngOptimizationLevel: options.pngOptimizationLevel,
     maxOutputBytes: options.maxOutputBytes,
     maxCandidates: options.maxCandidates,
     metadataPolicy: options.metadataPolicy,
