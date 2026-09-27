@@ -1440,6 +1440,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
       let importedCount = 0;
       if (bundle.sourceKind === "video") {
+        setSourceMode("video");
         setError(`视频源“${bundle.sourceMetadata?.fileName ?? bundle.sourcePaths[0] ?? "未知文件"}”不会被当作图片读取，请重新导入视频。`);
       } else if (bundle.sourcePaths.length && isTauriEnvironment()) {
         const nativeFiles = await Promise.all(bundle.sourcePaths.map((path) => readImageFile(path)));
