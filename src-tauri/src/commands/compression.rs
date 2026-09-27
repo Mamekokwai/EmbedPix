@@ -109,6 +109,8 @@ struct CompressionMetadata {
     #[serde(default)]
     max_candidates: Option<usize>,
     #[serde(default)]
+    png_optimization_level: Option<u8>,
+    #[serde(default)]
     metadata_policy: MetadataPolicy,
     #[serde(default)]
     job_id: Option<String>,
@@ -122,6 +124,7 @@ struct CompressionRequest {
     lossless: bool,
     target_bytes: Option<u64>,
     max_candidates: usize,
+    png_optimization_level: u8,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -462,7 +465,14 @@ fn choose_encoded_output(
 ) -> Result<EncodedSelection, String> {
     let quality = request.metadata.jpeg_quality.unwrap_or(82);
     let Some(target_bytes) = request.target_bytes else {
-        let bytes = encode_and_verify(&request.input, request.format, quality, width, height)?;
+        let bytes = encode_and_verify(
+            &request.input,
+            request.format,
+            quality,
+            request.png_optimization_level,
+            width,
+            height,
+        )?;
         return Ok(EncodedSelection {
             bytes,
             selected_quality: (request.format == CompressionFormat::Jpeg).then_some(quality),
@@ -472,7 +482,14 @@ fn choose_encoded_output(
     };
 
     if request.format != CompressionFormat::Jpeg {
-        let bytes = encode_and_verify(&request.input, request.format, quality, width, height)?;
+        let bytes = encode_and_verify(
+            &request.input,
+            request.format,
+            quality,
+            request.png_optimization_level,
+            width,
+            height,
+        )?;
         return Ok(EncodedSelection {
             target_met: (bytes.len() as u64) <= target_bytes,
             skipped_reason: ((bytes.len() as u64) > target_bytes).then_some(
@@ -501,7 +518,14 @@ fn choose_encoded_output(
             break;
         }
         candidates.push(candidate);
-        let bytes = encode_and_verify(&request.input, request.format, candidate, width, height)?;
+        let bytes = encode_and_verify(
+            &request.input,
+            request.format,
+            candidate,
+            request.png_optimization_level,
+            width,
+            height,
+        )?;
         if smallest
             .as_ref()
             .is_none_or(|(_, current)| bytes.len() < current.len())
@@ -533,10 +557,11 @@ fn encode_and_verify(
     input: &[u8],
     format: CompressionFormat,
     quality: u8,
+    png_optimization_level: u8,
     width: u32,
     height: u32,
 ) -> Result<Vec<u8>, String> {
-    let bytes = encode_image(input, format, quality)?;
+    let bytes = encode_image(input, format, quality, png_optimization_level)?;
     if bytes.len() > MAX_OUTPUT_BYTES {
         return Err("compressed output exceeds the 128 MiB limit".into());
     }
@@ -587,7 +612,12 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
     })
 }
 
-fn encode_image(input: &[u8], format: CompressionFormat, quality: u8) -> Result<Vec<u8>, String> {
+fn encode_image(
+    input: &[u8],
+    format: CompressionFormat,
+    quality: u8,
+    png_optimization_level: u8,
+) -> Result<Vec<u8>, String> {
     let image = decode_image(input)?;
     let mut output = LimitedWriter {
         bytes: Vec::new(),
@@ -597,9 +627,17 @@ fn encode_image(input: &[u8], format: CompressionFormat, quality: u8) -> Result<
         CompressionFormat::Jpeg => JpegEncoder::new_with_quality(&mut output, quality)
             .encode_image(&image.to_rgb8())
             .map_err(|error| format!("failed to encode jpeg: {error}"))?,
-        CompressionFormat::Png => image
-            .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::Png)
-            .map_err(|error| format!("failed to encode png: {error}"))?,
+        CompressionFormat::Png => {
+            image
+                .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::Png)
+                .map_err(|error| format!("failed to encode png: {error}"))?;
+            let optimized = oxipng::optimize_from_memory(
+                &output.bytes,
+                &oxipng::Options::from_preset(png_optimization_level),
+            )
+            .map_err(|error| format!("failed to optimize png: {error}"))?;
+            output.bytes = optimized;
+        }
         // image 0.24 exposes lossless WebP only; a quality-controlled WebP backend can be added later.
         CompressionFormat::Webp => image
             .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::WebP)
@@ -730,6 +768,10 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
             "maxCandidates must be between 1 and {MAX_CANDIDATES}"
         ));
     }
+    let png_optimization_level = metadata.png_optimization_level.unwrap_or(2);
+    if png_optimization_level > 6 {
+        return Err("pngOptimizationLevel must be between 0 and 6".into());
+    }
     if matches!(format, CompressionFormat::Jpeg) && lossless {
         return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
     }
@@ -761,6 +803,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
         lossless,
         target_bytes,
         max_candidates,
+        png_optimization_level,
     })
 }
 
@@ -915,11 +958,36 @@ mod tests {
             CompressionFormat::Jpeg,
             CompressionFormat::Webp,
         ] {
-            let output = encode_image(&input, format, 80).unwrap();
+            let output = encode_image(&input, format, 80, 2).unwrap();
             assert!(!output.is_empty());
             assert!(decode_image(&output).is_ok());
         }
         assert!(decode_image(b"bad").is_err());
+    }
+
+    #[test]
+    fn png_optimization_preserves_alpha_and_rgba_pixels_at_all_levels() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_fn(3, 2, |x, y| {
+            Rgba([
+                (x * 80 + y * 17) as u8,
+                (y * 100 + x * 11) as u8,
+                220,
+                if x == 1 { 64 } else { 255 },
+            ])
+        }));
+        let expected = image.to_rgba8().into_raw();
+        let mut input = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut input), ImageOutputFormat::Png)
+            .unwrap();
+        for level in 0..=6 {
+            let output = encode_image(&input, CompressionFormat::Png, 80, level).unwrap();
+            let actual = decode_image(&output).unwrap().to_rgba8().into_raw();
+            assert_eq!(
+                actual, expected,
+                "PNG optimization level {level} changed pixels"
+            );
+        }
     }
     #[test]
     fn validates_quality_and_metadata_policy() {
@@ -961,6 +1029,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: None,
                 max_candidates: None,
+                png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("skip-test".into()),
             },
@@ -969,6 +1038,7 @@ mod tests {
             lossless: true,
             target_bytes: None,
             max_candidates: DEFAULT_MAX_CANDIDATES,
+            png_optimization_level: 2,
         };
         let job = Arc::new(CompressionJob {
             cancelled: AtomicBool::new(false),
@@ -997,7 +1067,7 @@ mod tests {
     #[test]
     fn jpeg_target_search_returns_highest_quality_candidate_within_bound() {
         let input = png_input();
-        let target = encode_image(&input, CompressionFormat::Jpeg, 50)
+        let target = encode_image(&input, CompressionFormat::Jpeg, 50, 2)
             .unwrap()
             .len() as u64;
         let request = CompressionRequest {
@@ -1016,6 +1086,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
                 max_candidates: Some(MAX_CANDIDATES),
+                png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
             },
@@ -1024,6 +1095,7 @@ mod tests {
             lossless: false,
             target_bytes: Some(target),
             max_candidates: MAX_CANDIDATES,
+            png_optimization_level: 2,
         };
         let selection = choose_encoded_output(&request, 2, 2).unwrap();
         assert!(selection.target_met);
@@ -1050,6 +1122,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: Some(1),
                 max_candidates: Some(DEFAULT_MAX_CANDIDATES),
+                png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
             },
@@ -1058,6 +1131,7 @@ mod tests {
             lossless: true,
             target_bytes: Some(1),
             max_candidates: DEFAULT_MAX_CANDIDATES,
+            png_optimization_level: 2,
         };
         let selection = choose_encoded_output(&request, 2, 2).unwrap();
         assert!(!selection.target_met);
@@ -1099,6 +1173,15 @@ mod tests {
         assert!(parse_raw_payload(&oversized)
             .unwrap_err()
             .contains("metadata"));
+        let invalid_metadata =
+            br#"{"fileName":"sample.png","outputFormat":"png","pngOptimizationLevel":7}"#;
+        let mut invalid_level = Vec::from(*b"EGF1");
+        invalid_level.extend_from_slice(&(invalid_metadata.len() as u32).to_le_bytes());
+        invalid_level.extend_from_slice(invalid_metadata);
+        invalid_level.extend_from_slice(&png_input());
+        assert!(parse_raw_payload(&invalid_level)
+            .unwrap_err()
+            .contains("pngOptimizationLevel"));
     }
     #[test]
     fn cancellation_checkpoint_is_observable() {
