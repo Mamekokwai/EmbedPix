@@ -444,3 +444,11 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] Tauri 静态图片源恢复、浏览器降级提示和失败不覆盖完成
 
 证据：基于 `1ea4c08`、`a7c5f47`、`e7f6c31`、`21e9905`、`ba9699f`、`57371eb`、`c524fdd`；本次发布前重新执行 npm/Rust 完整门禁，发布后继续核验 7 项资产、latest.json、provenance、SHA256SUMS 和 x64/ARM64 minisign 验签。已有版本标签不移动、不重写。
+
+## 0.6.1 发布验收
+
+- [x] GIF 工作区帧元数据 mismatch 报告完成
+- [x] 窄窗口布局优化完成
+- [x] 安装器启动失败清理 health marker 完成
+
+证据：基于 `acb29b8`、`9ead095`、`c933967`；本次发布前执行版本一致性与完整门禁，发布后继续核验 7 项资产、latest.json、provenance、SHA256SUMS 和 x64/ARM64 minisign 验签。已有版本标签不移动、不重写。
