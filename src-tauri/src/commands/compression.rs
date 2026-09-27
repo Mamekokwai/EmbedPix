@@ -31,6 +31,7 @@ const MAX_IMAGE_DIMENSION: u32 = 8_192;
 const MAX_IMAGE_PIXELS: u64 = 16_777_216;
 const MAX_DECODER_ALLOC_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 64 * 1024;
+const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -187,6 +188,17 @@ pub struct CompressionPreflight {
     pub lossless: bool,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressionPreview {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub format: String,
+    pub output_bytes: u64,
+    pub lossless: bool,
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPreflight, String> {
     let request = parse_request(request)?;
@@ -201,6 +213,14 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
         lossless: request.lossless,
         output_path: output_path.to_string_lossy().into_owned(),
     })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn preview_compression(request: Request<'_>) -> Result<CompressionPreview, String> {
+    let request = parse_request(request)?;
+    tauri::async_runtime::spawn_blocking(move || run_preview(&request))
+        .await
+        .map_err(|error| format!("compression preview task failed: {error}"))?
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -413,6 +433,34 @@ fn compression_statistics(input_bytes: u64, output_bytes: u64) -> (i64, f64) {
     )
 }
 
+fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, String> {
+    let (width, height) = inspect_image(&request.input)?;
+    let data = encode_image(
+        &request.input,
+        request.format,
+        request.metadata.jpeg_quality.unwrap_or(82),
+    )?;
+    if data.len() > MAX_PREVIEW_BYTES {
+        return Err(format!(
+            "compressed preview exceeds the {} MiB limit",
+            MAX_PREVIEW_BYTES / (1024 * 1024)
+        ));
+    }
+    let verified = decode_image(&data)?;
+    if verified.dimensions() != (width, height) {
+        return Err("compressed preview dimensions do not match the source image".into());
+    }
+    let output_bytes = data.len() as u64;
+    Ok(CompressionPreview {
+        data,
+        width,
+        height,
+        format: request.format.name().into(),
+        output_bytes,
+        lossless: request.lossless,
+    })
+}
+
 fn encode_image(input: &[u8], format: CompressionFormat, quality: u8) -> Result<Vec<u8>, String> {
     let image = decode_image(input)?;
     let mut output = LimitedWriter {
@@ -501,6 +549,10 @@ fn parse_request(request: Request<'_>) -> Result<CompressionRequest, String> {
         InvokeBody::Raw(bytes) => bytes,
         _ => return Err("compression commands require a raw binary IPC request".into()),
     };
+    parse_raw_payload(body)
+}
+
+fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     if body.len() < 8 {
         return Err("compression request is truncated".into());
     }
@@ -796,6 +848,40 @@ mod tests {
     fn compression_statistics_are_signed_for_larger_outputs() {
         assert_eq!(compression_statistics(100, 80), (20, 20.0));
         assert_eq!(compression_statistics(100, 120), (-20, -20.0));
+    }
+
+    #[test]
+    fn preview_accepts_egf1_payload_and_never_publishes_output() {
+        let target = crate::commands::test_temp_dir().join(format!(
+            "embedpix-compression-preview-{}.png",
+            uuid_like_id()
+        ));
+        let metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"png\",\"outputPath\":\"{}\",\"lossless\":true}}",
+            target.to_string_lossy().replace('\\', "/")
+        );
+        let input = png_input();
+        let mut payload = Vec::from(*b"EGF1");
+        payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
+        payload.extend_from_slice(metadata.as_bytes());
+        payload.extend_from_slice(&input);
+        let request = parse_raw_payload(&payload).unwrap();
+        let preview = run_preview(&request).unwrap();
+        assert_eq!((preview.width, preview.height), (2, 2));
+        assert_eq!(preview.output_bytes, preview.data.len() as u64);
+        assert!(preview.lossless);
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn preview_rejects_invalid_raw_payload_without_touching_disk() {
+        assert!(parse_raw_payload(b"BAD\x00\x00\x00\x00").is_err());
+        let mut oversized = Vec::from(*b"EGF1");
+        oversized.extend_from_slice(&((MAX_METADATA_BYTES as u32) + 1).to_le_bytes());
+        oversized.resize(8 + MAX_METADATA_BYTES + 1, 0);
+        assert!(parse_raw_payload(&oversized)
+            .unwrap_err()
+            .contains("metadata"));
     }
     #[test]
     fn cancellation_checkpoint_is_observable() {

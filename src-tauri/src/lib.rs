@@ -36,6 +36,7 @@ pub fn run() {
             commands::export_image::read_image_file,
             commands::compression::compress_image,
             commands::compression::preflight_compression,
+            commands::compression::preview_compression,
             commands::compression::cancel_compression,
             commands::compression::get_compression_progress,
             commands::export_preflight::preflight_image_exports,
