@@ -1,6 +1,7 @@
 @import url("./styles/tokens.css");
 @import url("./styles/app-shell.css");
 @import url("./styles/features/image-converter.css");
+@import url("./styles/features/image-compression.css");
 @import url("./styles/features/settings.css");
 @import url("./styles/components/theme-select.css");
 @import url("./styles/features/about.css");

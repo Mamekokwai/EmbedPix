@@ -4,10 +4,12 @@ import {
   Info,
   Images,
   Menu,
+  Minimize2,
   Settings2,
 } from "lucide-react";
 import AppTitleBar from "./AppTitleBar";
 import ImageConverter from "../features/image-converter/ImageConverter";
+import ImageCompressionView from "../features/image-compression/ImageCompressionView";
 import GifMakerView from "../features/gif-maker/GifMakerView";
 import AboutView from "../features/about/AboutView";
 import SettingsView from "../features/settings/SettingsView";
@@ -23,10 +25,11 @@ import {
   type ThemeMode,
 } from "../platform/preferences/appPreferences";
 
-type AppView = "converter" | "gif" | "settings" | "about";
+type AppView = "converter" | "compression" | "gif" | "settings" | "about";
 
 const NAV_ITEMS: ReadonlyArray<{ id: AppView; label: string; hint: string; icon: typeof Images }> = [
   { id: "converter", label: "图片转换", hint: "导入、调整并导出", icon: Images },
+  { id: "compression", label: "图片压缩", hint: "批量降低图片体积", icon: Minimize2 },
   { id: "gif", label: "GIF 制作", hint: "图片序列制作动画", icon: Film },
   { id: "settings", label: "设置", hint: "外观与默认参数", icon: Settings2 },
   { id: "about", label: "关于", hint: "版本与项目信息", icon: Info },
@@ -154,7 +157,7 @@ export default function AppShell() {
           </div>
         </aside>
 
-        <main className={`app-main${view === "gif" ? " app-main-gif" : ""}`}>
+        <main className={`app-main${view === "gif" ? " app-main-gif" : ""}${view === "compression" ? " app-main-compression" : ""}`}>
           <div className="app-kept-view" hidden={view !== "converter"}>
             <ImageConverter
               active={view === "converter"}
@@ -172,6 +175,9 @@ export default function AppShell() {
           </div>
           <div className="app-kept-view app-kept-gif" hidden={view !== "gif"}>
             <GifMakerView active={view === "gif"} />
+          </div>
+          <div className="app-kept-view app-kept-compression" hidden={view !== "compression"}>
+            <ImageCompressionView active={view === "compression"} />
           </div>
           {view === "settings" ? (
             <SettingsView

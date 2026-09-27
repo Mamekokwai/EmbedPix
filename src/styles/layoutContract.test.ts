@@ -7,8 +7,11 @@ function readSource(url: URL): string {
 
 const gifCss = readSource(new URL("./features/gif-maker.css", import.meta.url));
 const converterCss = readSource(new URL("./features/image-converter.css", import.meta.url));
+const compressionCss = readSource(new URL("./features/image-compression.css", import.meta.url));
 const gifView = readSource(new URL("../features/gif-maker/GifMakerView.tsx", import.meta.url));
 const converterView = readSource(new URL("../features/image-converter/ImageConverter.tsx", import.meta.url));
+const compressionView = readSource(new URL("../features/image-compression/ImageCompressionView.tsx", import.meta.url));
+const appShell = readSource(new URL("../app/AppShell.tsx", import.meta.url));
 const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
 
 const VIEWPORT_MATRIX = [
@@ -36,6 +39,9 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".converter-app {\n  width: min(1180px, 100%);");
     expect(converterCss).toContain("overflow-x: hidden;");
     expect(converterCss).toContain(".preview-content { min-height: 210px; }");
+    expect(compressionCss).toContain(".compression-app {\n  width: min(1180px, 100%);");
+    expect(compressionCss).toContain("overflow-x: hidden;");
+    expect(compressionCss).toContain("@media (max-width: 520px)");
     expect(themeSelectCss).toContain(".theme-select-option:focus-visible");
   });
 
@@ -60,6 +66,16 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("setSourceMode(\"video\")");
     expect(gifView).toContain("选择视频");
     expect(converterView).toContain("export-progress-panel");
+  });
+
+  it("keeps the compression workbench wired into navigation and busy guards", () => {
+    expect(appShell).toContain('id: "compression"');
+    expect(compressionView).toContain("导入文件夹");
+    expect(compressionView).toContain("重试失败项");
+    expect(compressionView).toContain("aria-live=\"polite\"");
+    expect(compressionView).toContain("disabled={busy}");
+    expect(compressionView).toContain("当前浏览器预览仅支持编辑参数和估算大小");
+    expect(compressionCss).toContain(".compression-progress");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {

@@ -1,0 +1,313 @@
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
+import "../../styles/features/image-compression.css";
+import { cancelCompression, compressImage, createCompressionRequest, getCompressionProgress, pickCompressionDirectory, pickCompressionFiles, preflightCompression } from "../../platform/compression/compressionGateway";
+import { isTauriEnvironment } from "../../platform/image/imageExportGateway";
+import type { NativeImageFile } from "../../platform/image/imageExportGateway";
+import {
+  COMPRESSION_FORMATS,
+  estimateFallback,
+  filterCompressionFiles,
+  formatCompressionBytes,
+} from "./imageCompressionLogic";
+import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionOptions, MetadataPolicy } from "./types";
+
+type CompressionStatus = "idle" | "ready" | "busy" | "success" | "error";
+
+interface ImageCompressionViewProps {
+  active?: boolean;
+}
+
+function fileTypeForPath(path: string): string {
+  const extension = path.split(".").pop()?.toLowerCase();
+  return extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension ? `image/${extension}` : "application/octet-stream";
+}
+
+function nativeFileToItem(nativeFile: NativeImageFile): CompressionItem {
+  const file = new File([new Uint8Array(nativeFile.data)], nativeFile.fileName, { type: fileTypeForPath(nativeFile.fileName) });
+  return { id: `${nativeFile.path}-${file.size}`, file, sourcePath: nativeFile.path, size: file.size };
+}
+
+function toBrowserItems(files: File[]): CompressionItem[] {
+  return filterCompressionFiles(files).map((file, index) => ({
+    id: `${file.name}-${file.lastModified}-${file.size}-${index}`,
+    file,
+    size: file.size,
+  }));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export default function ImageCompressionView({ active = true }: ImageCompressionViewProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [items, setItems] = useState<CompressionItem[]>([]);
+  const [format, setFormat] = useState<CompressionFormat>("webp");
+  const [quality, setQuality] = useState(82);
+  const [lossless, setLossless] = useState(false);
+  const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicy>("strip");
+  const [outputDirectory, setOutputDirectory] = useState("");
+  const [overwrite, setOverwrite] = useState(false);
+  const [status, setStatus] = useState<CompressionStatus>("idle");
+  const [dragging, setDragging] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [stage, setStage] = useState("");
+  const [estimate, setEstimate] = useState<CompressionEstimate>({ inputBytes: 0, estimatedBytes: 0, savingsPercent: 0 });
+  const [estimateNote, setEstimateNote] = useState("等待导入图片");
+  const [message, setMessage] = useState("");
+  const [failures, setFailures] = useState<string[]>([]);
+  const activeJobIdRef = useRef<string | null>(null);
+
+  const busy = status === "busy";
+  const options = useMemo<CompressionOptions>(() => ({
+    format,
+    quality,
+    lossless,
+    metadataPolicy,
+    outputDirectory: outputDirectory.trim() || undefined,
+    overwrite,
+  }), [format, quality, lossless, metadataPolicy, outputDirectory, overwrite]);
+
+  useEffect(() => {
+    if (!active) return;
+    const fallback = estimateFallback(items, options);
+    setEstimate(fallback);
+    setEstimateNote(items.length === 0 ? "等待导入图片" : "本地预估，执行前由原生预检复核");
+  }, [active, items, options]);
+
+  const addBrowserFiles = (files: File[]) => {
+    const next = toBrowserItems(files);
+    if (next.length === 0) {
+      setMessage("没有找到支持的图片格式（PNG、JPEG、WebP、BMP、GIF）。");
+      setStatus("error");
+      return;
+    }
+    setItems((current) => {
+      const existing = new Set(current.map((item) => item.id));
+      return [...current, ...next.filter((item) => !existing.has(item.id))];
+    });
+    setMessage("");
+    setFailures([]);
+    setStatus("ready");
+  };
+
+  const importNativeFiles = async (nativeFiles: NativeImageFile[]) => {
+    const imported: CompressionItem[] = [];
+    const skipped: string[] = [];
+    for (const nativeFile of nativeFiles) {
+      try {
+        imported.push(nativeFileToItem(nativeFile));
+      } catch {
+        skipped.push(nativeFile.fileName);
+      }
+    }
+    if (imported.length > 0) {
+      setItems((current) => [...current, ...imported]);
+      setStatus("ready");
+    }
+    if (skipped.length > 0) {
+      setMessage(`有 ${skipped.length} 个文件读取失败，已跳过。`);
+      setFailures(skipped);
+      setStatus(imported.length > 0 ? "ready" : "error");
+    }
+  };
+
+  const chooseFiles = async () => {
+    if (busy) return;
+    if (!isTauriEnvironment()) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      await importNativeFiles(await pickCompressionFiles());
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
+  };
+
+  const chooseDirectory = async () => {
+    if (busy) return;
+    if (!isTauriEnvironment()) {
+      setMessage("导入文件夹仅在桌面应用中可用；当前预览环境可使用“选择图片”后多选文件。");
+      setStatus("error");
+      return;
+    }
+    try {
+      await importNativeFiles(await pickCompressionDirectory());
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    addBrowserFiles(Array.from(event.target.files ?? []));
+    event.target.value = "";
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    if (!busy) addBrowserFiles(Array.from(event.dataTransfer.files));
+  };
+
+  const monitorCompressionProgress = async (jobId: string) => {
+    while (activeJobIdRef.current === jobId) {
+      try {
+        const next = await getCompressionProgress(jobId);
+        setStage(next.stage);
+        if (next.error) setMessage(next.error);
+      } catch {
+        return;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 160));
+    }
+  };
+
+  const cancelActiveCompression = async () => {
+    const jobId = activeJobIdRef.current;
+    if (!jobId) return;
+    setMessage("正在取消当前压缩任务…");
+    try {
+      await cancelCompression(jobId);
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  };
+
+  const runCompression = async () => {
+    if (busy || items.length === 0) return;
+    if (!isTauriEnvironment()) {
+      setMessage("压缩需要桌面应用的原生命令；当前浏览器预览仅支持编辑参数和估算大小。");
+      setStatus("error");
+      return;
+    }
+    if (items.some((item) => !item.sourcePath)) {
+      setMessage("当前列表包含浏览器导入文件，请在桌面应用中重新选择图片后执行压缩。");
+      setStatus("error");
+      return;
+    }
+    setStatus("busy");
+    setMessage("");
+    setStage("preflight");
+    const queue = failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : items;
+    setFailures([]);
+    setProgress({ current: 0, total: queue.length });
+    let currentIndex = 0;
+    try {
+      for (const [index, item] of queue.entries()) {
+        currentIndex = index;
+        const jobId = `compression-${Date.now()}-${index}`;
+        const nativeFile: NativeImageFile = { path: item.sourcePath as string, fileName: item.file.name, data: Array.from(new Uint8Array(await item.file.arrayBuffer())) };
+        const request = createCompressionRequest(nativeFile, options, jobId);
+        const preflight = await preflightCompression(request);
+        if (preflight.overwritesExisting && !options.overwrite) throw new Error(`输出文件已存在：${preflight.outputPath}`);
+        activeJobIdRef.current = jobId;
+        const progressPoll = monitorCompressionProgress(jobId);
+        await compressImage(request);
+        activeJobIdRef.current = null;
+        await progressPoll;
+        setProgress({ current: index + 1, total: queue.length });
+      }
+      setStatus("success");
+      setStage("completed");
+      setMessage(`已完成 ${queue.length} 个文件的压缩。`);
+    } catch (error) {
+      activeJobIdRef.current = null;
+      setProgress((current) => ({ ...current, current: Math.min(current.current, currentIndex) }));
+      setFailures(queue.slice(currentIndex).map((item) => item.file.name));
+      setStage("failed");
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
+  };
+
+  const removeItem = (id: string) => {
+    if (busy) return;
+    setItems((current) => current.filter((item) => item.id !== id));
+    setStatus(items.length > 1 ? "ready" : "idle");
+  };
+
+  return (
+    <section className="compression-app" aria-label="图片压缩工作台">
+      <header className="compression-header">
+        <div>
+          <p className="compression-kicker">IMAGE COMPRESSION</p>
+          <h1>图片压缩</h1>
+          <p>批量压缩图片体积，保留对嵌入式 UI 有用的格式与参数控制。</p>
+        </div>
+        <div className="compression-header-note"><FileDown size={17} aria-hidden="true" /> 桌面原生队列</div>
+      </header>
+
+      <div className="compression-grid">
+        <div className="compression-card compression-input-card">
+          <div className="compression-card-heading">
+            <div><span className="compression-card-kicker">01 / SOURCE</span><h2>导入图片</h2></div>
+            <span className="compression-count">{items.length} 个文件</span>
+          </div>
+          <div
+            className={`compression-drop-zone${dragging ? " compression-drop-zone-dragging" : ""}${busy ? " compression-drop-zone-disabled" : ""}`}
+            onDragEnter={(event) => { event.preventDefault(); if (!busy) setDragging(true); }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            role="button"
+            tabIndex={busy ? -1 : 0}
+            aria-disabled={busy}
+            onKeyDown={(event) => { if (!busy && (event.key === "Enter" || event.key === " ")) void chooseFiles(); }}
+            onClick={() => { void chooseFiles(); }}
+          >
+            <span className="compression-drop-icon"><Upload size={22} aria-hidden="true" /></span>
+            <strong>拖放图片到这里</strong>
+            <span>或点击选择多个文件</span>
+            <small>支持 PNG / JPEG / WebP / BMP / GIF；输出格式为 PNG / JPEG / WebP</small>
+          </div>
+          <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={busy} />
+          <div className="compression-source-actions">
+            <button type="button" className="compression-secondary-button" onClick={() => { void chooseFiles(); }} disabled={busy}><Images size={15} aria-hidden="true" /> 选择图片</button>
+            <button type="button" className="compression-secondary-button" onClick={() => { void chooseDirectory(); }} disabled={busy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
+          </div>
+          <div className="compression-list" aria-label="待压缩图片列表">
+            {items.length === 0 ? <p className="compression-empty">导入后将在这里显示文件、原始大小与来源。</p> : items.map((item) => (
+              <div className="compression-item" key={item.id}>
+                <div className="compression-item-icon"><Images size={15} aria-hidden="true" /></div>
+                <div className="compression-item-copy"><strong>{item.file.name}</strong><span>{formatCompressionBytes(item.size)}{item.sourcePath ? " · 桌面文件" : " · 浏览器文件"}</span></div>
+                <button type="button" className="compression-icon-button" aria-label={`移除 ${item.file.name}`} onClick={() => removeItem(item.id)} disabled={busy}><Trash2 size={15} aria-hidden="true" /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <aside className="compression-card compression-settings-card">
+          <div className="compression-card-heading"><div><span className="compression-card-kicker">02 / OPTIONS</span><h2>压缩参数</h2></div></div>
+          <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => setFormat(event.target.value as CompressionFormat)} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label className="compression-field"><span className="compression-label-row"><span>质量</span><strong>{quality}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => setQuality(Number(event.target.value))} disabled={busy || lossless} /></label>
+          <label className="compression-check"><input type="checkbox" checked={lossless} onChange={(event) => setLossless(event.target.checked)} disabled={busy} /><span><strong>无损压缩</strong><small>适合图标、UI 线稿和像素边缘</small></span></label>
+          <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（推荐）</option><option value="preserve" disabled>保留元数据（核心待支持）</option></select></label>
+          <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="留空：跟随源文件目录" disabled={busy} /></label>
+          <label className="compression-check"><input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} disabled={busy} /><span><strong>允许覆盖同名文件</strong><small>关闭时由桌面端自动避免覆盖</small></span></label>
+        </aside>
+      </div>
+
+      <section className="compression-card compression-summary-card" aria-live="polite">
+        <div className="compression-summary-stat"><span>原始大小</span><strong>{formatCompressionBytes(estimate.inputBytes)}</strong></div>
+        <div className="compression-summary-stat"><span>预计输出</span><strong>{formatCompressionBytes(estimate.estimatedBytes)}</strong></div>
+        <div className="compression-summary-stat"><span>预计节省</span><strong className="compression-saving">{estimate.savingsPercent.toFixed(0)}%</strong></div>
+        <span className="compression-estimate-note">{estimateNote}</span>
+      </section>
+
+      <footer className="compression-footer">
+        <div className={`compression-status compression-status-${status}`} role={status === "error" ? "alert" : "status"}>
+          {status === "busy" ? <LoaderCircle size={15} className="compression-spin" aria-hidden="true" /> : status === "success" ? <CheckCircle2 size={15} aria-hidden="true" /> : status === "error" ? <AlertCircle size={15} aria-hidden="true" /> : null}
+          <span>{message || (status === "busy" ? `正在处理 ${progress.current}/${progress.total}${stage ? ` · ${stage}` : ""}` : status === "success" ? "任务已完成" : "准备就绪")}</span>
+          {failures.length > 0 && status === "error" ? <button type="button" className="compression-retry-button" onClick={() => { void runCompression(); }} disabled={busy}><RefreshCw size={13} aria-hidden="true" /> 重试失败项</button> : null}
+          {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
+        </div>
+        <div className="compression-progress" aria-label="压缩进度"><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
+        <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
+      </footer>
+    </section>
+  );
+}
