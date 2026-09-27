@@ -313,6 +313,7 @@ export default function ImageConverter({
   const exportCancelRef = useRef(false);
   const exportPauseRef = useRef(false);
   const exportResumeRef = useRef<(() => void) | null>(null);
+  const exportCancelWaitRef = useRef<(() => void) | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const realPreviewUrlRef = useRef<string | null>(null);
@@ -329,8 +330,9 @@ export default function ImageConverter({
       loadIdRef.current += 1;
       exportCancelRef.current = true;
       exportPauseRef.current = false;
-      exportResumeRef.current?.();
+      exportCancelWaitRef.current?.();
       exportResumeRef.current = null;
+      exportCancelWaitRef.current = null;
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
         previewUrlRef.current = null;
@@ -1053,9 +1055,10 @@ export default function ImageConverter({
     }
     exportCancelRef.current = true;
     exportPauseRef.current = false;
-    exportResumeRef.current?.();
+    exportCancelWaitRef.current?.();
     exportResumeRef.current?.();
     exportResumeRef.current = null;
+    exportCancelWaitRef.current = null;
     setExportPaused(false);
     setStatus({ kind: "busy", text: "正在等待当前文件完成，之后将停止队列…" });
   };
@@ -1219,7 +1222,13 @@ export default function ImageConverter({
       }, {
         shouldCancel: () => exportCancelRef.current,
         shouldPause: () => exportPauseRef.current,
-        waitForResume: () => new Promise<void>((resolve) => { exportResumeRef.current = resolve; }),
+        waitForResume: () => new Promise<void>((resolve) => {
+          exportResumeRef.current = resolve;
+          exportCancelWaitRef.current = () => {
+            exportPauseRef.current = false;
+            resolve();
+          };
+        }),
         cancelWaitForResume: () => {
           exportPauseRef.current = false;
           exportResumeRef.current?.();

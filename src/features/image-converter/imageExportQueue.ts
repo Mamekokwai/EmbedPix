@@ -29,6 +29,7 @@ export interface ExportQueueOptions<T> {
   shouldCancel?: () => boolean;
   shouldPause?: () => boolean;
   waitForResume?: () => Promise<void>;
+  cancelWaitForResume?: () => void;
   onProgress?: (progress: ExportQueueProgress<T>) => void;
 }
 

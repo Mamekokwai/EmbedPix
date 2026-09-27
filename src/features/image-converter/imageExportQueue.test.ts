@@ -73,6 +73,27 @@ describe("image export queue", () => {
     expect(result.succeeded).toEqual(items);
   });
 
+  it("allows a paused waiter to be released by cancellation", async () => {
+    let paused = true;
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const exportItem = vi.fn(async () => undefined);
+    const items = [{ file: { name: "first.png" } }];
+    const options = {
+      shouldPause: () => paused,
+      shouldCancel: () => true,
+      waitForResume: () => wait,
+      cancelWaitForResume: () => { paused = false; release(); },
+    };
+    const run = runExportQueue(items, exportItem, options);
+    // The owner of the waiter must release it before cancellation can be observed.
+    expect(exportItem).not.toHaveBeenCalled();
+    options.cancelWaitForResume();
+    const result = await run;
+    expect(result.cancelled).toBe(true);
+    expect(exportItem).not.toHaveBeenCalled();
+  });
+
   it("keeps complete failure filenames and reasons copyable", () => {
     expect(formatExportFailureDetails([
       { fileName: "very-long-image-name.bmp", message: "编码失败" },
