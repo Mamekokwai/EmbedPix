@@ -122,6 +122,16 @@ jobs:
           if(files.length===0) throw new Error('No expected Tauri bundle found in '+dir);
           console.log('Verified Tauri bundle:', files.join(', '));"
 
+      - name: Run compression CLI smoke contract
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          COMPRESSION_SMOKE_REQUIRED: ${{ vars.EMBEDPIX_COMPRESSION_CLI_SMOKE == 'true' }}
+        run: |
+          $smokeParams = @{}
+          if ($env:COMPRESSION_SMOKE_REQUIRED -eq 'true') { $smokeParams.RequireCompression = $true }
+          .\scripts\compression-cli-smoke.ps1 @smokeParams
+
       - name: Run Windows desktop smoke contract
         if: runner.os == 'Windows' && steps.tauri.outputs.available == 'true'
         shell: pwsh
