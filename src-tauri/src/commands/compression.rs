@@ -99,6 +99,8 @@ struct CompressionMetadata {
     jpeg_quality: Option<u8>,
     #[serde(default)]
     lossless: Option<bool>,
+    #[serde(default = "default_skip_if_larger")]
+    skip_if_larger: bool,
     #[serde(default)]
     metadata_policy: MetadataPolicy,
     #[serde(default)]
@@ -161,7 +163,12 @@ impl CompressionJobState {
 pub struct CompressionResult {
     pub job_id: String,
     pub output_path: String,
+    pub status: String,
+    pub skipped_reason: Option<String>,
+    pub input_bytes: u64,
     pub output_bytes: u64,
+    pub saved_bytes: i64,
+    pub savings_percent: f64,
     pub width: u32,
     pub height: u32,
     pub format: String,
@@ -250,7 +257,7 @@ pub fn cancel_compression(
         .map(|progress| {
             matches!(
                 progress.status.as_str(),
-                "completed" | "failed" | "cancelled"
+                "completed" | "skipped" | "failed" | "cancelled"
             )
         })
         .unwrap_or(true);
@@ -304,9 +311,48 @@ fn run_compression(
     if bytes.len() > MAX_OUTPUT_BYTES {
         return fail(job, "compressed output exceeds the 128 MiB limit");
     }
+    let verified = decode_image(&bytes).map_err(|error| {
+        fail_message(
+            job,
+            format!("compressed output failed decode verification: {error}"),
+        )
+    })?;
+    if verified.dimensions() != (width, height) {
+        return fail(
+            job,
+            "compressed output dimensions do not match the source image",
+        );
+    }
     checkpoint(job)?;
-    update_progress(job, "publishing", None, None);
     let output_path = resolve_output_path(request).map_err(|error| fail_message(job, error))?;
+    let input_bytes = request.input.len() as u64;
+    let output_bytes = bytes.len() as u64;
+    let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
+    if request.metadata.skip_if_larger && output_bytes > input_bytes {
+        let skipped_reason =
+            "compressed output is larger than the source; output was not published";
+        update_progress(job, "skipped", None, Some(skipped_reason.to_string()));
+        return Ok(CompressionResult {
+            job_id: job
+                .progress
+                .lock()
+                .map_err(|_| "compression progress is unavailable".to_string())?
+                .job_id
+                .clone(),
+            output_path: output_path.to_string_lossy().into_owned(),
+            status: "skipped".to_string(),
+            skipped_reason: Some(skipped_reason.to_string()),
+            input_bytes,
+            output_bytes,
+            saved_bytes,
+            savings_percent,
+            width,
+            height,
+            format: request.format.name().into(),
+            lossless: request.lossless,
+        });
+    }
+    update_progress(job, "publishing", None, None);
     let source_path = request.metadata.source_path.as_deref();
     write_exported_file(
         &output_path,
@@ -322,7 +368,7 @@ fn run_compression(
         },
     )
     .map_err(|error| fail_message(job, error))?;
-    let output_bytes = fs::metadata(&output_path)
+    let published_output_bytes = fs::metadata(&output_path)
         .map_err(|error| {
             fail_message(job, format!("failed to inspect compressed output: {error}"))
         })?
@@ -335,7 +381,12 @@ fn run_compression(
             .job_id
             .clone(),
         output_path: output_path.to_string_lossy().into_owned(),
-        output_bytes,
+        status: "completed".to_string(),
+        skipped_reason: None,
+        input_bytes,
+        output_bytes: published_output_bytes,
+        saved_bytes,
+        savings_percent,
         width,
         height,
         format: request.format.name().into(),
@@ -343,6 +394,23 @@ fn run_compression(
     };
     update_progress(job, "completed", Some(result.output_path.clone()), None);
     Ok(result)
+}
+
+fn default_skip_if_larger() -> bool {
+    true
+}
+
+fn compression_statistics(input_bytes: u64, output_bytes: u64) -> (i64, f64) {
+    let saved_bytes = input_bytes as i128 - output_bytes as i128;
+    let savings_percent = if input_bytes == 0 {
+        0.0
+    } else {
+        (saved_bytes as f64 / input_bytes as f64) * 100.0
+    };
+    (
+        saved_bytes.clamp(i64::MIN as i128, i64::MAX as i128) as i64,
+        savings_percent,
+    )
 }
 
 fn encode_image(input: &[u8], format: CompressionFormat, quality: u8) -> Result<Vec<u8>, String> {
@@ -605,6 +673,7 @@ fn update_progress(
         progress.stage = stage.to_string();
         progress.status = match stage {
             "completed" => "completed",
+            "skipped" => "skipped",
             "cancelled" => "cancelled",
             "failed" => "failed",
             "cancelling" => "cancelling",
@@ -615,7 +684,7 @@ fn update_progress(
             progress.output_path = output_path;
         }
         progress.error = error;
-        if matches!(stage, "completed" | "cancelled" | "failed") {
+        if matches!(stage, "completed" | "skipped" | "cancelled" | "failed") {
             if let Ok(mut terminal_at) = job.terminal_at.lock() {
                 *terminal_at = Some(Instant::now());
             }
@@ -666,6 +735,67 @@ mod tests {
         assert!(CompressionFormat::parse("bmp").is_err());
         assert!(!(1..=100).contains(&0));
         assert_eq!(MetadataPolicy::default(), MetadataPolicy::Strip);
+    }
+
+    #[test]
+    fn skips_larger_output_without_publishing_and_reports_statistics() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_fn(64, 64, |x, y| {
+            Rgba([
+                (x.wrapping_mul(37) ^ y.wrapping_mul(19)) as u8,
+                (x.wrapping_mul(13) ^ y.wrapping_mul(47)) as u8,
+                (x.wrapping_mul(71) ^ y.wrapping_mul(23)) as u8,
+                255,
+            ])
+        }));
+        let mut input = Vec::new();
+        JpegEncoder::new_with_quality(&mut input, 10)
+            .encode_image(&image.to_rgb8())
+            .unwrap();
+        let output_path = crate::commands::test_temp_dir()
+            .join(format!("embedpix-compression-skip-{}.png", uuid_like_id()));
+        let request = CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "sample.jpg".into(),
+                output_format: "png".into(),
+                output_path: Some(output_path.to_string_lossy().into_owned()),
+                output_location: Some("path".into()),
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                jpeg_quality: None,
+                lossless: Some(true),
+                skip_if_larger: true,
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: Some("skip-test".into()),
+            },
+            input,
+            format: CompressionFormat::Png,
+            lossless: true,
+        };
+        let job = Arc::new(CompressionJob {
+            cancelled: AtomicBool::new(false),
+            progress: Mutex::new(CompressionProgress {
+                job_id: "skip-test".into(),
+                status: "running".into(),
+                stage: "preflight".into(),
+                output_path: None,
+                error: None,
+            }),
+            terminal_at: Mutex::new(None),
+        });
+        let result = run_compression(&request, &job).unwrap();
+        assert_eq!(result.status, "skipped");
+        assert!(result.skipped_reason.is_some());
+        assert!(result.saved_bytes < 0);
+        assert!(!output_path.exists());
+    }
+
+    #[test]
+    fn compression_statistics_are_signed_for_larger_outputs() {
+        assert_eq!(compression_statistics(100, 80), (20, 20.0));
+        assert_eq!(compression_statistics(100, 120), (-20, -20.0));
     }
     #[test]
     fn cancellation_checkpoint_is_observable() {
