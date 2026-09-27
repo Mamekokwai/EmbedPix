@@ -1,6 +1,6 @@
 # 图片压缩发布门禁
 
-本文档只描述发布/验收侧契约。压缩核心命令尚未进入 `embedpix-cli` 前，CI 不强制虚构的 `compress` 操作；核心合并后，将仓库变量 `EMBEDPIX_COMPRESSION_CLI_SMOKE` 设为 `true`，Windows CI 会自动切换到强制压缩 smoke。
+本文档只描述发布/验收侧契约。当前压缩核心是 Tauri 原生命令，不是 `embedpix-cli` 的 `op:"compress"`；CI 不虚构不存在的 CLI 操作。仓库变量 `EMBEDPIX_COMPRESSION_CLI_SMOKE` 设为 `true` 后，Windows CI 会切换到强制原生压缩契约检查。
 
 ## 当前可执行门禁
 
@@ -17,7 +17,7 @@ npm run check:compression-cli-smoke
 - SHA256 可复现并输出 JSON 报告；
 - 输出可再次被 CLI 解码。
 
-当前阶段会明确报告 `compress` 操作尚未启用，不把图片转换 smoke 伪称为压缩 smoke。
+当前阶段会明确报告压缩不通过 CLI 执行，不把图片转换 smoke 伪称为压缩 smoke。
 
 ## 压缩核心合并后的强制门禁
 
@@ -25,20 +25,14 @@ npm run check:compression-cli-smoke
 pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression
 ```
 
-强制模式要求 CLI 接受如下契约：
+强制模式检查真实的 Tauri 原生契约：
 
-```json
-{
-  "id": "compression-smoke",
-  "op": "compress",
-  "inputPath": "...",
-  "outputPath": "...",
-  "format": "png",
-  "preset": "balanced"
-}
-```
+- `preflight_compression`、`compress_image`、`cancel_compression` 入口存在；
+- `path`、`source`、`directory`、`subfolder`、`original` 输出位置有契约入口；
+- 输出经过现有原子发布/回滚入口；
+- `skipIfLarger` 已进入原生或 gateway 契约。
 
-它还必须满足相同的签名、SHA256、可解码和非空输出检查。若压缩核心支持失败/取消，后续应增加不发布半成品、临时文件清理和源文件保持不变的 CLI fixture；当前脚本不会越界假设这些尚不存在的字段。
+现有 CLI smoke 仍检查真实支持的 image/GIF 输出：签名、SHA256 和二次解码。原生压缩真正可调用后，应再增加桌面 Tauri IPC fixture，检查 `skipIfLarger` 的跳过结果、输出位置实际路径、取消、失败清理和源文件不变；当前脚本不会越界假设 CLI 存在这些操作。
 
 ## 第三方编码器许可证清单
 

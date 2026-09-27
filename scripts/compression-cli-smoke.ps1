@@ -42,6 +42,22 @@ function Assert-Output([string]$Path, [string]$Format, [string]$Label) {
   [pscustomobject]@{ label = $Label; format = $Format; path = $Path; bytes = $file.Length; sha256 = $hash; signature = $signature }
 }
 
+function Assert-NativeCompressionContract([switch]$Required) {
+  $sourcePath = Join-Path $repoRoot 'src-tauri/src/commands/compression.rs'
+  $gatewayPath = Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts'
+  if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw "Native compression source is missing: $sourcePath" }
+  if (-not (Test-Path -LiteralPath $gatewayPath -PathType Leaf)) { throw "Compression gateway source is missing: $gatewayPath" }
+  $source = Get-Content -Raw -LiteralPath $sourcePath
+  $gateway = Get-Content -Raw -LiteralPath $gatewayPath
+  $requiredTokens = @('pub async fn preflight_compression', 'pub async fn compress_image', 'pub fn cancel_compression', 'fn resolve_output_path', 'output_location', 'output_directory', 'output_subdirectory', 'replace_original', 'write_exported_file', 'COMPRESS_IMAGE_COMMAND')
+  $missing = @($requiredTokens | Where-Object { $source -notmatch [regex]::Escape($_) -and $gateway -notmatch [regex]::Escape($_) })
+  if ($missing.Count -gt 0) { throw "Native compression contract is missing: $($missing -join ', ')" }
+  $hasSkipIfLarger = $source -match 'skip[_-]?if[_-]?larger' -or $gateway -match 'skip[_-]?if[_-]?larger'
+  if ($Required -and -not $hasSkipIfLarger) { throw 'skipIfLarger is required by this smoke mode but is not present in the native compression contract.' }
+  if (-not $hasSkipIfLarger) { Write-Warning 'skipIfLarger is not implemented in the native compression contract; no skip-if-larger claim is made.' }
+  [pscustomobject]@{ nativeCommands = $true; outputLocations = @('path', 'source', 'directory', 'subfolder', 'original'); skipIfLarger = $hasSkipIfLarger; cliCompressionOperation = $false }
+}
+
 $script:root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-compression-cli-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $script:root | Out-Null
 try {
@@ -66,22 +82,19 @@ try {
   $gifEvent = Invoke-CliRequest $CliPath @{ id = 'gif-smoke'; op = 'gif'; outputPath = $gifOutput; width = 32; height = 32; loopMode = 'infinite'; loopCount = 0; frames = @(@{ path = $pngInput; durationMs = 100 }, @{ path = $pngInput; durationMs = 100 }) } 'gif'
   $gifResult = Assert-Output $gifOutput 'gif' 'GIF'
 
+  $nativeContract = Assert-NativeCompressionContract -Required:$RequireCompression
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
-    compressionCommand = if ($RequireCompression) { 'required' } else { ' 준비后可通过 -RequireCompression 启用' }
+    compressionCommand = 'not exposed by embedpix-cli; native Tauri contract checked separately'
     outputs = @($imageResult, $decodeResult, $gifResult)
     decodeValidated = $true
-    compressionCoreAvailable = $false
+    nativeCompressionContract = $nativeContract
   }
 
   if ($RequireCompression) {
-    $compressionOutput = Join-Path $script:root 'compressed.png'
-    $compressionEvent = Invoke-CliRequest $CliPath @{ id = 'compression-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $compressionOutput; format = 'png'; preset = 'balanced' } 'compression'
-    $compressionResult = Assert-Output $compressionOutput 'png' 'compressed image'
-    $report.compressionCoreAvailable = $true
-    $report.outputs += $compressionResult
+    Write-Host 'Native compression contract is present and skipIfLarger is enabled.'
   } else {
-    Write-Warning 'Compression CLI operation is not enabled; pass -RequireCompression after the compress operation lands in embedpix-cli.'
+    Write-Warning 'Compression output is not executed through embedpix-cli; pass -RequireCompression to require the native contract and skipIfLarger support.'
   }
 
   $json = $report | ConvertTo-Json -Depth 8
