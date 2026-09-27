@@ -459,3 +459,11 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 保持 Windows 安装器启动失败后的 health marker 清理
 
 证据：基于当前工作树的跨平台修复；本次发布前重新执行版本一致性、npm/Rust 完整门禁，确保 macOS/Ubuntu clippy 与 Windows 行为均通过。`v0.6.1` 标签不移动、不重写。
+
+## 0.7.0 发布验收
+
+- [x] 桌面 smoke 脚本与 Windows CI 契约完成
+- [x] GIF 视频工作区源元数据保存与安全恢复提示完成
+- [x] 前后端统一任务状态契约完成
+
+证据：基于 `515c13a`、`52896a0`、`abf6d8c`；本次发布前重新执行版本一致性、npm/Rust 完整门禁，发布后继续核验跨平台构建、7 项资产、latest.json、provenance、SHA256SUMS 和 x64/ARM64 minisign 验签。已有版本标签不移动、不重写。
