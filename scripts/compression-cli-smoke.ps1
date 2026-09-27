@@ -83,6 +83,64 @@ function Assert-PreviewCompressionContract {
   [pscustomobject]@{ command = $previewName; writerFree = $true; inputDecodeValidation = $true; sizeLimits = @('MAX_INPUT_BYTES', 'MAX_IMAGE_DIMENSION', 'MAX_IMAGE_PIXELS', 'MAX_DECODER_ALLOC_BYTES') }
 }
 
+function Assert-TargetCompressionContract([switch]$Required) {
+  $gifPath = Join-Path $repoRoot 'src-tauri/src/commands/gif.rs'
+  $storagePath = Join-Path $repoRoot 'src-tauri/src/commands/gif/storage.rs'
+  $testsPath = Join-Path $repoRoot 'src-tauri/src/commands/gif/tests.rs'
+  foreach ($path in @($gifPath, $storagePath, $testsPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+      if ($Required) { throw "Target compression contract source is missing: $path" }
+      Write-Warning "Target compression contract source is missing: $path"
+      return [pscustomobject]@{ checked = $false; cliTargetSearchOperation = $false }
+    }
+  }
+  $gif = Get-Content -Raw -LiteralPath $gifPath
+  $storage = Get-Content -Raw -LiteralPath $storagePath
+  $tests = Get-Content -Raw -LiteralPath $testsPath
+  $plannerMatch = [regex]::Match($gif, '(?s)fn\s+plan_gif_compression_blocking\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
+  $selectorMatch = [regex]::Match($gif, '(?s)fn\s+select_export_candidate\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
+  $exportMatch = [regex]::Match($gif, '(?s)fn\s+export_gif_blocking_with_job\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
+  if (-not $plannerMatch.Success -or -not $selectorMatch.Success -or -not $exportMatch.Success) {
+    throw 'Could not locate GIF target-volume planner, selector, or export function.'
+  }
+  $planner = $plannerMatch.Value
+  $selector = $selectorMatch.Value
+  $export = $exportMatch.Value
+  $searchBody = "$planner`n$selector"
+  if ($planner -notmatch 'max_candidates' -or $planner -notmatch 'clamp\(1,\s*8\)' -or $planner -notmatch 'for index in 0\.\.budget') {
+    throw 'GIF target-volume search does not expose a bounded maxCandidates budget.'
+  }
+  if ($storage -notmatch 'MAX_OUTPUT_BYTES\s*:\s*u64' -or $storage -notmatch 'validate_output_size\s*\(' -or $storage -notmatch '未发布') {
+    throw 'GIF output-size enforcement is missing or does not document the no-publish failure.'
+  }
+  if ($export -notmatch 'storage::MAX_OUTPUT_BYTES' -or $export -notmatch 'storage::write_output_with_publish') {
+    throw 'GIF export does not pass the bounded output limit through the publish writer.'
+  }
+  if ($searchBody -match 'write_output_with_publish|write_exported_file|fs::rename|hard_link|acquire_publish|job_begin_publish') {
+    throw 'GIF target-volume search or candidate selection invokes a publishing writer.'
+  }
+  if ($planner -notmatch 'is_none\(\)' -or $planner -notmatch '不可达' -or $selector -notmatch 'selected\.ok_or_else') {
+    throw 'GIF target_unreachable handling is missing from the planner/selector contract.'
+  }
+  $guardPosition = $export.IndexOf('select_export_candidate')
+  $publishPosition = $export.IndexOf('write_output_with_publish')
+  if ($guardPosition -lt 0 -or $publishPosition -lt 0 -or $guardPosition -gt $publishPosition) {
+    throw 'GIF target_unreachable is not rejected before the publish writer.'
+  }
+  if ($tests -notmatch 'export_candidate_selection_rejects_unreachable_target_before_publish') {
+    throw 'GIF target_unreachable regression test is missing.'
+  }
+  [pscustomobject]@{
+    checked = $true
+    cliTargetSearchOperation = $false
+    maxOutputBytesBounded = $true
+    maxCandidatesUpperBound = 8
+    candidateSearchWriterFree = $true
+    targetUnreachableNoPublish = $true
+    unreachableRepresentation = 'selected=null + reason(不可达); no target_unreachable CLI status is claimed'
+  }
+}
+
 $script:root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-compression-cli-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $script:root | Out-Null
 try {
@@ -109,6 +167,7 @@ try {
 
   $nativeContract = Assert-NativeCompressionContract -Required:$RequireCompression
   $previewContract = Assert-PreviewCompressionContract
+  $targetContract = Assert-TargetCompressionContract -Required:$RequireCompression
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'not exposed by embedpix-cli; native Tauri contract checked separately'
@@ -116,6 +175,7 @@ try {
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
+    targetCompressionContract = $targetContract
   }
 
   if ($RequireCompression) {
