@@ -62,6 +62,11 @@ export function fpsFromFrameDuration(value: number): number {
   return Math.round((1000 / clampFrameDuration(value)) * 100) / 100;
 }
 
+export function applyGifFrameDuration<T extends { durationMs: number }>(frames: ReadonlyArray<T>, duration: number, indices?: ReadonlySet<number>): T[] {
+  const nextDuration = clampFrameDuration(duration);
+  return frames.map((frame, index) => indices === undefined || indices.has(index) ? { ...frame, durationMs: nextDuration } : frame);
+}
+
 export function clampGifPlaybackSpeed(value: number): GifPlaybackSpeed {
   if (!Number.isFinite(value)) return 1;
   return GIF_PLAYBACK_SPEEDS.reduce((closest, speed) => Math.abs(speed - value) < Math.abs(closest - value) ? speed : closest, 1 as GifPlaybackSpeed);

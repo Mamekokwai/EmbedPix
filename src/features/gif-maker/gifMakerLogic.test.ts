@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifByteFrame } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
+  it("applies global and selected durations with the same clamped value", () => {
+    const frames = [{ durationMs: 100 }, { durationMs: 200 }, { durationMs: 300 }];
+    expect(applyGifFrameDuration(frames, durationFromGifFps(12)).map((frame) => frame.durationMs)).toEqual([80, 80, 80]);
+    expect(applyGifFrameDuration(frames, 155, new Set([1])).map((frame) => frame.durationMs)).toEqual([100, 150, 300]);
+  });
   it("moves source and settings tabs with standard keyboard directions", () => {
     expect(getNextGifTabIndex(0, 2, "ArrowRight")).toBe(1);
     expect(getNextGifTabIndex(1, 2, "ArrowRight")).toBe(0);

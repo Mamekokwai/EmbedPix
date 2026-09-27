@@ -26,7 +26,7 @@ import { getFormatMetadata, GIF_OUTPUT_FORMAT_IDS } from "../../shared/formatMet
 import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, planGifCompression, revealGifOutput } from "../../platform/gif/gifGateway";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import { createGifCustomPreset, loadGifCustomPresets, saveGifCustomPresets, type GifCustomPreset } from "./gifCustomPresets";
@@ -1477,7 +1477,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const updateAllDurations = (value: number) => {
     const duration = clampFrameDuration(value);
     setGlobalDuration(duration);
-    setFrames((current) => current.map((frame) => ({ ...frame, durationMs: duration })));
+    const next = applyGifFrameDuration(framesRef.current, duration);
+    framesRef.current = next;
+    setFrames(next);
   };
 
   const updateAnimationFps = (value: number) => {
@@ -1486,14 +1488,18 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const updateSelectedDuration = (value: number) => {
     const duration = clampFrameDuration(value);
-    setFrames((current) => current.map((frame, index) => index === selectedIndex ? { ...frame, durationMs: duration } : frame));
+    const next = applyGifFrameDuration(framesRef.current, duration, new Set([selectedIndex]));
+    framesRef.current = next;
+    setFrames(next);
   };
 
   const updateSelectedFramesDuration = () => {
     if (lockedRef.current || !selectedFrameIndices.size) return;
     const duration = clampFrameDuration(batchDuration);
     setBatchDuration(duration);
-    setFrames((current) => current.map((frame, index) => selectedFrameIndices.has(index) ? { ...frame, durationMs: duration } : frame));
+    const next = applyGifFrameDuration(framesRef.current, duration, selectedFrameIndices);
+    framesRef.current = next;
+    setFrames(next);
   };
 
   const chooseOutput = async () => {
