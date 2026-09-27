@@ -43,6 +43,14 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression
 
 目标体积门禁分别覆盖两条原生路径：GIF `plan_gif_compression` 使用 `maxCandidates` 的 `1..=8` 上限并以 `selected=null + reason` 表示不可达；图片 `compression.rs` 使用 `maxOutputBytes` 的 128 MiB 上限、`maxCandidates` 的 `1..=12` 上限和 JPEG 质量搜索，不可达结果在 `write_exported_file` 前以 `target_unreachable` 跳过。两条路径均不宣称存在 CLI 目标搜索操作。
 
+当前工作树已接入 OxiPNG 9.1.5 并写入 `Cargo.lock`；普通 smoke 与严格 smoke 都会校验其版本、许可证入口和 `pngOptimizationLevel` 边界。若某个发布分支尚未包含该依赖，普通 smoke 只报告 pending，不宣称 PNG 优化后端已启用。接入后使用下面的严格门禁：
+
+```powershell
+pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression -RequireOxiPng
+```
+
+严格 OxiPNG 门禁要求：Cargo.toml 使用 `oxipng = { version = "=9.1.5", default-features = false }`，Cargo.lock 存在相同版本；`pngOptimizationLevel` 只能接受 `0..=6`；不得新增 `embedpix-cli` 的 PNG 优化 op。`binary`、默认 `zopfli`、`parallel` 和 `sanity-checks` feature 不纳入默认桌面包，除非另行完成体积与许可证评审。
+
 ## 第三方编码器许可证清单
 
 | 组件/编码器 | 当前状态 | 许可证/证据要求 | 发布阻塞 |
@@ -50,7 +58,7 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression
 | `image` crate PNG/JPEG/WebP 基础能力 | 已在生产依赖 | 固定 Cargo.lock 版本，保留 Cargo license 追踪 | 否 |
 | `gif` crate | 已在生产依赖 | 固定 Cargo.lock 版本，保留 Cargo license 追踪 | 否 |
 | `webp-animation` 0.10.0 → `libwebp-sys2` 0.2.0/0.1.11 | 已在生产依赖，`static` feature；`cargo tree` 可见两层 libwebp sys crate | Rust crate 元数据为 MIT OR Apache-2.0；`libwebp` 上游为 BSD-3-Clause，并需保留 `PATENTS`/版权与许可证文本；发布前按 x64/ARM64 实际安装包复核 | 否，现有 WebP 动画链路已接入；新增后端仍需单独评估 |
-| OxiPNG | 尚未引入 | 上游 [oxipng/oxipng](https://github.com/oxipng/oxipng) 为 MIT；引入前固定版本、核对完整 Cargo 依赖链和许可证，优先作为 Rust 后端试验 | 是 |
+| OxiPNG 9.1.5 | 已接入当前工作树，Cargo.lock 已固定；默认 feature 全部关闭 | [crates.io 9.1.5](https://crates.io/crates/oxipng/9.1.5) 与上游 [oxipng/oxipng](https://github.com/oxipng/oxipng) 均标注 MIT；固定 `=9.1.5`、`default-features=false`，提交 Cargo.lock，并用 `cargo metadata --locked` 复核 bitvec/indexmap/libdeflater/log/rgb/rustc-hash 及完整依赖许可证 | 是，直到严格 OxiPNG 门禁与包体积对比通过 |
 | MozJPEG | 尚未引入 | 上游 [mozilla/mozjpeg](https://github.com/mozilla/mozjpeg) 的发布构建需按 BSD 系列许可证文件逐项核对；评估 C/汇编静态链接、Windows 工具链和专利/版权清单后再启用 | 是 |
 | pngquant | 未引入 | GPLv3/商业许可路径需明确，不得默认捆绑 | 是 |
 | libavif/AV1 编码器 | 未引入 | 明确编码器、静态链接、专利/许可证和安装包体积影响 | 是 |
@@ -61,6 +69,7 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression
 
 - 不从 Cargo.lock 的源码体积推断安装包增量；以同一提交、同一 profile、同一目标平台做“基线构建 vs 单后端构建”的 `EmbedPix.exe`、MSI/NSIS 安装包和附带 DLL/静态链接产物对比。
 - libwebp 当前已经通过 `webp-animation` 的 `static` feature 进入原生依赖，重点是确认是否重复打包两套 `libwebp-sys2`、静态链接是否把编码器完整带入每个架构，而不是把它当作全新依赖。
-- OxiPNG 为 Rust 依赖，先用 `cargo tree --locked -e normal` 和 release 二进制大小差分评估；只有在 PNG 输出 smoke、许可证清单和 x64/ARM64 构建均通过后才纳入默认后端。
+- OxiPNG 9.1.5 的 crate 元数据要求 Rust 1.74.0；本项目当前 toolchain 为 1.94.1。接入前用 `cargo tree --locked -e features -i oxipng`、`cargo metadata --locked` 和 release 二进制大小差分评估；只有在 `pngOptimizationLevel=0`、`6`、越界值拒绝、PNG 输出可解码、许可证清单和 x64/ARM64 构建均通过后才纳入默认后端。
+- OxiPNG 9.1.5 的默认 feature 包含 `binary`、`parallel`、`zopfli`、`filetime`；桌面库当前使用 `default-features=false`，避免把 CLI、Zopfli、并行通道和额外文件时间依赖带入安装包。任何启用额外 feature 的变更都必须重新做包体积与耗时评估。
 - MozJPEG 属于原生 C/汇编后端，必须额外记录编译器、静态/动态链接方式、运行库和最终安装包增量；没有实际 release 构建前不写固定 MB 结论。
 - 建议把“安装包增量、最终可执行文件增量、依赖许可证变更、各架构结果”作为同一份发布附件，并为新后端设置经评审的增量预算；超预算时改为可选后端或延后发布。

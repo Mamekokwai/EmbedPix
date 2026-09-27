@@ -2,7 +2,8 @@
 param(
   [string]$CliPath,
   [string]$ReportPath,
-  [switch]$RequireCompression
+  [switch]$RequireCompression,
+  [switch]$RequireOxiPng
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,6 +83,55 @@ function Assert-PreviewCompressionContract {
     if ($source -notmatch [regex]::Escape($limit)) { throw "Preview size limit is missing: $limit" }
   }
   [pscustomobject]@{ command = $previewName; writerFree = $true; inputDecodeValidation = $true; sizeLimits = @('MAX_INPUT_BYTES', 'MAX_IMAGE_DIMENSION', 'MAX_IMAGE_PIXELS', 'MAX_DECODER_ALLOC_BYTES') }
+}
+
+function Assert-PngOptimizationContract([switch]$Required) {
+  $sourcePath = Join-Path $repoRoot 'src-tauri/src/commands/compression.rs'
+  $gatewayPath = Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts'
+  $manifestPath = Join-Path $repoRoot 'src-tauri/Cargo.toml'
+  $lockPath = Join-Path $repoRoot 'src-tauri/Cargo.lock'
+  $source = Get-Content -Raw -LiteralPath $sourcePath
+  $gateway = Get-Content -Raw -LiteralPath $gatewayPath
+  $manifest = Get-Content -Raw -LiteralPath $manifestPath
+  $lock = Get-Content -Raw -LiteralPath $lockPath
+  $levelToken = $source -match 'png_optimization_level|pngOptimizationLevel' -or $gateway -match 'png_optimization_level|pngOptimizationLevel'
+  $hasPinnedDependency = $manifest -match '(?m)^\s*oxipng\s*=' -and $lock -match '(?m)^name = "oxipng"'
+  $hasExactPin = $manifest -match '(?m)oxipng\s*=\s*\{[^}\r\n]*version\s*=\s*"=9\.1\.5"'
+  if (-not $levelToken) {
+    if ($Required) { throw 'OxiPNG is required by this smoke mode but pngOptimizationLevel is not implemented.' }
+    Write-Warning 'OxiPNG/pngOptimizationLevel is not implemented; the smoke makes no PNG optimization claim.'
+    return [pscustomobject]@{
+      checked = $false
+      pending = $true
+      acceptedRange = '0..6'
+      dependency = if ($hasPinnedDependency) { 'oxipng present' } else { 'not in Cargo.toml/Cargo.lock' }
+      pinnedVersion = '9.1.5 (planned exact pin)'
+      license = 'MIT'
+      cliPngOptimizationOperation = $false
+    }
+  }
+  if ($source -notmatch 'oxipng' -and $gateway -notmatch 'oxipng') { throw 'pngOptimizationLevel is exposed without an OxiPNG implementation marker.' }
+  if ($source -notmatch '0\.\.=6|0\s*<=.*<=\s*6|MAX_PNG_OPTIMIZATION_LEVEL\s*:\s*.*6|png_optimization_level\s*>\s*6' -and $gateway -notmatch '0\.\.6|0\s*<=.*<=\s*6|Math\.min\(6|Math\.max\(0') {
+    throw 'pngOptimizationLevel does not expose the required 0..6 boundary contract.'
+  }
+  if (-not $hasPinnedDependency -or -not $hasExactPin -or $manifest -notmatch '(?m)oxipng\s*=\s*\{[^}\r\n]*default-features\s*=\s*false') {
+    throw 'OxiPNG implementation is present but Cargo.toml/Cargo.lock is not pinned to oxipng =9.1.5 with default-features=false.'
+  }
+  $metadataJson = cargo metadata --manifest-path $manifestPath --locked --format-version 1 | Out-String
+  if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the locked Cargo metadata for OxiPNG.' }
+  $oxipngPackage = ($metadataJson | ConvertFrom-Json).packages | Where-Object { $_.name -eq 'oxipng' } | Select-Object -First 1
+  if (-not $oxipngPackage -or $oxipngPackage.version -ne '9.1.5' -or $oxipngPackage.license -ne 'MIT') {
+    throw 'Cargo metadata does not report oxipng 9.1.5 with the expected MIT license.'
+  }
+  [pscustomobject]@{
+    checked = $true
+    pending = $false
+    acceptedRange = '0..6'
+    dependency = 'oxipng'
+    pinnedVersion = '9.1.5'
+    license = 'MIT'
+    cliPngOptimizationOperation = $false
+  }
 }
 
 function Assert-ImageTargetCompressionContract([switch]$Required) {
@@ -214,6 +264,7 @@ try {
 
   $nativeContract = Assert-NativeCompressionContract -Required:$RequireCompression
   $previewContract = Assert-PreviewCompressionContract
+  $pngOptimizationContract = Assert-PngOptimizationContract -Required:$RequireOxiPng
   $imageTargetContract = Assert-ImageTargetCompressionContract -Required:$RequireCompression
   $targetContract = Assert-TargetCompressionContract -Required:$RequireCompression
   $report = [ordered]@{
@@ -223,6 +274,7 @@ try {
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
+    pngOptimizationContract = $pngOptimizationContract
     imageTargetCompressionContract = $imageTargetContract
     targetCompressionContract = $targetContract
   }
