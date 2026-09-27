@@ -1434,7 +1434,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       if (typeof p.videoReverse === "boolean") setVideoReverse(p.videoReverse);
 
       let importedCount = 0;
-      if (bundle.sourcePaths.length && isTauriEnvironment()) {
+      if (bundle.sourceKind === "video") {
+        setError(`视频源“${bundle.sourceMetadata?.fileName ?? bundle.sourcePaths[0] ?? "未知文件"}”不会被当作图片读取，请重新导入视频。`);
+      } else if (bundle.sourcePaths.length && isTauriEnvironment()) {
         const nativeFiles = await Promise.all(bundle.sourcePaths.map((path) => readImageFile(path)));
         await importFiles(nativeFiles.map(nativeImageFileToGifFile), null, null, true);
         const restoredFrames = framesRef.current.map((frame, index) => ({ ...frame, durationMs: bundle.frames[index]?.durationMs ?? frame.durationMs }));

@@ -6,7 +6,7 @@ export const WORKSPACE_SCHEMA = "embedpix.workspace" as const;
 export const WORKSPACE_VERSION = 1 as const;
 const MAX_JSON_BYTES = 1 * 1024 * 1024;
 
-export interface WorkspaceSource { path: string; fileName: string; width?: number; height?: number; sizeBytes?: number; }
+export interface WorkspaceSource { path: string; fileName: string; kind?: "image" | "video"; width?: number; height?: number; sizeBytes?: number; durationMs?: number; fps?: number; }
 export interface WorkspaceFrame { index: number; durationMs: number; width?: number; height?: number; sizeBytes?: number; }
 export interface ImageWorkspaceSnapshot { type: "image"; parameters: ImageConverterDefaults; outputLocation: OutputLocation; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string; sources: WorkspaceSource[]; }
 export interface GifWorkspaceSnapshot { type: "gif"; parameters: GifMakerPreferences; outputLocation: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string; sources: WorkspaceSource[]; frames: WorkspaceFrame[]; }
@@ -17,7 +17,7 @@ export interface WorkspaceRestoreResult { workspaces: WorkspaceSnapshot[]; issue
 
 const IMAGE_PARAMETER_KEYS = ["defaultOutputFormat", "defaultJpegQuality", "defaultBitDepth", "defaultByteOrder", "defaultChannelOrder", "defaultRowOrder", "defaultRowAlignment", "defaultCArrayName", "defaultBackgroundColor", "keepAspectRatio"] as const;
 const GIF_PARAMETER_KEYS = ["canvasPreset", "canvasWidth", "canvasHeight", "keepAspectRatio", "fitMode", "contentAlignment", "contentMargins", "globalDuration", "batchDuration", "firstFrameHoldDuration", "lastFrameHoldDuration", "playbackSpeed", "background", "customBackgroundColor", "loopMode", "loopCount", "encodingQuality", "colorCount", "ditherMode", "gifPreset", "targetSizeKiB", "maxSizeKiB", "autoCompress", "mergeIdenticalFrames", "overwriteExisting", "outputFormat", "videoFps", "videoEveryNthFrame", "videoMaxFrames", "videoCropPreset", "videoRotation", "videoReverse"] as const;
-const SOURCE_KEYS = ["path", "fileName", "width", "height", "sizeBytes"] as const;
+const SOURCE_KEYS = ["path", "fileName", "kind", "width", "height", "sizeBytes", "durationMs", "fps"] as const;
 const FRAME_KEYS = ["index", "durationMs", "width", "height", "sizeBytes"] as const;
 const BAD_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 
@@ -26,7 +26,7 @@ function whitelist(value: Record<string, unknown>, keys: readonly string[], labe
 function integer(value: unknown, min: number, max: number, label: string): void { if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) throw new Error(`${label} is out of range`); }
 function safePath(value: unknown, label: string): string { if (typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f]/u.test(value) || /(?:^|[\\/])\.\.(?:[\\/]|$)/u.test(value) || /^(?:blob:|data:)/iu.test(value)) throw new Error(`${label} is unsafe`); return value; }
 function optionalPath(value: unknown, label: string): string | undefined { return value === undefined ? undefined : safePath(value, label); }
-function validateSource(value: unknown): WorkspaceSource { const item = record(value, "source"); whitelist(item, SOURCE_KEYS, "source"); safePath(item.path, "source path"); if (typeof item.fileName !== "string" || !item.fileName.trim()) throw new Error("source fileName is invalid"); for (const key of ["width", "height", "sizeBytes"] as const) if (item[key] !== undefined) integer(item[key], 0, Number.MAX_SAFE_INTEGER, `source ${key}`); return item as unknown as WorkspaceSource; }
+function validateSource(value: unknown): WorkspaceSource { const item = record(value, "source"); whitelist(item, SOURCE_KEYS, "source"); safePath(item.path, "source path"); if (typeof item.fileName !== "string" || !item.fileName.trim()) throw new Error("source fileName is invalid"); if (item.kind !== undefined && item.kind !== "image" && item.kind !== "video") throw new Error("source kind is invalid"); for (const key of ["width", "height", "sizeBytes", "durationMs"] as const) if (item[key] !== undefined) integer(item[key], 0, Number.MAX_SAFE_INTEGER, `source ${key}`); if (item.fps !== undefined) { if (typeof item.fps !== "number" || !Number.isFinite(item.fps) || item.fps <= 0 || item.fps > 240) throw new Error("source fps is out of range"); } return item as unknown as WorkspaceSource; }
 function validateFrame(value: unknown): WorkspaceFrame { const item = record(value, "frame"); whitelist(item, FRAME_KEYS, "frame"); integer(item.index, 0, 200, "frame index"); integer(item.durationMs, 10, 60000, "frame duration"); for (const key of ["width", "height", "sizeBytes"] as const) if (item[key] !== undefined) integer(item[key], 0, Number.MAX_SAFE_INTEGER, `frame ${key}`); return item as unknown as WorkspaceFrame; }
 function validateParameters(value: unknown, type: "image" | "gif"): ImageConverterDefaults | GifMakerPreferences { const parameters = record(value, `${type} parameters`); const keys = type === "image" ? IMAGE_PARAMETER_KEYS : GIF_PARAMETER_KEYS; whitelist(parameters, keys, `${type} parameters`); return parameters as unknown as ImageConverterDefaults | GifMakerPreferences; }
 function transferableParameters(value: ImageConverterDefaults | GifMakerPreferences, type: "image" | "gif"): ImageConverterDefaults | GifMakerPreferences { const source = value as unknown as Record<string, unknown>; const keys = type === "image" ? IMAGE_PARAMETER_KEYS : GIF_PARAMETER_KEYS; return Object.fromEntries(keys.map((key) => [key, source[key]])) as unknown as ImageConverterDefaults | GifMakerPreferences; }
@@ -78,7 +78,7 @@ export function importWorkspaceSnapshot(serialized: string): WorkspaceRestoreRes
 }
 
 // Compatibility helpers keep lightweight page integrations on the same strict snapshot contract.
-export function exportWorkspace(bundle: { kind: "image" | "gif"; parameters: Record<string, unknown>; sourcePaths: string[]; frames?: WorkspaceFrame[]; outputLocation?: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string }): string {
+export function exportWorkspace(bundle: { kind: "image" | "gif"; parameters: Record<string, unknown>; sourcePaths: string[]; sourceKind?: "image" | "video"; sourceMetadata?: Partial<WorkspaceSource>; frames?: WorkspaceFrame[]; outputLocation?: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string }): string {
   const parameters = bundle.kind === "image" ? {
     defaultOutputFormat: bundle.parameters.outputFormat ?? "bmp", defaultJpegQuality: bundle.parameters.jpegQuality ?? 85, defaultBitDepth: bundle.parameters.bitDepth ?? 24,
     defaultByteOrder: bundle.parameters.byteOrder ?? "little", defaultChannelOrder: bundle.parameters.channelOrder ?? "rgb", defaultRowOrder: bundle.parameters.rowOrder ?? "top-down", defaultRowAlignment: bundle.parameters.rowAlignment ?? 1,
@@ -86,13 +86,13 @@ export function exportWorkspace(bundle: { kind: "image" | "gif"; parameters: Rec
   } : bundle.parameters as unknown as GifMakerPreferences;
   const snapshot = bundle.kind === "image"
     ? { type: "image" as const, parameters, outputLocation: (bundle.outputLocation ?? "source") as OutputLocation, outputDirectory: bundle.outputDirectory, outputSubdirectory: bundle.outputSubdirectory, namingTemplate: bundle.namingTemplate, sources: bundle.sourcePaths.map((path) => ({ path, fileName: path.split(/[\\/]/u).pop() ?? path })) }
-    : { type: "gif" as const, parameters, outputLocation: bundle.outputLocation ?? "path", outputDirectory: bundle.outputDirectory, outputSubdirectory: bundle.outputSubdirectory, namingTemplate: bundle.namingTemplate, sources: bundle.sourcePaths.map((path) => ({ path, fileName: path.split(/[\\/]/u).pop() ?? path })), frames: bundle.frames ?? [] };
+    : { type: "gif" as const, parameters, outputLocation: bundle.outputLocation ?? "path", outputDirectory: bundle.outputDirectory, outputSubdirectory: bundle.outputSubdirectory, namingTemplate: bundle.namingTemplate, sources: bundle.sourcePaths.map((path) => ({ path, fileName: path.split(/[\\/]/u).pop() ?? path, ...bundle.sourceMetadata, ...(bundle.sourceKind ? { kind: bundle.sourceKind } : {}) })), frames: bundle.frames ?? [] };
   return exportWorkspaceSnapshot([snapshot as WorkspaceSnapshot]);
 }
 
-export function importWorkspace(serialized: string, kind: "image" | "gif"): { parameters: Record<string, unknown>; sourcePaths: string[]; frames: WorkspaceFrame[]; outputLocation: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string } {
+export function importWorkspace(serialized: string, kind: "image" | "gif"): { parameters: Record<string, unknown>; sourcePaths: string[]; sourceKind?: "image" | "video"; sourceMetadata?: WorkspaceSource; frames: WorkspaceFrame[]; outputLocation: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string } {
   const result = importWorkspaceSnapshot(serialized);
   const workspace = result.workspaces.find((item) => item.type === kind);
   if (!workspace) throw new Error("工作区文件类型不匹配。");
-  return { parameters: workspace.parameters as unknown as Record<string, unknown>, sourcePaths: workspace.sources.map((source) => source.path), frames: workspace.type === "gif" ? workspace.frames : [], outputLocation: workspace.outputLocation, outputDirectory: workspace.outputDirectory, outputSubdirectory: workspace.outputSubdirectory, namingTemplate: workspace.namingTemplate };
+  return { parameters: workspace.parameters as unknown as Record<string, unknown>, sourcePaths: workspace.sources.map((source) => source.path), sourceKind: workspace.sources[0]?.kind, sourceMetadata: workspace.sources[0], frames: workspace.type === "gif" ? workspace.frames : [], outputLocation: workspace.outputLocation, outputDirectory: workspace.outputDirectory, outputSubdirectory: workspace.outputSubdirectory, namingTemplate: workspace.namingTemplate };
 }

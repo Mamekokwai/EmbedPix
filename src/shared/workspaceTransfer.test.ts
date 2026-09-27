@@ -27,4 +27,9 @@ describe("workspace transfer", () => {
     expect(restored.workspaces).toHaveLength(1);
     expect(restored.issues).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "frame-metadata-mismatch" })]));
   });
+  it("preserves video source metadata without treating it as an image", () => {
+    const json = exportWorkspaceSnapshot([{ ...gif, sources: [{ path: "E:\\video.mp4", fileName: "video.mp4", kind: "video", width: 1920, height: 1080, durationMs: 12_500, fps: 24 }], frames: [] }]);
+    const restored = importWorkspaceSnapshot(json);
+    expect(restored.workspaces[0]).toMatchObject({ sources: [{ kind: "video", durationMs: 12_500, fps: 24 }] });
+  });
 });
