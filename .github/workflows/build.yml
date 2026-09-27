@@ -122,6 +122,16 @@ jobs:
           if(files.length===0) throw new Error('No expected Tauri bundle found in '+dir);
           console.log('Verified Tauri bundle:', files.join(', '));"
 
+      - name: Run Windows desktop smoke contract
+        if: runner.os == 'Windows' && steps.tauri.outputs.available == 'true'
+        shell: pwsh
+        env:
+          BUNDLE_DIRECTORY: src-tauri/target/release/bundle/nsis
+        run: |
+          $bundle = Get-ChildItem -LiteralPath $env:BUNDLE_DIRECTORY -Filter '*-setup.exe' -File | Select-Object -First 1
+          if (-not $bundle) { throw "No Windows installer found in $env:BUNDLE_DIRECTORY." }
+          .\scripts\desktop-smoke.ps1 -BundlePath $bundle.FullName -SkipInstall
+
       - name: Print CI failure diagnostics
         if: failure()
         shell: bash

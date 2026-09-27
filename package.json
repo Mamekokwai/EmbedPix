@@ -12,6 +12,7 @@
     "check:lint": "eslint . --max-warnings 0",
     "check:gif-benchmark": "node scripts/check-gif-benchmark.mjs",
     "check:gif-quality": "node scripts/check-gif-quality-benchmark.mjs",
+    "check:desktop-smoke": "pwsh -NoProfile -File scripts/desktop-smoke.ps1 -SkipInstall",
     "tauri": "tauri"
   },
   "dependencies": {
