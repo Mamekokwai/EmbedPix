@@ -921,33 +921,9 @@ fn current_update_target() -> Option<UpdateTarget> {
     Some(UpdateTarget::WindowsArm64)
 }
 
-#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-fn current_update_target() -> Option<UpdateTarget> {
-    Some(UpdateTarget::MacosX64)
-}
-
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-fn current_update_target() -> Option<UpdateTarget> {
-    Some(UpdateTarget::MacosArm64)
-}
-
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-fn current_update_target() -> Option<UpdateTarget> {
-    Some(UpdateTarget::LinuxX64)
-}
-
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-fn current_update_target() -> Option<UpdateTarget> {
-    Some(UpdateTarget::LinuxArm64)
-}
-
 #[cfg(not(any(
     all(windows, target_arch = "x86_64"),
     all(windows, target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "linux", target_arch = "aarch64"),
 )))]
 fn current_update_target() -> Option<UpdateTarget> {
     None

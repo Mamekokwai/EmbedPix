@@ -193,10 +193,6 @@ export function getCurrentUpdateTarget(): UpdateTarget {
     ?? browserNavigator.userAgent).toLowerCase();
   const arm64 = architecture.includes("arm64") || architecture.includes("aarch64") || architecture.includes("arm");
   if (platform.includes("win")) return arm64 ? "windows-arm64" : "windows-x64";
-  if (platform.includes("mac") || platform.includes("iphone") || platform.includes("ipad")) {
-    return arm64 ? "macos-arm64" : "macos-x64";
-  }
-  if (platform.includes("linux")) return arm64 ? "linux-arm64" : "linux-x64";
   return "unsupported";
 }
 

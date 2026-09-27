@@ -37,8 +37,18 @@ try {
   if ($platforms.Count -ne 2 -or $platforms -notcontains 'windows-x86_64' -or $platforms -notcontains 'windows-aarch64') {
     throw 'latest.json platform set mismatch.'
   }
+  $expectedPlatformAssets = @{
+    'windows-x86_64' = "EmbedPix_${version}_x64-setup.exe"
+    'windows-aarch64' = "EmbedPix_${version}_arm64-setup.exe"
+  }
   foreach ($platform in $platforms) {
     $encoded = $latest.platforms.$platform.signature
+    $assetName = $expectedPlatformAssets[$platform]
+    $asset = $release.assets | Where-Object name -eq $assetName | Select-Object -First 1
+    $expectedUrl = "https://github.com/$Repository/releases/download/$Tag/$assetName"
+    if ($latest.platforms.$platform.url -ne $expectedUrl) { throw "$platform manifest URL does not match $expectedUrl." }
+    $assetSignature = (Get-Content -Raw (Join-Path $root "$assetName.sig")).Trim()
+    if ($encoded.Trim() -ne $assetSignature) { throw "$platform manifest signature does not match $assetName.sig." }
     try { $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) } catch { throw "$platform signature is not valid base64." }
     $lines = @($decoded -split "\r?\n" | Where-Object { $_ -ne '' })
     $b64 = '^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$'
@@ -83,6 +93,7 @@ try {
     & $verifier $publicKeyPath (Join-Path $root $installerName) $rawSignaturePath
     if ($LASTEXITCODE -ne 0) { throw "Independent minisign verification failed for $installerName." }
   }
+  Write-Host 'ARM64 coverage: asset download, SHA256, and minisign verification passed; native ARM64 install/startup is not executed on the x64 runner.'
   if ($SkipInstall) { Write-Host "Release asset smoke passed for $Tag (install skipped)."; exit 0 }
   if ($env:RUNNER_OS -ne 'Windows' -and $PSVersionTable.Platform -ne 'Win32NT') { throw 'Installer smoke requires Windows.' }
   $installer = Join-Path $root "EmbedPix_${version}_x64-setup.exe"

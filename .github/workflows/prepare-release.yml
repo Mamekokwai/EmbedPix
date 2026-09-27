@@ -463,16 +463,15 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          @"
-          # EmbedPix v$env:RELEASE_VERSION
-
-          Signed Windows NSIS installers for x64 and ARM64.
-
-          This release includes the bounded GIF compression search and deterministic GIF benchmark records.
-          The repository's MIT license and third-party notices are included in the source tree.
-
-          The `.sig` files and `latest.json` are generated from the Tauri updater signing key configured in GitHub Actions.
-          "@ | Set-Content -Path release-assets/release-notes.md -Encoding utf8NoBOM
+          $source = "docs/release-notes-v$env:RELEASE_VERSION.md"
+          if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw "Missing versioned release notes: $source"
+          }
+          $notes = Get-Content -Raw -LiteralPath $source
+          if ([string]::IsNullOrWhiteSpace($notes) -or $notes -notmatch "(?m)^# EmbedPix v$([regex]::Escape($env:RELEASE_VERSION))\s*$") {
+            throw "Versioned release notes are empty or have an invalid title: $source"
+          }
+          $notes | Set-Content -Path release-assets/release-notes.md -Encoding utf8NoBOM
 
       - name: Attest x64 installer
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4

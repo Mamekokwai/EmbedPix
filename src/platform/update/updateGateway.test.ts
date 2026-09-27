@@ -101,6 +101,24 @@ describe("update gateway", () => {
     )).toBe(false);
   });
 
+  it("does not advertise automatic updates for unsupported desktop platforms", async () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64)",
+      platform: "Linux x86_64",
+      userAgentData: { platform: "Linux", architecture: "x86_64" },
+    });
+    const result = await checkForUpdates(
+      async () => response({
+        tag_name: "v0.2.0",
+        html_url: "https://github.com/Mamekokwai/EmbedPix/releases/tag/v0.2.0",
+        assets: [],
+      }),
+      "0.1.0",
+    );
+    expect(result.updateAvailable).toBe(true);
+    expect(result.assetDownloadUrl).toBeNull();
+  });
+
   it("accepts only the EmbedPix release page and version tag URLs", () => {
     expect(isTrustedReleasePageUrl("https://github.com/Mamekokwai/EmbedPix/releases")).toBe(true);
     expect(isTrustedReleasePageUrl("https://github.com/Mamekokwai/EmbedPix/releases/tag/v0.2.0")).toBe(true);
