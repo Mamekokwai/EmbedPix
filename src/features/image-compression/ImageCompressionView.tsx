@@ -71,10 +71,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   useEffect(() => {
     if (!active) return;
-    const fallback = estimateFallback(items, options);
+    const fallback = estimateFallback(items, format === "jpg" ? options : { ...options, lossless: true });
     setEstimate(fallback);
     setEstimateNote(items.length === 0 ? "等待导入图片" : "本地预估，执行前由原生预检复核");
-  }, [active, items, options]);
+  }, [active, format, items, options]);
 
   const addBrowserFiles = (files: File[]) => {
     const next = toBrowserItems(files);
@@ -282,12 +282,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
         <aside className="compression-card compression-settings-card">
           <div className="compression-card-heading"><div><span className="compression-card-kicker">02 / OPTIONS</span><h2>压缩参数</h2></div></div>
-          <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => setFormat(event.target.value as CompressionFormat)} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-          <label className="compression-field"><span className="compression-label-row"><span>质量</span><strong>{quality}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => setQuality(Number(event.target.value))} disabled={busy || lossless} /></label>
-          <label className="compression-check"><input type="checkbox" checked={lossless} onChange={(event) => setLossless(event.target.checked)} disabled={busy} /><span><strong>无损压缩</strong><small>适合图标、UI 线稿和像素边缘</small></span></label>
+          <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => { const nextFormat = event.target.value as CompressionFormat; setFormat(nextFormat); if (nextFormat === "jpg") setLossless(false); }} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label className="compression-field"><span className="compression-label-row"><span>质量（仅 JPEG）</span><strong>{format === "jpg" ? quality : "—"}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => setQuality(Number(event.target.value))} disabled={busy || lossless || format !== "jpg"} /></label>
+          <label className="compression-check"><input type="checkbox" checked={lossless} onChange={(event) => setLossless(event.target.checked)} disabled={busy || format === "jpg"} /><span><strong>PNG/WebP 无损模式</strong><small>{format === "jpg" ? "JPEG 不支持无损模式" : format === "webp" ? "当前核心 WebP 编码固定为无损" : "PNG 编码天然无损"}</small></span></label>
           <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（推荐）</option><option value="preserve" disabled>保留元数据（核心待支持）</option></select></label>
           <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="留空：跟随源文件目录" disabled={busy} /></label>
-          <label className="compression-check"><input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} disabled={busy} /><span><strong>允许覆盖同名文件</strong><small>关闭时由桌面端自动避免覆盖</small></span></label>
+          <label className="compression-check"><input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} disabled={busy} /><span><strong>允许覆盖同名文件</strong><small>关闭时同名目标会拒绝写入</small></span></label>
         </aside>
       </div>
 
