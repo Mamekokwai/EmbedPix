@@ -184,7 +184,8 @@
   .gif-maker-view.page-view { padding: 4px; gap: 8px; }
   .gif-workspace-grid { grid-template-columns: minmax(225px, 1fr) minmax(0, 1fr); }
   .gif-maker-toolbar > span { max-width: 230px; }
-  .gif-header-note { display: none; }
+  .gif-header-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px; white-space: normal; }
+  .gif-header-note > .status-dot { display: none; }
 }
 
 @media (max-height: 760px) {

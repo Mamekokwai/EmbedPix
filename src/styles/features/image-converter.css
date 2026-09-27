@@ -1238,6 +1238,9 @@
     width: 100%;
   }
 
+  .workspace-transfer-actions { width: 100%; justify-content: stretch; }
+  .workspace-transfer-actions > * { flex: 1 1 0; text-align: center; }
+
   .export-retry-button,
   .footer-actions .export-button {
     flex: 1;
