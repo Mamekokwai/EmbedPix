@@ -12,6 +12,7 @@ const request = {
   sourcePath: "C:/icon.png",
   overwriteExisting: false,
   jpegQuality: 82,
+  lossless: true,
   metadataPolicy: "strip" as const,
   jobId: "compression-test",
 };
@@ -34,8 +35,15 @@ describe("compression gateway", () => {
     expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip" });
   });
 
+  it("passes JPEG target-size candidates through raw metadata", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, maxOutputBytes: 64 * 1024, maxCandidates: 8 });
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata).toMatchObject({ maxOutputBytes: 64 * 1024, maxCandidates: 8 });
+  });
+
   it("uses preflight and single-image compression command contracts", async () => {
-    vi.mocked(invoke).mockResolvedValueOnce({ outputPath: "C:/icon.webp", overwritesExisting: false }).mockResolvedValueOnce({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "completed", skippedReason: null, inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: true });
+    vi.mocked(invoke).mockResolvedValueOnce({ outputPath: "C:/icon.webp", overwritesExisting: false }).mockResolvedValueOnce({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "completed", skippedReason: null, inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: true, targetBytes: null, targetMet: false, selectedQuality: null });
     await preflightCompression(request);
     await compressImage(request);
     expect(invoke).toHaveBeenNthCalledWith(1, PREFLIGHT_COMPRESSION_COMMAND, expect.any(Uint8Array));
@@ -43,7 +51,7 @@ describe("compression gateway", () => {
   });
 
   it("uses the preview command without changing the raw envelope", async () => {
-    vi.mocked(invoke).mockResolvedValue({ data: [1, 2, 3], width: 2, height: 2, format: "webp", inputBytes: 3, outputBytes: 3, savedBytes: 0, savingsPercent: 0, lossless: true });
+    vi.mocked(invoke).mockResolvedValue({ data: [1, 2, 3], width: 2, height: 2, format: "webp", outputBytes: 3, lossless: true, status: "completed", skippedReason: null, targetBytes: 65536, targetMet: true, selectedQuality: 74 });
     const controller = new AbortController();
     await expect(previewCompression(request, controller.signal)).resolves.toMatchObject({ format: "webp", outputBytes: 3 });
     expect(invoke).toHaveBeenCalledWith(PREVIEW_COMPRESSION_COMMAND, expect.any(Uint8Array));
@@ -57,7 +65,7 @@ describe("compression gateway", () => {
   });
 
   it("keeps skipped results distinct from completed output", async () => {
-    vi.mocked(invoke).mockResolvedValue({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "skipped", skippedReason: "compressed output is larger than the source; output was not published", inputBytes: 3, outputBytes: 5, savedBytes: -2, savingsPercent: -66.7, width: 1, height: 1, format: "webp", lossless: true });
+    vi.mocked(invoke).mockResolvedValue({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "skipped", skippedReason: "compressed output is larger than the source; output was not published", inputBytes: 3, outputBytes: 5, savedBytes: -2, savingsPercent: -66.7, width: 1, height: 1, format: "webp", lossless: true, targetBytes: null, targetMet: false, selectedQuality: null });
     const result = await compressImage(request);
     expect(result.status).toBe("skipped");
     expect(result.skippedReason).toContain("not published");

@@ -108,6 +108,7 @@
 .compression-summary-stat .compression-failure { color: var(--qp-danger, #df6a6a); }
 .compression-estimate-note { margin-left: auto; }
 .compression-field-error { margin: -6px 0 0; color: var(--qp-danger, #df6a6a); font-size: 11px; line-height: 1.5; }
+.compression-field-hint { color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; }
 .compression-skip-details { display: grid; flex-basis: 100%; gap: 4px; padding-top: 8px; border-top: 1px solid var(--qp-border-subtle); color: var(--qp-text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
 .compression-skip-details strong { color: var(--qp-text-secondary); font-weight: 650; }
 .compression-footer { flex-wrap: wrap; gap: 12px; margin-top: 14px; }

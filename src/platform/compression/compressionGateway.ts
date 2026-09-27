@@ -18,6 +18,9 @@ export interface CompressionEnvelopeRequest {
   outputDirectory?: string;
   overwriteExisting: boolean;
   jpegQuality: number;
+  lossless: boolean;
+  maxOutputBytes?: number;
+  maxCandidates?: number;
   metadataPolicy: MetadataPolicy;
   jobId?: string;
 }
@@ -37,6 +40,9 @@ export interface CompressionResult {
   height: number;
   format: string;
   lossless: boolean;
+  targetBytes: number | null;
+  targetMet: boolean;
+  selectedQuality: number | null;
 }
 export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; }
 export interface CompressionPreview {
@@ -44,11 +50,13 @@ export interface CompressionPreview {
   width: number;
   height: number;
   format: string;
-  inputBytes: number;
   outputBytes: number;
-  savedBytes: number;
-  savingsPercent: number;
   lossless: boolean;
+  status: CompressionResultStatus;
+  skippedReason: string | null;
+  targetBytes: number | null;
+  targetMet: boolean;
+  selectedQuality: number | null;
 }
 
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
@@ -62,6 +70,9 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.outputDirectory ? { outputDirectory: request.outputDirectory } : {}),
     overwriteExisting: request.overwriteExisting,
     jpegQuality: request.jpegQuality,
+    lossless: request.lossless,
+    ...(request.maxOutputBytes ? { maxOutputBytes: request.maxOutputBytes } : {}),
+    ...(request.maxCandidates ? { maxCandidates: request.maxCandidates } : {}),
     metadataPolicy: "strip",
     ...(request.jobId ? { jobId: request.jobId } : {}),
   };
@@ -103,6 +114,9 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     outputDirectory: options.outputLocation === "directory" ? options.outputDirectory : undefined,
     overwriteExisting: options.overwrite,
     jpegQuality: options.quality,
+    lossless: options.lossless,
+    maxOutputBytes: options.maxOutputBytes,
+    maxCandidates: options.maxCandidates,
     metadataPolicy: options.metadataPolicy,
     jobId,
   };

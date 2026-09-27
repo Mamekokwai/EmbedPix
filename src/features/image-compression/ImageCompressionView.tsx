@@ -29,7 +29,11 @@ interface CompressionResultStats {
   processedInputBytes: number;
   outputBytes: number;
   savedBytes: number;
+  targetMet: boolean | null;
+  selectedQualities: number[];
 }
+
+const MAX_TARGET_SIZE_KIB = 128 * 1024;
 
 function fileTypeForPath(path: string): string {
   const extension = path.split(".").pop()?.toLowerCase();
@@ -63,6 +67,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [items, setItems] = useState<CompressionItem[]>([]);
   const [format, setFormat] = useState<CompressionFormat>("webp");
   const [quality, setQuality] = useState(82);
+  const [targetSizeKiB, setTargetSizeKiB] = useState("");
   const [lossless, setLossless] = useState(false);
   const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicy>("strip");
   const [outputLocation, setOutputLocation] = useState<CompressionOutputLocation>("source");
@@ -84,11 +89,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState("");
-  const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
+  const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
   const activeJobIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
 
   const busy = status === "busy";
+  const targetSizeError = useMemo(() => {
+    if (format !== "jpg" || !targetSizeKiB.trim()) return null;
+    const value = Number(targetSizeKiB);
+    if (!Number.isFinite(value) || value < 1 || value > MAX_TARGET_SIZE_KIB) return `目标体积需为 1–${MAX_TARGET_SIZE_KIB.toLocaleString()} KiB。`;
+    return null;
+  }, [format, targetSizeKiB]);
+  const maxOutputBytes = format === "jpg" && !targetSizeError && targetSizeKiB.trim() ? Math.round(Number(targetSizeKiB) * 1024) : undefined;
   const options = useMemo<CompressionOptions>(() => ({
     format,
     quality,
@@ -98,12 +110,16 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     outputSubdirectory: outputLocation === "subfolder" ? outputSubdirectory.trim() || undefined : undefined,
     outputDirectory: outputLocation === "directory" ? outputDirectory.trim() || undefined : undefined,
     overwrite,
-  }), [format, quality, lossless, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, overwrite]);
+    maxOutputBytes,
+    maxCandidates: maxOutputBytes ? 8 : undefined,
+  }), [format, quality, lossless, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, overwrite, maxOutputBytes]);
 
   const outputLocationError = useMemo(() => getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, !isTauriEnvironment() || (items.length > 0 && items.every((item) => Boolean(item.sourcePath)))), [items, outputDirectory, outputLocation, outputSubdirectory]);
   const actualSavedBytes = resultStats.savedBytes;
   const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const previewSavedBytes = selectedItem && preview ? selectedItem.size - preview.outputBytes : 0;
+  const previewSavingsPercent = selectedItem && preview && selectedItem.size > 0 ? (previewSavedBytes / selectedItem.size) * 100 : 0;
 
   useEffect(() => {
     if (!active) return;
@@ -187,7 +203,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setMessage("");
     setFailures([]);
     setSkipReasons([]);
-    setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
+    setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setStatus("ready");
   };
 
@@ -204,7 +220,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     if (imported.length > 0) {
       setItems((current) => [...current, ...imported]);
       setSkipReasons([]);
-      setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
+      setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
       setStatus("ready");
     }
     if (skipped.length > 0) {
@@ -280,6 +296,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   const runCompression = async () => {
     if (busy || items.length === 0) return;
+    if (targetSizeError) {
+      setMessage(targetSizeError);
+      setStatus("error");
+      return;
+    }
     if (outputLocationError) {
       setMessage(outputLocationError);
       setStatus("error");
@@ -302,7 +323,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setFailures([]);
     setSkipReasons([]);
     cancelRequestedRef.current = false;
-    setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
+    setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setProgress({ current: 0, total: queue.length });
     const failedNames: string[] = [];
     let lastError = "";
@@ -325,11 +346,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         activeJobIdRef.current = null;
         await progressPoll;
         if (result.status === "skipped") {
-          setResultStats((current) => ({ ...current, skipped: current.skipped + 1 }));
+          setResultStats((current) => ({ ...current, skipped: current.skipped + 1, targetMet: result.targetMet ?? (options.maxOutputBytes === undefined ? current.targetMet : false) }));
           setSkipReasons((current) => [...current, `${item.file.name}：${result.skippedReason || "原生压缩策略跳过，未发布输出"}`]);
           setMessage(`已跳过 ${item.file.name}：${result.skippedReason || "未发布输出"}`);
         } else {
-          setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes }));
+          const targetMet = result.targetMet ?? (options.maxOutputBytes === undefined ? null : result.outputBytes <= options.maxOutputBytes);
+          setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes, targetMet: targetMet === null ? current.targetMet : current.targetMet === false || targetMet === false ? false : true, selectedQualities: typeof result.selectedQuality === "number" ? [...current.selectedQualities, result.selectedQuality] : current.selectedQualities }));
         }
       } catch (error) {
         activeJobIdRef.current = null;
@@ -420,6 +442,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => { const nextFormat = event.target.value as CompressionFormat; setFormat(nextFormat); if (nextFormat === "jpg") setLossless(false); }} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label className="compression-field"><span className="compression-label-row"><span>质量（仅 JPEG）</span><strong>{format === "jpg" ? quality : "—"}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => setQuality(Number(event.target.value))} disabled={busy || lossless || format !== "jpg"} /></label>
           <label className="compression-check"><input type="checkbox" checked={lossless} onChange={(event) => setLossless(event.target.checked)} disabled={busy || format === "jpg"} /><span><strong>PNG/WebP 无损模式</strong><small>{format === "jpg" ? "JPEG 不支持无损模式" : format === "webp" ? "当前核心 WebP 编码固定为无损" : "PNG 编码天然无损"}</small></span></label>
+          <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（仅 JPEG）</span><strong>{format === "jpg" && targetSizeKiB ? `${targetSizeKiB} KiB` : "—"}</strong></span><input type="number" min="1" max={MAX_TARGET_SIZE_KIB} step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="留空：不设目标" disabled={busy || format !== "jpg"} aria-invalid={Boolean(targetSizeError)} /><small className="compression-field-hint">{format === "jpg" ? `可选，核心最多尝试 8 个质量候选（1–${MAX_TARGET_SIZE_KIB.toLocaleString()} KiB）` : "PNG 和无损 WebP 不支持目标体积控制"}</small></label>
+          {targetSizeError ? <p className="compression-field-error" role="alert">{targetSizeError}</p> : null}
           <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（推荐）</option><option value="preserve" disabled>保留元数据（核心待支持）</option></select></label>
           <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>
           {outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy} /></label> : null}
@@ -435,7 +459,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <figure className="compression-preview-pane"><figcaption>原图<span>{formatCompressionBytes(selectedItem.size)}</span></figcaption><div className="compression-preview-stage">{originalPreviewUrl ? <img src={originalPreviewUrl} alt={`原图 ${selectedItem.file.name}`} /> : null}</div></figure>
           <figure className="compression-preview-pane"><figcaption>压缩后{preview ? <span>{formatCompressionBytes(preview.outputBytes)}</span> : null}</figcaption><div className="compression-preview-stage">{previewUrl ? <img src={previewUrl} alt={`压缩预览 ${selectedItem.file.name}`} /> : previewBusy ? <LoaderCircle size={20} className="compression-spin" aria-label="正在生成预览" /> : <span className="compression-preview-placeholder">{previewError || "等待预览"}</span>}</div></figure>
         </div> : <p className="compression-empty">选择一张图片后查看原图与真实压缩结果。</p>}
-        {preview ? <div className="compression-preview-stats"><span>尺寸 {preview.width} × {preview.height}</span><span>输出 {formatCompressionBytes(preview.outputBytes)}</span><span className={preview.savedBytes >= 0 ? "compression-saving" : "compression-failure"}>{preview.savedBytes >= 0 ? `节省 ${formatCompressionBytes(preview.savedBytes)} · ${preview.savingsPercent.toFixed(0)}%` : `增加 ${formatCompressionBytes(Math.abs(preview.savedBytes))}`}</span></div> : null}
+        {preview ? <div className="compression-preview-stats"><span>尺寸 {preview.width} × {preview.height}</span><span>输出 {formatCompressionBytes(preview.outputBytes)}</span><span className={previewSavedBytes >= 0 ? "compression-saving" : "compression-failure"}>{previewSavedBytes >= 0 ? `节省 ${formatCompressionBytes(previewSavedBytes)} · ${previewSavingsPercent.toFixed(0)}%` : `增加 ${formatCompressionBytes(Math.abs(previewSavedBytes))}`}</span>{maxOutputBytes ? <span className={preview.targetMet ? "compression-saving" : "compression-failure"}>目标 {preview.targetMet ? "已达成" : "未达成"}</span> : null}{typeof preview.selectedQuality === "number" ? <span>选中质量 {preview.selectedQuality}</span> : null}{preview.status === "skipped" ? <span className="compression-failure">预览跳过：{preview.skippedReason || "未发布输出"}</span> : null}</div> : null}
       </section>
 
       <section className="compression-card compression-summary-card" aria-live="polite">
@@ -450,6 +474,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className="compression-summary-stat"><span>跳过</span><strong>{resultStats.skipped}</strong></div>
         <div className="compression-summary-stat"><span>失败</span><strong className={resultStats.failed > 0 ? "compression-failure" : undefined}>{resultStats.failed}</strong></div>
         <div className="compression-summary-stat"><span>实际节省</span><strong className="compression-saving">{formatCompressionBytes(actualSavedBytes)} · {actualSavingsPercent.toFixed(0)}%</strong></div>
+        {maxOutputBytes ? <div className="compression-summary-stat"><span>目标体积</span><strong className={resultStats.targetMet === false ? "compression-failure" : "compression-saving"}>{resultStats.targetMet === null ? "待处理" : resultStats.targetMet ? "已达成" : "未达成"}</strong></div> : null}
+        {resultStats.selectedQualities.length > 0 ? <div className="compression-summary-stat"><span>实际质量</span><strong>{resultStats.selectedQualities.join(" / ")}</strong></div> : null}
         <span className="compression-estimate-note">输出 {formatCompressionBytes(resultStats.outputBytes)} / 已处理输入 {formatCompressionBytes(resultStats.processedInputBytes)}</span>
         {skipReasons.length > 0 ? <div className="compression-skip-details"><strong>跳过原因</strong>{skipReasons.map((reason) => <span key={reason}>{reason}</span>)}</div> : null}
       </section>
@@ -462,7 +488,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
         </div>
         <div className="compression-progress" aria-label="压缩进度"><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
-        <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
+        <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError) || Boolean(targetSizeError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
       </footer>
     </section>
   );
