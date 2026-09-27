@@ -32,6 +32,8 @@ const MAX_IMAGE_PIXELS: u64 = 16_777_216;
 const MAX_DECODER_ALLOC_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 64 * 1024;
 const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
+const DEFAULT_MAX_CANDIDATES: usize = 8;
+const MAX_CANDIDATES: usize = 12;
 const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -103,6 +105,10 @@ struct CompressionMetadata {
     #[serde(default = "default_skip_if_larger")]
     skip_if_larger: bool,
     #[serde(default)]
+    max_output_bytes: Option<u64>,
+    #[serde(default)]
+    max_candidates: Option<usize>,
+    #[serde(default)]
     metadata_policy: MetadataPolicy,
     #[serde(default)]
     job_id: Option<String>,
@@ -114,6 +120,8 @@ struct CompressionRequest {
     input: Vec<u8>,
     format: CompressionFormat,
     lossless: bool,
+    target_bytes: Option<u64>,
+    max_candidates: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -174,6 +182,9 @@ pub struct CompressionResult {
     pub height: u32,
     pub format: String,
     pub lossless: bool,
+    pub target_bytes: Option<u64>,
+    pub target_met: bool,
+    pub selected_quality: Option<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -197,6 +208,11 @@ pub struct CompressionPreview {
     pub format: String,
     pub output_bytes: u64,
     pub lossless: bool,
+    pub status: String,
+    pub skipped_reason: Option<String>,
+    pub target_bytes: Option<u64>,
+    pub target_met: bool,
+    pub selected_quality: Option<u8>,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -322,35 +338,28 @@ fn run_compression(
     let (width, height) =
         inspect_image(&request.input).map_err(|error| fail_message(job, error))?;
     update_progress(job, "encoding", None, None);
-    let bytes = encode_image(
-        &request.input,
-        request.format,
-        request.metadata.jpeg_quality.unwrap_or(82),
-    )
-    .map_err(|error| fail_message(job, error))?;
-    if bytes.len() > MAX_OUTPUT_BYTES {
-        return fail(job, "compressed output exceeds the 128 MiB limit");
-    }
-    let verified = decode_image(&bytes).map_err(|error| {
-        fail_message(
-            job,
-            format!("compressed output failed decode verification: {error}"),
-        )
-    })?;
-    if verified.dimensions() != (width, height) {
-        return fail(
-            job,
-            "compressed output dimensions do not match the source image",
-        );
-    }
+    let EncodedSelection {
+        bytes,
+        selected_quality,
+        target_met,
+        skipped_reason: selection_skipped_reason,
+    } = choose_encoded_output(request, width, height).map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
     let output_path = resolve_output_path(request).map_err(|error| fail_message(job, error))?;
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
-    if request.metadata.skip_if_larger && output_bytes > input_bytes {
-        let skipped_reason =
-            "compressed output is larger than the source; output was not published";
+    let skipped_reason = selection_skipped_reason.or_else(|| {
+        request
+            .metadata
+            .skip_if_larger
+            .then_some(output_bytes > input_bytes)
+            .filter(|value| *value)
+            .map(|_| {
+                "compressed output is larger than the source; output was not published".to_string()
+            })
+    });
+    if let Some(skipped_reason) = skipped_reason {
         update_progress(job, "skipped", None, Some(skipped_reason.to_string()));
         return Ok(CompressionResult {
             job_id: job
@@ -361,7 +370,7 @@ fn run_compression(
                 .clone(),
             output_path: output_path.to_string_lossy().into_owned(),
             status: "skipped".to_string(),
-            skipped_reason: Some(skipped_reason.to_string()),
+            skipped_reason: Some(skipped_reason),
             input_bytes,
             output_bytes,
             saved_bytes,
@@ -370,6 +379,9 @@ fn run_compression(
             height,
             format: request.format.name().into(),
             lossless: request.lossless,
+            target_bytes: request.target_bytes,
+            target_met,
+            selected_quality,
         });
     }
     update_progress(job, "publishing", None, None);
@@ -411,6 +423,9 @@ fn run_compression(
         height,
         format: request.format.name().into(),
         lossless: request.lossless,
+        target_bytes: request.target_bytes,
+        target_met,
+        selected_quality,
     };
     update_progress(job, "completed", Some(result.output_path.clone()), None);
     Ok(result)
@@ -433,13 +448,114 @@ fn compression_statistics(input_bytes: u64, output_bytes: u64) -> (i64, f64) {
     )
 }
 
+struct EncodedSelection {
+    bytes: Vec<u8>,
+    selected_quality: Option<u8>,
+    target_met: bool,
+    skipped_reason: Option<String>,
+}
+
+fn choose_encoded_output(
+    request: &CompressionRequest,
+    width: u32,
+    height: u32,
+) -> Result<EncodedSelection, String> {
+    let quality = request.metadata.jpeg_quality.unwrap_or(82);
+    let Some(target_bytes) = request.target_bytes else {
+        let bytes = encode_and_verify(&request.input, request.format, quality, width, height)?;
+        return Ok(EncodedSelection {
+            bytes,
+            selected_quality: (request.format == CompressionFormat::Jpeg).then_some(quality),
+            target_met: false,
+            skipped_reason: None,
+        });
+    };
+
+    if request.format != CompressionFormat::Jpeg {
+        let bytes = encode_and_verify(&request.input, request.format, quality, width, height)?;
+        return Ok(EncodedSelection {
+            target_met: (bytes.len() as u64) <= target_bytes,
+            skipped_reason: ((bytes.len() as u64) > target_bytes).then_some(
+                "target_unreachable: lossless output exceeds maxOutputBytes".to_string(),
+            ),
+            bytes,
+            selected_quality: None,
+        });
+    }
+
+    let max_quality = quality;
+    let mut low = 1u8;
+    let mut high = max_quality;
+    let mut candidates = Vec::new();
+    let mut best: Option<(u8, Vec<u8>)> = None;
+    let mut smallest: Option<(u8, Vec<u8>)> = None;
+    while candidates.len() < request.max_candidates && low <= high {
+        let candidate = if candidates.is_empty() {
+            max_quality
+        } else if candidates.len() == 1 {
+            1
+        } else {
+            low + (high - low) / 2
+        };
+        if candidates.contains(&candidate) {
+            break;
+        }
+        candidates.push(candidate);
+        let bytes = encode_and_verify(&request.input, request.format, candidate, width, height)?;
+        if smallest
+            .as_ref()
+            .is_none_or(|(_, current)| bytes.len() < current.len())
+        {
+            smallest = Some((candidate, bytes.clone()));
+        }
+        if bytes.len() as u64 <= target_bytes {
+            best = Some((candidate, bytes));
+            low = candidate.saturating_add(1);
+        } else {
+            high = candidate.saturating_sub(1);
+        }
+    }
+    let target_met = best.is_some();
+    let Some((selected_quality, bytes)) = best.or(smallest) else {
+        return Err("JPEG candidate search produced no encoded output".into());
+    };
+    Ok(EncodedSelection {
+        bytes,
+        selected_quality: Some(selected_quality),
+        target_met,
+        skipped_reason: (!target_met).then_some(
+            "target_unreachable: no JPEG quality candidate fits maxOutputBytes".to_string(),
+        ),
+    })
+}
+
+fn encode_and_verify(
+    input: &[u8],
+    format: CompressionFormat,
+    quality: u8,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, String> {
+    let bytes = encode_image(input, format, quality)?;
+    if bytes.len() > MAX_OUTPUT_BYTES {
+        return Err("compressed output exceeds the 128 MiB limit".into());
+    }
+    let verified = decode_image(&bytes)
+        .map_err(|error| format!("compressed output failed decode verification: {error}"))?;
+    if verified.dimensions() != (width, height) {
+        return Err("compressed output dimensions do not match the source image".into());
+    }
+    Ok(bytes)
+}
+
 fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, String> {
     let (width, height) = inspect_image(&request.input)?;
-    let data = encode_image(
-        &request.input,
-        request.format,
-        request.metadata.jpeg_quality.unwrap_or(82),
-    )?;
+    let EncodedSelection {
+        bytes: data,
+        selected_quality,
+        target_met,
+        skipped_reason,
+    } = choose_encoded_output(request, width, height)?;
     if data.len() > MAX_PREVIEW_BYTES {
         return Err(format!(
             "compressed preview exceeds the {} MiB limit",
@@ -458,6 +574,16 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
         format: request.format.name().into(),
         output_bytes,
         lossless: request.lossless,
+        status: if skipped_reason.is_some() {
+            "skipped"
+        } else {
+            "completed"
+        }
+        .into(),
+        skipped_reason,
+        target_bytes: request.target_bytes,
+        target_met,
+        selected_quality,
     })
 }
 
@@ -589,6 +715,21 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
             return Err("jpegQuality must be between 1 and 100".into());
         }
     }
+    if let Some(target_bytes) = metadata.max_output_bytes {
+        if target_bytes == 0 || target_bytes > MAX_OUTPUT_BYTES as u64 {
+            return Err(format!(
+                "maxOutputBytes must be between 1 and {} MiB",
+                MAX_OUTPUT_BYTES / (1024 * 1024)
+            ));
+        }
+    }
+    let target_bytes = metadata.max_output_bytes;
+    let max_candidates = metadata.max_candidates.unwrap_or(DEFAULT_MAX_CANDIDATES);
+    if !(1..=MAX_CANDIDATES).contains(&max_candidates) {
+        return Err(format!(
+            "maxCandidates must be between 1 and {MAX_CANDIDATES}"
+        ));
+    }
     if matches!(format, CompressionFormat::Jpeg) && lossless {
         return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
     }
@@ -618,6 +759,8 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
         input,
         format,
         lossless,
+        target_bytes,
+        max_candidates,
     })
 }
 
@@ -690,9 +833,6 @@ fn checkpoint(job: &Arc<CompressionJob>) -> Result<(), String> {
     } else {
         Ok(())
     }
-}
-fn fail<T>(job: &Arc<CompressionJob>, message: &str) -> Result<T, String> {
-    Err(fail_message(job, message.to_string()))
 }
 fn fail_message(job: &Arc<CompressionJob>, message: String) -> String {
     update_progress(
@@ -819,12 +959,16 @@ mod tests {
                 jpeg_quality: None,
                 lossless: Some(true),
                 skip_if_larger: true,
+                max_output_bytes: None,
+                max_candidates: None,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("skip-test".into()),
             },
             input,
             format: CompressionFormat::Png,
             lossless: true,
+            target_bytes: None,
+            max_candidates: DEFAULT_MAX_CANDIDATES,
         };
         let job = Arc::new(CompressionJob {
             cancelled: AtomicBool::new(false),
@@ -848,6 +992,79 @@ mod tests {
     fn compression_statistics_are_signed_for_larger_outputs() {
         assert_eq!(compression_statistics(100, 80), (20, 20.0));
         assert_eq!(compression_statistics(100, 120), (-20, -20.0));
+    }
+
+    #[test]
+    fn jpeg_target_search_returns_highest_quality_candidate_within_bound() {
+        let input = png_input();
+        let target = encode_image(&input, CompressionFormat::Jpeg, 50)
+            .unwrap()
+            .len() as u64;
+        let request = CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "sample.png".into(),
+                output_format: "jpeg".into(),
+                output_path: None,
+                output_location: None,
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                jpeg_quality: Some(100),
+                lossless: Some(false),
+                skip_if_larger: true,
+                max_output_bytes: Some(target),
+                max_candidates: Some(MAX_CANDIDATES),
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: None,
+            },
+            input,
+            format: CompressionFormat::Jpeg,
+            lossless: false,
+            target_bytes: Some(target),
+            max_candidates: MAX_CANDIDATES,
+        };
+        let selection = choose_encoded_output(&request, 2, 2).unwrap();
+        assert!(selection.target_met);
+        assert!(selection.selected_quality.unwrap() >= 50);
+        assert!((selection.bytes.len() as u64) <= target);
+    }
+
+    #[test]
+    fn lossless_target_reports_unreachable_without_publishing() {
+        let input = png_input();
+        let request = CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "sample.png".into(),
+                output_format: "png".into(),
+                output_path: None,
+                output_location: None,
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                jpeg_quality: None,
+                lossless: Some(true),
+                skip_if_larger: true,
+                max_output_bytes: Some(1),
+                max_candidates: Some(DEFAULT_MAX_CANDIDATES),
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: None,
+            },
+            input,
+            format: CompressionFormat::Png,
+            lossless: true,
+            target_bytes: Some(1),
+            max_candidates: DEFAULT_MAX_CANDIDATES,
+        };
+        let selection = choose_encoded_output(&request, 2, 2).unwrap();
+        assert!(!selection.target_met);
+        assert!(selection
+            .skipped_reason
+            .as_deref()
+            .is_some_and(|reason| reason.starts_with("target_unreachable")));
     }
 
     #[test]
