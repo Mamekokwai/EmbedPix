@@ -945,6 +945,7 @@
 }
 
 .directory-import-button { margin-top: 6px; }
+.drop-zone-actions { display: flex; justify-content: center; }
 .workspace-transfer-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .workspace-file-button { cursor: pointer; }
 
