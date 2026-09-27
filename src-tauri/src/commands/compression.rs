@@ -7,6 +7,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
+    time::{Duration, Instant},
 };
 
 use image::{
@@ -30,6 +31,7 @@ const MAX_IMAGE_DIMENSION: u32 = 8_192;
 const MAX_IMAGE_PIXELS: u64 = 16_777_216;
 const MAX_DECODER_ALLOC_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 64 * 1024;
+const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -96,6 +98,8 @@ struct CompressionMetadata {
     #[serde(default)]
     jpeg_quality: Option<u8>,
     #[serde(default)]
+    lossless: Option<bool>,
+    #[serde(default)]
     metadata_policy: MetadataPolicy,
     #[serde(default)]
     job_id: Option<String>,
@@ -106,6 +110,7 @@ struct CompressionRequest {
     metadata: CompressionMetadata,
     input: Vec<u8>,
     format: CompressionFormat,
+    lossless: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -125,12 +130,28 @@ pub struct CompressionJobState {
 struct CompressionJob {
     cancelled: AtomicBool,
     progress: Mutex<CompressionProgress>,
+    terminal_at: Mutex<Option<Instant>>,
 }
 
 impl Default for CompressionJobState {
     fn default() -> Self {
         Self {
             jobs: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+impl CompressionJobState {
+    fn prune(&self) {
+        let now = Instant::now();
+        if let Ok(mut jobs) = self.jobs.lock() {
+            jobs.retain(|_, job| {
+                job.terminal_at
+                    .lock()
+                    .ok()
+                    .and_then(|value| *value)
+                    .is_none_or(|finished| now.duration_since(finished) < JOB_RETENTION)
+            });
         }
     }
 }
@@ -144,6 +165,7 @@ pub struct CompressionResult {
     pub width: u32,
     pub height: u32,
     pub format: String,
+    pub lossless: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -155,6 +177,7 @@ pub struct CompressionPreflight {
     pub input_bytes: u64,
     pub output_path: String,
     pub overwrites_existing: bool,
+    pub lossless: bool,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -168,6 +191,7 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
         height,
         input_bytes: request.input.len() as u64,
         overwrites_existing: output_path.exists(),
+        lossless: request.lossless,
         output_path: output_path.to_string_lossy().into_owned(),
     })
 }
@@ -178,6 +202,7 @@ pub async fn compress_image(
     state: State<'_, CompressionJobState>,
 ) -> Result<CompressionResult, String> {
     let request = parse_request(request)?;
+    state.prune();
     let job_id = request
         .metadata
         .job_id
@@ -192,6 +217,7 @@ pub async fn compress_image(
             output_path: None,
             error: None,
         }),
+        terminal_at: Mutex::new(None),
     });
     state
         .jobs
@@ -201,9 +227,7 @@ pub async fn compress_image(
     let result = tauri::async_runtime::spawn_blocking(move || run_compression(&request, &job))
         .await
         .map_err(|error| format!("compression task failed: {error}"))?;
-    if let Ok(mut jobs) = state.jobs.lock() {
-        jobs.remove(&job_id);
-    }
+    state.prune();
     result
 }
 
@@ -212,6 +236,7 @@ pub fn cancel_compression(
     job_id: String,
     state: State<'_, CompressionJobState>,
 ) -> Result<CompressionProgress, String> {
+    state.prune();
     let job = state
         .jobs
         .lock()
@@ -219,8 +244,20 @@ pub fn cancel_compression(
         .get(&job_id)
         .cloned()
         .ok_or_else(|| "compression job not found".to_string())?;
-    job.cancelled.store(true, Ordering::Release);
-    update_progress(&job, "cancelling", None, None);
+    let is_terminal = job
+        .progress
+        .lock()
+        .map(|progress| {
+            matches!(
+                progress.status.as_str(),
+                "completed" | "failed" | "cancelled"
+            )
+        })
+        .unwrap_or(true);
+    if !is_terminal {
+        job.cancelled.store(true, Ordering::Release);
+        update_progress(&job, "cancelling", None, None);
+    }
     let progress = job
         .progress
         .lock()
@@ -234,6 +271,7 @@ pub fn get_compression_progress(
     job_id: String,
     state: State<'_, CompressionJobState>,
 ) -> Result<CompressionProgress, String> {
+    state.prune();
     let job = state
         .jobs
         .lock()
@@ -301,6 +339,7 @@ fn run_compression(
         width,
         height,
         format: request.format.name().into(),
+        lossless: request.lossless,
     };
     update_progress(job, "completed", Some(result.output_path.clone()), None);
     Ok(result)
@@ -415,6 +454,10 @@ fn parse_request(request: Request<'_>) -> Result<CompressionRequest, String> {
     let metadata: CompressionMetadata = serde_json::from_slice(&body[8..end])
         .map_err(|error| format!("invalid compression metadata JSON: {error}"))?;
     let format = CompressionFormat::parse(&metadata.output_format)?;
+    let lossless = metadata.lossless.unwrap_or(matches!(
+        format,
+        CompressionFormat::Png | CompressionFormat::Webp
+    ));
     if metadata.file_name.trim().is_empty()
         || metadata.file_name.len() > 1024
         || metadata.file_name.chars().any(char::is_control)
@@ -425,6 +468,12 @@ fn parse_request(request: Request<'_>) -> Result<CompressionRequest, String> {
         if !(1..=100).contains(&quality) {
             return Err("jpegQuality must be between 1 and 100".into());
         }
+    }
+    if matches!(format, CompressionFormat::Jpeg) && lossless {
+        return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
+    }
+    if matches!(format, CompressionFormat::Webp) && !lossless {
+        return Err("lossy WebP compression is not available in the first-stage backend; request lossless WebP".into());
     }
     if metadata.metadata_policy == MetadataPolicy::Preserve {
         return Err(
@@ -448,6 +497,7 @@ fn parse_request(request: Request<'_>) -> Result<CompressionRequest, String> {
         metadata,
         input,
         format,
+        lossless,
     })
 }
 
@@ -544,6 +594,14 @@ fn update_progress(
     error: Option<String>,
 ) {
     if let Ok(mut progress) = job.progress.lock() {
+        if stage == "cancelling"
+            && matches!(
+                progress.status.as_str(),
+                "completed" | "failed" | "cancelled"
+            )
+        {
+            return;
+        }
         progress.stage = stage.to_string();
         progress.status = match stage {
             "completed" => "completed",
@@ -557,6 +615,11 @@ fn update_progress(
             progress.output_path = output_path;
         }
         progress.error = error;
+        if matches!(stage, "completed" | "cancelled" | "failed") {
+            if let Ok(mut terminal_at) = job.terminal_at.lock() {
+                *terminal_at = Some(Instant::now());
+            }
+        }
     }
 }
 fn uuid_like_id() -> String {
@@ -615,6 +678,7 @@ mod tests {
                 output_path: None,
                 error: None,
             }),
+            terminal_at: Mutex::new(None),
         });
         assert!(checkpoint(&job).is_err());
         assert_eq!(job.progress.lock().unwrap().status, "cancelled");
