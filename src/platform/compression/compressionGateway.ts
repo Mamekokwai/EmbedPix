@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isTauriEnvironment, pickImageDirectory, pickImageFiles, type ImageDirectoryImportResult, type NativeImageFile } from "../image/imageExportGateway";
-import type { CompressionFormat, CompressionOptions, MetadataPolicy } from "../../features/image-compression/types";
+import type { CompressionFormat, CompressionOptions, CompressionOutputLocation, MetadataPolicy } from "../../features/image-compression/types";
 
 export const PREFLIGHT_COMPRESSION_COMMAND = "preflight_compression" as const;
 export const COMPRESS_IMAGE_COMMAND = "compress_image" as const;
@@ -11,7 +11,9 @@ export interface CompressionEnvelopeRequest {
   fileName: string;
   inputData: Uint8Array;
   outputFormat: Exclude<CompressionFormat, "original">;
+  outputLocation: CompressionOutputLocation;
   sourcePath?: string;
+  outputSubdirectory?: string;
   outputDirectory?: string;
   overwriteExisting: boolean;
   jpegQuality: number;
@@ -28,8 +30,9 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
   return {
     fileName: request.fileName,
     outputFormat: request.outputFormat,
-    outputLocation: request.outputDirectory ? "directory" : "source",
+    outputLocation: request.outputLocation,
     ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
+    ...(request.outputSubdirectory ? { outputSubdirectory: request.outputSubdirectory } : {}),
     ...(request.outputDirectory ? { outputDirectory: request.outputDirectory } : {}),
     overwriteExisting: request.overwriteExisting,
     jpegQuality: request.jpegQuality,
@@ -40,7 +43,9 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
 
 export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): Uint8Array {
   if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
-  if (!request.sourcePath && !request.outputDirectory) throw new Error("压缩需要源文件路径或输出目录。");
+  if ((request.outputLocation === "source" || request.outputLocation === "subfolder") && !request.sourcePath) throw new Error("源文件夹输出需要源文件路径。");
+  if (request.outputLocation === "subfolder" && !request.outputSubdirectory) throw new Error("源文件夹子目录不能为空。");
+  if (request.outputLocation === "directory" && !request.outputDirectory) throw new Error("指定目录输出需要目录路径。");
   const metadataBytes = new TextEncoder().encode(JSON.stringify(getCompressionMetadata(request)));
   const payload = new Uint8Array(8 + metadataBytes.byteLength + request.inputData.byteLength);
   payload.set(new Uint8Array([0x45, 0x47, 0x46, 0x31]));
@@ -66,8 +71,10 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     fileName: file.fileName,
     inputData: new Uint8Array(file.data),
     outputFormat: options.format,
+    outputLocation: options.outputLocation,
     sourcePath: file.path,
-    outputDirectory: options.outputDirectory,
+    outputSubdirectory: options.outputLocation === "subfolder" ? options.outputSubdirectory : undefined,
+    outputDirectory: options.outputLocation === "directory" ? options.outputDirectory : undefined,
     overwriteExisting: options.overwrite,
     jpegQuality: options.quality,
     metadataPolicy: options.metadataPolicy,

@@ -8,6 +8,7 @@ const request = {
   fileName: "icon.png",
   inputData: new Uint8Array([1, 2, 3]),
   outputFormat: "webp" as const,
+  outputLocation: "source" as const,
   sourcePath: "C:/icon.png",
   overwriteExisting: false,
   jpegQuality: 82,
@@ -39,6 +40,17 @@ describe("compression gateway", () => {
     await compressImage(request);
     expect(invoke).toHaveBeenNthCalledWith(1, PREFLIGHT_COMPRESSION_COMMAND, expect.any(Uint8Array));
     expect(invoke).toHaveBeenNthCalledWith(2, COMPRESS_IMAGE_COMMAND, expect.any(Uint8Array));
+  });
+
+  it("serializes source subfolder and directory output locations without unsupported fields", () => {
+    const subfolder = encodeCompressionEnvelope({ ...request, outputLocation: "subfolder", outputSubdirectory: "compressed" });
+    const metadataLength = new DataView(subfolder.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(subfolder.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata).toMatchObject({ outputLocation: "subfolder", outputSubdirectory: "compressed" });
+    const directory = encodeCompressionEnvelope({ ...request, outputLocation: "directory", outputDirectory: "C:/export" });
+    const directoryLength = new DataView(directory.buffer).getUint32(4, true);
+    const directoryMetadata = JSON.parse(new TextDecoder().decode(directory.slice(8, 8 + directoryLength))) as Record<string, unknown>;
+    expect(directoryMetadata).toMatchObject({ outputLocation: "directory", outputDirectory: "C:/export" });
   });
 
   it("exposes native progress and cancellation commands", async () => {
