@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod export_image;
 pub mod export_preflight;
 pub mod gif;

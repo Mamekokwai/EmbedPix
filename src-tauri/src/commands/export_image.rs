@@ -237,12 +237,12 @@ impl WatermarkPosition {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct WriteOptions {
-    manage_existing_output: bool,
-    overwrite_existing: bool,
-    overwrite_same_name: bool,
-    delete_source: bool,
-    replace_original: bool,
+pub(crate) struct WriteOptions {
+    pub(crate) manage_existing_output: bool,
+    pub(crate) overwrite_existing: bool,
+    pub(crate) overwrite_same_name: bool,
+    pub(crate) delete_source: bool,
+    pub(crate) replace_original: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -1498,7 +1498,7 @@ fn choose_output_path(
     )
 }
 
-fn write_exported_file(
+pub(crate) fn write_exported_file(
     output_path: &Path,
     bytes: Vec<u8>,
     source_path: Option<&str>,

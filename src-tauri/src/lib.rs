@@ -10,6 +10,7 @@ pub fn run() {
         .manage(commands::update::UpdateHealthState::default())
         .manage(commands::gif::GifExportJobState::default())
         .manage(commands::gif::GifFrameSpoolState::default())
+        .manage(commands::compression::CompressionJobState::default())
         .invoke_handler(tauri::generate_handler![
             commands::gif::pick_gif_output,
             commands::gif::export_gif,
@@ -33,6 +34,10 @@ pub fn run() {
             commands::export_image::pick_images,
             commands::export_image::pick_image_directory,
             commands::export_image::read_image_file,
+            commands::compression::compress_image,
+            commands::compression::preflight_compression,
+            commands::compression::cancel_compression,
+            commands::compression::get_compression_progress,
             commands::export_preflight::preflight_image_exports,
             commands::update::check_update,
             commands::update::get_update_download_progress,
