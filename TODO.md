@@ -452,3 +452,10 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 安装器启动失败清理 health marker 完成
 
 证据：基于 `acb29b8`、`9ead095`、`c933967`；本次发布前执行版本一致性与完整门禁，发布后继续核验 7 项资产、latest.json、provenance、SHA256SUMS 和 x64/ARM64 minisign 验签。已有版本标签不移动、不重写。
+
+## 0.6.2 发布验收
+
+- [x] 修复非 Windows 目标上的更新 health marker 清理分支，避免 clippy `-D warnings` 失败
+- [x] 保持 Windows 安装器启动失败后的 health marker 清理
+
+证据：基于当前工作树的跨平台修复；本次发布前重新执行版本一致性、npm/Rust 完整门禁，确保 macOS/Ubuntu clippy 与 Windows 行为均通过。`v0.6.1` 标签不移动、不重写。
