@@ -1169,6 +1169,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
   };
 
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);

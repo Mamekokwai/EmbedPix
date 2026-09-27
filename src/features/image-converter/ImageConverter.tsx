@@ -1356,6 +1356,7 @@ export default function ImageConverter({
               <strong>拖拽图片到这里</strong>
               <span>或点击选择一个或多个本地文件</span>
               <small>支持 {SUPPORTED_IMAGE_FORMAT_LABEL}</small>
+              <button className="quiet-button directory-import-button" type="button" onClick={(event) => { event.stopPropagation(); void handleImportImageDirectory(); }}>导入图片文件夹</button>
             </div>
           ) : (
             <div className="preview-content">
@@ -1447,8 +1448,6 @@ export default function ImageConverter({
             </div>
           )}
         </div>
-
-        {!file ? <button className="quiet-button directory-import-button" type="button" onClick={() => void handleImportImageDirectory()}>导入图片文件夹</button> : null}
 
         <div className="panel settings-panel">
           <div className="panel-heading">

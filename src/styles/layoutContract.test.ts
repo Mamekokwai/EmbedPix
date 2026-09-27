@@ -45,6 +45,8 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("getGifCancelButtonLabel");
     expect(converterView).toContain("export-button");
     expect(converterView).toContain("requestExportCancel");
+    expect(converterView).toContain("导入图片文件夹");
+    expect(converterCss).toContain(".directory-import-button");
     expect(gifView).toContain("保存工作区");
     expect(converterView).toContain("打开工作区");
     expect(gifCss).toContain(".gif-header-note { display: flex; flex-wrap: wrap;");
