@@ -31,8 +31,11 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression
 - `path`、`source`、`directory`、`subfolder`、`original` 输出位置有契约入口；
 - 输出经过现有原子发布/回滚入口；
 - `skipIfLarger` 已进入原生或 gateway 契约。
+- `preview_compression`（当前兼容名为 `preflight_compression`）只做解码/尺寸预检，不调用发布 writer、不执行文件写入/重命名/删除；输入受字节、尺寸、像素和 decoder allocation 限制。
 
 现有 CLI smoke 仍检查真实支持的 image/GIF 输出：签名、SHA256 和二次解码。原生压缩真正可调用后，应再增加桌面 Tauri IPC fixture，检查 `skipIfLarger` 的跳过结果、输出位置实际路径、取消、失败清理和源文件不变；当前脚本不会越界假设 CLI 存在这些操作。
+
+脚本的静态 preview 检查会在发布前失败于以下情况：预检函数调用 `write_exported_file` 或文件写入/重命名/删除 API；未调用输入解码校验；或缺少输入字节、图像尺寸、像素数、decoder allocation 限制。
 
 ## 第三方编码器许可证清单
 

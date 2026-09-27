@@ -58,6 +58,31 @@ function Assert-NativeCompressionContract([switch]$Required) {
   [pscustomobject]@{ nativeCommands = $true; outputLocations = @('path', 'source', 'directory', 'subfolder', 'original'); skipIfLarger = $hasSkipIfLarger; cliCompressionOperation = $false }
 }
 
+function Assert-PreviewCompressionContract {
+  $sourcePath = Join-Path $repoRoot 'src-tauri/src/commands/compression.rs'
+  $source = Get-Content -Raw -LiteralPath $sourcePath
+  $previewName = if ($source -match '(?m)\bpreview_compression\b') { 'preview_compression' } else { 'preflight_compression' }
+  $previewMatch = [regex]::Match($source, "(?s)(?:pub async fn|pub fn)\s+$previewName\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)")
+  if (-not $previewMatch.Success) { throw "Could not locate preview compression function: $previewName" }
+  $body = $previewMatch.Value
+  $validationBody = $body
+  $runPreviewBody = ''
+  if ($body -notmatch 'inspect_image|decode_image') {
+    $runPreviewMatch = [regex]::Match($source, '(?s)fn\s+run_preview\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
+    if (-not $runPreviewMatch.Success) { throw "$previewName does not expose an input-validation implementation." }
+    $runPreviewBody = $runPreviewMatch.Value
+    $validationBody = "$body`n$runPreviewBody"
+  }
+  if ($validationBody -match 'write_exported_file|fs::write|fs::rename|remove_file|create_dir') {
+    throw "$previewName contains a publishing or filesystem mutation call."
+  }
+  if ($validationBody -notmatch 'inspect_image|decode_image') { throw "$previewName does not validate/decode the input image." }
+  foreach ($limit in @('MAX_INPUT_BYTES', 'MAX_IMAGE_DIMENSION', 'MAX_IMAGE_PIXELS', 'MAX_DECODER_ALLOC_BYTES')) {
+    if ($source -notmatch [regex]::Escape($limit)) { throw "Preview size limit is missing: $limit" }
+  }
+  [pscustomobject]@{ command = $previewName; writerFree = $true; inputDecodeValidation = $true; sizeLimits = @('MAX_INPUT_BYTES', 'MAX_IMAGE_DIMENSION', 'MAX_IMAGE_PIXELS', 'MAX_DECODER_ALLOC_BYTES') }
+}
+
 $script:root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-compression-cli-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $script:root | Out-Null
 try {
@@ -83,12 +108,14 @@ try {
   $gifResult = Assert-Output $gifOutput 'gif' 'GIF'
 
   $nativeContract = Assert-NativeCompressionContract -Required:$RequireCompression
+  $previewContract = Assert-PreviewCompressionContract
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'not exposed by embedpix-cli; native Tauri contract checked separately'
     outputs = @($imageResult, $decodeResult, $gifResult)
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
+    previewCompressionContract = $previewContract
   }
 
   if ($RequireCompression) {
