@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import "../../styles/features/image-compression.css";
-import { cancelCompression, compressImage, createCompressionRequest, getCompressionProgress, pickCompressionDirectory, pickCompressionFiles, preflightCompression } from "../../platform/compression/compressionGateway";
+import { cancelCompression, compressImage, createCompressionRequest, getCompressionProgress, pickCompressionDirectory, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
 import { isTauriEnvironment } from "../../platform/image/imageExportGateway";
 import type { NativeImageFile } from "../../platform/image/imageExportGateway";
 import {
@@ -12,6 +12,7 @@ import {
   getCompressionOutputLocationError,
 } from "./imageCompressionLogic";
 import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionOptions, CompressionOutputLocation, MetadataPolicy } from "./types";
+import type { CompressionPreview } from "../../platform/compression/compressionGateway";
 
 type CompressionStatus = "idle" | "ready" | "busy" | "success" | "error";
 
@@ -52,8 +53,13 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function previewMimeType(format: string): string {
+  return format === "jpeg" || format === "jpg" ? "image/jpeg" : format === "png" ? "image/png" : "image/webp";
+}
+
 export default function ImageCompressionView({ active = true }: ImageCompressionViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewRequestIdRef = useRef(0);
   const [items, setItems] = useState<CompressionItem[]>([]);
   const [format, setFormat] = useState<CompressionFormat>("webp");
   const [quality, setQuality] = useState(82);
@@ -72,6 +78,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [message, setMessage] = useState("");
   const [failures, setFailures] = useState<string[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<CompressionPreview | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState("");
   const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0 });
   const activeJobIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
@@ -91,6 +103,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const outputLocationError = useMemo(() => getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, !isTauriEnvironment() || (items.length > 0 && items.every((item) => Boolean(item.sourcePath)))), [items, outputDirectory, outputLocation, outputSubdirectory]);
   const actualSavedBytes = resultStats.savedBytes;
   const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
+  const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
 
   useEffect(() => {
     if (!active) return;
@@ -98,6 +111,67 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setEstimate(fallback);
     setEstimateNote(items.length === 0 ? "等待导入图片" : "本地预估，执行前由原生预检复核");
   }, [active, format, items, options]);
+
+  useEffect(() => {
+    if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
+  }, [items, selectedItemId]);
+
+  useEffect(() => {
+    if (!selectedItem) {
+      setOriginalPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(selectedItem.file);
+    setOriginalPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [selectedItem]);
+
+  useEffect(() => {
+    if (!preview) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([new Uint8Array(preview.data)], { type: previewMimeType(preview.format) }));
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [preview]);
+
+  useEffect(() => {
+    const requestId = ++previewRequestIdRef.current;
+    const controller = new AbortController();
+    setPreview(null);
+    setPreviewError("");
+    if (!active || !selectedItem) {
+      setPreviewBusy(false);
+      return () => controller.abort();
+    }
+    if (!isTauriEnvironment()) {
+      setPreviewBusy(false);
+      setPreviewError("真实压缩预览需要桌面应用；当前环境只显示原图和参数估算。");
+      return () => controller.abort();
+    }
+    setPreviewBusy(true);
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          if (!selectedItem.sourcePath) throw new Error("当前图片没有可用的桌面源路径。");
+          const nativeFile: NativeImageFile = { path: selectedItem.sourcePath, fileName: selectedItem.file.name, data: Array.from(new Uint8Array(await selectedItem.file.arrayBuffer())) };
+          const result = await previewCompression(createCompressionRequest(nativeFile, options), controller.signal);
+          if (requestId !== previewRequestIdRef.current) return;
+          setPreview(result);
+        } catch (error) {
+          if (requestId !== previewRequestIdRef.current || (error instanceof DOMException && error.name === "AbortError")) return;
+          setPreviewError(errorMessage(error));
+        } finally {
+          if (requestId === previewRequestIdRef.current) setPreviewBusy(false);
+        }
+      })();
+    }, 260);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [active, options, selectedItem]);
 
   const addBrowserFiles = (files: File[]) => {
     const next = toBrowserItems(files);
@@ -332,7 +406,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           </div>
           <div className="compression-list" aria-label="待压缩图片列表">
             {items.length === 0 ? <p className="compression-empty">导入后将在这里显示文件、原始大小与来源。</p> : items.map((item) => (
-              <div className="compression-item" key={item.id}>
+              <div className={`compression-item${selectedItemId === item.id ? " compression-item-selected" : ""}`} key={item.id} role="button" tabIndex={busy ? -1 : 0} aria-pressed={selectedItemId === item.id} onClick={() => { if (!busy) setSelectedItemId(item.id); }} onKeyDown={(event) => { if (!busy && (event.key === "Enter" || event.key === " ")) setSelectedItemId(item.id); }}>
                 <div className="compression-item-icon"><Images size={15} aria-hidden="true" /></div>
                 <div className="compression-item-copy"><strong>{item.file.name}</strong><span>{formatCompressionBytes(item.size)}{item.sourcePath ? " · 桌面文件" : " · 浏览器文件"}</span></div>
                 <button type="button" className="compression-icon-button" aria-label={`移除 ${item.file.name}`} onClick={() => removeItem(item.id)} disabled={busy}><Trash2 size={15} aria-hidden="true" /></button>
@@ -354,6 +428,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <label className="compression-check"><input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} disabled={busy} /><span><strong>允许覆盖同名文件</strong><small>关闭时同名目标会拒绝写入</small></span></label>
         </aside>
       </div>
+
+      <section className="compression-card compression-preview-card" aria-live="polite" aria-label="压缩预览">
+        <div className="compression-card-heading"><div><span className="compression-card-kicker">03 / PREVIEW</span><h2>真实压缩预览</h2></div><span className="compression-count">{selectedItem?.file.name ?? "未选择图片"}</span></div>
+        {selectedItem ? <div className="compression-preview-grid">
+          <figure className="compression-preview-pane"><figcaption>原图<span>{formatCompressionBytes(selectedItem.size)}</span></figcaption><div className="compression-preview-stage">{originalPreviewUrl ? <img src={originalPreviewUrl} alt={`原图 ${selectedItem.file.name}`} /> : null}</div></figure>
+          <figure className="compression-preview-pane"><figcaption>压缩后{preview ? <span>{formatCompressionBytes(preview.outputBytes)}</span> : null}</figcaption><div className="compression-preview-stage">{previewUrl ? <img src={previewUrl} alt={`压缩预览 ${selectedItem.file.name}`} /> : previewBusy ? <LoaderCircle size={20} className="compression-spin" aria-label="正在生成预览" /> : <span className="compression-preview-placeholder">{previewError || "等待预览"}</span>}</div></figure>
+        </div> : <p className="compression-empty">选择一张图片后查看原图与真实压缩结果。</p>}
+        {preview ? <div className="compression-preview-stats"><span>尺寸 {preview.width} × {preview.height}</span><span>输出 {formatCompressionBytes(preview.outputBytes)}</span><span className={preview.savedBytes >= 0 ? "compression-saving" : "compression-failure"}>{preview.savedBytes >= 0 ? `节省 ${formatCompressionBytes(preview.savedBytes)} · ${preview.savingsPercent.toFixed(0)}%` : `增加 ${formatCompressionBytes(Math.abs(preview.savedBytes))}`}</span></div> : null}
+      </section>
 
       <section className="compression-card compression-summary-card" aria-live="polite">
         <div className="compression-summary-stat"><span>原始大小</span><strong>{formatCompressionBytes(estimate.inputBytes)}</strong></div>

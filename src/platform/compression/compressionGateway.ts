@@ -3,6 +3,7 @@ import { isTauriEnvironment, pickImageDirectory, pickImageFiles, type ImageDirec
 import type { CompressionFormat, CompressionOptions, CompressionOutputLocation, MetadataPolicy } from "../../features/image-compression/types";
 
 export const PREFLIGHT_COMPRESSION_COMMAND = "preflight_compression" as const;
+export const PREVIEW_COMPRESSION_COMMAND = "preview_compression" as const;
 export const COMPRESS_IMAGE_COMMAND = "compress_image" as const;
 export const CANCEL_COMPRESSION_COMMAND = "cancel_compression" as const;
 export const GET_COMPRESSION_PROGRESS_COMMAND = "get_compression_progress" as const;
@@ -38,6 +39,17 @@ export interface CompressionResult {
   lossless: boolean;
 }
 export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; }
+export interface CompressionPreview {
+  data: number[];
+  width: number;
+  height: number;
+  format: string;
+  inputBytes: number;
+  outputBytes: number;
+  savedBytes: number;
+  savingsPercent: number;
+  lossless: boolean;
+}
 
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
   if (request.metadataPolicy !== "strip") throw new Error("第一阶段原生压缩仅支持移除元数据。");
@@ -99,6 +111,14 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
 export async function preflightCompression(request: CompressionEnvelopeRequest): Promise<CompressionPreflight> {
   if (!isTauriEnvironment()) throw new Error("压缩预检需要桌面原生命令，当前环境仅可编辑参数。");
   return invoke<CompressionPreflight>(PREFLIGHT_COMPRESSION_COMMAND, encodeCompressionEnvelope(request));
+}
+
+export async function previewCompression(request: CompressionEnvelopeRequest, signal?: AbortSignal): Promise<CompressionPreview> {
+  if (!isTauriEnvironment()) throw new Error("真实压缩预览需要桌面原生命令，当前环境仅可查看原图。");
+  if (signal?.aborted) throw new DOMException("压缩预览已取消。", "AbortError");
+  const preview = await invoke<CompressionPreview>(PREVIEW_COMPRESSION_COMMAND, encodeCompressionEnvelope(request));
+  if (signal?.aborted) throw new DOMException("压缩预览已取消。", "AbortError");
+  return preview;
 }
 
 export async function compressImage(request: CompressionEnvelopeRequest): Promise<CompressionResult> {

@@ -70,6 +70,7 @@
 .compression-secondary-button:hover, .compression-icon-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
 .compression-list { display: grid; gap: 6px; max-height: 220px; margin-top: 14px; overflow-y: auto; overflow-x: hidden; }
 .compression-item { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 8px 9px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); }
+.compression-item-selected { border-color: color-mix(in srgb, var(--qp-accent-default) 55%, var(--qp-border-subtle)); background: var(--qp-accent-muted); }
 .compression-item-icon { width: 27px; height: 27px; flex: 0 0 auto; border-radius: 7px; background: var(--qp-accent-muted); }
 .compression-item-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
 .compression-item-copy strong, .compression-item-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -78,6 +79,15 @@
 .compression-icon-button { width: 28px; height: 28px; flex: 0 0 auto; background: transparent; color: var(--qp-text-tertiary); }
 .compression-empty { margin: 14px 0 0; color: var(--qp-text-tertiary); font-size: 12px; line-height: 1.6; }
 .compression-settings-card { display: grid; align-content: start; gap: 15px; }
+.compression-preview-card { margin-top: 14px; padding: 18px; }
+.compression-preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.compression-preview-pane { min-width: 0; margin: 0; }
+.compression-preview-pane figcaption { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 7px; color: var(--qp-text-secondary); font-size: 12px; }
+.compression-preview-pane figcaption span { color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
+.compression-preview-stage { display: grid; min-height: 180px; max-height: 300px; place-items: center; overflow: hidden; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background-color: var(--qp-bg-elevated); background-image: linear-gradient(45deg, color-mix(in srgb, var(--qp-border-subtle) 55%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--qp-border-subtle) 55%, transparent) 75%), linear-gradient(45deg, color-mix(in srgb, var(--qp-border-subtle) 55%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--qp-border-subtle) 55%, transparent) 75%); background-position: 0 0, 8px 8px; background-size: 16px 16px; }
+.compression-preview-stage img { display: block; max-width: 100%; max-height: 298px; object-fit: contain; }
+.compression-preview-placeholder { max-width: 80%; color: var(--qp-text-tertiary); font-size: 11px; text-align: center; overflow-wrap: anywhere; }
+.compression-preview-stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
 .compression-field { display: grid; gap: 7px; color: var(--qp-text-secondary); font-size: 12px; }
 .compression-field select, .compression-field input:not([type="range"]) { width: 100%; min-height: 34px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-primary); font: inherit; font-size: 12px; padding: 0 10px; }
 .compression-field input:not([type="range"]):focus, .compression-field select:focus { border-color: var(--qp-accent-default); }
@@ -126,6 +136,8 @@
   .compression-header-note { white-space: normal; }
   .compression-input-card, .compression-settings-card { padding: 14px; }
   .compression-settings-card { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .compression-preview-card { padding: 14px; }
+  .compression-preview-grid { grid-template-columns: minmax(0, 1fr); }
   .compression-settings-card .compression-card-heading { grid-column: auto; }
   .compression-summary-card { gap: 14px; }
   .compression-result-card { gap: 14px; }

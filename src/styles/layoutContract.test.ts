@@ -79,6 +79,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("成功、跳过和节省统计");
     expect(compressionView).toContain("result.status === \"skipped\"");
     expect(compressionView).toContain("skippedReason");
+    expect(compressionView).toContain("真实压缩预览");
+    expect(compressionView).toContain("AbortController");
+    expect(compressionCss).toContain(".compression-preview-grid");
     expect(compressionView).toContain("同名目标会拒绝写入");
     expect(compressionCss).toContain(".compression-progress");
   });

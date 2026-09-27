@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, cancelCompression, compressImage, encodeCompressionEnvelope, getCompressionProgress, preflightCompression } from "./compressionGateway";
+import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, encodeCompressionEnvelope, getCompressionProgress, preflightCompression, previewCompression } from "./compressionGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -40,6 +40,20 @@ describe("compression gateway", () => {
     await compressImage(request);
     expect(invoke).toHaveBeenNthCalledWith(1, PREFLIGHT_COMPRESSION_COMMAND, expect.any(Uint8Array));
     expect(invoke).toHaveBeenNthCalledWith(2, COMPRESS_IMAGE_COMMAND, expect.any(Uint8Array));
+  });
+
+  it("uses the preview command without changing the raw envelope", async () => {
+    vi.mocked(invoke).mockResolvedValue({ data: [1, 2, 3], width: 2, height: 2, format: "webp", inputBytes: 3, outputBytes: 3, savedBytes: 0, savingsPercent: 0, lossless: true });
+    const controller = new AbortController();
+    await expect(previewCompression(request, controller.signal)).resolves.toMatchObject({ format: "webp", outputBytes: 3 });
+    expect(invoke).toHaveBeenCalledWith(PREVIEW_COMPRESSION_COMMAND, expect.any(Uint8Array));
+  });
+
+  it("does not surface a stale preview after cancellation", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(previewCompression(request, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("keeps skipped results distinct from completed output", async () => {
