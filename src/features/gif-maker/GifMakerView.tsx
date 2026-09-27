@@ -547,6 +547,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [isDragging, setIsDragging] = useState(false);
   const [sourceMode, setSourceMode] = useState<GifSourceMode>("image");
   const [videoSource, setVideoSource] = useState<VideoSourceModel | null>(null);
+  const videoSourceRef = useRef<VideoSourceModel | null>(null);
   const [videoStart, setVideoStart] = useState(0);
   const [videoEnd, setVideoEnd] = useState(0);
   const [videoFps, setVideoFps] = useState(savedPreferences.videoFps);
@@ -612,6 +613,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   framesRef.current = frames;
+  videoSourceRef.current = videoSource;
 
   useEffect(() => () => {
     importQueueRef.current.cancel();
@@ -623,8 +625,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     gifCancelFailureRef.current = null;
     videoImportRequestRef.current += 1;
     framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
-    if (videoSource) URL.revokeObjectURL(videoSource.previewUrl);
-  }, [videoSource]);
+    if (videoSourceRef.current) URL.revokeObjectURL(videoSourceRef.current.previewUrl);
+  }, []);
 
   useEffect(() => {
     saveGifMakerPreferences({
