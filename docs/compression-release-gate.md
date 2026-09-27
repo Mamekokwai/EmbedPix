@@ -27,20 +27,21 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression
 
 强制模式检查真实的 Tauri 原生契约：
 
-- `preflight_compression`、`compress_image`、`cancel_compression` 入口存在；
+- `preflight_compression`、独立的 `preview_compression`、`compress_image`、`cancel_compression` 入口存在；
 - `path`、`source`、`directory`、`subfolder`、`original` 输出位置有契约入口；
 - 输出经过现有原子发布/回滚入口；
 - `skipIfLarger` 已进入原生或 gateway 契约。
-- `preview_compression`（当前兼容名为 `preflight_compression`）只做解码/尺寸预检，不调用发布 writer、不执行文件写入/重命名/删除；输入受字节、尺寸、像素和 decoder allocation 限制。
+- 独立的 `preview_compression` 只做解码/编码预览，不调用发布 writer、不执行文件写入/重命名/删除；输入受字节、尺寸、像素和 decoder allocation 限制。
+- 图片原生压缩接收并校验 `maxOutputBytes`（不超过 128 MiB）与 `maxCandidates`（`1..=12`）；JPEG 使用有界质量候选搜索，PNG/WebP 等无损输出在超过目标时返回 `target_unreachable` 跳过结果。
 - GIF 目标体积搜索使用 `maxCandidates` 的 `1..=8` 上限；候选规划只做估算/编码，不调用发布 writer。
 - 输出发布统一经过 `storage::MAX_OUTPUT_BYTES`（当前 128 MiB）和 `validate_output_size`；超限在 publish lease 之前失败并清理临时文件。
 - 目标不可达的当前语义是 `selected=null` 加 `reason`（包含“不可达”），不是虚构的 `target_unreachable` CLI 操作；导出选择器在 `write_output_with_publish` 之前返回错误，因此不可达目标不会发布。
 
-现有 CLI smoke 仍检查真实支持的 image/GIF 输出：签名、SHA256 和二次解码。原生压缩真正可调用后，应再增加桌面 Tauri IPC fixture，检查 `skipIfLarger` 的跳过结果、输出位置实际路径、取消、失败清理和源文件不变；当前脚本不会越界假设 CLI 存在这些操作。
+现有 CLI smoke 仍检查真实支持的 image/GIF 输出：签名、SHA256 和二次解码；它不会伪造压缩或目标搜索 CLI op。原生压缩与目标搜索通过静态 Rust/gateway 契约检查，后续可再增加桌面 Tauri IPC fixture，检查 `skipIfLarger`、`target_unreachable` 的实际结果、输出位置、取消、失败清理和源文件不变。
 
 脚本的静态检查会在发布前失败于以下情况：预检函数调用 `write_exported_file` 或文件写入/重命名/删除 API；未调用输入解码校验；缺少输入字节、图像尺寸、像素数、decoder allocation 限制；目标搜索没有 `maxCandidates` 上限；候选阶段调用发布 writer；输出没有统一体积上限；或不可达目标没有在 publish writer 之前被拒绝。当前检查的是原生 Rust/Tauri 路径，不增加不存在的 CLI op。
 
-这里的目标体积门禁针对现有 GIF `plan_gif_compression`。图片压缩 gateway 中的 `maxOutputBytes` / `maxCandidates` 字段不能被当作已经存在的 CLI 目标搜索能力；在没有独立原生命令和 IPC fixture 前，发布说明只记录字段契约，不宣称已完成目标体积搜索。
+目标体积门禁分别覆盖两条原生路径：GIF `plan_gif_compression` 使用 `maxCandidates` 的 `1..=8` 上限并以 `selected=null + reason` 表示不可达；图片 `compression.rs` 使用 `maxOutputBytes` 的 128 MiB 上限、`maxCandidates` 的 `1..=12` 上限和 JPEG 质量搜索，不可达结果在 `write_exported_file` 前以 `target_unreachable` 跳过。两条路径均不宣称存在 CLI 目标搜索操作。
 
 ## 第三方编码器许可证清单
 

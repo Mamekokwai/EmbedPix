@@ -49,7 +49,7 @@ function Assert-NativeCompressionContract([switch]$Required) {
   if (-not (Test-Path -LiteralPath $gatewayPath -PathType Leaf)) { throw "Compression gateway source is missing: $gatewayPath" }
   $source = Get-Content -Raw -LiteralPath $sourcePath
   $gateway = Get-Content -Raw -LiteralPath $gatewayPath
-  $requiredTokens = @('pub async fn preflight_compression', 'pub async fn compress_image', 'pub fn cancel_compression', 'fn resolve_output_path', 'output_location', 'output_directory', 'output_subdirectory', 'replace_original', 'write_exported_file', 'COMPRESS_IMAGE_COMMAND')
+  $requiredTokens = @('pub async fn preflight_compression', 'pub async fn preview_compression', 'pub async fn compress_image', 'pub fn cancel_compression', 'fn resolve_output_path', 'output_location', 'output_directory', 'output_subdirectory', 'replace_original', 'write_exported_file', 'COMPRESS_IMAGE_COMMAND', 'PREVIEW_COMPRESSION_COMMAND')
   $missing = @($requiredTokens | Where-Object { $source -notmatch [regex]::Escape($_) -and $gateway -notmatch [regex]::Escape($_) })
   if ($missing.Count -gt 0) { throw "Native compression contract is missing: $($missing -join ', ')" }
   $hasSkipIfLarger = $source -match 'skip[_-]?if[_-]?larger' -or $gateway -match 'skip[_-]?if[_-]?larger'
@@ -61,7 +61,8 @@ function Assert-NativeCompressionContract([switch]$Required) {
 function Assert-PreviewCompressionContract {
   $sourcePath = Join-Path $repoRoot 'src-tauri/src/commands/compression.rs'
   $source = Get-Content -Raw -LiteralPath $sourcePath
-  $previewName = if ($source -match '(?m)\bpreview_compression\b') { 'preview_compression' } else { 'preflight_compression' }
+  $previewName = 'preview_compression'
+  if ($source -notmatch '(?m)(?:pub async fn|pub fn)\s+preview_compression\b') { throw 'The independent preview_compression Tauri command is missing.' }
   $previewMatch = [regex]::Match($source, "(?s)(?:pub async fn|pub fn)\s+$previewName\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)")
   if (-not $previewMatch.Success) { throw "Could not locate preview compression function: $previewName" }
   $body = $previewMatch.Value
@@ -81,6 +82,52 @@ function Assert-PreviewCompressionContract {
     if ($source -notmatch [regex]::Escape($limit)) { throw "Preview size limit is missing: $limit" }
   }
   [pscustomobject]@{ command = $previewName; writerFree = $true; inputDecodeValidation = $true; sizeLimits = @('MAX_INPUT_BYTES', 'MAX_IMAGE_DIMENSION', 'MAX_IMAGE_PIXELS', 'MAX_DECODER_ALLOC_BYTES') }
+}
+
+function Assert-ImageTargetCompressionContract([switch]$Required) {
+  $sourcePath = Join-Path $repoRoot 'src-tauri/src/commands/compression.rs'
+  $gatewayPath = Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts'
+  $source = Get-Content -Raw -LiteralPath $sourcePath
+  $gateway = Get-Content -Raw -LiteralPath $gatewayPath
+  $selectionMatch = [regex]::Match($source, '(?s)fn\s+choose_encoded_output\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
+  $runMatch = [regex]::Match($source, '(?s)fn\s+run_compression\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
+  if (-not $selectionMatch.Success -or -not $runMatch.Success) { throw 'Could not locate image target-volume selection or publish functions.' }
+  $selection = $selectionMatch.Value
+  $run = $runMatch.Value
+  $requiredSourceTokens = @(
+    'max_output_bytes', 'max_candidates', 'DEFAULT_MAX_CANDIDATES', 'MAX_CANDIDATES',
+    'fn choose_encoded_output', 'while candidates.len\(\) < request.max_candidates',
+    'target_unreachable', 'MAX_OUTPUT_BYTES', 'fn encode_and_verify'
+  )
+  $missing = @($requiredSourceTokens | Where-Object { $source -notmatch $_ })
+  if ($missing.Count -gt 0) { throw "Image target-volume contract is missing: $($missing -join ', ')" }
+  if ($gateway -notmatch 'maxOutputBytes' -or $gateway -notmatch 'maxCandidates') {
+    throw 'Compression gateway does not expose maxOutputBytes and maxCandidates.'
+  }
+  if ($source -notmatch 'target_bytes == 0\s*\|\|\s*target_bytes > MAX_OUTPUT_BYTES') {
+    throw 'Image maxOutputBytes is not bounded by MAX_OUTPUT_BYTES at request validation.'
+  }
+  if ($source -notmatch '\(1\.\.=MAX_CANDIDATES\)\.contains\(&max_candidates\)') {
+    throw 'Image maxCandidates is not bounded by MAX_CANDIDATES at request validation.'
+  }
+  if ($selection -match 'write_exported_file|fs::write|fs::rename|remove_file|create_dir') {
+    throw 'Image target-volume selection invokes a publishing or filesystem mutation call.'
+  }
+  $selectionPosition = $run.IndexOf('choose_encoded_output')
+  $skippedPosition = $run.IndexOf('if let Some(skipped_reason)')
+  $writerPosition = $run.IndexOf('write_exported_file')
+  if ($selectionPosition -lt 0 -or $skippedPosition -lt 0 -or $writerPosition -lt 0 -or $skippedPosition -gt $writerPosition) {
+    throw 'Image target_unreachable/skip result is not handled before the publish writer.'
+  }
+  [pscustomobject]@{
+    checked = $true
+    maxOutputBytesBounded = $true
+    maxCandidatesUpperBound = 12
+    jpegCandidateSearchBounded = $true
+    candidateSearchWriterFree = $true
+    targetUnreachableNoPublish = $true
+    cliTargetSearchOperation = $false
+  }
 }
 
 function Assert-TargetCompressionContract([switch]$Required) {
@@ -167,6 +214,7 @@ try {
 
   $nativeContract = Assert-NativeCompressionContract -Required:$RequireCompression
   $previewContract = Assert-PreviewCompressionContract
+  $imageTargetContract = Assert-ImageTargetCompressionContract -Required:$RequireCompression
   $targetContract = Assert-TargetCompressionContract -Required:$RequireCompression
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
@@ -175,6 +223,7 @@ try {
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
+    imageTargetCompressionContract = $imageTargetContract
     targetCompressionContract = $targetContract
   }
 
