@@ -45,6 +45,9 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("getGifCancelButtonLabel");
     expect(converterView).toContain("export-button");
     expect(converterView).toContain("requestExportCancel");
+    expect(converterView).toContain("if (status.kind === \"busy\") return;");
+    expect(converterView).toContain("disabled={status.kind === \"busy\"}");
+    expect(gifView).toContain("pendingRef.current > 0 || status.kind === \"exporting\"");
     expect(converterView).toContain("导入图片文件夹");
     expect(converterCss).toContain(".directory-import-button");
     expect(converterCss).toContain(".drop-zone-actions");

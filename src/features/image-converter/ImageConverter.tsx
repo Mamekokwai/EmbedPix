@@ -717,6 +717,7 @@ export default function ImageConverter({
   };
 
   const handleSelectImage = (replaceImageId: string | null = null) => {
+    if (status.kind === "busy") return;
     replaceImageIdRef.current = replaceImageId;
     if (isTauriEnvironment()) {
       void loadNativeImages(undefined, replaceImageId);
@@ -726,6 +727,7 @@ export default function ImageConverter({
   };
 
   const handleImportImageDirectory = async () => {
+    if (status.kind === "busy") return;
     if (!isTauriEnvironment()) {
       setError("导入文件夹仅在桌面应用中可用，请使用文件选择或拖放。 ");
       setStatus({ kind: "error", text: "当前环境不支持导入文件夹" });
@@ -769,6 +771,7 @@ export default function ImageConverter({
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    if (status.kind === "busy") return;
     setIsDragging(false);
     const nextFiles = Array.from(event.dataTransfer.files);
     if (nextFiles.length > 0) {
@@ -1049,6 +1052,8 @@ export default function ImageConverter({
       return;
     }
     exportCancelRef.current = true;
+    exportPauseRef.current = false;
+    exportResumeRef.current?.();
     exportResumeRef.current?.();
     exportResumeRef.current = null;
     setExportPaused(false);
@@ -1215,6 +1220,11 @@ export default function ImageConverter({
         shouldCancel: () => exportCancelRef.current,
         shouldPause: () => exportPauseRef.current,
         waitForResume: () => new Promise<void>((resolve) => { exportResumeRef.current = resolve; }),
+        cancelWaitForResume: () => {
+          exportPauseRef.current = false;
+          exportResumeRef.current?.();
+          exportResumeRef.current = null;
+        },
         onProgress: (progress) => {
           setExportProgress(progress);
           setStatus({ kind: "busy", text: formatExportQueueProgress(progress) });
@@ -1325,7 +1335,7 @@ export default function ImageConverter({
             ) : null}
           </div>
 
-          <input ref={inputRef} type="file" accept={SUPPORTED_IMAGE_ACCEPT} onChange={handleFileChange} multiple hidden />
+          <input ref={inputRef} type="file" accept={SUPPORTED_IMAGE_ACCEPT} onChange={handleFileChange} multiple hidden disabled={status.kind === "busy"} />
 
           {!file ? (
             <div
@@ -1344,6 +1354,7 @@ export default function ImageConverter({
               onClick={() => handleSelectImage()}
               role="button"
               tabIndex={0}
+              aria-disabled={status.kind === "busy"}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();

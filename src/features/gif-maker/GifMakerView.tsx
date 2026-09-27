@@ -814,7 +814,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   }, [active, background, canvasSize, contentAlignment, contentMargins, customBackgroundColor, fitMode, selectedFrame]);
 
   const openFileDialog = (frameId: string | null = null, insertAt: number | null = null) => {
-    if (lockedRef.current) return;
+    if (lockedRef.current || pendingRef.current > 0 || status.kind === "exporting") return;
     replaceFrameIdRef.current = frameId;
     insertFrameAtRef.current = insertAt;
     fileInputRef.current?.click();
@@ -1184,6 +1184,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const removeFrame = (index: number) => {
+    if (lockedRef.current || pendingRef.current > 0 || status.kind === "exporting") return;
     if (lockedRef.current) return;
     setIsPlaying(false);
     const frame = frames[index];
@@ -1263,6 +1264,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const moveFrame = (index: number, direction: -1 | 1) => {
+    if (lockedRef.current || pendingRef.current > 0 || status.kind === "exporting") return;
     if (lockedRef.current) return;
     setIsPlaying(false);
     const targetIndex = getGifFrameOrder(frames.length, index, direction);
@@ -1316,6 +1318,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const clearFrames = () => {
+    if (lockedRef.current || pendingRef.current > 0 || status.kind === "exporting") return;
     if (lockedRef.current) return;
     importQueueRef.current.cancel();
     frames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
