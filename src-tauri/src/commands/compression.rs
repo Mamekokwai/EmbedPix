@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Condvar, Mutex,
     },
     time::{Duration, Instant},
 };
@@ -35,6 +35,7 @@ const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_MAX_CANDIDATES: usize = 8;
 const MAX_CANDIDATES: usize = 12;
 const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
+const MAX_COMPRESSION_CONCURRENCY: usize = 2;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -139,6 +140,16 @@ pub struct CompressionProgress {
 
 pub struct CompressionJobState {
     jobs: Mutex<HashMap<String, Arc<CompressionJob>>>,
+    encoder_slots: Arc<CompressionSemaphore>,
+}
+
+struct CompressionSemaphore {
+    available: Mutex<usize>,
+    wake: Condvar,
+}
+
+struct CompressionPermit {
+    semaphore: Arc<CompressionSemaphore>,
 }
 
 struct CompressionJob {
@@ -151,6 +162,38 @@ impl Default for CompressionJobState {
     fn default() -> Self {
         Self {
             jobs: Mutex::new(HashMap::new()),
+            encoder_slots: Arc::new(CompressionSemaphore {
+                available: Mutex::new(MAX_COMPRESSION_CONCURRENCY),
+                wake: Condvar::new(),
+            }),
+        }
+    }
+}
+
+impl CompressionSemaphore {
+    fn acquire(self: &Arc<Self>) -> CompressionPermit {
+        let mut available = self
+            .available
+            .lock()
+            .expect("compression semaphore poisoned");
+        while *available == 0 {
+            available = self
+                .wake
+                .wait(available)
+                .expect("compression semaphore poisoned");
+        }
+        *available -= 1;
+        CompressionPermit {
+            semaphore: Arc::clone(self),
+        }
+    }
+}
+
+impl Drop for CompressionPermit {
+    fn drop(&mut self) {
+        if let Ok(mut available) = self.semaphore.available.lock() {
+            *available += 1;
+            self.semaphore.wake.notify_one();
         }
     }
 }
@@ -285,9 +328,13 @@ pub async fn compress_image(
         terminal_at: Mutex::new(None),
     });
     state.register(job_id.clone(), Arc::clone(&job))?;
-    let result = tauri::async_runtime::spawn_blocking(move || run_compression(&request, &job))
-        .await
-        .map_err(|error| format!("compression task failed: {error}"))?;
+    let encoder_slots = Arc::clone(&state.encoder_slots);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _permit = encoder_slots.acquire();
+        run_compression(&request, &job)
+    })
+    .await
+    .map_err(|error| format!("compression task failed: {error}"))?;
     state.prune();
     result
 }
@@ -1115,6 +1162,21 @@ mod tests {
         };
         state.register("duplicate-test".into(), job()).unwrap();
         assert!(state.register("duplicate-test".into(), job()).is_err());
+    }
+
+    #[test]
+    fn compression_semaphore_releases_slots_after_encoding() {
+        let semaphore = Arc::new(CompressionSemaphore {
+            available: Mutex::new(2),
+            wake: Condvar::new(),
+        });
+        let first = semaphore.acquire();
+        let second = semaphore.acquire();
+        assert_eq!(*semaphore.available.lock().unwrap(), 0);
+        drop(first);
+        assert_eq!(*semaphore.available.lock().unwrap(), 1);
+        drop(second);
+        assert_eq!(*semaphore.available.lock().unwrap(), 2);
     }
 
     #[test]
