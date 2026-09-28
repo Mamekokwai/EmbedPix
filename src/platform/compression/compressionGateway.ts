@@ -11,6 +11,7 @@ export const GET_COMPRESSION_PROGRESS_COMMAND = "get_compression_progress" as co
 
 export interface CompressionEnvelopeRequest {
   fileName: string;
+  outputFileName?: string;
   inputData: Uint8Array;
   outputFormat: Exclude<CompressionFormat, "original">;
   outputLocation: CompressionOutputLocation;
@@ -94,6 +95,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
   if (request.metadataPolicy !== "strip") throw new Error("第一阶段原生压缩仅支持移除元数据。");
   return {
     fileName: request.fileName,
+    ...(request.outputFileName !== undefined ? { outputFileName: request.outputFileName } : {}),
     outputFormat: request.outputFormat,
     outputLocation: request.outputLocation,
     ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
@@ -171,6 +173,7 @@ export async function pickCompressionDirectory(): Promise<NativeImageFile[]> {
 export function createCompressionRequest(file: NativeImageFile, options: CompressionOptions, jobId?: string): CompressionEnvelopeRequest {
   return {
     fileName: file.fileName,
+    outputFileName: options.outputFileName,
     inputData: new Uint8Array(file.data),
     outputFormat: options.format,
     outputLocation: options.outputLocation,

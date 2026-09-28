@@ -88,6 +88,8 @@ enum MetadataPolicy {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CompressionMetadata {
     file_name: String,
+    #[serde(default)]
+    output_file_name: Option<String>,
     output_format: String,
     #[serde(default)]
     output_path: Option<String>,
@@ -933,6 +935,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     let metadata: CompressionMetadata = serde_json::from_slice(&body[8..end])
         .map_err(|error| format!("invalid compression metadata JSON: {error}"))?;
     let format = CompressionFormat::parse(&metadata.output_format)?;
+    let output_location = normalize_output_location(metadata.output_location.as_deref())?;
     let lossless = metadata.lossless.unwrap_or(matches!(
         format,
         CompressionFormat::Png | CompressionFormat::Webp
@@ -985,6 +988,15 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
         && (metadata.replace_original || metadata.output_location.as_deref() == Some("original"))
     {
         return Err("autoSequence cannot be combined with replaceOriginal".into());
+    }
+    if let Some(output_file_name) = metadata.output_file_name.as_deref() {
+        normalize_custom_output_file_name(output_file_name, format)?;
+        if output_location == "path" {
+            return Err("outputFileName cannot be combined with outputPath".into());
+        }
+        if metadata.replace_original || output_location == "original" {
+            return Err("outputFileName cannot change the target of original replacement".into());
+        }
     }
     if let Some(source_path) = metadata.source_path.as_deref() {
         let source_path = path_security::normalize_path(source_path)
@@ -1081,6 +1093,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     Ok(CompressionRequest {
         metadata: CompressionMetadata {
             file_name: metadata.file_name,
+            output_file_name: None,
             output_format: format.name().into(),
             output_path: None,
             output_location: None,
@@ -1111,11 +1124,15 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
 
 fn resolve_output_path(request: &CompressionRequest) -> Result<PathBuf, String> {
     let metadata = &request.metadata;
-    let location = metadata
-        .output_location
+    let location = normalize_output_location(metadata.output_location.as_deref())?;
+    let custom_file_name = metadata
+        .output_file_name
         .as_deref()
-        .unwrap_or("path")
-        .to_ascii_lowercase();
+        .map(|value| normalize_custom_output_file_name(value, request.format))
+        .transpose()?;
+    if custom_file_name.is_some() && location == "path" {
+        return Err("outputFileName cannot be combined with outputPath".into());
+    }
     let source = metadata.source_path.as_deref().map(PathBuf::from);
     let path = if location == "path" {
         path_security::normalize_path(
@@ -1126,6 +1143,9 @@ fn resolve_output_path(request: &CompressionRequest) -> Result<PathBuf, String> 
         )
         .map_err(|error| format!("invalid outputPath: {error:?}"))?
     } else if location == "original" || metadata.replace_original {
+        if custom_file_name.is_some() {
+            return Err("outputFileName cannot change the target of original replacement".into());
+        }
         source
             .clone()
             .ok_or_else(|| "sourcePath is required for original output".to_string())?
@@ -1153,7 +1173,7 @@ fn resolve_output_path(request: &CompressionRequest) -> Result<PathBuf, String> 
         } else {
             directory
         }
-        .join(default_name(&metadata.file_name, request.format))
+        .join(custom_file_name.unwrap_or_else(|| default_name(&metadata.file_name, request.format)))
     };
     let path = with_extension(path, request.format.extension());
     path_security::validate_output_path(&path)
@@ -1161,14 +1181,72 @@ fn resolve_output_path(request: &CompressionRequest) -> Result<PathBuf, String> 
     Ok(path)
 }
 
+fn normalize_output_location(value: Option<&str>) -> Result<String, String> {
+    let location = value.unwrap_or("path").to_ascii_lowercase();
+    if matches!(
+        location.as_str(),
+        "path" | "source" | "subfolder" | "directory" | "original"
+    ) {
+        Ok(location)
+    } else {
+        Err(format!(
+            "[output_location_invalid] unsupported outputLocation `{location}`"
+        ))
+    }
+}
+
+fn normalize_custom_output_file_name(
+    value: &str,
+    format: CompressionFormat,
+) -> Result<String, String> {
+    if value.is_empty() || value.trim() != value {
+        return Err(
+            "[output_file_name_invalid] outputFileName must be a non-empty file name".into(),
+        );
+    }
+    if value.len() > 255
+        || value.chars().any(char::is_control)
+        || value.contains(['/', '\\'])
+        || value
+            .chars()
+            .any(|character| matches!(character, '<' | '>' | ':' | '"' | '|' | '?' | '*'))
+        || value.starts_with('.')
+        || value == "."
+        || value == ".."
+        || value.ends_with(['.', ' '])
+    {
+        return Err(
+            "[output_file_name_invalid] outputFileName must be a single safe file name".into(),
+        );
+    }
+    let path = Path::new(value);
+    let extension = path.extension().and_then(|extension| extension.to_str());
+    if let Some(extension) = extension {
+        if !extension.eq_ignore_ascii_case(format.extension()) {
+            return Err(format!(
+                "[output_file_name_invalid] outputFileName must use the .{} extension",
+                format.extension()
+            ));
+        }
+    }
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .ok_or_else(|| {
+            "[output_file_name_invalid] outputFileName is not valid Unicode".to_string()
+        })?;
+    let normalized = format!("{stem}.{}", format.extension());
+    if path_security::is_reserved_windows_name(&normalized) {
+        return Err(
+            "[output_file_name_invalid] outputFileName uses a reserved Windows name".into(),
+        );
+    }
+    Ok(normalized)
+}
+
 fn resolve_final_output_path(request: &CompressionRequest) -> Result<PathBuf, String> {
     let output_path = resolve_output_path(request)?;
-    let location = request
-        .metadata
-        .output_location
-        .as_deref()
-        .unwrap_or("path")
-        .to_ascii_lowercase();
+    let location = normalize_output_location(request.metadata.output_location.as_deref())?;
     if !request.metadata.auto_sequence && !request.metadata.auto_rename
         || request.metadata.overwrite_existing
         || request.metadata.replace_original
@@ -1525,6 +1603,7 @@ mod tests {
         CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "sample.png".into(),
+                output_file_name: None,
                 output_format: "webp".into(),
                 output_path: Some(output_path.to_string_lossy().into_owned()),
                 output_location: Some("path".into()),
@@ -1705,6 +1784,7 @@ mod tests {
         let request = CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "transparent.png".into(),
+                output_file_name: None,
                 output_format: "jpeg".into(),
                 output_path: Some(output_path.to_string_lossy().into_owned()),
                 output_location: Some("path".into()),
@@ -1798,6 +1878,7 @@ mod tests {
         let missing_request = CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "sample.png".into(),
+                output_file_name: None,
                 output_format: "webp".into(),
                 output_path: Some(missing_output.to_string_lossy().into_owned()),
                 output_location: Some("path".into()),
@@ -1853,6 +1934,101 @@ mod tests {
 
         fs::set_permissions(&directory, original_permissions).unwrap();
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn custom_output_file_name_is_safe_unicode_and_forces_target_extension() {
+        assert_eq!(
+            normalize_custom_output_file_name("旅行照片", CompressionFormat::Webp).unwrap(),
+            "旅行照片.webp"
+        );
+        assert_eq!(
+            normalize_custom_output_file_name("旅行照片.WEBP", CompressionFormat::Webp).unwrap(),
+            "旅行照片.webp"
+        );
+        for invalid in [
+            "",
+            "   ",
+            "../escape",
+            r"nested\escape",
+            "..",
+            ".jpg",
+            "CON.webp",
+            "report.jpg",
+            "unsafe:name.webp",
+            "trailing.",
+            "control\nname",
+        ] {
+            assert!(
+                normalize_custom_output_file_name(invalid, CompressionFormat::Webp).is_err(),
+                "expected custom output file name to be rejected: {invalid:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_output_file_name_is_in_the_strict_metadata_contract() {
+        let valid = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"webp","outputLocation":"directory","outputDirectory":".","outputFileName":"旅行照片"}"#,
+            &png_input(),
+        );
+        let request = parse_raw_payload(&valid).unwrap();
+        assert_eq!(
+            request.metadata.output_file_name.as_deref(),
+            Some("旅行照片")
+        );
+
+        let unknown = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"webp","outputLocation":"directory","outputDirectory":".","unexpected":true}"#,
+            &png_input(),
+        );
+        assert!(parse_raw_payload(&unknown)
+            .unwrap_err()
+            .contains("unknown field"));
+    }
+
+    #[test]
+    fn custom_output_file_name_resolves_without_writing_and_auto_sequences() {
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-custom-name-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let base = directory.join("旅行照片.webp");
+        fs::write(&base, b"existing output").unwrap();
+
+        let mut request = path_request(&directory.join("ignored.webp"));
+        request.metadata.output_location = Some("directory".into());
+        request.metadata.output_directory = Some(directory.to_string_lossy().into_owned());
+        request.metadata.output_file_name = Some("旅行照片".into());
+        request.metadata.auto_sequence = true;
+        let resolved = resolve_preflight_output_path(&request).unwrap();
+
+        assert_eq!(resolved, directory.join("旅行照片_1.webp"));
+        assert!(!resolved.exists());
+        assert_eq!(fs::read(&base).unwrap(), b"existing output");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn custom_output_file_name_rejects_path_and_original_replacement_modes() {
+        let mut path_output_request = path_request(Path::new("output.webp"));
+        path_output_request.metadata.output_file_name = Some("custom.webp".into());
+        assert!(resolve_output_path(&path_output_request)
+            .unwrap_err()
+            .contains("outputFileName cannot be combined with outputPath"));
+
+        let mut original_request = path_request(Path::new("output.webp"));
+        original_request.metadata.output_location = Some("original".into());
+        original_request.metadata.source_path = Some("source.webp".into());
+        original_request.metadata.output_file_name = Some("custom.webp".into());
+        assert!(resolve_output_path(&original_request)
+            .unwrap_err()
+            .contains("outputFileName cannot change the target"));
+
+        let mut unknown_location_request = path_request(Path::new("output.webp"));
+        unknown_location_request.metadata.output_location = Some("mystery".into());
+        assert!(resolve_output_path(&unknown_location_request)
+            .unwrap_err()
+            .starts_with("[output_location_invalid]"));
     }
 
     #[test]
@@ -2092,6 +2268,7 @@ mod tests {
         let request = CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "broken.png".into(),
+                output_file_name: None,
                 output_format: "webp".into(),
                 output_path: Some(output_path.to_string_lossy().into_owned()),
                 output_location: Some("path".into()),
@@ -2156,6 +2333,7 @@ mod tests {
         let request = CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "sample.jpg".into(),
+                output_file_name: None,
                 output_format: "png".into(),
                 output_path: Some(output_path.to_string_lossy().into_owned()),
                 output_location: Some("path".into()),
@@ -2352,6 +2530,7 @@ mod tests {
         let request = CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "sample.png".into(),
+                output_file_name: None,
                 output_format: "jpeg".into(),
                 output_path: None,
                 output_location: None,
@@ -2393,6 +2572,7 @@ mod tests {
         let request = CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "sample.png".into(),
+                output_file_name: None,
                 output_format: "webp".into(),
                 output_path: None,
                 output_location: None,
@@ -2431,6 +2611,7 @@ mod tests {
         let request = CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "sample.png".into(),
+                output_file_name: None,
                 output_format: "webp".into(),
                 output_path: None,
                 output_location: None,
@@ -2472,6 +2653,7 @@ mod tests {
         let request = CompressionRequest {
             metadata: CompressionMetadata {
                 file_name: "sample.png".into(),
+                output_file_name: None,
                 output_format: "png".into(),
                 output_path: None,
                 output_location: None,

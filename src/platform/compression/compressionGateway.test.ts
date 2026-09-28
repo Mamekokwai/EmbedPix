@@ -6,6 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 const request = {
   fileName: "icon.png",
+  outputFileName: "旅行照片",
   inputData: new Uint8Array([1, 2, 3]),
   outputFormat: "webp" as const,
   outputLocation: "source" as const,
@@ -33,7 +34,7 @@ describe("compression gateway", () => {
     expect(Array.from(encoded.slice(0, 4))).toEqual([0x45, 0x47, 0x46, 0x31]);
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
-    expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip", pngOptimizationLevel: 2 });
+    expect(metadata).toMatchObject({ fileName: "icon.png", outputFileName: "旅行照片", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip", pngOptimizationLevel: 2 });
     expect(metadata).not.toHaveProperty("jpegQuality");
   });
 
