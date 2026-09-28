@@ -14,7 +14,7 @@
 - 第二阶段已交付：压缩后更大则跳过、源文件夹/子目录/指定目录输出、实际输入输出体积与节省统计、跳过原因展示。
 - 第一阶段限制：WebP 有损使用质量 1–100 和 libwebp 默认 Alpha 质量，不开放 effort/method；JPEG 不支持无损且拒绝含透明像素的输入；元数据仅支持移除；浏览器预览不能直接执行原生压缩；同名文件默认拒绝写入，不自动改名。
 - 下一阶段优先级：WebP effort/method、完整元数据策略、可回收临时资源、关闭窗口时的任务清理，以及跨架构发布复核。
-- 当前门禁：前端 26 个测试文件 / 279 个测试通过；Rust 180 个库测试 + 3 个 CLI 测试通过；构建、clippy、OxiPNG 强制 smoke、GIF 8/8 性能与 3/3 质量门禁、桌面 smoke、发布配置与本地 release fixture smoke、压缩 CLI smoke 通过；真实 `v0.7.0` 发布资产 smoke 已完成。
+- 当前门禁：前端 27 个测试文件 / 285 个测试通过；Rust 182 个库测试 + 3 个 CLI 测试通过；构建、clippy、OxiPNG 强制 smoke、GIF 8/8 性能与 3/3 质量门禁、桌面 smoke、发布配置与本地 release fixture smoke、压缩 CLI smoke 通过；真实 `v0.7.0` 发布资产 smoke 已完成。
 
 ## 0. 总体门禁
 
@@ -115,7 +115,7 @@
 
 - [x] `compress_image`。
 - [x] `preflight_compression`。
-- [ ] `estimate_image_compression`。
+- [x] `estimate_image_compression`：只读内存编码和候选搜索，不接受发布路径或覆盖字段。
 - [x] `preview_compression`。
 - [x] `get_compression_progress`。
 - [x] `cancel_compression`。
@@ -248,9 +248,9 @@
 - [ ] 增加默认“压缩后更大则跳过”。
 - [ ] 增加默认输出位置。
 - [ ] 增加最大输入/输出限制。
-- [ ] 压缩预设支持 JSON 导出。
-- [ ] 压缩预设支持 JSON 导入。
-- [ ] 未知字段兼容忽略。
+- [x] 压缩预设支持 JSON 导出。
+- [x] 压缩预设支持 JSON 导入。
+- [x] 未知字段兼容忽略。
 - [ ] 新增设置字段加入版本迁移。
 - [x] 工作区保存压缩参数。
 - [ ] 工作区打开时校验源文件存在性。
