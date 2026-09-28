@@ -2508,7 +2508,7 @@ mod tests {
             .unwrap();
         let output_path = crate::commands::test_temp_dir()
             .join(format!("embedpix-compression-skip-{}.png", uuid_like_id()));
-        let request = CompressionRequest {
+        let mut request = CompressionRequest {
             metadata: CompressionMetadata {
                 schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "sample.jpg".into(),
@@ -2557,6 +2557,32 @@ mod tests {
         assert!(result.skipped_reason.is_some());
         assert!(result.saved_bytes < 0);
         assert!(!output_path.exists());
+
+        let source_path = crate::commands::test_temp_dir().join(format!(
+            "embedpix-compression-replace-skip-{}.png",
+            uuid_like_id()
+        ));
+        fs::write(&source_path, &request.input).unwrap();
+        request.metadata.output_path = None;
+        request.metadata.output_location = Some("original".into());
+        request.metadata.source_path = Some(source_path.to_string_lossy().into_owned());
+        request.metadata.replace_original = true;
+        request.metadata.job_id = Some("replace-original-skip-test".into());
+        let original_source = fs::read(&source_path).unwrap();
+        let skipped_replace =
+            run_compression(&request, &test_job("replace-original-skip")).unwrap();
+        assert_eq!(skipped_replace.status, "skipped");
+        assert_eq!(fs::read(&source_path).unwrap(), original_source);
+
+        request.metadata.skip_if_larger = false;
+        request.metadata.job_id = Some("replace-original-publish-test".into());
+        let published_replace =
+            run_compression(&request, &test_job("replace-original-publish")).unwrap();
+        assert_eq!(published_replace.status, "completed");
+        assert_eq!(PathBuf::from(published_replace.output_path), source_path);
+        assert!(decode_image(&fs::read(&source_path).unwrap()).is_ok());
+
+        fs::remove_file(source_path).unwrap();
     }
 
     #[test]
