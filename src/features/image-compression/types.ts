@@ -5,5 +5,5 @@ export type MetadataPolicy = "preserve" | "strip";
 export interface CompressionItem { id: string; file: File; sourcePath?: string; size: number; dimensions?: { width: number; height: number }; }
 export type CompressionItemResultStatus = "completed" | "skipped" | "failed";
 export interface CompressionItemResult { fileName: string; status: CompressionItemResultStatus; outputPath?: string; reason?: string; }
-export interface CompressionOptions { format: CompressionFormat; quality: number; lossless: boolean; pngOptimizationLevel: number; metadataPolicy: MetadataPolicy; outputLocation: CompressionOutputLocation; outputSubdirectory?: string; outputDirectory?: string; overwrite: boolean; replaceOriginal?: boolean; maxOutputBytes?: number; maxCandidates?: number; }
+export interface CompressionOptions { format: CompressionFormat; quality: number; lossless: boolean; pngOptimizationLevel: number; metadataPolicy: MetadataPolicy; outputLocation: CompressionOutputLocation; outputSubdirectory?: string; outputDirectory?: string; overwrite: boolean; autoNumbering?: boolean; replaceOriginal?: boolean; maxOutputBytes?: number; maxCandidates?: number; }
 export interface CompressionEstimate { inputBytes: number; estimatedBytes: number; savingsPercent: number; }

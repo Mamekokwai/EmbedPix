@@ -60,6 +60,17 @@ describe("compression gateway", () => {
     expect(metadata.replaceOriginal).toBe(true);
   });
 
+  it("serializes auto numbering and rejects conflicting output modes", () => {
+    const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
+    const autoRequest = createCompressionRequest(file, { format: "webp", quality: 82, lossless: true, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", overwrite: false, autoNumbering: true });
+    const encoded = encodeCompressionEnvelope(autoRequest);
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata.autoSequence).toBe(true);
+    expect(() => encodeCompressionEnvelope({ ...request, autoSequence: true, overwriteExisting: true })).toThrow("自动序号不能与覆盖同名同时启用");
+    expect(() => encodeCompressionEnvelope({ ...request, autoSequence: true, replaceOriginal: true })).toThrow("自动序号不能与覆盖原图同时启用");
+  });
+
   it("keeps WebP lossy target candidates bounded like JPEG", () => {
     const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
     const request = createCompressionRequest(file, { format: "webp", quality: 64, lossless: false, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", overwrite: false, maxOutputBytes: 64 * 1024, maxCandidates: 8 });

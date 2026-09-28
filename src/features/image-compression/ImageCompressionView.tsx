@@ -17,6 +17,7 @@ import {
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
   getCompressionOutputLocationError,
+  normalizeCompressionOutputModes,
   supportsCompressionTargetSize,
 } from "./imageCompressionLogic";
 import {
@@ -131,6 +132,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [outputSubdirectory, setOutputSubdirectory] = useState(initialPreferences.outputSubdirectory);
   const [outputDirectory, setOutputDirectory] = useState("");
   const [overwrite, setOverwrite] = useState(initialPreferences.overwrite);
+  const [autoNumbering, setAutoNumbering] = useState(initialPreferences.autoNumbering);
   const [replaceOriginal, setReplaceOriginal] = useState(initialPreferences.replaceOriginal);
   const [status, setStatus] = useState<CompressionStatus>("idle");
   const [importBusy, setImportBusy] = useState(false);
@@ -161,6 +163,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const sourceBusy = busy || importBusy;
   const qualityEnabled = supportsCompressionTargetSize(format, lossless);
   const replaceOriginalAvailable = canReplaceCompressionOriginal(items, isTauriEnvironment());
+  const outputModes = useMemo(() => normalizeCompressionOutputModes({ autoNumbering, overwrite, replaceOriginal }), [autoNumbering, overwrite, replaceOriginal]);
   const targetSizeActive = targetSizeEnabled && qualityEnabled;
   const targetSizeError = useMemo(() => {
     if (!targetSizeActive || !targetSizeKiB.trim()) return null;
@@ -178,11 +181,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     outputLocation,
     outputSubdirectory: outputLocation === "subfolder" ? outputSubdirectory.trim() || undefined : undefined,
     outputDirectory: outputLocation === "directory" ? outputDirectory.trim() || undefined : undefined,
-    overwrite,
-    replaceOriginal,
+    overwrite: outputModes.overwrite,
+    autoNumbering: outputModes.autoNumbering,
+    replaceOriginal: outputModes.replaceOriginal,
     maxOutputBytes,
     maxCandidates: qualityEnabled && maxOutputBytes ? 8 : undefined,
-  }), [format, quality, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, overwrite, replaceOriginal, maxOutputBytes]);
+  }), [format, quality, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, outputModes, maxOutputBytes]);
 
   const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, !isTauriEnvironment() || (items.length > 0 && items.every((item) => Boolean(item.sourcePath)))), [items, outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
@@ -223,9 +227,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       outputLocation,
       outputSubdirectory,
       overwrite,
+      autoNumbering,
       replaceOriginal,
     });
-  }, [format, lossless, metadataPolicy, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, targetSizeActive, targetSizeKiB]);
+  }, [autoNumbering, format, lossless, metadataPolicy, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, targetSizeActive, targetSizeKiB]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -705,8 +710,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           {outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
           {outputLocation === "directory" ? <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="例如 D:\\Export" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
           {outputLocationError ? <p className="compression-field-error" role="alert">{outputLocationError}</p> : null}
-          <label className="compression-check"><input type="checkbox" checked={replaceOriginal && replaceOriginalAvailable} onChange={(event) => setReplaceOriginal(event.target.checked)} disabled={busy || !replaceOriginalAvailable} /><span><strong>覆盖原图并备份到 bak</strong><small>{replaceOriginalAvailable ? "启用后会先备份原图，再写入压缩结果；输出位置设置暂不生效" : isTauriEnvironment() ? "仅全部桌面源文件队列可用，浏览器文件或混合队列会禁用" : "仅桌面应用支持覆盖原图"}</small></span></label>
-          <label className="compression-check"><input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} disabled={busy} /><span><strong>允许覆盖同名文件</strong><small>关闭时同名目标会拒绝写入</small></span></label>
+          <label className="compression-check"><input type="checkbox" checked={outputModes.replaceOriginal && replaceOriginalAvailable} onChange={(event) => { const checked = event.target.checked; setReplaceOriginal(checked); if (checked) { setAutoNumbering(false); setOverwrite(false); } }} disabled={busy || !replaceOriginalAvailable} /><span><strong>覆盖原图并备份到 bak</strong><small>{replaceOriginalAvailable ? "启用后会先备份原图，再写入压缩结果；输出位置、自动序号和覆盖同名均不适用" : isTauriEnvironment() ? "仅全部桌面源文件队列可用，浏览器文件或混合队列会禁用" : "仅桌面应用支持覆盖原图"}</small></span></label>
+          <label className="compression-check"><input type="checkbox" checked={outputModes.autoNumbering} onChange={(event) => { const checked = event.target.checked; setAutoNumbering(checked); if (checked) setOverwrite(false); }} disabled={busy || outputModes.replaceOriginal} /><span><strong>自动序号避免重名</strong><small>{outputModes.replaceOriginal ? "覆盖原图模式不适用自动序号" : "同名时自动使用 _1、_2 等序号；输出位置仍按上方设置"}</small></span></label>
+          <label className="compression-check"><input type="checkbox" checked={outputModes.overwrite} onChange={(event) => setOverwrite(event.target.checked)} disabled={busy || outputModes.autoNumbering || outputModes.replaceOriginal} /><span><strong>允许覆盖同名文件</strong><small>{outputModes.autoNumbering ? "自动序号已启用，同名目标会改用下一个序号" : outputModes.replaceOriginal ? "覆盖原图模式不使用同名目标覆盖" : "关闭时同名目标会拒绝写入"}</small></span></label>
         </aside>
       </div>
 

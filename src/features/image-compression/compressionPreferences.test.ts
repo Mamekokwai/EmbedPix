@@ -30,6 +30,7 @@ describe("compression preferences", () => {
       outputLocation: "subfolder" as const,
       outputSubdirectory: "compressed",
       overwrite: true,
+      autoNumbering: false,
       replaceOriginal: true,
     };
 
@@ -45,9 +46,19 @@ describe("compression preferences", () => {
 
   it("keeps the dangerous source-replacement option disabled by default", () => {
     expect(DEFAULT_COMPRESSION_PREFERENCES.replaceOriginal).toBe(false);
+    expect(DEFAULT_COMPRESSION_PREFERENCES.autoNumbering).toBe(false);
     expect(loadCompressionPreferences(createStorage({
       [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "jpg", replaceOriginal: "yes" }),
     })).replaceOriginal).toBe(false);
+  });
+
+  it("restores auto numbering without persisting output paths", () => {
+    const storage = createStorage();
+    saveCompressionPreferences({ ...DEFAULT_COMPRESSION_PREFERENCES, autoNumbering: true, outputLocation: "subfolder", outputSubdirectory: "compressed" }, storage);
+    const stored = JSON.parse(storage.read(COMPRESSION_PREFERENCES_STORAGE_KEY) ?? "{}");
+    expect(stored.autoNumbering).toBe(true);
+    expect(stored).not.toHaveProperty("outputDirectory");
+    expect(loadCompressionPreferences(storage).autoNumbering).toBe(true);
   });
 
   it("ignores unknown fields and repairs malformed known fields", () => {

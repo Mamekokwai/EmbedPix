@@ -17,6 +17,7 @@ export interface CompressionEnvelopeRequest {
   outputSubdirectory?: string;
   outputDirectory?: string;
   overwriteExisting: boolean;
+  autoSequence?: boolean;
   replaceOriginal?: boolean;
   jpegQuality: number;
   lossless: boolean;
@@ -71,6 +72,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.outputSubdirectory ? { outputSubdirectory: request.outputSubdirectory } : {}),
     ...(request.outputDirectory ? { outputDirectory: request.outputDirectory } : {}),
     overwriteExisting: request.overwriteExisting,
+    ...(request.autoSequence ? { autoSequence: true } : {}),
     ...(request.replaceOriginal ? { replaceOriginal: true } : {}),
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
     lossless: request.lossless,
@@ -85,6 +87,8 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
 export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): Uint8Array {
   if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
+  if (request.autoSequence && request.overwriteExisting) throw new Error("自动序号不能与覆盖同名同时启用。");
+  if (request.autoSequence && request.replaceOriginal) throw new Error("自动序号不能与覆盖原图同时启用。");
   if ((request.outputLocation === "source" || request.outputLocation === "subfolder") && !request.sourcePath) throw new Error("源文件夹输出需要源文件路径。");
   if (request.outputLocation === "subfolder" && !request.outputSubdirectory) throw new Error("源文件夹子目录不能为空。");
   if (request.outputLocation === "directory" && !request.outputDirectory) throw new Error("指定目录输出需要目录路径。");
@@ -122,6 +126,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     outputSubdirectory: options.outputLocation === "subfolder" ? options.outputSubdirectory : undefined,
     outputDirectory: options.outputLocation === "directory" ? options.outputDirectory : undefined,
     overwriteExisting: options.overwrite,
+    autoSequence: options.autoNumbering ?? false,
     replaceOriginal: options.replaceOriginal ?? false,
     jpegQuality: options.quality,
     lossless: options.format === "png" || (options.format === "webp" && options.lossless),

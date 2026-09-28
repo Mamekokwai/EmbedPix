@@ -13,6 +13,7 @@ export interface CompressionPreferences {
   outputLocation: CompressionOutputLocation;
   outputSubdirectory: string;
   overwrite: boolean;
+  autoNumbering: boolean;
   replaceOriginal: boolean;
 }
 
@@ -32,6 +33,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   outputLocation: "source",
   outputSubdirectory: "",
   overwrite: false,
+  autoNumbering: false,
   replaceOriginal: false,
 };
 
@@ -104,6 +106,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       outputLocation: enumValue(record, "outputLocation", OUTPUT_LOCATIONS, DEFAULT_COMPRESSION_PREFERENCES.outputLocation),
       outputSubdirectory: subdirectoryValue(record),
       overwrite: typeof record.overwrite === "boolean" ? record.overwrite : DEFAULT_COMPRESSION_PREFERENCES.overwrite,
+      autoNumbering: typeof record.autoNumbering === "boolean" ? record.autoNumbering : DEFAULT_COMPRESSION_PREFERENCES.autoNumbering,
       replaceOriginal: typeof record.replaceOriginal === "boolean" ? record.replaceOriginal : DEFAULT_COMPRESSION_PREFERENCES.replaceOriginal,
     };
   } catch {
@@ -139,6 +142,7 @@ export function saveCompressionPreferences(
       outputLocation: preferences.outputLocation,
       outputSubdirectory: preferences.outputSubdirectory,
       overwrite: preferences.overwrite,
+      autoNumbering: preferences.autoNumbering,
       replaceOriginal: preferences.replaceOriginal,
     }));
   } catch {

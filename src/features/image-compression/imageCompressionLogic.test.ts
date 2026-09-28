@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, normalizeCompressionOutputModes, supportsCompressionTargetSize } from "./imageCompressionLogic";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -51,6 +51,12 @@ describe("image compression logic", () => {
     expect(formatCompressionItemResultStatus("completed")).toBe("已完成");
     expect(formatCompressionItemResultStatus("skipped")).toBe("已跳过");
     expect(formatCompressionItemResultStatus("failed")).toBe("失败");
+  });
+
+  it("keeps auto numbering mutually exclusive with overwrite and original replacement", () => {
+    expect(normalizeCompressionOutputModes({ autoNumbering: true, overwrite: true, replaceOriginal: false })).toEqual({ autoNumbering: true, overwrite: false, replaceOriginal: false });
+    expect(normalizeCompressionOutputModes({ autoNumbering: true, overwrite: true, replaceOriginal: true })).toEqual({ autoNumbering: false, overwrite: false, replaceOriginal: true });
+    expect(normalizeCompressionOutputModes({ autoNumbering: false, overwrite: true, replaceOriginal: false })).toEqual({ autoNumbering: false, overwrite: true, replaceOriginal: false });
   });
 
   it("validates safe source subdirectory names", () => {

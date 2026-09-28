@@ -36,6 +36,7 @@ const MAX_METADATA_BYTES: usize = 64 * 1024;
 const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_MAX_CANDIDATES: usize = 8;
 const MAX_CANDIDATES: usize = 12;
+const MAX_AUTO_RENAME_ATTEMPTS: usize = 10_000;
 const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
 const MAX_COMPRESSION_CONCURRENCY: usize = 2;
 
@@ -101,6 +102,10 @@ struct CompressionMetadata {
     overwrite_existing: bool,
     #[serde(default)]
     replace_original: bool,
+    #[serde(default)]
+    auto_sequence: bool,
+    #[serde(default)]
+    auto_rename: bool,
     #[serde(default)]
     jpeg_quality: Option<u8>,
     #[serde(default)]
@@ -401,7 +406,8 @@ fn run_compression(
         skipped_reason: selection_skipped_reason,
     } = choose_encoded_output(request, width, height).map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
-    let output_path = resolve_output_path(request).map_err(|error| fail_message(job, error))?;
+    let output_path =
+        resolve_final_output_path(request).map_err(|error| fail_message(job, error))?;
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
@@ -880,6 +886,14 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     if metadata.replace_original && metadata.source_path.is_none() {
         return Err("replaceOriginal requires sourcePath".into());
     }
+    if (metadata.auto_sequence || metadata.auto_rename) && metadata.overwrite_existing {
+        return Err("autoSequence cannot be combined with overwriteExisting".into());
+    }
+    if (metadata.auto_sequence || metadata.auto_rename)
+        && (metadata.replace_original || metadata.output_location.as_deref() == Some("original"))
+    {
+        return Err("autoSequence cannot be combined with replaceOriginal".into());
+    }
     if let Some(source_path) = metadata.source_path.as_deref() {
         let source_path = path_security::normalize_path(source_path)
             .map_err(|error| format!("invalid sourcePath: {error:?}"))?;
@@ -953,6 +967,78 @@ fn resolve_output_path(request: &CompressionRequest) -> Result<PathBuf, String> 
     Ok(path)
 }
 
+fn resolve_final_output_path(request: &CompressionRequest) -> Result<PathBuf, String> {
+    let output_path = resolve_output_path(request)?;
+    let location = request
+        .metadata
+        .output_location
+        .as_deref()
+        .unwrap_or("path")
+        .to_ascii_lowercase();
+    if !request.metadata.auto_sequence && !request.metadata.auto_rename
+        || request.metadata.overwrite_existing
+        || request.metadata.replace_original
+        || location == "original"
+    {
+        return Ok(output_path);
+    }
+    choose_auto_rename_path(output_path)
+}
+
+fn choose_auto_rename_path(output_path: PathBuf) -> Result<PathBuf, String> {
+    choose_auto_rename_path_with_limit(output_path, MAX_AUTO_RENAME_ATTEMPTS)
+}
+
+fn choose_auto_rename_path_with_limit(
+    output_path: PathBuf,
+    max_attempts: usize,
+) -> Result<PathBuf, String> {
+    if !output_path.exists() {
+        return Ok(output_path);
+    }
+    let parent = output_path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = output_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "compression output file has no valid file name".to_string())?;
+    let source = Path::new(file_name);
+    let stem = source
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "compression output file has no valid stem".to_string())?;
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| format!(".{value}"))
+        .unwrap_or_default();
+
+    for index in 1..=max_attempts {
+        let candidate = parent.join(format!("{stem}_{index}{extension}"));
+        path_security::validate_output_path(&candidate)
+            .map_err(|error| format!("invalid compression auto-rename path: {error:?}"))?;
+        match fs::symlink_metadata(&candidate) {
+            Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => continue,
+            Ok(_) => {
+                return Err(format!(
+                    "compression auto-rename candidate is not a regular file: {}",
+                    candidate.display()
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(candidate),
+            Err(error) => {
+                return Err(format!(
+                    "failed to inspect compression auto-rename candidate {}: {error}",
+                    candidate.display()
+                ));
+            }
+        }
+    }
+    Err(format!(
+        "compression auto-rename exhausted {} candidates",
+        max_attempts
+    ))
+}
+
 fn validate_preflight_output_directory(output_path: &Path) -> Result<(), String> {
     let requested_directory = output_path
         .parent()
@@ -1005,7 +1091,7 @@ fn validate_preflight_output_directory(output_path: &Path) -> Result<(), String>
 }
 
 fn resolve_preflight_output_path(request: &CompressionRequest) -> Result<PathBuf, String> {
-    let output_path = resolve_output_path(request)
+    let output_path = resolve_final_output_path(request)
         .map_err(|error| format!("[preflight_output_path_invalid] {error}"))?;
     validate_preflight_output_directory(&output_path)?;
     Ok(output_path)
@@ -1167,6 +1253,53 @@ mod tests {
         payload
     }
 
+    fn path_request(output_path: &Path) -> CompressionRequest {
+        CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "sample.png".into(),
+                output_format: "webp".into(),
+                output_path: Some(output_path.to_string_lossy().into_owned()),
+                output_location: Some("path".into()),
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
+                jpeg_quality: None,
+                lossless: Some(true),
+                skip_if_larger: false,
+                max_output_bytes: None,
+                max_candidates: None,
+                png_optimization_level: Some(2),
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: Some("auto-rename-test".into()),
+            },
+            input: png_input(),
+            format: CompressionFormat::Webp,
+            lossless: true,
+            target_bytes: None,
+            max_candidates: DEFAULT_MAX_CANDIDATES,
+            png_optimization_level: 2,
+        }
+    }
+
+    fn test_job(job_id: &str) -> Arc<CompressionJob> {
+        Arc::new(CompressionJob {
+            cancelled: AtomicBool::new(false),
+            progress: Mutex::new(CompressionProgress {
+                job_id: job_id.into(),
+                status: "running".into(),
+                stage: "preflight".into(),
+                output_path: None,
+                error: None,
+                code: None,
+            }),
+            terminal_at: Mutex::new(None),
+        })
+    }
+
     fn luma_png_input(width: u32, height: u32) -> Vec<u8> {
         let image = DynamicImage::ImageLuma8(ImageBuffer::from_pixel(width, height, Luma([0])));
         let mut bytes = Vec::new();
@@ -1312,6 +1445,8 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
                 jpeg_quality: Some(80),
                 lossless: Some(false),
                 skip_if_larger: false,
@@ -1403,6 +1538,8 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
                 jpeg_quality: None,
                 lossless: Some(true),
                 skip_if_larger: true,
@@ -1479,6 +1616,108 @@ mod tests {
     }
 
     #[test]
+    fn auto_rename_returns_final_preflight_path_and_publishes_there() {
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-auto-rename-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("sample.webp");
+        let first = directory.join("sample_1.webp");
+        fs::write(&output, b"existing output").unwrap();
+        fs::write(&first, b"existing sequence").unwrap();
+
+        let mut request = path_request(&output);
+        request.metadata.auto_sequence = true;
+        let preflight_path = resolve_preflight_output_path(&request).unwrap();
+        let expected = directory.join("sample_2.webp");
+        assert_eq!(preflight_path, expected);
+        assert_eq!(fs::read(&output).unwrap(), b"existing output");
+        assert_eq!(fs::read(&first).unwrap(), b"existing sequence");
+        assert!(!expected.exists());
+
+        let result = run_compression(&request, &test_job("auto-rename-publish-test")).unwrap();
+        assert_eq!(PathBuf::from(result.output_path), expected);
+        assert!(expected.is_file());
+        assert_eq!(fs::read(&output).unwrap(), b"existing output");
+        assert_eq!(fs::read(&first).unwrap(), b"existing sequence");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn auto_rename_defaults_off_and_is_disabled_for_overwrite_or_original() {
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-auto-rename-contract-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("sample.webp");
+        fs::write(&output, b"existing output").unwrap();
+
+        let request = path_request(&output);
+        assert_eq!(resolve_final_output_path(&request).unwrap(), output);
+        let error =
+            run_compression(&request, &test_job("auto-rename-default-off-test")).unwrap_err();
+        assert!(error.contains("output file already exists"));
+        assert_eq!(fs::read(&output).unwrap(), b"existing output");
+
+        let mut overwrite_request = path_request(&output);
+        overwrite_request.metadata.auto_rename = true;
+        overwrite_request.metadata.overwrite_existing = true;
+        assert_eq!(
+            resolve_final_output_path(&overwrite_request).unwrap(),
+            output
+        );
+
+        let source = directory.join("source.webp");
+        fs::write(&source, b"source").unwrap();
+        let mut original_request = path_request(&output);
+        original_request.metadata.auto_sequence = true;
+        original_request.metadata.output_location = Some("original".into());
+        original_request.metadata.source_path = Some(source.to_string_lossy().into_owned());
+        assert_eq!(
+            resolve_final_output_path(&original_request).unwrap(),
+            source
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn auto_rename_rejects_unsafe_candidates_and_limits_attempts() {
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-auto-rename-limit-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("sample.webp");
+        fs::write(&output, b"existing output").unwrap();
+        for index in 1..=2 {
+            fs::write(
+                directory.join(format!("sample_{index}.webp")),
+                b"existing sequence",
+            )
+            .unwrap();
+        }
+        let error = choose_auto_rename_path_with_limit(output, 2).unwrap_err();
+        assert!(error.contains("exhausted"));
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn auto_rename_rejects_symlink_candidate() {
+        use std::os::unix::fs::symlink;
+
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-auto-rename-symlink-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("sample.webp");
+        let candidate = directory.join("sample_1.webp");
+        let target = directory.join("target.webp");
+        fs::write(&output, b"existing output").unwrap();
+        fs::write(&target, b"target").unwrap();
+        symlink(&target, &candidate).unwrap();
+
+        let error = choose_auto_rename_path(output).unwrap_err();
+        assert!(error.contains("auto-rename") || error.contains("symlink"));
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn compression_decodes_bytes_instead_of_trusting_filename_extension() {
         let metadata = br#"{"fileName":"photo.jpg","outputFormat":"webp"}"#;
         let mut payload = Vec::from(*b"EGF1");
@@ -1535,6 +1774,8 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
                 jpeg_quality: None,
                 lossless: Some(true),
                 skip_if_larger: true,
@@ -1597,6 +1838,8 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
                 jpeg_quality: None,
                 lossless: Some(true),
                 skip_if_larger: true,
@@ -1791,6 +2034,8 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
                 jpeg_quality: Some(100),
                 lossless: Some(false),
                 skip_if_larger: true,
@@ -1830,6 +2075,8 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
                 jpeg_quality: Some(100),
                 lossless: Some(false),
                 skip_if_larger: true,
@@ -1866,6 +2113,8 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
                 jpeg_quality: Some(100),
                 lossless: Some(false),
                 skip_if_larger: true,
@@ -1905,6 +2154,8 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                auto_sequence: false,
+                auto_rename: false,
                 jpeg_quality: None,
                 lossless: Some(true),
                 skip_if_larger: true,

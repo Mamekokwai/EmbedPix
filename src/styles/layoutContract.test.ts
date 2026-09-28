@@ -11,6 +11,7 @@ const compressionCss = readSource(new URL("./features/image-compression.css", im
 const gifView = readSource(new URL("../features/gif-maker/GifMakerView.tsx", import.meta.url));
 const converterView = readSource(new URL("../features/image-converter/ImageConverter.tsx", import.meta.url));
 const compressionView = readSource(new URL("../features/image-compression/ImageCompressionView.tsx", import.meta.url));
+const compressionGateway = readSource(new URL("../platform/compression/compressionGateway.ts", import.meta.url));
 const compressionPreferences = readSource(new URL("../features/image-compression/compressionPreferences.ts", import.meta.url));
 const appShell = readSource(new URL("../app/AppShell.tsx", import.meta.url));
 const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
@@ -132,6 +133,10 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("setFailures([]);");
     expect(compressionCss).toContain(".compression-preview-grid");
     expect(compressionView).toContain("同名目标会拒绝写入");
+    expect(compressionView).toContain("自动序号避免重名");
+    expect(compressionView).toContain("autoNumbering");
+    expect(compressionGateway).toContain("autoSequence");
+    expect(compressionView).toContain("输出位置仍按上方设置");
     expect(compressionCss).toContain(".compression-progress");
     expect(compressionCss).toContain("@media (max-height: 620px)");
     expect(compressionCss).toContain(".compression-status > span { min-width: 0;");
@@ -142,6 +147,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-failure-details");
     expect(compressionCss).toContain(".compression-item-results");
     expect(compressionCss).toContain(".compression-item-result-actions");
+    expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {
