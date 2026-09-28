@@ -95,6 +95,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-progress");
     expect(compressionCss).toContain("@media (max-height: 620px)");
     expect(compressionCss).toContain(".compression-status > span { min-width: 0;");
+    expect(compressionCss).toContain(".compression-clear-button:focus-visible");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {

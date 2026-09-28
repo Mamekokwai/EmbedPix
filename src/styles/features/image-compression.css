@@ -63,7 +63,7 @@
 .compression-drop-zone { display: flex; min-height: 214px; flex-direction: column; align-items: center; justify-content: center; margin-top: 16px; border: 1px dashed var(--qp-border-strong); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); cursor: pointer; color: var(--qp-text-secondary); transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease); }
 .compression-drop-zone:hover, .compression-drop-zone-dragging { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }
 .compression-drop-zone-disabled { cursor: not-allowed; opacity: .58; }
-.compression-drop-zone:focus-visible, .compression-secondary-button:focus-visible, .compression-primary-button:focus-visible, .compression-icon-button:focus-visible, .compression-retry-button:focus-visible, .compression-field input:focus-visible, .compression-field select:focus-visible, .compression-check input:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
+.compression-drop-zone:focus-visible, .compression-secondary-button:focus-visible, .compression-primary-button:focus-visible, .compression-retry-button:focus-visible, .compression-clear-button:focus-visible, .compression-icon-button:focus-visible, .compression-field input:focus-visible, .compression-field select:focus-visible, .compression-check input:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
 .compression-drop-icon, .compression-item-icon { display: grid; place-items: center; color: var(--qp-accent-default); }
 .compression-drop-icon { width: 44px; height: 44px; margin-bottom: 13px; border: 1px solid color-mix(in srgb, var(--qp-accent-default) 40%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); }
 .compression-drop-zone strong { color: var(--qp-text-primary); font-size: 14px; }
@@ -128,7 +128,7 @@
 .compression-progress span { display: block; height: 100%; border-radius: inherit; background: var(--qp-accent-default); transition: width 160ms ease; }
 .compression-primary-button { min-height: 36px; padding: 0 16px; border-color: var(--qp-accent-default); background: var(--qp-accent-default); color: var(--qp-accent-contrast, #fff); font-size: 12px; font-weight: 650; }
 .compression-primary-button:hover { filter: brightness(1.06); }
-.compression-primary-button:disabled, .compression-secondary-button:disabled, .compression-icon-button:disabled { cursor: not-allowed; opacity: .55; }
+.compression-primary-button:disabled, .compression-secondary-button:disabled, .compression-clear-button:disabled, .compression-icon-button:disabled { cursor: not-allowed; opacity: .55; }
 .compression-spin { animation: compression-spin 900ms linear infinite; }
 @keyframes compression-spin { to { transform: rotate(360deg); } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
