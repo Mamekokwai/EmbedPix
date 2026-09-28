@@ -32,7 +32,7 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression
 - 输出经过现有原子发布/回滚入口；
 - `skipIfLarger` 已进入原生或 gateway 契约。
 - 独立的 `preview_compression` 只做解码/编码预览，不调用发布 writer、不执行文件写入/重命名/删除；输入受字节、尺寸、像素和 decoder allocation 限制。
-- 图片原生压缩接收并校验 `maxOutputBytes`（不超过 128 MiB）与 `maxCandidates`（`1..=12`）；JPEG 使用有界质量候选搜索，PNG/WebP 等无损输出在超过目标时返回 `target_unreachable` 跳过结果。
+- 图片原生压缩接收并校验 `maxOutputBytes`（不超过 128 MiB）与 `maxCandidates`（`1..=12`）；JPEG 使用有界质量候选搜索，PNG/WebP 无损输出在超过目标时返回 `target_unreachable`，WebP 有损当前不做质量候选搜索，超目标返回 `target_unmet`。
 - GIF 目标体积搜索使用 `maxCandidates` 的 `1..=8` 上限；候选规划只做估算/编码，不调用发布 writer。
 - 输出发布统一经过 `storage::MAX_OUTPUT_BYTES`（当前 128 MiB）和 `validate_output_size`；超限在 publish lease 之前失败并清理临时文件。
 - 目标不可达的当前语义是 `selected=null` 加 `reason`（包含“不可达”），不是虚构的 `target_unreachable` CLI 操作；导出选择器在 `write_output_with_publish` 之前返回错误，因此不可达目标不会发布。
@@ -58,7 +58,7 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression -Req
 | `image` crate PNG/JPEG/WebP 基础能力 | 已在生产依赖 | 固定 Cargo.lock 版本，保留 Cargo license 追踪 | 否 |
 | `gif` crate | 已在生产依赖 | 固定 Cargo.lock 版本，保留 Cargo license 追踪 | 否 |
 | `kamadak-exif` 0.6.1 | 已接入 JPEG Orientation 归一化，版本已固定 | BSD-2-Clause；纯 Rust，无 C/cc/build.rs；按 x64/ARM64 构建复核 Cargo.lock 与许可证清单 | 否 |
-| `webp-animation` 0.10.0 → `libwebp-sys2` 0.2.0/0.1.11 | 已在生产依赖，`static` feature；`cargo tree` 可见两层 libwebp sys crate | Rust crate 元数据为 MIT OR Apache-2.0；`libwebp` 上游为 BSD-3-Clause，并需保留 `PATENTS`/版权与许可证文本；发布前按 x64/ARM64 实际安装包复核 | 否，现有 WebP 动画链路已接入；新增后端仍需单独评估 |
+| `webp-animation` 0.10.0 → `libwebp-sys2` 0.2.0/0.1.11 | 已在生产依赖，`static` feature；静态 WebP 有损复用同一绑定，`cargo tree` 可见两层 libwebp sys crate | Rust crate 元数据为 MIT OR Apache-2.0；`libwebp` 上游为 BSD-3-Clause，并需保留 `PATENTS`/版权与许可证文本；发布前按 x64/ARM64 实际安装包复核 | 否，现有动画链路和静态有损基础路径已接入；effort/目标候选及 ARM64 发布构建仍待评估 |
 | OxiPNG 9.1.5 | 已接入当前工作树，Cargo.lock 已固定；默认 feature 全部关闭 | [crates.io 9.1.5](https://crates.io/crates/oxipng/9.1.5) 与上游 [oxipng/oxipng](https://github.com/oxipng/oxipng) 均标注 MIT；固定 `=9.1.5`、`default-features=false`，提交 Cargo.lock，并用 `cargo metadata --locked` 复核 bitvec/indexmap/libdeflater/log/rgb/rustc-hash 及完整依赖许可证 | 是，直到严格 OxiPNG 门禁与包体积对比通过 |
 | MozJPEG | 尚未引入 | 上游 [mozilla/mozjpeg](https://github.com/mozilla/mozjpeg) 的发布构建需按 BSD 系列许可证文件逐项核对；评估 C/汇编静态链接、Windows 工具链和专利/版权清单后再启用 | 是 |
 | pngquant | 未引入 | GPLv3/商业许可路径需明确，不得默认捆绑 | 是 |

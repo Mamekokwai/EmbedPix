@@ -24,6 +24,7 @@ use super::{
     export_image::{write_exported_file, WriteOptions},
     image_orientation::normalize_jpeg_orientation,
     path_security,
+    webp_static::encode_lossy_rgba,
 };
 
 const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
@@ -538,10 +539,13 @@ fn choose_encoded_output(
             request.png_optimization_level,
             width,
             height,
+            request.lossless,
         )?;
         return Ok(EncodedSelection {
             bytes,
-            selected_quality: (request.format == CompressionFormat::Jpeg).then_some(quality),
+            selected_quality: (request.format == CompressionFormat::Jpeg
+                || (request.format == CompressionFormat::Webp && !request.lossless))
+                .then_some(quality),
             target_met: false,
             skipped_reason: None,
         });
@@ -555,14 +559,17 @@ fn choose_encoded_output(
             request.png_optimization_level,
             width,
             height,
+            request.lossless,
         )?;
         return Ok(EncodedSelection {
             target_met: (bytes.len() as u64) <= target_bytes,
-            skipped_reason: ((bytes.len() as u64) > target_bytes).then_some(
-                "target_unreachable: lossless output exceeds maxOutputBytes".to_string(),
-            ),
+            skipped_reason: ((bytes.len() as u64) > target_bytes).then_some(if request.lossless {
+                "target_unreachable: lossless output exceeds maxOutputBytes".to_string()
+            } else {
+                "target_unmet: WebP quality candidate search is not available".to_string()
+            }),
             bytes,
-            selected_quality: None,
+            selected_quality: (request.format == CompressionFormat::Webp).then_some(quality),
         });
     }
 
@@ -591,6 +598,7 @@ fn choose_encoded_output(
             request.png_optimization_level,
             width,
             height,
+            request.lossless,
         )?;
         if smallest
             .as_ref()
@@ -626,8 +634,9 @@ fn encode_and_verify(
     png_optimization_level: u8,
     width: u32,
     height: u32,
+    lossless: bool,
 ) -> Result<Vec<u8>, String> {
-    let bytes = encode_image(input, format, quality, png_optimization_level)?;
+    let bytes = encode_image_with_mode(input, format, quality, png_optimization_level, lossless)?;
     if bytes.len() > MAX_OUTPUT_BYTES {
         return Err("compressed output exceeds the 128 MiB limit".into());
     }
@@ -678,11 +687,22 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
     })
 }
 
+#[cfg(test)]
 fn encode_image(
     input: &[u8],
     format: CompressionFormat,
     quality: u8,
     png_optimization_level: u8,
+) -> Result<Vec<u8>, String> {
+    encode_image_with_mode(input, format, quality, png_optimization_level, true)
+}
+
+fn encode_image_with_mode(
+    input: &[u8],
+    format: CompressionFormat,
+    quality: u8,
+    png_optimization_level: u8,
+    lossless: bool,
 ) -> Result<Vec<u8>, String> {
     let image = decode_image(input)?;
     if format == CompressionFormat::Jpeg && image.to_rgba8().pixels().any(|pixel| pixel[3] < 255) {
@@ -710,10 +730,12 @@ fn encode_image(
             .map_err(|error| format!("failed to optimize png: {error}"))?;
             output.bytes = optimized;
         }
-        // image 0.24 exposes lossless WebP only; a quality-controlled WebP backend can be added later.
-        CompressionFormat::Webp => image
+        CompressionFormat::Webp if lossless => image
             .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::WebP)
             .map_err(|error| format!("failed to encode webp: {error}"))?,
+        CompressionFormat::Webp => {
+            output.bytes = encode_lossy_rgba(&image.to_rgba8(), quality)?;
+        }
     }
     if output.bytes.len() > output.limit {
         return Err("compressed output exceeds the 128 MiB limit".into());
@@ -847,9 +869,6 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     }
     if matches!(format, CompressionFormat::Jpeg) && lossless {
         return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
-    }
-    if matches!(format, CompressionFormat::Webp) && !lossless {
-        return Err("lossy WebP compression is not available in the first-stage backend; request lossless WebP".into());
     }
     if metadata.metadata_policy == MetadataPolicy::Preserve {
         return Err(
