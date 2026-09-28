@@ -69,7 +69,8 @@ describe("GIF desktop gateway", () => {
       .mockResolvedValueOnce(undefined);
 
     await expect(exportGif(input)).rejects.toThrow("export failed");
-    expect(vi.mocked(invoke).mock.calls.at(-1)).toEqual([
+    const calls = vi.mocked(invoke).mock.calls;
+    expect(calls[calls.length - 1]).toEqual([
       "discard_gif_frame_spool",
       { spoolId: "spool-id" },
     ]);
