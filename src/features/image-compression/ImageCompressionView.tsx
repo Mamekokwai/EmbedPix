@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent 
 import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import "../../styles/features/image-compression.css";
 import { cancelCompression, compressImage, createCompressionRequest, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
-import { isTauriEnvironment } from "../../platform/image/imageExportGateway";
+import { isTauriEnvironment, revealImageOutput } from "../../platform/image/imageExportGateway";
 import type { NativeImageFile } from "../../platform/image/imageExportGateway";
 import {
   COMPRESSION_FORMATS,
@@ -10,6 +10,7 @@ import {
   estimateFallback,
   filterCompressionFiles,
   formatCompressionBytes,
+  getSuccessfulCompressionOutputPath,
   getCompressionPreset,
   getCompressionOutputLocationError,
   supportsCompressionTargetSize,
@@ -134,6 +135,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const [lastSuccessfulOutputPath, setLastSuccessfulOutputPath] = useState<string | null>(null);
   const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
   const activeJobIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
@@ -454,6 +456,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           setSkipReasons((current) => [...current, `${item.file.name}：${result.skippedReason || "原生压缩策略跳过，未发布输出"}`]);
           setMessage(`已跳过 ${item.file.name}：${result.skippedReason || "未发布输出"}`);
         } else {
+          const successfulOutputPath = getSuccessfulCompressionOutputPath(result.status, result.outputPath);
+          if (successfulOutputPath) setLastSuccessfulOutputPath(successfulOutputPath);
           const targetMet = result.targetMet ?? (options.maxOutputBytes === undefined ? null : result.outputBytes <= options.maxOutputBytes);
           setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes, targetMet: targetMet === null ? current.targetMet : current.targetMet === false || targetMet === false ? false : true, selectedQualities: typeof result.selectedQuality === "number" ? [...current.selectedQualities, result.selectedQuality] : current.selectedQualities }));
         }
@@ -521,6 +525,31 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     const values = getCompressionPreset(nextPreset);
     setQuality(values.quality);
     setPngOptimizationLevel(values.pngOptimizationLevel);
+  };
+
+  const copySuccessfulOutputPath = async () => {
+    if (!lastSuccessfulOutputPath) return;
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择输出路径。");
+      await navigator.clipboard.writeText(lastSuccessfulOutputPath);
+      setMessage("输出路径已复制");
+      setStatus("ready");
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
+  };
+
+  const openSuccessfulOutputFolder = async () => {
+    if (!lastSuccessfulOutputPath) return;
+    try {
+      await revealImageOutput(lastSuccessfulOutputPath);
+      setMessage("已打开输出文件夹");
+      setStatus("ready");
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
   };
 
   return (
@@ -620,6 +649,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         {maxOutputBytes ? <div className="compression-summary-stat"><span>目标体积</span><strong className={resultStats.targetMet === false ? "compression-failure" : "compression-saving"}>{resultStats.targetMet === null ? "待处理" : resultStats.targetMet ? "已达成" : "未达成"}</strong></div> : null}
         {resultStats.selectedQualities.length > 0 ? <div className="compression-summary-stat"><span>实际质量</span><strong>{resultStats.selectedQualities.join(" / ")}</strong></div> : null}
         <span className="compression-estimate-note">输出 {formatCompressionBytes(resultStats.outputBytes)} / 已处理输入 {formatCompressionBytes(resultStats.processedInputBytes)}</span>
+        {lastSuccessfulOutputPath ? <div className="compression-output-actions" aria-label="最近成功输出"><div className="compression-output-path"><span>最近成功输出</span><code>{lastSuccessfulOutputPath}</code></div><div className="compression-output-buttons"><button type="button" className="compression-secondary-button" onClick={() => { void copySuccessfulOutputPath(); }}>复制输出路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openSuccessfulOutputFolder(); }}>打开输出文件夹</button></div></div> : null}
         {skipReasons.length > 0 ? <div className="compression-skip-details"><strong>跳过原因</strong>{skipReasons.map((reason) => <span key={reason}>{reason}</span>)}</div> : null}
       </section>
 

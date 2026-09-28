@@ -118,6 +118,11 @@
 .compression-field-hint { color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; }
 .compression-skip-details { display: grid; flex-basis: 100%; gap: 4px; padding-top: 8px; border-top: 1px solid var(--qp-border-subtle); color: var(--qp-text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
 .compression-skip-details strong { color: var(--qp-text-secondary); font-weight: 650; }
+.compression-output-actions { display: flex; min-width: 0; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 9px 14px; padding-top: 9px; border-top: 1px solid var(--qp-border-subtle); }
+.compression-output-path { display: grid; min-width: 0; flex: 1 1 320px; gap: 4px; }
+.compression-output-path > span { color: var(--qp-text-tertiary); font-size: 11px; }
+.compression-output-path code { min-width: 0; color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+.compression-output-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .compression-import-errors { display: grid; gap: 4px; margin-top: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--qp-danger, #df6a6a) 38%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); color: var(--qp-danger, #df6a6a); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .compression-import-errors strong { font-weight: 650; }
 .compression-footer { flex-wrap: wrap; gap: 12px; margin-top: 14px; }
