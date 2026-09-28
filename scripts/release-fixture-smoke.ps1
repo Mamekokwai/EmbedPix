@@ -79,6 +79,11 @@ try {
   Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null
   Write-Host '[release-fixture] accepted valid manifest, asset set, signatures, URLs, pub_date, sizes, provenance, and checksums.'
 
+  $originalDownloadUrl = $release.assets[0].browser_download_url
+  $release.assets[0].browser_download_url = 'https://example.com/not-EmbedPix.exe'
+  Expect-Rejection 'untrusted asset download URL' { Assert-ReleaseAssetUrls -Release $release -Repository $repository -Tag $tag }
+  $release.assets[0].browser_download_url = $originalDownloadUrl
+
   $originalAssets = $release.assets
   $release.assets = @($originalAssets | Where-Object { $_.name -ne "EmbedPix_${version}_x64-setup.exe.sig" })
   Expect-Rejection 'missing installer signature asset' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }

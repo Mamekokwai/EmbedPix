@@ -25,6 +25,7 @@ if ($null -ne $configExitCode -and $configExitCode -ne 0) { throw "Release confi
 $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases/tags/$Tag"
 $version = $Tag.TrimStart('v')
 Assert-ReleaseChannel -Release $release -Tag $Tag
+Assert-ReleaseAssetUrls -Release $release -Repository $Repository -Tag $Tag
 $publicKeyPath = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-updater-public-key-" + [guid]::NewGuid() + '.pub')
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-release-smoke-" + [guid]::NewGuid())

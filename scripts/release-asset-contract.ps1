@@ -21,6 +21,25 @@ function Assert-ReleaseChannel {
   }
 }
 
+function Assert-ReleaseAssetUrls {
+  param(
+    [Parameter(Mandatory = $true)] [object]$Release,
+    [Parameter(Mandatory = $true)] [string]$Repository,
+    [Parameter(Mandatory = $true)] [string]$Tag
+  )
+
+  $expected = @(Get-ExpectedReleaseAssetNames $Tag.TrimStart('v'))
+  foreach ($asset in @($Release.assets)) {
+    if ($expected -notcontains $asset.name) {
+      throw "Release asset URL references an unexpected asset: $($asset.name)"
+    }
+    $expectedUrl = "https://github.com/$Repository/releases/download/$Tag/$($asset.name)"
+    if ($asset.browser_download_url -ne $expectedUrl) {
+      throw "Release asset URL does not match the trusted GitHub release path for $($asset.name)."
+    }
+  }
+}
+
 function Assert-MinisignText([string]$Encoded, [string]$Label) {
   if ([string]::IsNullOrWhiteSpace($Encoded)) { throw "$Label signature is empty." }
   try { $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Encoded.Trim())) } catch { throw "$Label signature is not valid base64." }
@@ -45,6 +64,7 @@ function Assert-ReleaseAssetContract {
   if ($actual.Count -ne $expected.Count -or @($expected | Where-Object { $actual -notcontains $_ }).Count -ne 0) {
     throw "Release assets do not match the expected seven-asset set: $($actual -join ', ')"
   }
+  Assert-ReleaseAssetUrls -Release $Release -Repository $Repository -Tag $Tag
   foreach ($asset in @($Release.assets)) {
     $path = Join-Path $Root $asset.name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Downloaded release asset is missing: $($asset.name)" }

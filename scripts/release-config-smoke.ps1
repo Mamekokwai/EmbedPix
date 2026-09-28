@@ -54,11 +54,11 @@ if (-not (Test-Path -LiteralPath 'src-tauri/src/bin/embedpix-cli.rs' -PathType L
 }
 
 $releaseSmoke = Get-Content -Raw 'scripts/release-smoke.ps1'
-foreach ($required in @('embedpix-minisign-verifier', 'release-asset-contract.ps1', 'release-pe-contract.ps1', 'Assert-ReleaseAssetContract', 'Install')) {
+foreach ($required in @('embedpix-minisign-verifier', 'release-asset-contract.ps1', 'release-pe-contract.ps1', 'Assert-ReleaseAssetUrls', 'Assert-ReleaseAssetContract', 'Install')) {
   if ($releaseSmoke -notmatch [regex]::Escape($required)) { throw "Release smoke is missing: $required" }
 }
 $assetContract = Get-Content -Raw 'scripts/release-asset-contract.ps1'
-foreach ($required in @('latest.json', 'SHA256SUMS.txt', 'release-provenance.json', 'Get-ExpectedReleaseAssetNames', 'Assert-ReleaseChannel', 'Assert-ReleaseAssetContract', 'asset.size', 'pub_date', 'windows-x86_64', 'windows-aarch64')) {
+foreach ($required in @('latest.json', 'SHA256SUMS.txt', 'release-provenance.json', 'Get-ExpectedReleaseAssetNames', 'Assert-ReleaseChannel', 'Assert-ReleaseAssetUrls', 'Assert-ReleaseAssetContract', 'asset.size', 'pub_date', 'windows-x86_64', 'windows-aarch64')) {
   if ($assetContract -notmatch [regex]::Escape($required)) { throw "Release asset contract is missing: $required" }
 }
 $peContract = Get-Content -Raw 'scripts/release-pe-contract.ps1'
