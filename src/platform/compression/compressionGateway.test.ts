@@ -63,6 +63,11 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, pngOptimizationLevel: 7 })).toThrow("pngOptimizationLevel");
   });
 
+  it("rejects metadata preservation with a stable user-facing explanation before IPC", () => {
+    expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "preserve" })).toThrow("第一阶段原生压缩仅支持移除元数据");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("passes JPEG target-size candidates through raw metadata", () => {
     const encoded = encodeCompressionEnvelope({ ...request, maxOutputBytes: 64 * 1024, maxCandidates: 8 });
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);

@@ -1055,6 +1055,9 @@ fn classify_error_code(stage: &str, message: &str) -> String {
         return "cancelled".into();
     }
     let lower = message.to_ascii_lowercase();
+    if lower.contains("metadatapolicy=preserve") {
+        return "metadata_policy_unsupported".into();
+    }
     if lower.contains("decode")
         || lower.contains("inspect input")
         || lower.contains("dimensions")
@@ -1499,6 +1502,13 @@ mod tests {
         assert_eq!(
             classify_error_code("cancelled", "compression cancelled"),
             "cancelled"
+        );
+        assert_eq!(
+            classify_error_code(
+                "failed",
+                "metadataPolicy=preserve is not supported by first-stage compression"
+            ),
+            "metadata_policy_unsupported"
         );
         assert_eq!(
             classify_error_code("skipped", "target_unreachable"),
