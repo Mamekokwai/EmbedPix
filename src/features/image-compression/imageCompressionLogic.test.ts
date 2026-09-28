@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCurrentCompressionEstimate, normalizeCompressionOutputModes, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSourcePathError, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, normalizeCompressionOutputModes, supportsCompressionTargetSize } from "./imageCompressionLogic";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -68,6 +68,15 @@ describe("image compression logic", () => {
     expect(isCurrentCompressionEstimate(3, 3, false)).toBe(true);
     expect(isCurrentCompressionEstimate(2, 3, false)).toBe(false);
     expect(isCurrentCompressionEstimate(3, 3, true)).toBe(false);
+  });
+
+  it("keeps browser files usable for directory output and reports missing desktop paths per item", () => {
+    expect(getCompressionSourcePathError("directory", false)).toBeNull();
+    expect(getCompressionSourcePathError("source", false)).toContain("缺少桌面源文件路径");
+    expect(getCompressionSourcePathError("subfolder", false)).toContain("指定目录");
+    expect(getCompressionSourcePathError("source", false, true)).toContain("覆盖原图需要");
+    expect(isCompressionSourcePathError("invalid sourcePath: Missing")).toBe(true);
+    expect(isCompressionSourcePathError("[preflight_output_directory_missing] output directory is unavailable")).toBe(false);
   });
 
   it("validates safe source subdirectory names", () => {

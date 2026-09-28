@@ -18,8 +18,10 @@ import {
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
   getCompressionOutputLocationError,
+  getCompressionSourcePathError,
   normalizeCompressionOutputModes,
   isCurrentCompressionEstimate,
+  isCompressionSourcePathError,
   supportsCompressionTargetSize,
 } from "./imageCompressionLogic";
 import {
@@ -206,7 +208,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     maxCandidates: qualityEnabled && maxOutputBytes ? 8 : undefined,
   }), [format, quality, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, outputModes, maxOutputBytes]);
 
-  const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, !isTauriEnvironment() || (items.length > 0 && items.every((item) => Boolean(item.sourcePath)))), [items, outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
+  const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, true), [outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
   const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
@@ -524,15 +526,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setStatus("error");
       return;
     }
-    if (items.some((item) => !item.sourcePath)) {
-      setMessage("当前列表包含浏览器导入文件，请在桌面应用中重新选择图片后执行压缩。");
-      setStatus("error");
-      return;
-    }
     const queue = failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : items;
     if (replaceOriginal) {
       if (!canReplaceCompressionOriginal(queue, true)) {
-        setMessage("覆盖原图仅支持全部来自桌面源文件的队列。");
+        const missingSourceItems = queue.filter((item) => !item.sourcePath);
+        const sourceError = getCompressionSourcePathError(outputLocation, false, true) ?? "覆盖原图需要可访问的桌面源文件路径。";
+        setImportErrors((current) => [...current.filter((entry) => !missingSourceItems.some((item) => item.id === entry.id)), ...missingSourceItems.map((item) => ({ id: item.id, fileName: item.file.name, message: sourceError }))]);
+        setItemResults((current) => [...current, ...missingSourceItems.map((item) => ({ fileName: item.file.name, status: "failed" as const, reason: sourceError }))]);
+        setFailureDetails((current) => [...current, ...missingSourceItems.map((item) => ({ fileName: item.file.name, message: sourceError }))]);
+        setFailures(missingSourceItems.map((item) => item.file.name));
+        setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: missingSourceItems.length, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
+        setProgress({ current: queue.length, total: queue.length });
+        setMessage("部分文件缺少可访问的桌面源路径，未开始覆盖原图。");
         setStatus("error");
         return;
       }
@@ -560,7 +565,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setStage("preflight");
       const jobId = `compression-${Date.now()}-${index}`;
       try {
-        const nativeFile: NativeImageFile = { path: item.sourcePath as string, fileName: item.file.name, data: Array.from(new Uint8Array(await item.file.arrayBuffer())) };
+        const sourcePathError = getCompressionSourcePathError(outputLocation, Boolean(item.sourcePath), replaceOriginal);
+        if (sourcePathError) {
+          failedNames.push(item.file.name);
+          lastError = sourcePathError;
+          setImportErrors((current) => [...current.filter((entry) => entry.id !== item.id), { id: item.id, fileName: item.file.name, message: sourcePathError }]);
+          setItemResults((current) => [...current, { fileName: item.file.name, status: "failed", reason: sourcePathError }]);
+          setFailureDetails((current) => [...current, { fileName: item.file.name, message: sourcePathError }]);
+          setResultStats((current) => ({ ...current, failed: current.failed + 1 }));
+          setProgress({ current: index + 1, total: queue.length });
+          continue;
+        }
+        const nativeFile: NativeImageFile = { path: item.sourcePath ?? "", fileName: item.file.name, data: Array.from(new Uint8Array(await item.file.arrayBuffer())) };
         const request = createCompressionRequest(nativeFile, options, jobId);
         const preflight = await preflightCompression(request);
         if (preflight.overwritesExisting && !options.overwrite) {
@@ -599,6 +615,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         }
         activeJobIdRef.current = null;
         failedNames.push(item.file.name);
+        if (isCompressionSourcePathError(detail)) {
+          setImportErrors((current) => [...current.filter((entry) => entry.id !== item.id), { id: item.id, fileName: item.file.name, message: "桌面源文件不可访问，未导出。" }]);
+        }
         setItemResults((current) => [...current, { fileName: item.file.name, status: "failed", reason: detail }]);
         setFailureDetails((current) => [...current, { fileName: item.file.name, message: detail }]);
         lastError = detail;

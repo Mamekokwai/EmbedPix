@@ -20,6 +20,11 @@ export function normalizeCompressionOutputModes(modes: { autoNumbering?: boolean
 }
 export function formatCompressionEstimateSource(source: "native" | "fallback", detail?: string): string { return `${source === "native" ? "原生精确预估" : "本地估算"}${detail ? `（${detail}）` : ""}`; }
 export function isCurrentCompressionEstimate(requestId: number, currentRequestId: number, aborted: boolean): boolean { return !aborted && requestId === currentRequestId; }
+export function getCompressionSourcePathError(location: CompressionOutputLocation, hasSourcePath: boolean, replaceOriginal = false): string | null {
+  if (hasSourcePath || location === "directory") return null;
+  return replaceOriginal ? "覆盖原图需要可访问的桌面源文件路径。" : "缺少桌面源文件路径；当前输出位置需要源文件路径，浏览器 File 请改用“指定目录”。";
+}
+export function isCompressionSourcePathError(message: string): boolean { return /sourcePath|source path|源文件/u.test(message); }
 export function canReplaceCompressionOriginal(items: ReadonlyArray<Pick<CompressionItem, "sourcePath">>, desktopEnvironment: boolean): boolean { return desktopEnvironment && items.length > 0 && items.every((item) => Boolean(item.sourcePath?.trim())); }
 export function formatCompressionReplaceOriginalConfirmation(sourcePaths: ReadonlyArray<string>): string { return [`危险操作：将覆盖 ${sourcePaths.length} 个源文件。`, "每个原图会先移动到同目录的 bak 文件夹，再写入压缩结果。", "失败或跳过不会删除或破坏源文件。取消确认不会开始压缩。", "是否继续？"].join("\n"); }
 export function estimateFallback(items: ReadonlyArray<CompressionItem>, options: CompressionOptions): CompressionEstimate { const inputBytes = items.reduce((sum, item) => sum + item.size, 0); const ratio = options.lossless || options.format === "png" ? 0.82 : Math.max(0.15, 0.65 - options.quality / 300); const estimatedBytes = Math.max(1, Math.round(inputBytes * ratio)); return { inputBytes, estimatedBytes, savingsPercent: Math.max(0, (1 - estimatedBytes / Math.max(1, inputBytes)) * 100) }; }

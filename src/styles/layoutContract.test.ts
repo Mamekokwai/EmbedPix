@@ -77,6 +77,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("aria-live=\"polite\"");
     expect(compressionView).toContain("disabled={busy}");
     expect(compressionView).toContain("当前浏览器预览仅支持编辑参数和估算大小");
+    expect(compressionView).toContain("getCompressionSourcePathError");
+    expect(compressionView).toContain("isCompressionSourcePathError");
+    expect(compressionView).toContain("桌面源文件不可访问，未导出");
     expect(compressionView).toContain("源文件夹子目录");
     expect(compressionView).toContain("成功、跳过和节省统计");
     expect(compressionView).toContain("result.status === \"skipped\"");
