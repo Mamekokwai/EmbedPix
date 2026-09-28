@@ -1697,6 +1697,17 @@ mod tests {
         fs::remove_dir_all(directory).unwrap();
     }
 
+    #[test]
+    fn auto_rename_keeps_windows_reserved_names_rejected() {
+        let request = parse_raw_payload(&raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"webp","outputPath":"CON.webp","autoSequence":true}"#,
+            &png_input(),
+        ))
+        .unwrap();
+        let error = resolve_final_output_path(&request).unwrap_err();
+        assert!(error.contains("InvalidPath") || error.contains("invalid compression output path"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn auto_rename_rejects_symlink_candidate() {
