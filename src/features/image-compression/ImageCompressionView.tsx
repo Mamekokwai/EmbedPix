@@ -407,6 +407,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         setSelectedItemId(replaceItemId);
         setMessage(nativeFiles.length > 1 ? "已替换当前图片（仅使用所选文件中的第一张）。" : "已替换当前图片。");
       }
+      setFailures([]);
+      setFailureDetails([]);
+      setItemResults([]);
       setSkipReasons([]);
       setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
       setStatus("ready");

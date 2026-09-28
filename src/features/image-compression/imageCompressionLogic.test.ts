@@ -96,16 +96,21 @@ describe("image compression logic", () => {
     expect(getCompressionOutputFileNameError("", "webp")).toBeNull();
     expect(getCompressionOutputFileNameError("旅行照片", "webp")).toBeNull();
     expect(getCompressionOutputFileNameError("旅行照片.WEBP", "webp")).toBeNull();
-    expect(getCompressionOutputFileNameError("旅行照片.png", "webp")).toBeNull();
+    expect(getCompressionOutputFileNameError("旅行照片.png", "webp")).toContain("扩展名");
     expect(getCompressionOutputFileNameError("   ", "webp")).toContain("空白");
+    expect(getCompressionOutputFileNameError(" 旅行照片", "webp")).toContain("空白");
+    expect(getCompressionOutputFileNameError(".旅行照片", "webp")).toContain("句点");
+    expect(getCompressionOutputFileNameError("旅行照片..webp", "webp")).toContain("路径");
     expect(getCompressionOutputFileNameError("../旅行照片", "webp")).toContain("路径");
     expect(getCompressionOutputFileNameError("旅行/照片", "webp")).toContain("路径");
     expect(getCompressionOutputFileNameError("旅行:照片", "webp")).toContain("禁止");
     expect(getCompressionOutputFileNameError("CON", "webp")).toContain("保留名称");
     expect(getCompressionOutputFileNameError("旅行照片.txt", "webp")).toContain("扩展名");
+    expect(getCompressionOutputFileNameError("旅行照片.WEBP", "webp")).toBeNull();
+    expect(getCompressionOutputFileNameError("界".repeat(86), "webp")).toContain("UTF-8");
+    expect(getCompressionOutputFileNameError("界".repeat(85), "webp")).toBeNull();
     expect(normalizeCompressionOutputFileName("旅行照片", "webp")).toBe("旅行照片.webp");
     expect(normalizeCompressionOutputFileName("旅行照片.WEBP", "webp")).toBe("旅行照片.webp");
-    expect(normalizeCompressionOutputFileName("旅行照片.png", "webp")).toBe("旅行照片.webp");
   });
 
   it("keeps batch parameter modes deterministic before native work starts", () => {

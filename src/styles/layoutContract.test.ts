@@ -188,6 +188,12 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('const nextItems = removeCompressionItem(items, id);');
     expect(compressionView).toContain('void cancelActiveCompression();');
     expect(compressionView).toContain('重试失败项');
+    const nativeImportStart = compressionView.indexOf("const importNativeFiles");
+    const nativeImportEnd = compressionView.indexOf("const chooseFiles", nativeImportStart);
+    const nativeImportSource = compressionView.slice(nativeImportStart, nativeImportEnd);
+    expect(nativeImportSource).toContain("setFailures([]);");
+    expect(nativeImportSource).toContain("setFailureDetails([]);");
+    expect(nativeImportSource).toContain("setItemResults([]);");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {
