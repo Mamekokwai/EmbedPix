@@ -11,6 +11,7 @@ const compressionCss = readSource(new URL("./features/image-compression.css", im
 const gifView = readSource(new URL("../features/gif-maker/GifMakerView.tsx", import.meta.url));
 const converterView = readSource(new URL("../features/image-converter/ImageConverter.tsx", import.meta.url));
 const compressionView = readSource(new URL("../features/image-compression/ImageCompressionView.tsx", import.meta.url));
+const compressionPreferences = readSource(new URL("../features/image-compression/compressionPreferences.ts", import.meta.url));
 const appShell = readSource(new URL("../app/AppShell.tsx", import.meta.url));
 const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
 
@@ -84,6 +85,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("打开输出文件夹");
     expect(compressionView).toContain("getSuccessfulCompressionOutputPath");
     expect(compressionView).toContain("revealImageOutput");
+    expect(compressionView).toContain("loadCompressionPreferences");
+    expect(compressionView).toContain("saveCompressionPreferences");
+    expect(compressionPreferences).toContain("COMPRESSION_PREFERENCES_VERSION = 1");
+    expect(compressionPreferences).not.toContain("outputDirectory");
+    expect(compressionPreferences).not.toContain("sourcePath");
     expect(compressionView).toContain("AbortController");
     expect(compressionView).toContain("最大输出体积（JPEG/WebP 有损）");
     expect(compressionView).toContain("启用目标体积控制");

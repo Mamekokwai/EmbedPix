@@ -15,6 +15,11 @@ import {
   getCompressionOutputLocationError,
   supportsCompressionTargetSize,
 } from "./imageCompressionLogic";
+import {
+  COMPRESSION_MAX_TARGET_SIZE_KIB,
+  loadCompressionPreferences,
+  saveCompressionPreferences,
+} from "./compressionPreferences";
 import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionOptions, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
 import type { CompressionPreview } from "../../platform/compression/compressionGateway";
 
@@ -42,8 +47,6 @@ interface CompressionImportError {
   fileName: string;
   message: string;
 }
-
-const MAX_TARGET_SIZE_KIB = 128 * 1024;
 
 function fileTypeForPath(path: string): string {
   const extension = path.split(".").pop()?.toLowerCase();
@@ -105,19 +108,20 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceItemIdRef = useRef<string | null>(null);
   const previewRequestIdRef = useRef(0);
+  const [initialPreferences] = useState(() => loadCompressionPreferences());
   const [items, setItems] = useState<CompressionItem[]>([]);
-  const [format, setFormat] = useState<CompressionFormat>("webp");
-  const [quality, setQuality] = useState(82);
-  const [pngOptimizationLevel, setPngOptimizationLevel] = useState(2);
-  const [targetSizeKiB, setTargetSizeKiB] = useState("");
-  const [targetSizeEnabled, setTargetSizeEnabled] = useState(false);
-  const [lossless, setLossless] = useState(true);
-  const [preset, setPreset] = useState<CompressionPreset>("balanced");
-  const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicy>("strip");
-  const [outputLocation, setOutputLocation] = useState<CompressionOutputLocation>("source");
-  const [outputSubdirectory, setOutputSubdirectory] = useState("");
+  const [format, setFormat] = useState<CompressionFormat>(initialPreferences.format);
+  const [quality, setQuality] = useState(initialPreferences.quality);
+  const [pngOptimizationLevel, setPngOptimizationLevel] = useState(initialPreferences.pngOptimizationLevel);
+  const [targetSizeKiB, setTargetSizeKiB] = useState(initialPreferences.targetSizeKiB);
+  const [targetSizeEnabled, setTargetSizeEnabled] = useState(initialPreferences.targetSizeEnabled);
+  const [lossless, setLossless] = useState(initialPreferences.lossless);
+  const [preset, setPreset] = useState<CompressionPreset>(initialPreferences.preset);
+  const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicy>(initialPreferences.metadataPolicy);
+  const [outputLocation, setOutputLocation] = useState<CompressionOutputLocation>(initialPreferences.outputLocation);
+  const [outputSubdirectory, setOutputSubdirectory] = useState(initialPreferences.outputSubdirectory);
   const [outputDirectory, setOutputDirectory] = useState("");
-  const [overwrite, setOverwrite] = useState(false);
+  const [overwrite, setOverwrite] = useState(initialPreferences.overwrite);
   const [status, setStatus] = useState<CompressionStatus>("idle");
   const [importBusy, setImportBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -147,7 +151,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const targetSizeError = useMemo(() => {
     if (!targetSizeActive || !targetSizeKiB.trim()) return null;
     const value = Number(targetSizeKiB);
-    if (!Number.isFinite(value) || value < 1 || value > MAX_TARGET_SIZE_KIB) return `目标体积需为 1–${MAX_TARGET_SIZE_KIB.toLocaleString()} KiB。`;
+    if (!Number.isFinite(value) || value < 1 || value > COMPRESSION_MAX_TARGET_SIZE_KIB) return `目标体积需为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB。`;
     return null;
   }, [targetSizeActive, targetSizeKiB]);
   const maxOutputBytes = targetSizeActive && !targetSizeError && targetSizeKiB.trim() ? Math.round(Number(targetSizeKiB) * 1024) : undefined;
@@ -186,6 +190,22 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setEstimate(fallback);
     setEstimateNote(items.length === 0 ? "等待导入图片" : "本地预估，执行前由原生预检复核");
   }, [active, format, items, options]);
+
+  useEffect(() => {
+    saveCompressionPreferences({
+      format,
+      quality,
+      pngOptimizationLevel,
+      targetSizeEnabled: targetSizeActive,
+      targetSizeKiB,
+      lossless,
+      preset,
+      metadataPolicy,
+      outputLocation,
+      outputSubdirectory,
+      overwrite,
+    });
+  }, [format, lossless, metadataPolicy, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, targetSizeActive, targetSizeKiB]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -614,7 +634,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <label className="compression-field"><span className="compression-label-row"><span>质量（JPEG/WebP 有损）</span><strong>{qualityEnabled ? quality : "—"}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => { setQuality(Number(event.target.value)); setPreset("custom"); }} disabled={busy || !qualityEnabled} /></label>
           <label className="compression-check"><input type="checkbox" checked={format === "png" || (format === "webp" && lossless)} onChange={(event) => { if (format === "webp") { setLossless(event.target.checked); if (event.target.checked) setTargetSizeEnabled(false); setPreset("custom"); } }} disabled={busy || format !== "webp"} /><span><strong>{format === "webp" ? "WebP 无损编码" : format === "png" ? "PNG 无损编码" : "JPEG 有损编码"}</strong><small>{format === "jpg" ? "JPEG 使用质量滑块进行有损编码" : format === "webp" ? lossless ? "当前为无损 WebP；关闭后使用有损质量" : "当前为有损 WebP；质量滑块控制编码质量" : "PNG 始终无损，使用优化级别控制编码效率"}</small></span></label>
           <label className="compression-check"><input type="checkbox" checked={targetSizeActive} onChange={(event) => setTargetSizeEnabled(event.target.checked)} disabled={busy || !qualityEnabled} /><span><strong>启用目标体积控制</strong><small>{format === "jpg" ? "启用后输入最大输出体积；核心最多尝试 8 个 JPEG 质量候选" : format === "webp" && !lossless ? "启用后输入最大输出体积；核心最多尝试 8 个 WebP 质量候选" : "PNG 和无损 WebP 不支持目标体积控制"}</small></span></label>
-          <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（JPEG/WebP 有损）</span><strong>{targetSizeActive && targetSizeKiB ? `${targetSizeKiB} KiB` : "—"}</strong></span><input type="number" min="1" max={MAX_TARGET_SIZE_KIB} step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="启用后输入 KiB" disabled={busy || !qualityEnabled || !targetSizeActive} aria-invalid={Boolean(targetSizeError)} /><small className="compression-field-hint">{format === "jpg" ? `JPEG 质量候选范围为 1–${MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : format === "webp" && !lossless ? `WebP 质量候选范围为 1–${MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : "PNG 和无损 WebP 不支持目标体积控制"}</small></label>
+          <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（JPEG/WebP 有损）</span><strong>{targetSizeActive && targetSizeKiB ? `${targetSizeKiB} KiB` : "—"}</strong></span><input type="number" min="1" max={COMPRESSION_MAX_TARGET_SIZE_KIB} step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="启用后输入 KiB" disabled={busy || !qualityEnabled || !targetSizeActive} aria-invalid={Boolean(targetSizeError)} /><small className="compression-field-hint">{format === "jpg" ? `JPEG 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : format === "webp" && !lossless ? `WebP 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : "PNG 和无损 WebP 不支持目标体积控制"}</small></label>
           {targetSizeError ? <p className="compression-field-error" role="alert">{targetSizeError}</p> : null}
           <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（推荐）</option><option value="preserve" disabled>保留元数据（核心待支持）</option></select></label>
           <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>
