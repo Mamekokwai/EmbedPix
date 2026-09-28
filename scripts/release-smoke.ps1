@@ -7,6 +7,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $headers = @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'EmbedPix release smoke' }
+
+function Assert-WindowsGuiSubsystem([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Installed executable is missing: $Path" }
+  $bytes = [IO.File]::ReadAllBytes($Path)
+  if ($bytes.Length -lt 0x100 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw "Executable is not a Windows PE file: $Path" }
+  $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+  if ($peOffset -lt 0 -or $peOffset + 0x60 -gt $bytes.Length) { throw "Executable PE header is invalid: $Path" }
+  if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) { throw "Executable PE signature is invalid: $Path" }
+  $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 0x5c)
+  if ($subsystem -ne 2) { throw "Installed EmbedPix executable uses subsystem $subsystem; expected Windows GUI subsystem 2." }
+  Write-Host "Verified Windows GUI subsystem for $Path."
+}
+
+$configSmoke = Join-Path $PSScriptRoot 'release-config-smoke.ps1'
+if (-not (Test-Path -LiteralPath $configSmoke -PathType Leaf)) { throw "Release config smoke is missing: $configSmoke" }
+& $configSmoke
+$configExitCode = $LASTEXITCODE
+if ($null -ne $configExitCode -and $configExitCode -ne 0) { throw "Release configuration smoke failed with exit code $configExitCode." }
+
 $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases/tags/$Tag"
 if ($release.draft -or $release.prerelease) { throw "Release $Tag is draft or prerelease." }
 
@@ -33,6 +52,12 @@ try {
   }
   $latest = Get-Content -Raw (Join-Path $root 'latest.json') | ConvertFrom-Json
   if ($latest.version -ne $version) { throw 'latest.json version mismatch.' }
+  $manifestFields = @($latest.PSObject.Properties.Name)
+  if ($manifestFields.Count -ne 4 -or $manifestFields -notcontains 'version' -or $manifestFields -notcontains 'notes' -or $manifestFields -notcontains 'pub_date' -or $manifestFields -notcontains 'platforms') {
+    throw 'latest.json root schema is invalid.'
+  }
+  [DateTimeOffset]$pubDate = $latest.pub_date
+  if ($pubDate -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) { throw 'latest.json pub_date is in the future.' }
   $platforms = @($latest.platforms.PSObject.Properties.Name)
   if ($platforms.Count -ne 2 -or $platforms -notcontains 'windows-x86_64' -or $platforms -notcontains 'windows-aarch64') {
     throw 'latest.json platform set mismatch.'
@@ -42,6 +67,10 @@ try {
     'windows-aarch64' = "EmbedPix_${version}_arm64-setup.exe"
   }
   foreach ($platform in $platforms) {
+    $platformFields = @($latest.platforms.$platform.PSObject.Properties.Name)
+    if ($platformFields.Count -ne 2 -or $platformFields -notcontains 'signature' -or $platformFields -notcontains 'url') {
+      throw "$platform manifest schema is invalid."
+    }
     $encoded = $latest.platforms.$platform.signature
     $assetName = $expectedPlatformAssets[$platform]
     $asset = $release.assets | Where-Object name -eq $assetName | Select-Object -First 1
@@ -106,6 +135,7 @@ try {
   ) | Where-Object { Test-Path -LiteralPath $_ }
   if (-not $candidates) { throw 'Installed EmbedPix executable was not found.' }
   $installedExecutable = $candidates | Select-Object -First 1
+  Assert-WindowsGuiSubsystem $installedExecutable
   $app = Start-Process -FilePath $installedExecutable -PassThru
   Start-Sleep -Seconds 8
   [ordered]@{

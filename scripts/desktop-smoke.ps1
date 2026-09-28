@@ -12,7 +12,8 @@ Set-Location $repoRoot
 function Invoke-SmokeStep([string]$Name, [scriptblock]$Action) {
   Write-Host "[desktop-smoke] $Name"
   & $Action
-  if ($LASTEXITCODE -ne 0) { throw "$Name failed with exit code $LASTEXITCODE." }
+  $exitCode = $LASTEXITCODE
+  if ($null -ne $exitCode -and $exitCode -ne 0) { throw "$Name failed with exit code $exitCode." }
 }
 
 if ($BundlePath) {
@@ -20,6 +21,10 @@ if ($BundlePath) {
     throw "Tauri bundle was not found: $BundlePath"
   }
   Write-Host "[desktop-smoke] bundle exists: $BundlePath"
+}
+
+Invoke-SmokeStep 'release configuration and Windows GUI subsystem contract' {
+  & (Join-Path $PSScriptRoot 'release-config-smoke.ps1')
 }
 
 Invoke-SmokeStep 'frontend contract and cleanup tests' {

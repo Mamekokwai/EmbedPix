@@ -158,6 +158,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
+      - name: Run release configuration smoke
+        run: npm run check:release-config
+
       - name: Run frontend quality gate
         run: npm test
 
@@ -250,8 +253,9 @@ jobs:
         run: |
           $root = "src-tauri/target/$env:RUST_TARGET/release"
           $bundleDir = Join-Path $root 'bundle/nsis'
-          $installer = Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -File | Select-Object -First 1
-          if (-not $installer) { throw "No NSIS installer was generated in $bundleDir." }
+          $installers = @(Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -File)
+          if ($installers.Count -ne 1) { throw "Expected exactly one NSIS installer in $bundleDir, found $($installers.Count)." }
+          $installer = $installers[0]
 
           $signature = Get-Item -LiteralPath "$($installer.FullName).sig" -ErrorAction SilentlyContinue
           if (-not $signature -or $signature.Length -eq 0) {

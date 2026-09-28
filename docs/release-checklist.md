@@ -5,6 +5,7 @@
 ## 版本与资产
 
 - [ ] package.json、Cargo.toml、Cargo.lock、tauri.conf.json 和 tag 版本一致
+- [ ] `npm run check:release-config` 通过：NSIS/updater 开启、公钥文件一致、GUI subsystem 和 release smoke 契约存在
 - [ ] Windows x64/ARM64 安装包和 `.sig` 成对存在
 - [ ] 资产集合恰为 7 项：4 个安装资产、`latest.json`、`SHA256SUMS.txt`、`release-provenance.json`
 - [ ] `latest.json` 版本、平台 URL、Base64 minisign 签名与资产一致
@@ -16,6 +17,7 @@
 - [ ] 真实下载所有资产并验证 HTTP、大小、SHA256 和签名结构
 - [ ] Windows runner 静默安装 x64 包成功
 - [ ] 从安装目录启动应用，启动窗口保持运行至少 8 秒
+- [ ] 安装后的 `EmbedPix.exe` 为 Windows GUI subsystem（subsystem=2），不残留控制台窗口
 - [ ] 更新失败时 `.part` 和不完整缓存被清理，错误状态可定位
 - [ ] 签名、manifest 或哈希不一致时安装前阻断，不启动安装器
 
@@ -30,7 +32,7 @@
 | 篡改 manifest | [ ] | [ ] | 版本/平台/签名校验失败 |
 | 下载中断 | [ ] | [ ] | 临时文件清理，可重试 |
 
-自动门禁：`scripts/release-smoke.ps1` 负责发布资产下载、7 项集合、manifest Base64 minisign 结构、SHA256 和 Windows x64 安装/启动 smoke；发布工作流在上传后执行它，不改变生产审批配置。
+自动门禁：`scripts/release-config-smoke.ps1` 负责发布配置、公钥一致性和 GUI subsystem 静态契约；`scripts/release-smoke.ps1` 负责发布资产下载、7 项集合、manifest schema/Base64 minisign 结构、SHA256、PE GUI subsystem 和 Windows x64 安装/启动 smoke；发布工作流在上传后执行它，不改变生产审批配置。
 
 ## v0.4.0 发布准备
 
