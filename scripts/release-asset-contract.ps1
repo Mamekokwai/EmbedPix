@@ -8,6 +8,19 @@ function Get-ExpectedReleaseAssetNames([string]$Version) {
   )
 }
 
+function Assert-ReleaseChannel {
+  param(
+    [Parameter(Mandatory = $true)] [object]$Release,
+    [Parameter(Mandatory = $true)] [string]$Tag
+  )
+
+  if ($Release.draft) { throw "Release $Tag is draft." }
+  $tagIsPrerelease = $Tag.TrimStart('v') -match '-'
+  if ([bool]$Release.prerelease -ne $tagIsPrerelease) {
+    throw "Release $Tag prerelease state does not match its version tag."
+  }
+}
+
 function Assert-MinisignText([string]$Encoded, [string]$Label) {
   if ([string]::IsNullOrWhiteSpace($Encoded)) { throw "$Label signature is empty." }
   try { $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Encoded.Trim())) } catch { throw "$Label signature is not valid base64." }

@@ -71,8 +71,17 @@ try {
     }
   })
   $release = [pscustomobject]@{ assets = $assets }
+  Assert-ReleaseChannel -Release ([pscustomobject]@{ draft = $false; prerelease = $false }) -Tag $tag
+  Assert-ReleaseChannel -Release ([pscustomobject]@{ draft = $false; prerelease = $true }) -Tag 'v0.7.0-rc.1'
+  Expect-Rejection 'stable tag marked prerelease' { Assert-ReleaseChannel -Release ([pscustomobject]@{ draft = $false; prerelease = $true }) -Tag $tag }
+  Expect-Rejection 'prerelease tag marked stable' { Assert-ReleaseChannel -Release ([pscustomobject]@{ draft = $false; prerelease = $false }) -Tag 'v0.7.0-rc.1' }
   Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null
   Write-Host '[release-fixture] accepted valid manifest, asset set, signatures, URLs, pub_date, sizes, provenance, and checksums.'
+
+  $originalAssets = $release.assets
+  $release.assets = @($originalAssets | Where-Object { $_.name -ne "EmbedPix_${version}_x64-setup.exe.sig" })
+  Expect-Rejection 'missing installer signature asset' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  $release.assets = $originalAssets
 
   $originalManifest = Get-Content -Raw -LiteralPath (Join-Path $root 'latest.json')
   $invalidPlatformManifest = [ordered]@{
@@ -93,6 +102,12 @@ try {
   $wrongUrlManifest.platforms.'windows-x86_64'.url = 'https://example.com/not-EmbedPix.exe'
   $wrongUrlManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
   Expect-Rejection 'signature/url mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
+
+  $wrongSignatureManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+  $wrongSignatureManifest.platforms.'windows-x86_64'.signature = 'not-a-valid-signature'
+  $wrongSignatureManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
+  Expect-Rejection 'signature mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
   $futureManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
@@ -122,6 +137,9 @@ try {
   [IO.File]::WriteAllBytes($overflowPePath, $overflowPe)
   Expect-Rejection 'out-of-range PE offset' { Assert-WindowsGuiSubsystem $overflowPePath }
 
+  cargo test --manifest-path src-tauri/Cargo.toml --locked commands::update::tests::
+  if ($LASTEXITCODE -ne 0) { throw 'Updater download and cache-cleanup tests failed.' }
+  Write-Host '[release-fixture] updater interruption, resume, signature, and cache cleanup tests passed.'
   Write-Host '[release-fixture] all local release and PE boundary fixtures passed.'
 } finally {
   Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue

@@ -329,6 +329,26 @@ async fn download_package_with_resume(
     Err("更新下载失败，请稍后重试。".to_string())
 }
 
+fn cleanup_download_artifacts(
+    path: &Path,
+    signature_path: &Path,
+    signature_committed: bool,
+    package_committed: bool,
+) {
+    let part_path = PathBuf::from(format!("{}.part", path.to_string_lossy()));
+    let signature_part_path = PathBuf::from(format!("{}.part", signature_path.to_string_lossy()));
+    let etag_path = PathBuf::from(format!("{}.etag", path.to_string_lossy()));
+    let _ = fs::remove_file(&part_path);
+    let _ = fs::remove_file(&signature_part_path);
+    let _ = fs::remove_file(&etag_path);
+    if signature_committed {
+        let _ = fs::remove_file(signature_path);
+    }
+    if package_committed {
+        let _ = fs::remove_file(path);
+    }
+}
+
 fn decode_signature_text(value: &str) -> Result<String, String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(value.trim())
@@ -642,16 +662,12 @@ async fn download_update_inner(
     .await;
 
     if result.is_err() {
-        let _ = tokio::fs::remove_file(&part_path).await;
-        let _ = tokio::fs::remove_file(&signature_part_path).await;
-        let _ =
-            tokio::fs::remove_file(PathBuf::from(format!("{}.etag", path.to_string_lossy()))).await;
-        if signature_committed {
-            let _ = tokio::fs::remove_file(&signature_path).await;
-        }
-        if package_committed {
-            let _ = tokio::fs::remove_file(&path).await;
-        }
+        cleanup_download_artifacts(
+            &path,
+            &signature_path,
+            signature_committed,
+            package_committed,
+        );
     }
     result
 }
@@ -1188,12 +1204,12 @@ fn parse_sha256(value: &str) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_versions, download_package_with_resume, is_trusted_release_page_url,
-        normalize_version, open_verified_package_file, parse_sha256, pending_install_diagnostic,
-        select_trusted_asset_for_target, should_append_partial, signature_url_for_asset,
-        validate_asset_url, validate_cached_package_path, validate_update_cache_dir,
-        verify_cached_package_signature, verify_signature, PendingInstallMarker, ReleaseAsset,
-        UpdateTarget,
+        cleanup_download_artifacts, compare_versions, download_package_with_resume,
+        is_trusted_release_page_url, normalize_version, open_verified_package_file, parse_sha256,
+        pending_install_diagnostic, select_trusted_asset_for_target, should_append_partial,
+        signature_url_for_asset, validate_asset_url, validate_cached_package_path,
+        validate_update_cache_dir, verify_cached_package_signature, verify_signature,
+        PendingInstallMarker, ReleaseAsset, UpdateTarget, MAX_DOWNLOAD_ATTEMPTS,
     };
     use base64::Engine;
     use sha2::Digest;
@@ -1276,6 +1292,66 @@ mod tests {
         ));
         assert_eq!(result.unwrap().0, 4);
         assert_eq!(std::fs::read(&part).unwrap(), b"test");
+        server.join().unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn interrupted_download_is_detected_and_cleanup_removes_all_partial_artifacts() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            for _ in 0..MAX_DOWNLOAD_ATTEMPTS {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 1024];
+                let _ = stream.read(&mut request);
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nETag: \"interrupted\"\r\nConnection: close\r\n\r\nte"
+                )
+                .unwrap();
+            }
+        });
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-update-interrupted-download-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let package = root.join("package.exe");
+        let signature = root.join("package.exe.sig");
+        let part = root.join("package.exe.part");
+        let etag = root.join("package.exe.etag");
+        let url = reqwest::Url::parse(&format!("http://{address}/asset.exe")).unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let result = runtime.block_on(download_package_with_resume(
+            &reqwest::Client::new(),
+            &url,
+            &part,
+            &etag,
+            "0.4.1",
+            Some(4),
+            |_downloaded, _total| {},
+        ));
+        let incomplete = match result {
+            Err(_) => true,
+            Ok((downloaded, total)) => total != Some(downloaded),
+        };
+        assert!(
+            incomplete,
+            "truncated response must not be treated as complete"
+        );
+        std::fs::write(&signature, b"committed signature").unwrap();
+        std::fs::write(&package, b"committed package").unwrap();
+        cleanup_download_artifacts(&package, &signature, true, true);
+        assert!(!part.exists());
+        assert!(!etag.exists());
+        assert!(!signature.exists());
+        assert!(!package.exists());
         server.join().unwrap();
         std::fs::remove_dir_all(root).unwrap();
     }

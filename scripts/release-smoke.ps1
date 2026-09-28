@@ -23,9 +23,8 @@ $configExitCode = $LASTEXITCODE
 if ($null -ne $configExitCode -and $configExitCode -ne 0) { throw "Release configuration smoke failed with exit code $configExitCode." }
 
 $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repository/releases/tags/$Tag"
-if ($release.draft -or $release.prerelease) { throw "Release $Tag is draft or prerelease." }
-
 $version = $Tag.TrimStart('v')
+Assert-ReleaseChannel -Release $release -Tag $Tag
 $publicKeyPath = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-updater-public-key-" + [guid]::NewGuid() + '.pub')
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-release-smoke-" + [guid]::NewGuid())
