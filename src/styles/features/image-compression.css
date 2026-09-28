@@ -123,6 +123,12 @@
 .compression-output-path > span { color: var(--qp-text-tertiary); font-size: 11px; }
 .compression-output-path code { min-width: 0; color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
 .compression-output-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.compression-failure-details { display: grid; min-width: 0; flex-basis: 100%; gap: 8px; padding-top: 9px; border-top: 1px solid var(--qp-border-subtle); }
+.compression-failure-heading { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 7px; color: var(--qp-text-secondary); font-size: 11px; }
+.compression-failure-details ul { display: grid; min-width: 0; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.compression-failure-details li { display: grid; min-width: 0; gap: 2px; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.compression-failure-details li strong { color: var(--qp-text-secondary); font-weight: 650; }
+.compression-current-file { flex: 1 1 100%; color: var(--qp-text-tertiary); overflow-wrap: anywhere; }
 .compression-import-errors { display: grid; gap: 4px; margin-top: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--qp-danger, #df6a6a) 38%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); color: var(--qp-danger, #df6a6a); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .compression-import-errors strong { font-weight: 650; }
 .compression-footer { flex-wrap: wrap; gap: 12px; margin-top: 14px; }

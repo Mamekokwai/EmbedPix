@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, estimateFallback, filterCompressionFiles, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, estimateFallback, filterCompressionFiles, formatCompressionFailureDetails, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, supportsCompressionTargetSize } from "./imageCompressionLogic";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -30,6 +30,13 @@ describe("image compression logic", () => {
     expect(getSuccessfulCompressionOutputPath("completed", " C:/out/icon.webp ")).toBe("C:/out/icon.webp");
     expect(getSuccessfulCompressionOutputPath("skipped", "C:/out/icon.webp")).toBeNull();
     expect(getSuccessfulCompressionOutputPath("completed", "  ")).toBeNull();
+  });
+
+  it("formats failure details without losing file names or messages", () => {
+    expect(formatCompressionFailureDetails([
+      { fileName: "a.png", message: "读取失败" },
+      { fileName: "b.webp", message: "目标不可达" },
+    ])).toBe("a.png：读取失败\nb.webp：目标不可达");
   });
 
   it("validates safe source subdirectory names", () => {

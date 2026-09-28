@@ -10,6 +10,7 @@ import {
   estimateFallback,
   filterCompressionFiles,
   formatCompressionBytes,
+  formatCompressionFailureDetails,
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
   getCompressionOutputLocationError,
@@ -44,6 +45,11 @@ interface CompressionResultStats {
 
 interface CompressionImportError {
   id: string;
+  fileName: string;
+  message: string;
+}
+
+interface CompressionFailureDetail {
   fileName: string;
   message: string;
 }
@@ -132,6 +138,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [message, setMessage] = useState("");
   const [importErrors, setImportErrors] = useState<CompressionImportError[]>([]);
   const [failures, setFailures] = useState<string[]>([]);
+  const [failureDetails, setFailureDetails] = useState<CompressionFailureDetail[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [preview, setPreview] = useState<CompressionPreview | null>(null);
@@ -140,6 +147,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [lastSuccessfulOutputPath, setLastSuccessfulOutputPath] = useState<string | null>(null);
+  const [currentFileName, setCurrentFileName] = useState<string | null>(null);
   const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
   const activeJobIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
@@ -294,6 +302,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setMessage(replacingExisting ? "已替换当前图片。" : "");
     setImportErrors(unsupportedFiles.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })));
     setFailures([]);
+    setFailureDetails([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setStatus("ready");
@@ -334,6 +343,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setMessage(`有 ${importFailureNames.length} 个文件导入失败，已跳过。`);
       setImportErrors(importFailureNames.map((fileName, index) => ({ id: `native-${fileName}-${index}`, fileName, message: "读取失败或被文件夹扫描跳过。" })));
       setFailures([]);
+      setFailureDetails([]);
       setStatus(imported.length > 0 ? "ready" : "error");
     }
   };
@@ -447,6 +457,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setStage("preflight");
     const queue = failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : items;
     setFailures([]);
+    setFailureDetails([]);
     setSkipReasons([]);
     cancelRequestedRef.current = false;
     setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
@@ -454,6 +465,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     const failedNames: string[] = [];
     let lastError = "";
     for (const [index, item] of queue.entries()) {
+      setCurrentFileName(item.file.name);
+      setStage("preflight");
       const jobId = `compression-${Date.now()}-${index}`;
       try {
         const nativeFile: NativeImageFile = { path: item.sourcePath as string, fileName: item.file.name, data: Array.from(new Uint8Array(await item.file.arrayBuffer())) };
@@ -491,6 +504,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         }
         activeJobIdRef.current = null;
         failedNames.push(item.file.name);
+        setFailureDetails((current) => [...current, { fileName: item.file.name, message: detail }]);
         lastError = detail;
         setResultStats((current) => ({ ...current, failed: current.failed + 1 }));
         if (cancelRequestedRef.current) {
@@ -503,6 +517,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setProgress({ current: index + 1, total: queue.length });
     }
     activeJobIdRef.current = null;
+    setCurrentFileName(null);
     if (failedNames.length > 0) {
       setFailures(failedNames);
       setStage(cancelRequestedRef.current ? "cancelled" : "failed");
@@ -521,6 +536,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     if (!removedItem) return;
     setItems((current) => current.filter((item) => item.id !== id));
     setFailures([]);
+    setFailureDetails([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setMessage("");
@@ -532,6 +548,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setItems([]);
     setSelectedItemId(null);
     setFailures([]);
+    setFailureDetails([]);
     setImportErrors([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
@@ -553,6 +570,19 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择输出路径。");
       await navigator.clipboard.writeText(lastSuccessfulOutputPath);
       setMessage("输出路径已复制");
+      setStatus("ready");
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
+  };
+
+  const copyFailureDetails = async () => {
+    if (!failureDetails.length) return;
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择失败详情。");
+      await navigator.clipboard.writeText(formatCompressionFailureDetails(failureDetails));
+      setMessage("失败详情已复制");
       setStatus("ready");
     } catch (error) {
       setMessage(errorMessage(error));
@@ -670,6 +700,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         {resultStats.selectedQualities.length > 0 ? <div className="compression-summary-stat"><span>实际质量</span><strong>{resultStats.selectedQualities.join(" / ")}</strong></div> : null}
         <span className="compression-estimate-note">输出 {formatCompressionBytes(resultStats.outputBytes)} / 已处理输入 {formatCompressionBytes(resultStats.processedInputBytes)}</span>
         {lastSuccessfulOutputPath ? <div className="compression-output-actions" aria-label="最近成功输出"><div className="compression-output-path"><span>最近成功输出</span><code>{lastSuccessfulOutputPath}</code></div><div className="compression-output-buttons"><button type="button" className="compression-secondary-button" onClick={() => { void copySuccessfulOutputPath(); }}>复制输出路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openSuccessfulOutputFolder(); }}>打开输出文件夹</button></div></div> : null}
+        {failureDetails.length > 0 ? <div className="compression-failure-details" role="alert" aria-label="失败详情"><div className="compression-failure-heading"><strong>失败详情（{failureDetails.length}）</strong><button type="button" className="compression-secondary-button" onClick={() => { void copyFailureDetails(); }}>复制失败详情</button></div><ul>{failureDetails.map((detail) => <li key={`${detail.fileName}:${detail.message}`}><strong>{detail.fileName}</strong><span>{detail.message}</span></li>)}</ul></div> : null}
         {skipReasons.length > 0 ? <div className="compression-skip-details"><strong>跳过原因</strong>{skipReasons.map((reason) => <span key={reason}>{reason}</span>)}</div> : null}
       </section>
 
@@ -677,6 +708,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className={`compression-status compression-status-${status}`} role={status === "error" ? "alert" : "status"}>
           {status === "busy" ? <LoaderCircle size={15} className="compression-spin" aria-hidden="true" /> : status === "success" ? <CheckCircle2 size={15} aria-hidden="true" /> : status === "error" ? <AlertCircle size={15} aria-hidden="true" /> : null}
           <span>{message || (status === "busy" ? `正在处理 ${progress.current}/${progress.total}${stage ? ` · ${stage}` : ""}` : status === "success" ? "任务已完成" : "准备就绪")}</span>
+          {busy ? <span className="compression-current-file" aria-live="polite">当前文件：{currentFileName || "准备中"}{stage ? ` · 阶段：${stage}` : ""}</span> : null}
           {failures.length > 0 && status === "error" ? <button type="button" className="compression-retry-button" onClick={() => { void runCompression(); }} disabled={busy}><RefreshCw size={13} aria-hidden="true" /> 重试失败项</button> : null}
           {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
         </div>
