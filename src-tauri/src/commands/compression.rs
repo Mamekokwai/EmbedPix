@@ -334,12 +334,17 @@ pub async fn compress_image(
     });
     state.register(job_id.clone(), Arc::clone(&job))?;
     let encoder_slots = Arc::clone(&state.encoder_slots);
+    let job_for_task = Arc::clone(&job);
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _permit = encoder_slots.acquire();
-        run_compression(&request, &job)
+        run_compression(&request, &job_for_task)
     })
     .await
-    .map_err(|error| format!("compression task failed: {error}"))?;
+    .map_err(|error| {
+        let message = format!("compression task failed: {error}");
+        fail_message(&job, message.clone());
+        message
+    })?;
     state.prune();
     result
 }
@@ -357,26 +362,7 @@ pub fn cancel_compression(
         .get(&job_id)
         .cloned()
         .ok_or_else(|| "compression job not found".to_string())?;
-    let is_terminal = job
-        .progress
-        .lock()
-        .map(|progress| {
-            matches!(
-                progress.status.as_str(),
-                "completed" | "skipped" | "failed" | "cancelled"
-            )
-        })
-        .unwrap_or(true);
-    if !is_terminal {
-        job.cancelled.store(true, Ordering::Release);
-        update_progress(&job, "cancelling", None, None);
-    }
-    let progress = job
-        .progress
-        .lock()
-        .map_err(|_| "compression progress is unavailable".to_string())?
-        .clone();
-    Ok(progress)
+    cancel_job(&job)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -985,6 +971,28 @@ fn checkpoint(job: &Arc<CompressionJob>) -> Result<(), String> {
         Ok(())
     }
 }
+
+fn cancel_job(job: &Arc<CompressionJob>) -> Result<CompressionProgress, String> {
+    let is_terminal = job
+        .progress
+        .lock()
+        .map(|progress| {
+            matches!(
+                progress.status.as_str(),
+                "completed" | "skipped" | "failed" | "cancelled"
+            )
+        })
+        .unwrap_or(true);
+    if !is_terminal {
+        job.cancelled.store(true, Ordering::Release);
+        update_progress(job, "cancelling", None, None);
+    }
+    job.progress
+        .lock()
+        .map_err(|_| "compression progress is unavailable".to_string())
+        .map(|progress| progress.clone())
+}
+
 fn fail_message(job: &Arc<CompressionJob>, message: String) -> String {
     update_progress(
         job,
@@ -1300,6 +1308,75 @@ mod tests {
         };
         state.register("duplicate-test".into(), job()).unwrap();
         assert!(state.register("duplicate-test".into(), job()).is_err());
+    }
+
+    #[test]
+    fn terminal_job_ids_can_be_reused_and_expired_jobs_are_pruned() {
+        let state = CompressionJobState::default();
+        let terminal_job = || {
+            Arc::new(CompressionJob {
+                cancelled: AtomicBool::new(false),
+                progress: Mutex::new(CompressionProgress {
+                    job_id: "reusable-test".into(),
+                    status: "completed".into(),
+                    stage: "completed".into(),
+                    output_path: None,
+                    error: None,
+                    code: None,
+                }),
+                terminal_at: Mutex::new(Some(Instant::now())),
+            })
+        };
+        state
+            .register("reusable-test".into(), terminal_job())
+            .unwrap();
+        assert!(state
+            .register("reusable-test".into(), terminal_job())
+            .is_ok());
+
+        let expired = Arc::new(CompressionJob {
+            cancelled: AtomicBool::new(false),
+            progress: Mutex::new(CompressionProgress {
+                job_id: "expired-test".into(),
+                status: "failed".into(),
+                stage: "failed".into(),
+                output_path: None,
+                error: Some("test failure".into()),
+                code: Some("encode".into()),
+            }),
+            terminal_at: Mutex::new(Some(
+                Instant::now() - JOB_RETENTION - Duration::from_secs(1),
+            )),
+        });
+        state.register("expired-test".into(), expired).unwrap();
+        state.prune();
+        let jobs = state.jobs.lock().unwrap();
+        assert!(jobs.contains_key("reusable-test"));
+        assert!(!jobs.contains_key("expired-test"));
+    }
+
+    #[test]
+    fn repeated_compression_cancellation_is_idempotent_after_terminal_state() {
+        let job = Arc::new(CompressionJob {
+            cancelled: AtomicBool::new(false),
+            progress: Mutex::new(CompressionProgress {
+                job_id: "cancel-idempotent".into(),
+                status: "running".into(),
+                stage: "encoding".into(),
+                output_path: None,
+                error: None,
+                code: None,
+            }),
+            terminal_at: Mutex::new(None),
+        });
+
+        assert_eq!(cancel_job(&job).unwrap().status, "cancelling");
+        assert_eq!(cancel_job(&job).unwrap().status, "cancelling");
+        update_progress(&job, "completed", Some("output.webp".into()), None);
+        let progress = cancel_job(&job).unwrap();
+        assert_eq!(progress.status, "completed");
+        assert_eq!(progress.stage, "completed");
+        assert_eq!(progress.output_path.as_deref(), Some("output.webp"));
     }
 
     #[test]
