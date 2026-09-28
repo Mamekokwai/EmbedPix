@@ -29,7 +29,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   format: "webp",
   quality: 82,
   webpMethod: COMPRESSION_WEBP_METHOD_DEFAULT,
-  pngOptimizationLevel: 2,
+  pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
   skipIfLarger: true,

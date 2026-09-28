@@ -5,6 +5,7 @@ import {
   loadCompressionPreferences,
   saveCompressionPreferences,
 } from "./compressionPreferences";
+import { getCompressionPreset } from "./imageCompressionLogic";
 
 function createStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial));
@@ -16,6 +17,11 @@ function createStorage(initial: Record<string, string> = {}) {
 }
 
 describe("compression preferences", () => {
+  it("keeps the default balanced preset aligned with its PNG optimization level", () => {
+    expect(DEFAULT_COMPRESSION_PREFERENCES.preset).toBe("balanced");
+    expect(DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel).toBe(getCompressionPreset("balanced").pngOptimizationLevel);
+  });
+
   it("round-trips parameters without persisting image or output paths", () => {
     const storage = createStorage();
     const preferences = {
