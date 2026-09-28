@@ -53,6 +53,13 @@ describe("compression gateway", () => {
     expect(createCompressionRequest(file, { ...base, format: "jpg", lossless: true }).lossless).toBe(false);
   });
 
+  it("passes an optional custom output filename through the native request", () => {
+    const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
+    const requestWithName = createCompressionRequest(file, { format: "webp", quality: 82, lossless: true, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", outputFileName: "旅行照片.webp", overwrite: false, autoNumbering: true });
+    expect(requestWithName.outputFileName).toBe("旅行照片.webp");
+    expect(requestWithName.autoSequence).toBe(true);
+  });
+
   it("serializes replaceOriginal only when explicitly enabled", () => {
     const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
     const encoded = encodeCompressionEnvelope(createCompressionRequest(file, { format: "webp", quality: 82, lossless: true, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", overwrite: false, replaceOriginal: true }));

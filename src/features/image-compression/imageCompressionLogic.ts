@@ -48,3 +48,36 @@ export function getCompressionOutputLocationError(location: CompressionOutputLoc
   if (location === "directory" && !directory.trim()) return "请输入输出目录。";
   return null;
 }
+
+const COMPRESSION_OUTPUT_EXTENSIONS = new Set(["jpg", "jpeg", "webp", "png"]);
+const WINDOWS_RESERVED_FILE_NAMES = new Set(["CON", "PRN", "AUX", "NUL", ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`), ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`)]);
+
+function compressionOutputExtension(format: CompressionFormat): string {
+  return `.${format}`;
+}
+
+export function getCompressionOutputFileNameError(value: string, format: CompressionFormat): string | null {
+  if (value.length === 0) return null;
+  const name = value.trim();
+  if (!name) return "文件名不能只包含空白字符。";
+  if (name.length > 255) return "文件名不能超过 255 个字符。";
+  if (name === "." || name === ".." || name.includes("..")) return "文件名不能包含路径片段 ..。";
+  if (/[\\/:*?"<>|\u0000-\u001f\u007f]/u.test(name)) return "文件名包含路径分隔符或 Windows 禁止字符。";
+  if (name.endsWith(".") || name.endsWith(" ")) return "文件名不能以空格或句点结尾。";
+
+  const lastDot = name.lastIndexOf(".");
+  const extension = lastDot > 0 ? name.slice(lastDot + 1).toLowerCase() : "";
+  const stem = lastDot > 0 ? name.slice(0, lastDot) : name;
+  if (WINDOWS_RESERVED_FILE_NAMES.has(stem.toUpperCase())) return "文件名不能使用 Windows 保留名称。";
+  if (lastDot > 0 && !COMPRESSION_OUTPUT_EXTENSIONS.has(extension)) return `文件扩展名应为 .${format}；可省略扩展名。`;
+  return null;
+}
+
+export function normalizeCompressionOutputFileName(value: string, format: CompressionFormat): string | undefined {
+  const name = value.trim();
+  if (!name) return undefined;
+  const targetExtension = compressionOutputExtension(format);
+  const lastDot = name.lastIndexOf(".");
+  if (lastDot > 0 && COMPRESSION_OUTPUT_EXTENSIONS.has(name.slice(lastDot + 1).toLowerCase())) return `${name.slice(0, lastDot)}${targetExtension}`;
+  return `${name}${targetExtension}`;
+}

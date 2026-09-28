@@ -28,6 +28,7 @@ describe("compression preferences", () => {
       lossless: false,
       preset: "custom" as const,
       outputLocation: "subfolder" as const,
+      outputFileName: "旅行照片.jpg",
       outputSubdirectory: "compressed",
       overwrite: true,
       autoNumbering: false,
@@ -41,6 +42,7 @@ describe("compression preferences", () => {
     expect(stored).not.toHaveProperty("outputPath");
     expect(stored).not.toHaveProperty("outputDirectory");
     expect(stored).not.toHaveProperty("items");
+    expect(stored.outputFileName).toBe("旅行照片.jpg");
     expect(loadCompressionPreferences(storage)).toEqual(preferences);
   });
 
@@ -73,6 +75,7 @@ describe("compression preferences", () => {
         lossless: false,
         outputLocation: "invalid",
         outputSubdirectory: "../escape",
+        outputFileName: "../escape.webp",
         unknownFutureField: true,
       }),
     });
@@ -86,7 +89,18 @@ describe("compression preferences", () => {
       lossless: true,
       outputLocation: "source",
       outputSubdirectory: "",
+      outputFileName: "",
     });
+  });
+
+  it("restores only a safe custom filename and never stores a path", () => {
+    const storage = createStorage();
+    saveCompressionPreferences({ ...DEFAULT_COMPRESSION_PREFERENCES, format: "webp", outputFileName: "旅行照片.webp" }, storage);
+    const stored = JSON.parse(storage.read(COMPRESSION_PREFERENCES_STORAGE_KEY) ?? "{}");
+    expect(stored.outputFileName).toBe("旅行照片.webp");
+    expect(stored).not.toHaveProperty("outputDirectory");
+    expect(loadCompressionPreferences(storage).outputFileName).toBe("旅行照片.webp");
+    expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "webp", outputFileName: "../escape.webp" }) })).outputFileName).toBe("");
   });
 
   it("falls back completely for broken or old-version storage", () => {

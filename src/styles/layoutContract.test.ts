@@ -148,6 +148,10 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("同名目标会拒绝写入");
     expect(compressionView).toContain("自动序号避免重名");
     expect(compressionView).toContain("autoNumbering");
+    expect(compressionView).toContain("outputFileName");
+    expect(compressionView).toContain("getCompressionOutputFileNameError");
+    expect(compressionView).toContain("normalizeCompressionOutputFileName");
+    expect(compressionView).toContain("compression-output-file-name-hint");
     expect(compressionGateway).toContain("autoSequence");
     expect(compressionView).toContain("输出位置仍按上方设置");
     expect(compressionCss).toContain(".compression-progress");
@@ -165,6 +169,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-preset-message");
     expect(compressionCss).toContain(".compression-estimate-note");
     expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
+    expect(compressionCss).toContain(".compression-output-file-name-hint");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {

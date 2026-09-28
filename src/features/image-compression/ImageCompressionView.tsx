@@ -18,7 +18,9 @@ import {
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
   getCompressionOutputLocationError,
+  getCompressionOutputFileNameError,
   getCompressionSourcePathError,
+  normalizeCompressionOutputFileName,
   normalizeCompressionOutputModes,
   isCurrentCompressionEstimate,
   isCompressionSourcePathError,
@@ -145,6 +147,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [preset, setPreset] = useState<CompressionPreset>(initialPreferences.preset);
   const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicy>(initialPreferences.metadataPolicy);
   const [outputLocation, setOutputLocation] = useState<CompressionOutputLocation>(initialPreferences.outputLocation);
+  const [outputFileName, setOutputFileName] = useState(initialPreferences.outputFileName);
   const [outputSubdirectory, setOutputSubdirectory] = useState(initialPreferences.outputSubdirectory);
   const [outputDirectory, setOutputDirectory] = useState("");
   const [overwrite, setOverwrite] = useState(initialPreferences.overwrite);
@@ -192,6 +195,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     return null;
   }, [targetSizeActive, targetSizeKiB]);
   const maxOutputBytes = targetSizeActive && !targetSizeError && targetSizeKiB.trim() ? Math.round(Number(targetSizeKiB) * 1024) : undefined;
+  const outputFileNameError = useMemo(() => replaceOriginal ? null : getCompressionOutputFileNameError(outputFileName, format), [format, outputFileName, replaceOriginal]);
   const options = useMemo<CompressionOptions>(() => ({
     format,
     quality,
@@ -199,6 +203,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     pngOptimizationLevel,
     metadataPolicy,
     outputLocation,
+    outputFileName: outputModes.replaceOriginal || outputFileNameError ? undefined : normalizeCompressionOutputFileName(outputFileName, format),
     outputSubdirectory: outputLocation === "subfolder" ? outputSubdirectory.trim() || undefined : undefined,
     outputDirectory: outputLocation === "directory" ? outputDirectory.trim() || undefined : undefined,
     overwrite: outputModes.overwrite,
@@ -206,7 +211,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     replaceOriginal: outputModes.replaceOriginal,
     maxOutputBytes,
     maxCandidates: qualityEnabled && maxOutputBytes ? 8 : undefined,
-  }), [format, quality, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, outputModes, maxOutputBytes]);
+  }), [format, quality, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, maxOutputBytes]);
 
   const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, true), [outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
@@ -285,12 +290,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       preset,
       metadataPolicy,
       outputLocation,
+      outputFileName: outputFileNameError ? "" : outputFileName.trim(),
       outputSubdirectory,
       overwrite,
       autoNumbering,
       replaceOriginal,
     });
-  }, [autoNumbering, format, lossless, metadataPolicy, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, targetSizeActive, targetSizeKiB]);
+  }, [autoNumbering, format, lossless, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, targetSizeActive, targetSizeKiB]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -511,6 +517,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   const runCompression = async () => {
     if (busy || items.length === 0) return;
+    if (outputFileNameError) {
+      setMessage(outputFileNameError);
+      setStatus("error");
+      return;
+    }
     if (targetSizeError) {
       setMessage(targetSizeError);
       setStatus("error");
@@ -851,6 +862,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy || replaceOriginal}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>
           {outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
           {outputLocation === "directory" ? <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="例如 D:\\Export" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
+          <label className="compression-field"><span>自定义输出文件名</span><input value={outputFileName} onChange={(event) => { setOutputFileName(event.target.value); setPreset("custom"); }} placeholder={`留空，自动使用 .${format}`} spellCheck={false} aria-invalid={Boolean(outputFileNameError)} disabled={busy || replaceOriginal} /><small className="compression-output-file-name-hint" role={outputFileNameError ? "alert" : undefined}>{replaceOriginal ? "覆盖原图模式不使用自定义文件名。" : outputFileNameError ?? `可选；扩展名会自动规范为 .${format}，自动序号仍可继续生效。`}</small></label>
           {outputLocationError ? <p className="compression-field-error" role="alert">{outputLocationError}</p> : null}
           <label className="compression-check"><input type="checkbox" checked={outputModes.replaceOriginal && replaceOriginalAvailable} onChange={(event) => { const checked = event.target.checked; setReplaceOriginal(checked); if (checked) { setAutoNumbering(false); setOverwrite(false); } }} disabled={busy || !replaceOriginalAvailable} /><span><strong>覆盖原图并备份到 bak</strong><small>{replaceOriginalAvailable ? "启用后会先备份原图，再写入压缩结果；输出位置、自动序号和覆盖同名均不适用" : isTauriEnvironment() ? "仅全部桌面源文件队列可用，浏览器文件或混合队列会禁用" : "仅桌面应用支持覆盖原图"}</small></span></label>
           <label className="compression-check"><input type="checkbox" checked={outputModes.autoNumbering} onChange={(event) => { const checked = event.target.checked; setAutoNumbering(checked); if (checked) setOverwrite(false); }} disabled={busy || outputModes.replaceOriginal} /><span><strong>自动序号避免重名</strong><small>{outputModes.replaceOriginal ? "覆盖原图模式不适用自动序号" : "同名时自动使用 _1、_2 等序号；输出位置仍按上方设置"}</small></span></label>
@@ -897,7 +909,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
         </div>
         <div className="compression-progress" aria-label="压缩进度"><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
-        <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError) || Boolean(targetSizeError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
+        <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError) || Boolean(outputFileNameError) || Boolean(targetSizeError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
       </footer>
     </section>
   );

@@ -1,4 +1,4 @@
-import { getCompressionSubdirectoryError, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { getCompressionOutputFileNameError, getCompressionSubdirectoryError, normalizeCompressionOutputFileName, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionFormat, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
 
 export interface CompressionPreferences {
@@ -11,6 +11,7 @@ export interface CompressionPreferences {
   preset: CompressionPreset;
   metadataPolicy: MetadataPolicy;
   outputLocation: CompressionOutputLocation;
+  outputFileName: string;
   outputSubdirectory: string;
   overwrite: boolean;
   autoNumbering: boolean;
@@ -31,6 +32,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   preset: "balanced",
   metadataPolicy: "strip",
   outputLocation: "source",
+  outputFileName: "",
   outputSubdirectory: "",
   overwrite: false,
   autoNumbering: false,
@@ -87,6 +89,12 @@ function subdirectoryValue(record: Record<string, unknown>): string {
   return !trimmed || getCompressionSubdirectoryError(trimmed) ? "" : trimmed.slice(0, 255);
 }
 
+function outputFileNameValue(record: Record<string, unknown>, format: CompressionFormat): string {
+  const value = record.outputFileName;
+  if (typeof value !== "string" || !value || getCompressionOutputFileNameError(value, format)) return "";
+  return normalizeCompressionOutputFileName(value, format) ?? "";
+}
+
 function parsePreferences(value: string | null): CompressionPreferences {
   if (!value) return fallbackPreferences();
   try {
@@ -104,6 +112,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       preset: enumValue(record, "preset", PRESETS, DEFAULT_COMPRESSION_PREFERENCES.preset),
       metadataPolicy: enumValue(record, "metadataPolicy", METADATA_POLICIES, DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy),
       outputLocation: enumValue(record, "outputLocation", OUTPUT_LOCATIONS, DEFAULT_COMPRESSION_PREFERENCES.outputLocation),
+      outputFileName: outputFileNameValue(record, format),
       outputSubdirectory: subdirectoryValue(record),
       overwrite: typeof record.overwrite === "boolean" ? record.overwrite : DEFAULT_COMPRESSION_PREFERENCES.overwrite,
       autoNumbering: typeof record.autoNumbering === "boolean" ? record.autoNumbering : DEFAULT_COMPRESSION_PREFERENCES.autoNumbering,
@@ -129,6 +138,7 @@ export function saveCompressionPreferences(
 ): void {
   if (!storage) return;
   try {
+    const outputFileName = getCompressionOutputFileNameError(preferences.outputFileName, preferences.format) ? "" : normalizeCompressionOutputFileName(preferences.outputFileName, preferences.format) ?? "";
     storage.setItem(COMPRESSION_PREFERENCES_STORAGE_KEY, JSON.stringify({
       version: COMPRESSION_PREFERENCES_VERSION,
       format: preferences.format,
@@ -140,6 +150,7 @@ export function saveCompressionPreferences(
       preset: preferences.preset,
       metadataPolicy: preferences.metadataPolicy,
       outputLocation: preferences.outputLocation,
+      outputFileName,
       outputSubdirectory: preferences.outputSubdirectory,
       overwrite: preferences.overwrite,
       autoNumbering: preferences.autoNumbering,

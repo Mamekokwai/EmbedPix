@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSourcePathError, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, normalizeCompressionOutputModes, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionSourcePathError, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, supportsCompressionTargetSize } from "./imageCompressionLogic";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -89,5 +89,21 @@ describe("image compression logic", () => {
     expect(getCompressionOutputLocationError("source", "", "", false)).toContain("源文件路径");
     expect(getCompressionOutputLocationError("subfolder", "compressed", "", true)).toBeNull();
     expect(getCompressionOutputLocationError("directory", "", "", true)).toContain("输出目录");
+  });
+
+  it("validates and normalizes optional custom output file names", () => {
+    expect(getCompressionOutputFileNameError("", "webp")).toBeNull();
+    expect(getCompressionOutputFileNameError("旅行照片", "webp")).toBeNull();
+    expect(getCompressionOutputFileNameError("旅行照片.WEBP", "webp")).toBeNull();
+    expect(getCompressionOutputFileNameError("旅行照片.png", "webp")).toBeNull();
+    expect(getCompressionOutputFileNameError("   ", "webp")).toContain("空白");
+    expect(getCompressionOutputFileNameError("../旅行照片", "webp")).toContain("路径");
+    expect(getCompressionOutputFileNameError("旅行/照片", "webp")).toContain("路径");
+    expect(getCompressionOutputFileNameError("旅行:照片", "webp")).toContain("禁止");
+    expect(getCompressionOutputFileNameError("CON", "webp")).toContain("保留名称");
+    expect(getCompressionOutputFileNameError("旅行照片.txt", "webp")).toContain("扩展名");
+    expect(normalizeCompressionOutputFileName("旅行照片", "webp")).toBe("旅行照片.webp");
+    expect(normalizeCompressionOutputFileName("旅行照片.WEBP", "webp")).toBe("旅行照片.webp");
+    expect(normalizeCompressionOutputFileName("旅行照片.png", "webp")).toBe("旅行照片.webp");
   });
 });
