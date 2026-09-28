@@ -82,13 +82,14 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("真实压缩预览");
     expect(compressionView).toContain("AbortController");
     expect(compressionView).toContain("最大输出体积（JPEG/WebP 有损）");
-    expect(compressionView).toContain("maxCandidates: format === \"jpg\" && maxOutputBytes ? 8 : undefined");
+    expect(compressionView).toContain("maxCandidates: qualityEnabled && maxOutputBytes ? 8 : undefined");
     expect(compressionView).toContain("selectedQuality");
     expect(compressionView).toContain("PNG 优化级别");
     expect(compressionView).toContain("pngOptimizationLevel");
     expect(compressionView).toContain("内置预设");
     expect(compressionView).toContain("JPEG 使用质量滑块进行有损编码");
     expect(compressionView).toContain("当前为有损 WebP；质量滑块控制编码质量");
+    expect(compressionView).toContain("核心最多尝试 8 个 WebP 质量候选");
     expect(compressionView).toContain("WebP 无损编码");
     expect(compressionView).toContain("PNG 始终无损");
     expect(compressionView).toContain("formatCompressionProgressError");

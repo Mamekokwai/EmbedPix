@@ -52,6 +52,13 @@ describe("compression gateway", () => {
     expect(createCompressionRequest(file, { ...base, format: "jpg", lossless: true }).lossless).toBe(false);
   });
 
+  it("keeps WebP lossy target candidates bounded like JPEG", () => {
+    const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
+    const request = createCompressionRequest(file, { format: "webp", quality: 64, lossless: false, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", overwrite: false, maxOutputBytes: 64 * 1024, maxCandidates: 8 });
+    expect(request.maxOutputBytes).toBe(64 * 1024);
+    expect(request.maxCandidates).toBe(8);
+  });
+
   it("rejects PNG optimization levels outside the native contract", () => {
     expect(() => encodeCompressionEnvelope({ ...request, pngOptimizationLevel: 7 })).toThrow("pngOptimizationLevel");
   });
