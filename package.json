@@ -15,6 +15,7 @@
     "check:desktop-smoke": "pwsh -NoProfile -File scripts/desktop-smoke.ps1 -SkipInstall",
     "check:compression-cli-smoke": "pwsh -NoProfile -File scripts/compression-cli-smoke.ps1",
     "check:release-config": "pwsh -NoProfile -File scripts/release-config-smoke.ps1",
+    "check:release-deps": "pwsh -NoProfile -File scripts/release-dependency-smoke.ps1",
     "check:release-fixture": "pwsh -NoProfile -File scripts/release-fixture-smoke.ps1",
     "tauri": "tauri"
   },

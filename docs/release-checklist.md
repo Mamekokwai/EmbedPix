@@ -5,7 +5,7 @@
 ## 版本与资产
 
 - [ ] package.json、Cargo.toml、Cargo.lock、tauri.conf.json 和 tag 版本一致
-- [ ] `npm run check:release-config` 和 `npm run check:release-fixture` 通过：NSIS/updater 开启、公钥文件一致、GUI subsystem、manifest/资产和 PE 边界契约存在
+- [ ] `npm run check:release-config`、`npm run check:release-deps` 和 `npm run check:release-fixture` 通过：NSIS/updater 开启、公钥一致、静态 WebP 依赖版本/许可证/feature、GUI subsystem、manifest/资产和 PE 边界契约存在
 - [ ] Windows x64/ARM64 安装包和 `.sig` 成对存在
 - [ ] 资产集合恰为 7 项：4 个安装资产、`latest.json`、`SHA256SUMS.txt`、`release-provenance.json`
 - [ ] `latest.json` 版本、平台 URL、Base64 minisign 签名与资产一致

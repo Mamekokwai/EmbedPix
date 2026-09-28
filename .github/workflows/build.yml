@@ -60,6 +60,10 @@ jobs:
         if: runner.os == 'Windows'
         run: npm run check:release-config
 
+      - name: Run Windows release dependency smoke
+        if: runner.os == 'Windows'
+        run: npm run check:release-deps
+
       - name: Run Windows local release fixture smoke
         if: runner.os == 'Windows'
         run: npm run check:release-fixture

@@ -161,6 +161,9 @@ jobs:
       - name: Run release configuration smoke
         run: npm run check:release-config
 
+      - name: Run release dependency smoke
+        run: npm run check:release-deps
+
       - name: Run local release fixture smoke
         run: npm run check:release-fixture
 
@@ -278,6 +281,7 @@ jobs:
 
           $stagedInstaller = Get-Item -LiteralPath (Join-Path $outputDir $installerName)
           if ($stagedInstaller.Length -eq 0) { throw "Staged installer is empty: $installerName" }
+          .\scripts\release-dependency-smoke.ps1 -InstallerPath $stagedInstaller.FullName -BinaryPath $binary
           Write-Host "Staged $installerName ($($stagedInstaller.Length) bytes) and $installerName.sig."
 
       - name: Upload architecture artifacts
