@@ -22,6 +22,7 @@ use tauri::{
 
 use super::{
     export_image::{write_exported_file, WriteOptions},
+    image_orientation::normalize_jpeg_orientation,
     path_security,
 };
 
@@ -774,9 +775,10 @@ fn decode_image(input: &[u8]) -> Result<DynamicImage, String> {
     limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
     limits.max_alloc = Some(MAX_DECODER_ALLOC_BYTES);
     reader.limits(limits);
-    reader
+    let image = reader
         .decode()
-        .map_err(|error| format!("failed to decode input image: {error}"))
+        .map_err(|error| format!("failed to decode input image: {error}"))?;
+    Ok(normalize_jpeg_orientation(input, image))
 }
 
 fn parse_request(request: Request<'_>) -> Result<CompressionRequest, String> {

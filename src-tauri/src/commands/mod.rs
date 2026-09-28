@@ -2,6 +2,7 @@ pub mod compression;
 pub mod export_image;
 pub mod export_preflight;
 pub mod gif;
+pub(crate) mod image_orientation;
 pub(crate) mod path_security;
 pub mod update;
 

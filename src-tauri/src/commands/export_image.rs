@@ -14,7 +14,7 @@ use image::{
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{InvokeBody, Request};
 
-use super::path_security;
+use super::{image_orientation::normalize_jpeg_orientation, path_security};
 
 mod bmp;
 mod raw;
@@ -1036,9 +1036,10 @@ fn decode_input(input_bytes: &[u8]) -> Result<DynamicImage, String> {
     limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
     limits.max_alloc = Some(MAX_DECODER_ALLOC_BYTES);
     reader.limits(limits);
-    reader
+    let image = reader
         .decode()
-        .map_err(|error| format!("failed to decode input image ({format}): {error}"))
+        .map_err(|error| format!("failed to decode input image ({format}): {error}"))?;
+    Ok(normalize_jpeg_orientation(input_bytes, image))
 }
 
 fn validate_bit_depth(format: OutputFormat, bit_depth: u16) -> Result<(), String> {
