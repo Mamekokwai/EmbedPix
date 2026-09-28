@@ -15,6 +15,8 @@ describe("image compression logic", () => {
     expect(COMPRESSION_PRESETS).toHaveLength(3);
     expect(getCompressionPreset("high-quality")).toMatchObject({ quality: 92, pngOptimizationLevel: 2 });
     expect(getCompressionPreset("small-size")).toMatchObject({ quality: 70, pngOptimizationLevel: 6 });
+    expect(getCompressionPreset("balanced").description).toContain("JPEG/WebP 有损质量 82");
+    expect(getCompressionPreset("balanced").description).toContain("WebP 默认无损");
   });
 
   it("validates safe source subdirectory names", () => {

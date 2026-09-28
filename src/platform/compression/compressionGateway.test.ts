@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, encodeCompressionEnvelope, formatCompressionProgressError, getCompressionProgress, preflightCompression, previewCompression } from "./compressionGateway";
+import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, createCompressionRequest, encodeCompressionEnvelope, formatCompressionProgressError, getCompressionProgress, preflightCompression, previewCompression } from "./compressionGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -35,6 +35,21 @@ describe("compression gateway", () => {
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
     expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip", pngOptimizationLevel: 2 });
     expect(metadata).not.toHaveProperty("jpegQuality");
+  });
+
+  it("passes the shared quality field for lossy WebP without leaking it into lossless WebP", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, lossless: false, jpegQuality: 64 });
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata).toMatchObject({ outputFormat: "webp", lossless: false, jpegQuality: 64 });
+  });
+
+  it("normalizes lossless mode by output format when creating requests", () => {
+    const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
+    const base = { quality: 64, pngOptimizationLevel: 2, metadataPolicy: "strip" as const, outputLocation: "source" as const, overwrite: false };
+    expect(createCompressionRequest(file, { ...base, format: "webp", lossless: false }).lossless).toBe(false);
+    expect(createCompressionRequest(file, { ...base, format: "png", lossless: false }).lossless).toBe(true);
+    expect(createCompressionRequest(file, { ...base, format: "jpg", lossless: true }).lossless).toBe(false);
   });
 
   it("rejects PNG optimization levels outside the native contract", () => {

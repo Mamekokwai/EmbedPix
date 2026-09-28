@@ -1,9 +1,9 @@
 import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionOptions, CompressionOutputLocation, CompressionPreset } from "./types";
 export const COMPRESSION_FORMATS: ReadonlyArray<{ value: CompressionFormat; label: string }> = [{ value: "jpg", label: "JPEG" }, { value: "webp", label: "WebP" }, { value: "png", label: "PNG" }];
 export const COMPRESSION_PRESETS: ReadonlyArray<{ value: Exclude<CompressionPreset, "custom">; label: string; description: string; quality: number; pngOptimizationLevel: number }> = [
-  { value: "high-quality", label: "高质量", description: "JPEG 质量 92；PNG 优化 2；WebP 无损", quality: 92, pngOptimizationLevel: 2 },
-  { value: "balanced", label: "平衡", description: "JPEG 质量 82；PNG 优化 3；WebP 无损", quality: 82, pngOptimizationLevel: 3 },
-  { value: "small-size", label: "小体积", description: "JPEG 质量 70；PNG 优化 6；WebP 无损", quality: 70, pngOptimizationLevel: 6 },
+  { value: "high-quality", label: "高质量", description: "JPEG/WebP 有损质量 92；PNG 优化 2；WebP 默认无损", quality: 92, pngOptimizationLevel: 2 },
+  { value: "balanced", label: "平衡", description: "JPEG/WebP 有损质量 82；PNG 优化 3；WebP 默认无损", quality: 82, pngOptimizationLevel: 3 },
+  { value: "small-size", label: "小体积", description: "JPEG/WebP 有损质量 70；PNG 优化 6；WebP 默认无损", quality: 70, pngOptimizationLevel: 6 },
 ];
 
 export function getCompressionPreset(preset: Exclude<CompressionPreset, "custom">) {
