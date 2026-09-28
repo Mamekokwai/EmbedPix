@@ -67,7 +67,7 @@ foreach ($required in @('Assert-WindowsGuiSubsystem', 'peOffset -gt $bytes.Lengt
 }
 if (-not (Test-Path -LiteralPath 'scripts/release-fixture-smoke.ps1' -PathType Leaf)) { throw 'Release fixture smoke is missing.' }
 $fixtureSmoke = Get-Content -Raw 'scripts/release-fixture-smoke.ps1'
-foreach ($required in @('commands::update::tests::', 'Updater download and cache-cleanup tests failed')) {
+foreach ($required in @('commands::update::tests::', 'Updater download and cache-cleanup tests failed', 'Windows console subsystem')) {
   if ($fixtureSmoke -notmatch [regex]::Escape($required)) { throw "Release fixture smoke is missing: $required" }
 }
 if (-not (Test-Path -LiteralPath 'scripts/release-dependency-smoke.ps1' -PathType Leaf)) { throw 'Release dependency smoke is missing.' }

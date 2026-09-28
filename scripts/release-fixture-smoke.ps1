@@ -131,6 +131,12 @@ try {
   [IO.File]::WriteAllBytes($validPePath, $validPe)
   Assert-WindowsGuiSubsystem $validPePath
 
+  $consolePe = [byte[]]$validPe.Clone()
+  $consolePe[0xdc] = 3
+  $consolePePath = Join-Path $root 'console.exe'
+  [IO.File]::WriteAllBytes($consolePePath, $consolePe)
+  Expect-Rejection 'Windows console subsystem' { Assert-WindowsGuiSubsystem $consolePePath }
+
   $overflowPe = New-Object byte[] 512
   $overflowPe[0] = 0x4d; $overflowPe[1] = 0x5a
   $overflowPe[0x3c] = 0x7f; $overflowPe[0x3d] = 0xff; $overflowPe[0x3e] = 0xff; $overflowPe[0x3f] = 0x7f
