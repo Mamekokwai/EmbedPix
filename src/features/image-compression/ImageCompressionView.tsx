@@ -19,9 +19,14 @@ import {
   getCompressionPreset,
   getCompressionOutputLocationError,
   getCompressionOutputFileNameError,
+  getCompressionBatchFinalState,
+  getCompressionCancelledItemResults,
+  getCompressionRetryQueue,
   getCompressionSourcePathError,
+  mergeCompressionItems,
   normalizeCompressionOutputFileName,
   normalizeCompressionOutputModes,
+  removeCompressionItem,
   isCurrentCompressionEstimate,
   isCompressionSourcePathError,
   supportsCompressionTargetSize,
@@ -369,20 +374,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setStatus("error");
       return;
     }
-    const replacement = replaceItemId ? next[0] : null;
-    const replacingExisting = Boolean(replacement && items.some((item) => item.id === replaceItemId));
-    const appendedItems = replacingExisting ? [] : next.filter((item) => !items.some((current) => current.id === item.id));
-    const hydratedItems = replacingExisting && replacement ? [{ ...replacement, id: replaceItemId as string }] : appendedItems;
-    setItems((current) => {
-      if (replacingExisting && replacement) {
-        return current.map((item) => item.id === replaceItemId ? { ...replacement, id: replaceItemId } : item);
-      }
-      const existing = new Set(current.map((item) => item.id));
-      return [...current, ...appendedItems.filter((item) => !existing.has(item.id))];
-    });
-    hydratedItems.forEach(queueCompressionDimensions);
-    if (replacingExisting) setSelectedItemId(replaceItemId);
-    setMessage(replacingExisting ? "已替换当前图片。" : "");
+    const merged = mergeCompressionItems(items, next, replaceItemId);
+    setItems(merged.items);
+    merged.itemsToHydrate.forEach(queueCompressionDimensions);
+    if (merged.replacingExisting) setSelectedItemId(replaceItemId);
+    setMessage(merged.replacingExisting ? "已替换当前图片。" : "");
     setImportErrors(unsupportedFiles.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })));
     setFailures([]);
     setFailureDetails([]);
@@ -404,17 +400,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       }
     }
     if (imported.length > 0) {
-      const replacement = replaceItemId ? imported[0] : null;
-      const replacingExisting = Boolean(replacement && items.some((item) => item.id === replaceItemId));
-      setItems((current) => {
-        if (replacingExisting && replacement) {
-          return current.map((item) => item.id === replaceItemId ? { ...replacement, id: replaceItemId } : item);
-        }
-        return [...current, ...imported];
-      });
-      const itemForDimensions = replacingExisting && replacement ? [{ ...replacement, id: replaceItemId as string }] : imported;
-      itemForDimensions.forEach(queueCompressionDimensions);
-      if (replacingExisting) {
+      const merged = mergeCompressionItems(items, imported, replaceItemId);
+      setItems(merged.items);
+      merged.itemsToHydrate.forEach(queueCompressionDimensions);
+      if (merged.replacingExisting) {
         setSelectedItemId(replaceItemId);
         setMessage(nativeFiles.length > 1 ? "已替换当前图片（仅使用所选文件中的第一张）。" : "已替换当前图片。");
       }
@@ -537,7 +526,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setStatus("error");
       return;
     }
-    const queue = failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : items;
+    const queue = getCompressionRetryQueue(items, failures);
     if (replaceOriginal) {
       if (!canReplaceCompressionOriginal(queue, true)) {
         const missingSourceItems = queue.filter((item) => !item.sourcePath);
@@ -634,7 +623,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         lastError = detail;
         setResultStats((current) => ({ ...current, failed: current.failed + 1 }));
         if (cancelRequestedRef.current) {
-          setItemResults((current) => [...current, ...queue.slice(index + 1).map((pendingItem) => ({ fileName: pendingItem.file.name, status: "skipped" as const, reason: "已取消，未处理" }))]);
+          setItemResults((current) => [...current, ...getCompressionCancelledItemResults(queue, index)]);
           setResultStats((current) => ({ ...current, skipped: current.skipped + queue.length - index - 1 }));
           setMessage("已取消当前任务，其余文件未处理。");
           setProgress({ current: queue.length, total: queue.length });
@@ -645,14 +634,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     }
     activeJobIdRef.current = null;
     setCurrentFileName(null);
-    if (failedNames.length > 0) {
+    const finalState = getCompressionBatchFinalState(failedNames, cancelRequestedRef.current);
+    if (finalState.status === "error") {
       setFailures(failedNames);
-      setStage(cancelRequestedRef.current ? "cancelled" : "failed");
+      setStage(finalState.stage);
       setMessage(cancelRequestedRef.current ? "已取消当前任务，其余文件未处理。" : `部分任务完成，请查看统计。${lastError ? ` ${lastError}` : ""}`);
       setStatus("error");
     } else {
       setStatus("success");
-      setStage("completed");
+      setStage(finalState.stage);
       setMessage("处理完成，请查看成功、跳过和节省统计。");
     }
   };
@@ -661,14 +651,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     if (sourceBusy) return;
     const removedItem = items.find((item) => item.id === id);
     if (!removedItem) return;
-    setItems((current) => current.filter((item) => item.id !== id));
+    const nextItems = removeCompressionItem(items, id);
+    setItems(nextItems);
     setFailures([]);
     setFailureDetails([]);
     setItemResults([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setMessage("");
-    setStatus(items.length > 1 ? "ready" : "idle");
+    setStatus(nextItems.length > 0 ? "ready" : "idle");
   };
 
   const clearItems = () => {

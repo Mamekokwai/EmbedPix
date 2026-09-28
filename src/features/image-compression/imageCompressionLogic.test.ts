@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionSourcePathError, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -105,5 +106,32 @@ describe("image compression logic", () => {
     expect(normalizeCompressionOutputFileName("旅行照片", "webp")).toBe("旅行照片.webp");
     expect(normalizeCompressionOutputFileName("旅行照片.WEBP", "webp")).toBe("旅行照片.webp");
     expect(normalizeCompressionOutputFileName("旅行照片.png", "webp")).toBe("旅行照片.webp");
+  });
+
+  it("keeps batch parameter modes deterministic before native work starts", () => {
+    expect(normalizeCompressionOutputModes({ overwrite: true, autoNumbering: true, replaceOriginal: false })).toEqual({ overwrite: false, autoNumbering: true, replaceOriginal: false });
+    expect(normalizeCompressionOutputModes({ overwrite: true, autoNumbering: true, replaceOriginal: true })).toEqual({ overwrite: false, autoNumbering: false, replaceOriginal: true });
+    expect(getCompressionBatchFinalState([], false)).toEqual({ status: "success", stage: "completed" });
+    expect(getCompressionBatchFinalState(["bad.png"], false)).toEqual({ status: "error", stage: "failed" });
+    expect(getCompressionBatchFinalState(["bad.png"], true)).toEqual({ status: "error", stage: "cancelled" });
+  });
+
+  it("merges, replaces, removes, retries, and cancels batch items without mutating inputs", () => {
+    const createItem = (id: string, name: string): CompressionItem => ({ id, file: new File([new Uint8Array([1])], name, { type: "image/png" }), size: 1 });
+    const first = createItem("a", "a.png");
+    const second = createItem("b", "b.png");
+    const replacement = createItem("new", "new.png");
+    const current = [first, second];
+    const added = mergeCompressionItems(current, [second, replacement]);
+    expect(added.items.map((item) => item.id)).toEqual(["a", "b", "new"]);
+    expect(current.map((item) => item.id)).toEqual(["a", "b"]);
+    const replaced = mergeCompressionItems(current, [replacement], "b");
+    expect(replaced.replacingExisting).toBe(true);
+    expect(replaced.items.map((item) => item.file.name)).toEqual(["a.png", "new.png"]);
+    expect(replaced.itemsToHydrate[0]?.id).toBe("b");
+    expect(removeCompressionItem(replaced.items, "a").map((item) => item.file.name)).toEqual(["new.png"]);
+    expect(getCompressionRetryQueue([first, second], ["b.png"]).map((item) => item.file.name)).toEqual(["b.png"]);
+    expect(getCompressionRetryQueue([first, second], []).map((item) => item.file.name)).toEqual(["a.png", "b.png"]);
+    expect(getCompressionCancelledItemResults([first, second, replacement], 0)).toEqual([{ fileName: "b.png", status: "skipped", reason: "已取消，未处理" }, { fileName: "new.png", status: "skipped", reason: "已取消，未处理" }]);
   });
 });

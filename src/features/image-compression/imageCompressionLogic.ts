@@ -1,4 +1,4 @@
-import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionItemResultStatus, CompressionOptions, CompressionOutputLocation, CompressionPreset } from "./types";
+import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionItemResult, CompressionItemResultStatus, CompressionOptions, CompressionOutputLocation, CompressionPreset } from "./types";
 export const COMPRESSION_FORMATS: ReadonlyArray<{ value: CompressionFormat; label: string }> = [{ value: "jpg", label: "JPEG" }, { value: "webp", label: "WebP" }, { value: "png", label: "PNG" }];
 export const COMPRESSION_PRESETS: ReadonlyArray<{ value: Exclude<CompressionPreset, "custom">; label: string; description: string; quality: number; pngOptimizationLevel: number }> = [
   { value: "high-quality", label: "高质量", description: "JPEG/WebP 有损质量 92；PNG 优化 2；WebP 默认无损", quality: 92, pngOptimizationLevel: 2 },
@@ -80,4 +80,39 @@ export function normalizeCompressionOutputFileName(value: string, format: Compre
   const lastDot = name.lastIndexOf(".");
   if (lastDot > 0 && COMPRESSION_OUTPUT_EXTENSIONS.has(name.slice(lastDot + 1).toLowerCase())) return `${name.slice(0, lastDot)}${targetExtension}`;
   return `${name}${targetExtension}`;
+}
+
+export function mergeCompressionItems(current: ReadonlyArray<CompressionItem>, incoming: ReadonlyArray<CompressionItem>, replaceItemId: string | null = null): { items: CompressionItem[]; itemsToHydrate: CompressionItem[]; replacingExisting: boolean } {
+  const replacement = replaceItemId ? incoming[0] : undefined;
+  const replacingExisting = Boolean(replacement && current.some((item) => item.id === replaceItemId));
+  if (replacingExisting && replacement && replaceItemId) {
+    const hydratedReplacement = { ...replacement, id: replaceItemId };
+    return { items: current.map((item) => item.id === replaceItemId ? hydratedReplacement : item), itemsToHydrate: [hydratedReplacement], replacingExisting: true };
+  }
+  const existing = new Set(current.map((item) => item.id));
+  const added: CompressionItem[] = [];
+  for (const item of incoming) {
+    if (existing.has(item.id)) continue;
+    existing.add(item.id);
+    added.push(item);
+  }
+  return { items: [...current, ...added], itemsToHydrate: added, replacingExisting: false };
+}
+
+export function removeCompressionItem(items: ReadonlyArray<CompressionItem>, id: string): CompressionItem[] {
+  return items.filter((item) => item.id !== id);
+}
+
+export function getCompressionRetryQueue(items: ReadonlyArray<CompressionItem>, failures: ReadonlyArray<string>): CompressionItem[] {
+  return failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : [...items];
+}
+
+export function getCompressionCancelledItemResults(items: ReadonlyArray<CompressionItem>, currentIndex: number): CompressionItemResult[] {
+  return items.slice(currentIndex + 1).map((item) => ({ fileName: item.file.name, status: "skipped", reason: "已取消，未处理" }));
+}
+
+export function getCompressionBatchFinalState(failedNames: ReadonlyArray<string>, cancelled: boolean): { status: "success" | "error"; stage: "completed" | "cancelled" | "failed" } {
+  return failedNames.length > 0
+    ? { status: "error", stage: cancelled ? "cancelled" : "failed" }
+    : { status: "success", stage: "completed" };
 }

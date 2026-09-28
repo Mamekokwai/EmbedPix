@@ -11,9 +11,9 @@ const compressionCss = readSource(new URL("./features/image-compression.css", im
 const gifView = readSource(new URL("../features/gif-maker/GifMakerView.tsx", import.meta.url));
 const converterView = readSource(new URL("../features/image-converter/ImageConverter.tsx", import.meta.url));
 const compressionView = readSource(new URL("../features/image-compression/ImageCompressionView.tsx", import.meta.url));
+const appShell = readSource(new URL("../app/AppShell.tsx", import.meta.url));
 const compressionGateway = readSource(new URL("../platform/compression/compressionGateway.ts", import.meta.url));
 const compressionPreferences = readSource(new URL("../features/image-compression/compressionPreferences.ts", import.meta.url));
-const appShell = readSource(new URL("../app/AppShell.tsx", import.meta.url));
 const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
 
 const VIEWPORT_MATRIX = [
@@ -170,6 +170,24 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-estimate-note");
     expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
     expect(compressionCss).toContain(".compression-output-file-name-hint");
+  });
+
+  it("keeps compression state mounted while navigation only toggles visibility", () => {
+    expect(appShell).toContain('<div className="app-kept-view app-kept-compression" hidden={view !== "compression"}>');
+    expect(appShell).toContain('<ImageCompressionView active={view === "compression"} />');
+    expect(appShell).not.toContain('{view === "compression" ? <ImageCompressionView');
+    expect(compressionView).toContain('if (!active || items.length === 0)');
+    expect(compressionView).toContain('const sourceBusy = busy || importBusy;');
+  });
+
+  it("keeps batch cancellation, retry, and source-list transitions explicit", () => {
+    expect(compressionView).toContain('const queue = getCompressionRetryQueue(items, failures);');
+    expect(compressionView).toContain('getCompressionCancelledItemResults(queue, index)');
+    expect(compressionView).toContain('const finalState = getCompressionBatchFinalState(failedNames, cancelRequestedRef.current);');
+    expect(compressionView).toContain('const merged = mergeCompressionItems(items, next, replaceItemId);');
+    expect(compressionView).toContain('const nextItems = removeCompressionItem(items, id);');
+    expect(compressionView).toContain('void cancelActiveCompression();');
+    expect(compressionView).toContain('重试失败项');
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {
