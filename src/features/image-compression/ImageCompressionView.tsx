@@ -25,6 +25,16 @@ import {
   loadCompressionPreferences,
   saveCompressionPreferences,
 } from "./compressionPreferences";
+import {
+  createCompressionCustomPreset,
+  exportCompressionPresetsJson,
+  importCompressionPresetsJson,
+  loadCompressionCustomPresets,
+  mergeCompressionCustomPresets,
+  saveCompressionCustomPresets,
+  type CompressionCustomPreset,
+  type CompressionPresetValues,
+} from "./compressionCustomPresets";
 import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionItemResult, CompressionOptions, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
 import type { CompressionPreview } from "../../platform/compression/compressionGateway";
 
@@ -116,6 +126,7 @@ function previewMimeType(format: string): string {
 
 export default function ImageCompressionView({ active = true }: ImageCompressionViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const presetFileInputRef = useRef<HTMLInputElement>(null);
   const replaceItemIdRef = useRef<string | null>(null);
   const previewRequestIdRef = useRef(0);
   const [initialPreferences] = useState(() => loadCompressionPreferences());
@@ -134,6 +145,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [overwrite, setOverwrite] = useState(initialPreferences.overwrite);
   const [autoNumbering, setAutoNumbering] = useState(initialPreferences.autoNumbering);
   const [replaceOriginal, setReplaceOriginal] = useState(initialPreferences.replaceOriginal);
+  const [customPresets, setCustomPresets] = useState<CompressionCustomPreset[]>(() => loadCompressionCustomPresets());
+  const [customPresetId, setCustomPresetId] = useState("");
+  const [customPresetName, setCustomPresetName] = useState("");
+  const [customPresetMessage, setCustomPresetMessage] = useState<string | null>(null);
   const [status, setStatus] = useState<CompressionStatus>("idle");
   const [importBusy, setImportBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -599,10 +614,69 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   const applyPreset = (nextPreset: CompressionPreset) => {
     setPreset(nextPreset);
+    setCustomPresetId("");
     if (nextPreset === "custom") return;
     const values = getCompressionPreset(nextPreset);
     setQuality(values.quality);
     setPngOptimizationLevel(values.pngOptimizationLevel);
+  };
+
+  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, lossless, metadataPolicy });
+
+  const applyCustomPreset = (id: string) => {
+    setCustomPresetId(id);
+    const selected = customPresets.find((item) => item.id === id);
+    if (!selected) return;
+    setFormat(selected.values.format);
+    setQuality(selected.values.quality);
+    setPngOptimizationLevel(selected.values.pngOptimizationLevel);
+    setTargetSizeEnabled(selected.values.targetSizeEnabled);
+    setTargetSizeKiB(selected.values.targetSizeKiB);
+    setLossless(selected.values.lossless);
+    setMetadataPolicy(selected.values.metadataPolicy);
+    setPreset("custom");
+    setCustomPresetMessage(`已应用自定义预设“${selected.name}”`);
+  };
+
+  const saveCurrentAsCustomPreset = () => {
+    const name = customPresetName.trim();
+    if (!name) return;
+    try {
+      const created = createCompressionCustomPreset(name, currentCustomPresetValues());
+      const next = mergeCompressionCustomPresets(customPresets, [created]);
+      setCustomPresets(next);
+      saveCompressionCustomPresets(next);
+      setCustomPresetId(next[next.length - 1]?.id ?? "");
+      setCustomPresetName("");
+      setCustomPresetMessage(`已保存自定义预设“${next[next.length - 1]?.name ?? name}”`);
+    } catch (error) {
+      setCustomPresetMessage(errorMessage(error));
+    }
+  };
+
+  const downloadCustomPresets = () => {
+    const url = URL.createObjectURL(new Blob([exportCompressionPresetsJson(customPresets)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "embedpix-compression-presets.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    setCustomPresetMessage("压缩预设 JSON 已导出");
+  };
+
+  const importCustomPresets = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const incoming = importCompressionPresetsJson(await file.text());
+      const next = mergeCompressionCustomPresets(customPresets, incoming);
+      setCustomPresets(next);
+      saveCompressionCustomPresets(next);
+      setCustomPresetMessage(`已导入 ${incoming.length} 个压缩预设，重复名称已自动编号`);
+    } catch (error) {
+      setCustomPresetMessage(errorMessage(error));
+    }
   };
 
   const copyOutputPath = async (outputPath: string) => {
@@ -698,6 +772,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <aside className="compression-card compression-settings-card">
           <div className="compression-card-heading"><div><span className="compression-card-kicker">02 / OPTIONS</span><h2>压缩参数</h2></div></div>
           <label className="compression-field"><span>内置预设</span><select value={preset} onChange={(event) => applyPreset(event.target.value as CompressionPreset)} disabled={busy}><option value="custom">自定义</option>{COMPRESSION_PRESETS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><small className="compression-field-hint">{preset === "custom" ? "手动参数；JPEG/WebP 有损质量、PNG 优化和 WebP 无损语义分别生效" : getCompressionPreset(preset).description}</small></label>
+          <div className="compression-custom-presets" aria-label="自定义压缩预设">
+            <label className="compression-field"><span>自定义预设</span><select value={customPresetId} onChange={(event) => applyCustomPreset(event.target.value)} disabled={busy}><option value="">选择已保存预设</option>{customPresets.map((customPreset) => <option key={customPreset.id} value={customPreset.id}>{customPreset.name}</option>)}</select></label>
+            <div className="compression-preset-save-row"><input className="compression-preset-name" value={customPresetName} placeholder="预设名称" aria-label="压缩预设名称" onChange={(event) => setCustomPresetName(event.target.value)} disabled={busy} /><button type="button" className="compression-secondary-button" disabled={busy || !customPresetName.trim()} onClick={saveCurrentAsCustomPreset}>保存当前参数</button></div>
+            <div className="compression-preset-actions"><button type="button" className="compression-secondary-button" onClick={downloadCustomPresets} disabled={busy}>导出 JSON</button><button type="button" className="compression-secondary-button" onClick={() => presetFileInputRef.current?.click()} disabled={busy}>导入 JSON</button><input ref={presetFileInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={(event) => { void importCustomPresets(event); }} disabled={busy} /></div>
+            {customPresetMessage ? <p className="compression-preset-message" role="status">{customPresetMessage}</p> : null}
+          </div>
           <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => { const nextFormat = event.target.value as CompressionFormat; setFormat(nextFormat); setLossless(nextFormat !== "jpg"); if (nextFormat !== "jpg") setTargetSizeEnabled(false); }} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label className="compression-field"><span>PNG 优化级别</span><select value={pngOptimizationLevel} onChange={(event) => { setPngOptimizationLevel(Number(event.target.value)); setPreset("custom"); }} disabled={busy || format !== "png"}>{[0, 1, 2, 3, 4, 5, 6].map((level) => <option key={level} value={level}>{level}</option>)}</select><small className="compression-field-hint">{format === "png" ? "0 最快，6 压缩更积极；默认 2" : "仅 PNG 有效，当前格式不可用"}</small></label>
           <label className="compression-field"><span className="compression-label-row"><span>质量（JPEG/WebP 有损）</span><strong>{qualityEnabled ? quality : "—"}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => { setQuality(Number(event.target.value)); setPreset("custom"); }} disabled={busy || !qualityEnabled} /></label>

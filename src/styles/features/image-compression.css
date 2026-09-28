@@ -86,6 +86,11 @@
 .compression-icon-button { width: 28px; height: 28px; flex: 0 0 auto; background: transparent; color: var(--qp-text-tertiary); }
 .compression-empty { margin: 14px 0 0; color: var(--qp-text-tertiary); font-size: 12px; line-height: 1.6; }
 .compression-settings-card { display: grid; align-content: start; gap: 15px; }
+.compression-custom-presets { display: grid; min-width: 0; gap: 8px; padding-top: 10px; border-top: 1px solid var(--qp-border-subtle); }
+.compression-preset-save-row, .compression-preset-actions { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
+.compression-preset-name { min-width: 0; flex: 1 1 150px; min-height: 32px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-primary); font: inherit; font-size: 12px; padding: 0 10px; }
+.compression-preset-name:focus { border-color: var(--qp-accent-default); }
+.compression-preset-message { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .compression-preview-card { margin-top: 14px; padding: 18px; }
 .compression-preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .compression-preview-pane { min-width: 0; margin: 0; }

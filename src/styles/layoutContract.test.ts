@@ -110,6 +110,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("PNG 优化级别");
     expect(compressionView).toContain("pngOptimizationLevel");
     expect(compressionView).toContain("内置预设");
+    expect(compressionView).toContain("保存当前参数");
+    expect(compressionView).toContain("导出 JSON");
+    expect(compressionView).toContain("导入 JSON");
+    expect(compressionView).toContain("loadCompressionCustomPresets");
+    expect(compressionView).toContain("importCompressionPresetsJson");
     expect(compressionView).toContain("JPEG 使用质量滑块进行有损编码");
     expect(compressionView).toContain("当前为有损 WebP；质量滑块控制编码质量");
     expect(compressionView).toContain("核心最多尝试 8 个 WebP 质量候选");
@@ -147,6 +152,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-failure-details");
     expect(compressionCss).toContain(".compression-item-results");
     expect(compressionCss).toContain(".compression-item-result-actions");
+    expect(compressionCss).toContain(".compression-custom-presets");
+    expect(compressionCss).toContain(".compression-preset-actions");
+    expect(compressionCss).toContain(".compression-preset-message");
     expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
   });
 

@@ -1,0 +1,68 @@
+import { describe, expect, it } from "vitest";
+import {
+  COMPRESSION_CUSTOM_PRESETS_SCHEMA,
+  COMPRESSION_CUSTOM_PRESETS_VERSION,
+  createCompressionCustomPreset,
+  exportCompressionPresetsJson,
+  importCompressionPresetsJson,
+  loadCompressionCustomPresets,
+  mergeCompressionCustomPresets,
+  saveCompressionCustomPresets,
+} from "./compressionCustomPresets";
+import type { CompressionPresetValues } from "./compressionCustomPresets";
+
+const values: CompressionPresetValues = {
+  format: "webp",
+  quality: 82,
+  pngOptimizationLevel: 3,
+  targetSizeEnabled: false,
+  targetSizeKiB: "",
+  lossless: true,
+  metadataPolicy: "strip",
+};
+
+function storage(initial = "") {
+  let value = initial;
+  return {
+    getItem: () => value || null,
+    setItem: (_key: string, next: string) => { value = next; },
+    read: () => value,
+  };
+}
+
+describe("compression custom presets", () => {
+  it("round-trips a versioned safe schema without paths or temporary state", () => {
+    const preset = createCompressionCustomPreset("嵌入式 WebP", values);
+    const json = exportCompressionPresetsJson([preset]);
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+    expect(parsed).toMatchObject({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: COMPRESSION_CUSTOM_PRESETS_VERSION });
+    expect(json).not.toContain("sourcePath");
+    expect(json).not.toContain("outputDirectory");
+    expect(json).not.toContain("replaceOriginal");
+    expect(json).not.toContain("resultStats");
+    expect(importCompressionPresetsJson(json)[0]).toMatchObject({ name: preset.name, values });
+  });
+
+  it("ignores unknown fields while rejecting malformed known fields in Chinese", () => {
+    const json = JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, future: true, presets: [{ name: "未来兼容", values: { ...values, futureOption: "ignored" }, ignored: "ignored" }] });
+    expect(importCompressionPresetsJson(json)[0].name).toBe("未来兼容");
+    expect(() => importCompressionPresetsJson("not-json")).toThrow("压缩预设 JSON 格式无效");
+    expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏预设", values: { ...values, quality: 101 } }] }))).toThrow("质量无效");
+  });
+
+  it("deduplicates imported names without applying or mutating existing presets", () => {
+    const existing = [createCompressionCustomPreset("屏幕", values)];
+    const incoming = importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "屏幕", values }, { name: "屏幕", values }] }));
+    const merged = mergeCompressionCustomPresets(existing, incoming);
+    expect(merged.map((preset) => preset.name)).toEqual(["屏幕", "屏幕 (2)", "屏幕 (3)"]);
+    expect(existing).toHaveLength(1);
+  });
+
+  it("persists only validated local presets and tolerates broken storage", () => {
+    const store = storage();
+    const preset = createCompressionCustomPreset("本地", values);
+    saveCompressionCustomPresets([preset], store);
+    expect(loadCompressionCustomPresets(store)[0]).toMatchObject({ name: "本地", values });
+    expect(loadCompressionCustomPresets(storage("broken"))).toEqual([]);
+  });
+});
