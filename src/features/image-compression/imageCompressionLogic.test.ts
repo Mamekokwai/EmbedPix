@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
@@ -60,6 +60,12 @@ describe("image compression logic", () => {
     expect(formatCompressionItemResultStatus("completed")).toBe("已完成");
     expect(formatCompressionItemResultStatus("skipped")).toBe("已跳过");
     expect(formatCompressionItemResultStatus("failed")).toBe("失败");
+  });
+
+  it("keeps native per-item size metrics and derives missing legacy fields safely", () => {
+    expect(getCompressionItemResultMetrics({ inputBytes: 100, outputBytes: 125, savedBytes: -25, savingsPercent: -25 }, 90)).toEqual({ inputBytes: 100, outputBytes: 125, savedBytes: -25, savingsPercent: -25 });
+    expect(getCompressionItemResultMetrics({ outputBytes: 80 }, 100)).toEqual({ inputBytes: 100, outputBytes: 80, savedBytes: 20, savingsPercent: 20 });
+    expect(getCompressionItemResultMetrics({}, 100)).toEqual({ inputBytes: 100, outputBytes: undefined, savedBytes: undefined, savingsPercent: undefined });
   });
 
   it("keeps auto numbering mutually exclusive with overwrite and original replacement", () => {

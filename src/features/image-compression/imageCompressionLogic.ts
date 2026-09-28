@@ -23,6 +23,15 @@ export function getCompressionTargetSizeError(enabled: boolean, value: string, m
 export function getSuccessfulCompressionOutputPath(status: "completed" | "skipped", outputPath: string): string | null { const normalizedPath = outputPath.trim(); return status === "completed" && normalizedPath ? normalizedPath : null; }
 export function formatCompressionFailureDetails(details: ReadonlyArray<{ fileName: string; message: string }>): string { return details.map(({ fileName, message }) => `${fileName}：${message}`).join("\n"); }
 export function formatCompressionItemResultStatus(status: CompressionItemResultStatus): string { return status === "completed" ? "已完成" : status === "skipped" ? "已跳过" : "失败"; }
+export interface CompressionItemResultMetrics { inputBytes: number; outputBytes?: number; savedBytes?: number; savingsPercent?: number; }
+function finiteMetric(value: number | undefined, allowNegative = false): number | undefined { return typeof value === "number" && Number.isFinite(value) && (allowNegative || value >= 0) ? value : undefined; }
+export function getCompressionItemResultMetrics(result: Pick<CompressionItemResult, "inputBytes" | "outputBytes" | "savedBytes" | "savingsPercent">, fallbackInputBytes: number): CompressionItemResultMetrics {
+  const inputBytes = finiteMetric(result.inputBytes) ?? Math.max(0, fallbackInputBytes);
+  const outputBytes = finiteMetric(result.outputBytes);
+  const savedBytes = finiteMetric(result.savedBytes, true) ?? (outputBytes === undefined ? undefined : inputBytes - outputBytes);
+  const savingsPercent = finiteMetric(result.savingsPercent, true) ?? (savedBytes === undefined || inputBytes <= 0 ? undefined : (savedBytes / inputBytes) * 100);
+  return { inputBytes, outputBytes, savedBytes, savingsPercent };
+}
 export function normalizeCompressionOutputModes(modes: { autoNumbering?: boolean; overwrite: boolean; replaceOriginal?: boolean }): { autoNumbering: boolean; overwrite: boolean; replaceOriginal: boolean } {
   const replaceOriginal = modes.replaceOriginal === true;
   const autoNumbering = !replaceOriginal && modes.autoNumbering === true;

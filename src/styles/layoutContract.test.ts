@@ -96,6 +96,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("原生精确预估");
     expect(compressionView).toContain("formatCompressionEstimateSource");
     expect(compressionView).toContain("逐项结果");
+    expect(compressionView).toContain("getCompressionItemResultMetrics");
+    expect(compressionView).toContain("原图 ${formatCompressionBytes(metrics.inputBytes)}");
+    expect(compressionView).toContain('result.status === "skipped" ? "候选" : "输出"');
+    expect(compressionView).toContain("节省");
+    expect(compressionView).toContain("增加");
     expect(compressionView).toContain("formatCompressionItemResultStatus");
     expect(compressionView).toContain("getSuccessfulCompressionOutputPath");
     expect(compressionView).toContain("revealImageOutput");
