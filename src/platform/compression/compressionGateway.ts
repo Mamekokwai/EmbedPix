@@ -22,6 +22,7 @@ export interface CompressionEnvelopeRequest {
   autoSequence?: boolean;
   replaceOriginal?: boolean;
   jpegQuality: number;
+  webpMethod?: number;
   lossless: boolean;
   pngOptimizationLevel: number;
   maxOutputBytes?: number;
@@ -84,6 +85,7 @@ export interface CompressionEstimateRequest {
   inputData: Uint8Array;
   outputFormat: Exclude<CompressionFormat, "original">;
   jpegQuality: number;
+  webpMethod?: number;
   lossless: boolean;
   skipIfLarger?: boolean;
   pngOptimizationLevel: number;
@@ -105,6 +107,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.autoSequence ? { autoSequence: true } : {}),
     ...(request.replaceOriginal ? { replaceOriginal: true } : {}),
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
+    ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
     lossless: request.lossless,
     pngOptimizationLevel: request.pngOptimizationLevel,
     ...(request.maxOutputBytes ? { maxOutputBytes: request.maxOutputBytes } : {}),
@@ -117,6 +120,8 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
 export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): Uint8Array {
   if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
+  if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
+  if (request.webpMethod !== undefined && (request.outputFormat !== "webp" || request.lossless)) throw new Error("webpMethod 仅支持有损 WebP。");
   if (request.autoSequence && request.overwriteExisting) throw new Error("自动序号不能与覆盖同名同时启用。");
   if (request.autoSequence && request.replaceOriginal) throw new Error("自动序号不能与覆盖原图同时启用。");
   if ((request.outputLocation === "source" || request.outputLocation === "subfolder") && !request.sourcePath) throw new Error("源文件夹输出需要源文件路径。");
@@ -135,12 +140,15 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
   if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
   if (!Number.isInteger(request.jpegQuality) || request.jpegQuality < 1 || request.jpegQuality > 100) throw new Error("jpegQuality 必须在 1 到 100 之间。");
+  if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
+  if (request.webpMethod !== undefined && (request.outputFormat !== "webp" || request.lossless)) throw new Error("webpMethod 仅支持有损 WebP。");
   if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
   if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
   const metadataBytes = new TextEncoder().encode(JSON.stringify({
     fileName: request.fileName,
     outputFormat: request.outputFormat,
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
+    ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
     lossless: request.lossless,
     skipIfLarger: request.skipIfLarger ?? true,
     pngOptimizationLevel: request.pngOptimizationLevel,
@@ -184,6 +192,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     autoSequence: options.autoNumbering ?? false,
     replaceOriginal: options.replaceOriginal ?? false,
     jpegQuality: options.quality,
+    webpMethod: options.webpMethod,
     lossless: options.format === "png" || (options.format === "webp" && options.lossless),
     pngOptimizationLevel: options.pngOptimizationLevel,
     maxOutputBytes: options.maxOutputBytes,

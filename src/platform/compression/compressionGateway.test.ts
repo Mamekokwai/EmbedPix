@@ -39,10 +39,18 @@ describe("compression gateway", () => {
   });
 
   it("passes the shared quality field for lossy WebP without leaking it into lossless WebP", () => {
-    const encoded = encodeCompressionEnvelope({ ...request, lossless: false, jpegQuality: 64 });
+    const encoded = encodeCompressionEnvelope({ ...request, lossless: false, jpegQuality: 64, webpMethod: 4 });
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
-    expect(metadata).toMatchObject({ outputFormat: "webp", lossless: false, jpegQuality: 64 });
+    expect(metadata).toMatchObject({ outputFormat: "webp", lossless: false, jpegQuality: 64, webpMethod: 4 });
+  });
+
+  it("validates the optional WebP method at the IPC boundary", () => {
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpMethod: 7 })).toThrow("webpMethod");
+    expect(() => encodeCompressionEnvelope({ ...request, webpMethod: 4 })).toThrow("仅支持有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "png", webpMethod: 4 })).toThrow("仅支持有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpMethod: 0 })).not.toThrow();
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpMethod: 6 })).not.toThrow();
   });
 
   it("normalizes lossless mode by output format when creating requests", () => {
@@ -131,14 +139,15 @@ describe("compression gateway", () => {
       inputData: new Uint8Array([1, 2, 3]),
       outputFormat: "webp",
       jpegQuality: 82,
-      lossless: true,
+      webpMethod: 6,
+      lossless: false,
       pngOptimizationLevel: 3,
       maxOutputBytes: 64 * 1024,
       maxCandidates: 4,
     });
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
-    expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", lossless: true, pngOptimizationLevel: 3, maxOutputBytes: 64 * 1024, maxCandidates: 4 });
+    expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", lossless: false, pngOptimizationLevel: 3, maxOutputBytes: 64 * 1024, maxCandidates: 4, webpMethod: 6 });
     expect(metadata).not.toHaveProperty("outputPath");
     expect(metadata).not.toHaveProperty("overwriteExisting");
     expect(metadata).not.toHaveProperty("replaceOriginal");

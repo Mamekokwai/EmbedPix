@@ -24,7 +24,7 @@ use super::{
     export_image::{write_exported_file, WriteOptions},
     image_orientation::normalize_jpeg_orientation,
     path_security,
-    webp_static::encode_lossy_rgba,
+    webp_static::{encode_lossy_rgba, encode_lossy_rgba_with_method},
 };
 
 const MAX_INPUT_BYTES: usize = 32 * 1024 * 1024;
@@ -112,6 +112,8 @@ struct CompressionMetadata {
     #[serde(default)]
     jpeg_quality: Option<u8>,
     #[serde(default)]
+    webp_method: Option<u8>,
+    #[serde(default)]
     lossless: Option<bool>,
     #[serde(default = "default_skip_if_larger")]
     skip_if_larger: bool,
@@ -134,6 +136,8 @@ struct CompressionEstimateMetadata {
     output_format: String,
     #[serde(default)]
     jpeg_quality: Option<u8>,
+    #[serde(default)]
+    webp_method: Option<u8>,
     #[serde(default)]
     lossless: Option<bool>,
     #[serde(default = "default_skip_if_larger")]
@@ -563,6 +567,22 @@ fn default_skip_if_larger() -> bool {
     true
 }
 
+fn validate_webp_method(
+    method: Option<u8>,
+    format: CompressionFormat,
+    lossless: bool,
+) -> Result<(), String> {
+    if let Some(method) = method {
+        if method > 6 {
+            return Err("webpMethod must be between 0 and 6".into());
+        }
+        if format != CompressionFormat::Webp || lossless {
+            return Err("webpMethod is only supported for lossy WebP".into());
+        }
+    }
+    Ok(())
+}
+
 fn compression_statistics(input_bytes: u64, output_bytes: u64) -> (i64, f64) {
     let saved_bytes = input_bytes as i128 - output_bytes as i128;
     let savings_percent = if input_bytes == 0 {
@@ -598,6 +618,7 @@ fn choose_encoded_output(
             width,
             height,
             request.lossless,
+            request.metadata.webp_method,
         )?;
         return Ok(EncodedSelection {
             bytes,
@@ -620,6 +641,7 @@ fn choose_encoded_output(
             width,
             height,
             request.lossless,
+            request.metadata.webp_method,
         )?;
         return Ok(EncodedSelection {
             target_met: (bytes.len() as u64) <= target_bytes,
@@ -659,6 +681,7 @@ fn choose_encoded_output(
             width,
             height,
             request.lossless,
+            request.metadata.webp_method,
         )?;
         if smallest
             .as_ref()
@@ -701,6 +724,7 @@ fn choose_encoded_output(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn encode_and_verify(
     input: &[u8],
     format: CompressionFormat,
@@ -709,8 +733,16 @@ fn encode_and_verify(
     width: u32,
     height: u32,
     lossless: bool,
+    webp_method: Option<u8>,
 ) -> Result<Vec<u8>, String> {
-    let bytes = encode_image_with_mode(input, format, quality, png_optimization_level, lossless)?;
+    let bytes = encode_image_with_webp_method(
+        input,
+        format,
+        quality,
+        png_optimization_level,
+        lossless,
+        webp_method,
+    )?;
     if bytes.len() > MAX_OUTPUT_BYTES {
         return Err("compressed output exceeds the 128 MiB limit".into());
     }
@@ -814,12 +846,31 @@ fn encode_image(
     encode_image_with_mode(input, format, quality, png_optimization_level, true)
 }
 
+#[cfg(test)]
 fn encode_image_with_mode(
     input: &[u8],
     format: CompressionFormat,
     quality: u8,
     png_optimization_level: u8,
     lossless: bool,
+) -> Result<Vec<u8>, String> {
+    encode_image_with_webp_method(
+        input,
+        format,
+        quality,
+        png_optimization_level,
+        lossless,
+        None,
+    )
+}
+
+fn encode_image_with_webp_method(
+    input: &[u8],
+    format: CompressionFormat,
+    quality: u8,
+    png_optimization_level: u8,
+    lossless: bool,
+    webp_method: Option<u8>,
 ) -> Result<Vec<u8>, String> {
     let image = decode_image(input)?;
     if format == CompressionFormat::Jpeg && image.to_rgba8().pixels().any(|pixel| pixel[3] < 255) {
@@ -851,7 +902,11 @@ fn encode_image_with_mode(
             .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::WebP)
             .map_err(|error| format!("failed to encode webp: {error}"))?,
         CompressionFormat::Webp => {
-            output.bytes = encode_lossy_rgba(&image.to_rgba8(), quality)?;
+            let rgba = image.to_rgba8();
+            output.bytes = match webp_method {
+                Some(method) => encode_lossy_rgba_with_method(&rgba, quality, method)?,
+                None => encode_lossy_rgba(&rgba, quality)?,
+            };
         }
     }
     if output.bytes.len() > output.limit {
@@ -985,6 +1040,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     if png_optimization_level > 6 {
         return Err("pngOptimizationLevel must be between 0 and 6".into());
     }
+    validate_webp_method(metadata.webp_method, format, lossless)?;
     if matches!(format, CompressionFormat::Jpeg) && lossless {
         return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
     }
@@ -1098,6 +1154,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     if png_optimization_level > 6 {
         return Err("pngOptimizationLevel must be between 0 and 6".into());
     }
+    validate_webp_method(metadata.webp_method, format, lossless)?;
     if matches!(format, CompressionFormat::Jpeg) && lossless {
         return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
     }
@@ -1120,6 +1177,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             auto_sequence: false,
             auto_rename: false,
             jpeg_quality: metadata.jpeg_quality,
+            webp_method: metadata.webp_method,
             lossless: Some(lossless),
             skip_if_larger: metadata.skip_if_larger,
             max_output_bytes: metadata.max_output_bytes,
@@ -1630,6 +1688,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                webp_method: None,
                 lossless: Some(true),
                 skip_if_larger: false,
                 max_output_bytes: None,
@@ -1775,9 +1834,17 @@ mod tests {
             .unwrap();
 
         for quality in [1, 100] {
-            let output =
-                encode_and_verify(&input, CompressionFormat::Jpeg, quality, 2, 7, 5, false)
-                    .unwrap();
+            let output = encode_and_verify(
+                &input,
+                CompressionFormat::Jpeg,
+                quality,
+                2,
+                7,
+                5,
+                false,
+                None,
+            )
+            .unwrap();
             let decoded = decode_image(&output).unwrap();
             assert_eq!(decoded.dimensions(), (7, 5));
             assert_eq!(decoded.color().channel_count(), 3);
@@ -1811,6 +1878,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(80),
+                webp_method: None,
                 lossless: Some(false),
                 skip_if_larger: false,
                 max_output_bytes: None,
@@ -1851,6 +1919,29 @@ mod tests {
         assert!(CompressionFormat::parse("bmp").is_err());
         assert!(!(1..=100).contains(&0));
         assert_eq!(MetadataPolicy::default(), MetadataPolicy::Strip);
+    }
+
+    #[test]
+    fn validates_webp_method_contract_for_requests_and_estimates() {
+        for method in [0, 6] {
+            let metadata = format!(
+                r#"{{"fileName":"sample.png","outputFormat":"webp","lossless":false,"webpMethod":{method}}}"#
+            );
+            let request = parse_raw_payload(&raw_payload(&metadata, &png_input())).unwrap();
+            assert_eq!(request.metadata.webp_method, Some(method));
+            let estimate =
+                parse_estimate_raw_payload(&raw_payload(&metadata, &png_input())).unwrap();
+            assert_eq!(estimate.metadata.webp_method, Some(method));
+        }
+
+        for metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"webpMethod":7}"#,
+            r#"{"fileName":"sample.png","outputFormat":"png","webpMethod":4}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":true,"webpMethod":4}"#,
+        ] {
+            assert!(parse_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+            assert!(parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+        }
     }
 
     #[test]
@@ -1905,6 +1996,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                webp_method: None,
                 lossless: Some(true),
                 skip_if_larger: true,
                 max_output_bytes: None,
@@ -2295,6 +2387,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                webp_method: None,
                 lossless: Some(true),
                 skip_if_larger: true,
                 max_output_bytes: None,
@@ -2360,6 +2453,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                webp_method: None,
                 lossless: Some(true),
                 skip_if_larger: true,
                 max_output_bytes: None,
@@ -2605,6 +2699,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
+                webp_method: None,
                 lossless: Some(false),
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
@@ -2647,6 +2742,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
+                webp_method: Some(6),
                 lossless: Some(false),
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
@@ -2686,6 +2782,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
+                webp_method: None,
                 lossless: Some(false),
                 skip_if_larger: true,
                 max_output_bytes: Some(1),
@@ -2728,6 +2825,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                webp_method: None,
                 lossless: Some(true),
                 skip_if_larger: true,
                 max_output_bytes: Some(1),
