@@ -288,7 +288,7 @@ pub struct CompressionPreview {
 pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPreflight, String> {
     let request = parse_request(request)?;
     let (width, height) = inspect_image(&request.input)?;
-    let output_path = resolve_output_path(&request)?;
+    let output_path = resolve_preflight_output_path(&request)?;
     Ok(CompressionPreflight {
         format: request.format.name().to_string(),
         width,
@@ -953,6 +953,64 @@ fn resolve_output_path(request: &CompressionRequest) -> Result<PathBuf, String> 
     Ok(path)
 }
 
+fn validate_preflight_output_directory(output_path: &Path) -> Result<(), String> {
+    let requested_directory = output_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut directory = requested_directory;
+    loop {
+        let metadata = match fs::symlink_metadata(directory) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let Some(parent) = directory.parent() else {
+                    return Err(format!(
+                        "[preflight_output_directory_missing] no existing ancestor for output directory: {}",
+                        requested_directory.display()
+                    ));
+                };
+                if parent == directory {
+                    return Err(format!(
+                        "[preflight_output_directory_missing] no existing ancestor for output directory: {}",
+                        requested_directory.display()
+                    ));
+                }
+                directory = parent;
+                continue;
+            }
+            Err(error) => {
+                return Err(format!(
+                    "[preflight_output_directory_unreadable] cannot inspect output directory `{}`: {error}",
+                    directory.display()
+                ));
+            }
+        };
+        if !metadata.is_dir()
+            || metadata.file_type().is_symlink()
+            || path_security::has_reparse_point(&metadata)
+        {
+            return Err(format!(
+                "[preflight_output_directory_invalid] output path parent is not a regular directory: {}",
+                directory.display()
+            ));
+        }
+        if metadata.permissions().readonly() {
+            return Err(format!(
+                "[preflight_output_directory_not_writable] output directory is read-only: {}",
+                directory.display()
+            ));
+        }
+        return Ok(());
+    }
+}
+
+fn resolve_preflight_output_path(request: &CompressionRequest) -> Result<PathBuf, String> {
+    let output_path = resolve_output_path(request)
+        .map_err(|error| format!("[preflight_output_path_invalid] {error}"))?;
+    validate_preflight_output_directory(&output_path)?;
+    Ok(output_path)
+}
+
 fn default_name(file_name: &str, format: CompressionFormat) -> String {
     let stem = Path::new(file_name)
         .file_stem()
@@ -1101,6 +1159,14 @@ mod tests {
         bytes
     }
 
+    fn raw_payload(metadata: &str, input: &[u8]) -> Vec<u8> {
+        let mut payload = Vec::from(*b"EGF1");
+        payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
+        payload.extend_from_slice(metadata.as_bytes());
+        payload.extend_from_slice(input);
+        payload
+    }
+
     fn luma_png_input(width: u32, height: u32) -> Vec<u8> {
         let image = DynamicImage::ImageLuma8(ImageBuffer::from_pixel(width, height, Luma([0])));
         let mut bytes = Vec::new();
@@ -1218,6 +1284,115 @@ mod tests {
         assert!(parse_raw_payload(&payload)
             .unwrap_err()
             .contains("metadataPolicy=preserve"));
+    }
+
+    #[test]
+    fn preflight_rejects_unsafe_paths_with_stable_codes() {
+        let traversal = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"webp","outputPath":"out/../escape.webp"}"#,
+            &png_input(),
+        );
+        assert!(parse_raw_payload(&traversal).is_ok());
+        let traversal_request = parse_raw_payload(&traversal).unwrap();
+        let traversal_error = resolve_preflight_output_path(&traversal_request).unwrap_err();
+        assert!(traversal_error.starts_with("[preflight_output_path_invalid]"));
+
+        let reserved = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"webp","outputPath":"CON.webp"}"#,
+            &png_input(),
+        );
+        let reserved_request = parse_raw_payload(&reserved).unwrap();
+        assert!(resolve_preflight_output_path(&reserved_request)
+            .unwrap_err()
+            .starts_with("[preflight_output_path_invalid]"));
+
+        let missing_directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-preflight-missing-{}", uuid_like_id()));
+        let missing_output = missing_directory.join("image.webp");
+        let missing_request = CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "sample.png".into(),
+                output_format: "webp".into(),
+                output_path: Some(missing_output.to_string_lossy().into_owned()),
+                output_location: Some("path".into()),
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                jpeg_quality: None,
+                lossless: Some(true),
+                skip_if_larger: true,
+                max_output_bytes: None,
+                max_candidates: None,
+                png_optimization_level: Some(2),
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: None,
+            },
+            input: png_input(),
+            format: CompressionFormat::Webp,
+            lossless: true,
+            target_bytes: None,
+            max_candidates: DEFAULT_MAX_CANDIDATES,
+            png_optimization_level: 2,
+        };
+        let missing_output = resolve_output_path(&missing_request).unwrap();
+        validate_preflight_output_directory(&missing_output).unwrap();
+        assert!(!missing_directory.exists());
+
+        let invalid_parent = missing_directory.with_extension("file");
+        fs::write(&invalid_parent, b"parent is not a directory").unwrap();
+        let invalid_output = invalid_parent.join("image.webp");
+        let invalid_error = validate_preflight_output_directory(&invalid_output).unwrap_err();
+        assert!(invalid_error.starts_with("[preflight_output_directory_invalid]"));
+        fs::remove_file(invalid_parent).unwrap();
+    }
+
+    #[test]
+    fn preflight_detects_read_only_output_directory_without_mutating_it() {
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-preflight-readonly-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let original_permissions = fs::metadata(&directory).unwrap().permissions();
+        let mut readonly_permissions = original_permissions.clone();
+        readonly_permissions.set_readonly(true);
+        fs::set_permissions(&directory, readonly_permissions).unwrap();
+
+        let output = directory.join("image.webp");
+        let error = validate_preflight_output_directory(&output).unwrap_err();
+        assert!(error.starts_with("[preflight_output_directory_not_writable]"));
+        assert!(!output.exists());
+
+        fs::set_permissions(&directory, original_permissions).unwrap();
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn preflight_preserves_existing_target_conflict_and_replace_original_contract() {
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-preflight-existing-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("image.webp");
+        let original = b"existing target";
+        fs::write(&output, original).unwrap();
+        let metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"webp\",\"outputPath\":\"{}\"}}",
+            output.to_string_lossy().replace('\\', "/")
+        );
+        let request = parse_raw_payload(&raw_payload(&metadata, &png_input())).unwrap();
+        let output_path = resolve_output_path(&request).unwrap();
+        validate_preflight_output_directory(&output_path).unwrap();
+        assert!(output_path.exists());
+        assert_eq!(fs::read(&output_path).unwrap(), original);
+
+        let replace_without_source = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"webp","replaceOriginal":true}"#,
+            &png_input(),
+        );
+        assert!(parse_raw_payload(&replace_without_source)
+            .unwrap_err()
+            .contains("replaceOriginal requires sourcePath"));
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
