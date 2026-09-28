@@ -76,6 +76,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [outputDirectory, setOutputDirectory] = useState("");
   const [overwrite, setOverwrite] = useState(false);
   const [status, setStatus] = useState<CompressionStatus>("idle");
+  const [importBusy, setImportBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [stage, setStage] = useState("");
@@ -95,6 +96,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const cancelRequestedRef = useRef(false);
 
   const busy = status === "busy";
+  const sourceBusy = busy || importBusy;
   const targetSizeError = useMemo(() => {
     if (format !== "jpg" || !targetSizeKiB.trim()) return null;
     const value = Number(targetSizeKiB);
@@ -233,31 +235,37 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   };
 
   const chooseFiles = async () => {
-    if (busy) return;
+    if (sourceBusy) return;
     if (!isTauriEnvironment()) {
       fileInputRef.current?.click();
       return;
     }
+    setImportBusy(true);
     try {
       await importNativeFiles(await pickCompressionFiles());
     } catch (error) {
       setMessage(errorMessage(error));
       setStatus("error");
+    } finally {
+      setImportBusy(false);
     }
   };
 
   const chooseDirectory = async () => {
-    if (busy) return;
+    if (sourceBusy) return;
     if (!isTauriEnvironment()) {
       setMessage("导入文件夹仅在桌面应用中可用；当前预览环境可使用“选择图片”后多选文件。");
       setStatus("error");
       return;
     }
+    setImportBusy(true);
     try {
       await importNativeFiles(await pickCompressionDirectory());
     } catch (error) {
       setMessage(errorMessage(error));
       setStatus("error");
+    } finally {
+      setImportBusy(false);
     }
   };
 
@@ -269,7 +277,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
-    if (!busy) addBrowserFiles(Array.from(event.dataTransfer.files));
+    if (!sourceBusy) addBrowserFiles(Array.from(event.dataTransfer.files));
   };
 
   const monitorCompressionProgress = async (jobId: string) => {
@@ -384,9 +392,20 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   };
 
   const removeItem = (id: string) => {
-    if (busy) return;
+    if (sourceBusy) return;
     setItems((current) => current.filter((item) => item.id !== id));
     setStatus(items.length > 1 ? "ready" : "idle");
+  };
+
+  const clearItems = () => {
+    if (sourceBusy) return;
+    setItems([]);
+    setSelectedItemId(null);
+    setFailures([]);
+    setSkipReasons([]);
+    setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
+    setMessage("");
+    setStatus("idle");
   };
 
   return (
@@ -404,18 +423,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className="compression-card compression-input-card">
           <div className="compression-card-heading">
             <div><span className="compression-card-kicker">01 / SOURCE</span><h2>导入图片</h2></div>
-            <span className="compression-count">{items.length} 个文件</span>
+            <div className="compression-heading-actions"><span className="compression-count">{items.length} 个文件</span>{items.length > 0 ? <button type="button" className="compression-clear-button" onClick={clearItems} disabled={sourceBusy}>清空</button> : null}</div>
           </div>
           <div
-            className={`compression-drop-zone${dragging ? " compression-drop-zone-dragging" : ""}${busy ? " compression-drop-zone-disabled" : ""}`}
-            onDragEnter={(event) => { event.preventDefault(); if (!busy) setDragging(true); }}
+            className={`compression-drop-zone${dragging ? " compression-drop-zone-dragging" : ""}${sourceBusy ? " compression-drop-zone-disabled" : ""}`}
+            onDragEnter={(event) => { event.preventDefault(); if (!sourceBusy) setDragging(true); }}
             onDragOver={(event) => event.preventDefault()}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
             role="button"
-            tabIndex={busy ? -1 : 0}
-            aria-disabled={busy}
-            onKeyDown={(event) => { if (!busy && (event.key === "Enter" || event.key === " ")) void chooseFiles(); }}
+            tabIndex={sourceBusy ? -1 : 0}
+            aria-disabled={sourceBusy}
+            onKeyDown={(event) => { if (!sourceBusy && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); void chooseFiles(); } }}
             onClick={() => { void chooseFiles(); }}
           >
             <span className="compression-drop-icon"><Upload size={22} aria-hidden="true" /></span>
@@ -423,17 +442,19 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             <span>或点击选择多个文件</span>
             <small>支持 PNG / JPEG / WebP / BMP / GIF；输出格式为 PNG / JPEG / WebP</small>
           </div>
-          <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={busy} />
+          <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={sourceBusy} />
           <div className="compression-source-actions">
-            <button type="button" className="compression-secondary-button" onClick={() => { void chooseFiles(); }} disabled={busy}><Images size={15} aria-hidden="true" /> 选择图片</button>
-            <button type="button" className="compression-secondary-button" onClick={() => { void chooseDirectory(); }} disabled={busy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
+            <button type="button" className="compression-secondary-button" onClick={() => { void chooseFiles(); }} disabled={sourceBusy}><Images size={15} aria-hidden="true" /> {importBusy ? "正在导入" : "选择图片"}</button>
+            <button type="button" className="compression-secondary-button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
           </div>
           <div className="compression-list" aria-label="待压缩图片列表">
             {items.length === 0 ? <p className="compression-empty">导入后将在这里显示文件、原始大小与来源。</p> : items.map((item) => (
-              <div className={`compression-item${selectedItemId === item.id ? " compression-item-selected" : ""}`} key={item.id} role="button" tabIndex={busy ? -1 : 0} aria-pressed={selectedItemId === item.id} onClick={() => { if (!busy) setSelectedItemId(item.id); }} onKeyDown={(event) => { if (!busy && (event.key === "Enter" || event.key === " ")) setSelectedItemId(item.id); }}>
-                <div className="compression-item-icon"><Images size={15} aria-hidden="true" /></div>
-                <div className="compression-item-copy"><strong>{item.file.name}</strong><span>{formatCompressionBytes(item.size)}{item.sourcePath ? " · 桌面文件" : " · 浏览器文件"}</span></div>
-                <button type="button" className="compression-icon-button" aria-label={`移除 ${item.file.name}`} onClick={() => removeItem(item.id)} disabled={busy}><Trash2 size={15} aria-hidden="true" /></button>
+              <div className="compression-item" key={item.id}>
+                <button type="button" className={`compression-item-select${selectedItemId === item.id ? " compression-item-selected" : ""}`} aria-pressed={selectedItemId === item.id} onClick={() => { if (!sourceBusy) setSelectedItemId(item.id); }} disabled={sourceBusy}>
+                  <div className="compression-item-icon"><Images size={15} aria-hidden="true" /></div>
+                  <span className="compression-item-copy"><strong>{item.file.name}</strong><span>{formatCompressionBytes(item.size)}{item.sourcePath ? " · 桌面文件" : " · 浏览器文件"}</span></span>
+                </button>
+                <button type="button" className="compression-icon-button" aria-label={`移除 ${item.file.name}`} onClick={() => removeItem(item.id)} disabled={sourceBusy}><Trash2 size={15} aria-hidden="true" /></button>
               </div>
             ))}
           </div>

@@ -22,6 +22,8 @@
 .compression-footer {
   justify-content: space-between;
 }
+.compression-header, .compression-card-heading { flex-wrap: wrap; }
+.compression-header > *, .compression-card-heading > * { min-width: 0; }
 
 .compression-header {
   gap: 18px;
@@ -54,7 +56,10 @@
 .compression-input-card, .compression-settings-card { padding: 18px; }
 .compression-card-heading { gap: 12px; min-height: 36px; }
 .compression-card-heading h2 { font-size: 17px; }
-.compression-count { color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
+.compression-heading-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
+.compression-count { max-width: 100%; overflow: hidden; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.compression-clear-button { min-height: 26px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: transparent; color: var(--qp-text-tertiary); font-size: 11px; padding-inline: 8px; }
+.compression-clear-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
 .compression-drop-zone { display: flex; min-height: 214px; flex-direction: column; align-items: center; justify-content: center; margin-top: 16px; border: 1px dashed var(--qp-border-strong); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); cursor: pointer; color: var(--qp-text-secondary); transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease); }
 .compression-drop-zone:hover, .compression-drop-zone-dragging { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }
 .compression-drop-zone-disabled { cursor: not-allowed; opacity: .58; }
@@ -69,8 +74,10 @@
 .compression-secondary-button { min-height: 32px; padding: 0 11px; background: var(--qp-bg-elevated); color: var(--qp-text-secondary); font-size: 12px; }
 .compression-secondary-button:hover, .compression-icon-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
 .compression-list { display: grid; gap: 6px; max-height: 220px; margin-top: 14px; overflow-y: auto; overflow-x: hidden; }
-.compression-item { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 8px 9px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); }
-.compression-item-selected { border-color: color-mix(in srgb, var(--qp-accent-default) 55%, var(--qp-border-subtle)); background: var(--qp-accent-muted); }
+.compression-item { display: flex; min-width: 0; align-items: center; gap: 6px; padding: 5px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); }
+.compression-item-select { display: flex; min-width: 0; flex: 1; align-items: center; gap: 9px; border: 1px solid transparent; border-radius: calc(var(--qp-radius-control) - 2px); background: transparent; color: inherit; padding: 3px 4px; text-align: left; }
+.compression-item-select:hover, .compression-item-select:focus-visible, .compression-item-select.compression-item-selected { border-color: color-mix(in srgb, var(--qp-accent-default) 55%, var(--qp-border-subtle)); background: var(--qp-accent-muted); }
+.compression-item-select:disabled { cursor: not-allowed; opacity: .6; }
 .compression-item-icon { width: 27px; height: 27px; flex: 0 0 auto; border-radius: 7px; background: var(--qp-accent-muted); }
 .compression-item-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
 .compression-item-copy strong, .compression-item-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -113,6 +120,7 @@
 .compression-skip-details strong { color: var(--qp-text-secondary); font-weight: 650; }
 .compression-footer { flex-wrap: wrap; gap: 12px; margin-top: 14px; }
 .compression-status { min-width: 0; flex: 1 1 260px; gap: 7px; color: var(--qp-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.compression-status > span { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
 .compression-status-error { color: var(--qp-danger, #df6a6a); }
 .compression-status-success { color: var(--qp-success); }
 .compression-retry-button { min-height: 28px; margin-left: 4px; padding: 0 8px; background: transparent; color: inherit; font-size: 11px; }
@@ -129,6 +137,7 @@
   .compression-grid { grid-template-columns: minmax(0, 1fr); }
   .compression-settings-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .compression-settings-card .compression-card-heading { grid-column: 1 / -1; }
+  .compression-field-error { grid-column: 1 / -1; }
 }
 
 @media (max-width: 520px) {
@@ -145,4 +154,15 @@
   .compression-estimate-note { flex-basis: 100%; margin-left: 0; }
   .compression-progress { order: 3; width: 100%; }
   .compression-primary-button { flex: 1 1 100%; }
+}
+
+@media (max-height: 620px) {
+  .compression-app { padding-top: 10px; padding-bottom: 12px; }
+  .compression-header { padding-top: 4px; padding-bottom: 12px; }
+  .compression-grid { gap: 10px; margin-top: 10px; }
+  .compression-input-card, .compression-settings-card, .compression-preview-card { padding: 10px; }
+  .compression-drop-zone { min-height: 150px; margin-top: 10px; }
+  .compression-preview-stage { min-height: 130px; max-height: 180px; }
+  .compression-preview-stage img { max-height: 178px; }
+  .compression-summary-card, .compression-result-card { margin-top: 10px; padding: 10px; }
 }

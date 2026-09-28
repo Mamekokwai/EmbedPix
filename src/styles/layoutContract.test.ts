@@ -86,9 +86,15 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("selectedQuality");
     expect(compressionView).toContain("PNG 优化级别");
     expect(compressionView).toContain("pngOptimizationLevel");
+    expect(compressionView).toContain("const sourceBusy = busy || importBusy;");
+    expect(compressionView).toContain("清空");
+    expect(compressionView).toContain("compression-item-select");
+    expect(compressionView).toContain("event.preventDefault(); void chooseFiles()");
     expect(compressionCss).toContain(".compression-preview-grid");
     expect(compressionView).toContain("同名目标会拒绝写入");
     expect(compressionCss).toContain(".compression-progress");
+    expect(compressionCss).toContain("@media (max-height: 620px)");
+    expect(compressionCss).toContain(".compression-status > span { min-width: 0;");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {
