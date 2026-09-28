@@ -89,6 +89,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("内置预设");
     expect(compressionView).toContain("JPEG 使用质量滑块进行有损编码");
     expect(compressionView).toContain("当前核心 WebP 固定无损");
+    expect(compressionView).toContain("formatCompressionProgressError");
+    expect(compressionView).toContain("const progressError = formatCompressionProgressError(next);");
     expect(compressionView).toContain("const sourceBusy = busy || importBusy;");
     expect(compressionView).toContain("清空");
     expect(compressionView).toContain("替换当前");

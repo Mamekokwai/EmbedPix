@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, encodeCompressionEnvelope, getCompressionProgress, preflightCompression, previewCompression } from "./compressionGateway";
+import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, encodeCompressionEnvelope, formatCompressionProgressError, getCompressionProgress, preflightCompression, previewCompression } from "./compressionGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -91,11 +91,17 @@ describe("compression gateway", () => {
   });
 
   it("exposes native progress and cancellation commands", async () => {
-    vi.mocked(invoke).mockResolvedValue({ jobId: "compression-test", status: "running", stage: "encoding", outputPath: null, error: null });
+    vi.mocked(invoke).mockResolvedValue({ jobId: "compression-test", status: "running", stage: "encoding", outputPath: null, error: null, code: null });
     await getCompressionProgress("compression-test");
     await cancelCompression("compression-test");
     expect(invoke).toHaveBeenNthCalledWith(1, GET_COMPRESSION_PROGRESS_COMMAND, { jobId: "compression-test" });
     expect(invoke).toHaveBeenNthCalledWith(2, CANCEL_COMPRESSION_COMMAND, { jobId: "compression-test" });
+  });
+
+  it("keeps native progress error codes visible without inventing missing codes", () => {
+    expect(formatCompressionProgressError({ error: "failed to decode input image", code: "decode" })).toBe("[decode] failed to decode input image");
+    expect(formatCompressionProgressError({ error: "failed to encode", code: null })).toBe("failed to encode");
+    expect(formatCompressionProgressError({ error: null, code: "encode" })).toBeNull();
   });
 
   it("explains why preview mode cannot execute native compression", async () => {

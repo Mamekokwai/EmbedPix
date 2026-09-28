@@ -45,7 +45,7 @@ export interface CompressionResult {
   targetMet: boolean;
   selectedQuality: number | null;
 }
-export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; }
+export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; code?: string | null; }
 export interface CompressionPreview {
   data: number[];
   width: number;
@@ -147,6 +147,11 @@ export async function compressImage(request: CompressionEnvelopeRequest): Promis
 export async function getCompressionProgress(jobId: string): Promise<CompressionProgress> {
   if (!isTauriEnvironment()) throw new Error("当前预览环境无法读取原生压缩进度。");
   return invoke<CompressionProgress>(GET_COMPRESSION_PROGRESS_COMMAND, { jobId });
+}
+
+export function formatCompressionProgressError(progress: Pick<CompressionProgress, "error" | "code">): string | null {
+  if (!progress.error) return null;
+  return progress.code ? `[${progress.code}] ${progress.error}` : progress.error;
 }
 
 export async function cancelCompression(jobId: string): Promise<CompressionProgress> {

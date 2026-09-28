@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import "../../styles/features/image-compression.css";
-import { cancelCompression, compressImage, createCompressionRequest, getCompressionProgress, pickCompressionDirectory, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
+import { cancelCompression, compressImage, createCompressionRequest, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectory, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
 import { isTauriEnvironment } from "../../platform/image/imageExportGateway";
 import type { NativeImageFile } from "../../platform/image/imageExportGateway";
 import {
@@ -316,7 +316,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       try {
         const next = await getCompressionProgress(jobId);
         setStage(next.stage);
-        if (next.error) setMessage(next.error);
+        const progressError = formatCompressionProgressError(next);
+        if (progressError) setMessage(progressError);
       } catch {
         return;
       }
@@ -395,8 +396,14 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes, targetMet: targetMet === null ? current.targetMet : current.targetMet === false || targetMet === false ? false : true, selectedQualities: typeof result.selectedQuality === "number" ? [...current.selectedQualities, result.selectedQuality] : current.selectedQualities }));
         }
       } catch (error) {
+        let detail = errorMessage(error);
+        try {
+          const finalProgress = await getCompressionProgress(jobId);
+          detail = formatCompressionProgressError(finalProgress) ?? detail;
+        } catch {
+          // A preflight or transport failure may not leave a readable native progress record.
+        }
         activeJobIdRef.current = null;
-        const detail = errorMessage(error);
         failedNames.push(item.file.name);
         lastError = detail;
         setResultStats((current) => ({ ...current, failed: current.failed + 1 }));
