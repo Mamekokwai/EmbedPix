@@ -1,6 +1,6 @@
 use std::{
     fs, io,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
@@ -45,11 +45,7 @@ pub fn preflight_image_exports(
     let disk_space = if request.estimated_bytes == 0 {
         None
     } else {
-        request
-            .target_paths
-            .iter()
-            .filter_map(|target| disk_space_for_path(Path::new(target), request.estimated_bytes))
-            .next()
+        disk_space_for_targets(&request.target_paths, request.estimated_bytes)
     };
     let mut items = request
         .target_paths
@@ -81,14 +77,44 @@ fn evaluate_disk_space(available_bytes: u64, estimated_bytes: u64) -> DiskSpace 
     }
 }
 
-fn disk_space_for_path(path: &Path, estimated_bytes: u64) -> Option<DiskSpace> {
+fn disk_space_for_targets(targets: &[String], estimated_bytes: u64) -> Option<DiskSpace> {
+    let mut volume = None;
+    let mut available_bytes = u64::MAX;
+    for target in targets {
+        let existing = existing_ancestor(Path::new(target))?;
+        let current_volume = volume_key(&existing);
+        if let Some(expected_volume) = &volume {
+            if expected_volume != &current_volume {
+                return None;
+            }
+        } else {
+            volume = Some(current_volume);
+        }
+        let space = disk_space_for_existing_path(&existing, estimated_bytes)?;
+        available_bytes = available_bytes.min(space.available_bytes);
+    }
+    (!targets.is_empty()).then_some(evaluate_disk_space(available_bytes, estimated_bytes))
+}
+
+fn existing_ancestor(path: &Path) -> Option<PathBuf> {
     let mut existing = path.to_path_buf();
     while !existing.exists() {
         if !existing.pop() {
             return None;
         }
     }
-    disk_space_for_existing_path(&existing, estimated_bytes)
+    Some(existing)
+}
+
+fn volume_key(path: &Path) -> String {
+    path.components()
+        .find_map(|component| match component {
+            Component::Prefix(prefix) => {
+                Some(prefix.as_os_str().to_string_lossy().to_ascii_lowercase())
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| "relative".to_string())
 }
 
 #[cfg(windows)]
@@ -189,6 +215,19 @@ mod tests {
     fn evaluates_low_and_high_space_estimates_without_touching_disk() {
         assert!(evaluate_disk_space(100, 99).sufficient);
         assert!(!evaluate_disk_space(100, 101).sufficient);
+    }
+
+    #[test]
+    fn volume_key_does_not_treat_target_file_names_as_volumes() {
+        assert_eq!(
+            volume_key(Path::new("one/output.png")),
+            volume_key(Path::new("two/output.png"))
+        );
+        #[cfg(windows)]
+        assert_ne!(
+            volume_key(Path::new(r"C:\output.png")),
+            volume_key(Path::new(r"D:\output.png"))
+        );
     }
 
     #[cfg(not(windows))]
