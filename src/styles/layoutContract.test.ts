@@ -86,6 +86,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("selectedQuality");
     expect(compressionView).toContain("PNG 优化级别");
     expect(compressionView).toContain("pngOptimizationLevel");
+    expect(compressionView).toContain("内置预设");
+    expect(compressionView).toContain("JPEG 使用质量滑块进行有损编码");
+    expect(compressionView).toContain("当前核心 WebP 固定无损");
     expect(compressionView).toContain("const sourceBusy = busy || importBusy;");
     expect(compressionView).toContain("清空");
     expect(compressionView).toContain("compression-item-select");

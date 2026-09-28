@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateFallback, filterCompressionFiles, getCompressionOutputLocationError, getCompressionSubdirectoryError } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, estimateFallback, filterCompressionFiles, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError } from "./imageCompressionLogic";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -9,6 +9,12 @@ describe("image compression logic", () => {
 
   it("filters unsupported files", () => {
     expect(filterCompressionFiles([new File([], "a.png", { type: "image/png" }), new File([], "a.txt", { type: "text/plain" })])).toHaveLength(1);
+  });
+
+  it("keeps preset quality semantics format-specific", () => {
+    expect(COMPRESSION_PRESETS).toHaveLength(3);
+    expect(getCompressionPreset("high-quality")).toMatchObject({ quality: 92, pngOptimizationLevel: 2 });
+    expect(getCompressionPreset("small-size")).toMatchObject({ quality: 70, pngOptimizationLevel: 6 });
   });
 
   it("validates safe source subdirectory names", () => {

@@ -1,4 +1,5 @@
 export type CompressionFormat = "jpg" | "webp" | "png";
+export type CompressionPreset = "high-quality" | "balanced" | "small-size" | "custom";
 export type CompressionOutputLocation = "source" | "subfolder" | "directory";
 export type MetadataPolicy = "preserve" | "strip";
 export interface CompressionItem { id: string; file: File; sourcePath?: string; size: number; }

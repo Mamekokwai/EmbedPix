@@ -1,5 +1,14 @@
-import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionOptions, CompressionOutputLocation } from "./types";
+import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionOptions, CompressionOutputLocation, CompressionPreset } from "./types";
 export const COMPRESSION_FORMATS: ReadonlyArray<{ value: CompressionFormat; label: string }> = [{ value: "jpg", label: "JPEG" }, { value: "webp", label: "WebP" }, { value: "png", label: "PNG" }];
+export const COMPRESSION_PRESETS: ReadonlyArray<{ value: Exclude<CompressionPreset, "custom">; label: string; description: string; quality: number; pngOptimizationLevel: number }> = [
+  { value: "high-quality", label: "高质量", description: "JPEG 质量 92；PNG 优化 2；WebP 无损", quality: 92, pngOptimizationLevel: 2 },
+  { value: "balanced", label: "平衡", description: "JPEG 质量 82；PNG 优化 3；WebP 无损", quality: 82, pngOptimizationLevel: 3 },
+  { value: "small-size", label: "小体积", description: "JPEG 质量 70；PNG 优化 6；WebP 无损", quality: 70, pngOptimizationLevel: 6 },
+];
+
+export function getCompressionPreset(preset: Exclude<CompressionPreset, "custom">) {
+  return COMPRESSION_PRESETS.find((option) => option.value === preset) ?? COMPRESSION_PRESETS[1];
+}
 export function estimateFallback(items: ReadonlyArray<CompressionItem>, options: CompressionOptions): CompressionEstimate { const inputBytes = items.reduce((sum, item) => sum + item.size, 0); const ratio = options.lossless || options.format === "png" ? 0.82 : Math.max(0.15, 0.65 - options.quality / 300); const estimatedBytes = Math.max(1, Math.round(inputBytes * ratio)); return { inputBytes, estimatedBytes, savingsPercent: Math.max(0, (1 - estimatedBytes / Math.max(1, inputBytes)) * 100) }; }
 export function formatCompressionBytes(bytes: number): string { if (bytes < 1024) return `${bytes} B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`; return `${(bytes / 1024 / 1024).toFixed(1)} MB`; }
 export function filterCompressionFiles(files: File[]): File[] { return files.filter((file) => /^image\/(png|jpeg|webp|bmp|gif)$/iu.test(file.type) || /\.(png|jpe?g|webp|bmp|gif)$/iu.test(file.name)); }

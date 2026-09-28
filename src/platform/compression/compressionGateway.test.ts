@@ -34,6 +34,7 @@ describe("compression gateway", () => {
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
     expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip", pngOptimizationLevel: 2 });
+    expect(metadata).not.toHaveProperty("jpegQuality");
   });
 
   it("rejects PNG optimization levels outside the native contract", () => {
