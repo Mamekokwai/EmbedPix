@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, normalizeCompressionOutputModes, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCurrentCompressionEstimate, normalizeCompressionOutputModes, supportsCompressionTargetSize } from "./imageCompressionLogic";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -57,6 +57,17 @@ describe("image compression logic", () => {
     expect(normalizeCompressionOutputModes({ autoNumbering: true, overwrite: true, replaceOriginal: false })).toEqual({ autoNumbering: true, overwrite: false, replaceOriginal: false });
     expect(normalizeCompressionOutputModes({ autoNumbering: true, overwrite: true, replaceOriginal: true })).toEqual({ autoNumbering: false, overwrite: false, replaceOriginal: true });
     expect(normalizeCompressionOutputModes({ autoNumbering: false, overwrite: true, replaceOriginal: false })).toEqual({ autoNumbering: false, overwrite: true, replaceOriginal: false });
+  });
+
+  it("labels native estimates and fallback reasons distinctly", () => {
+    expect(formatCompressionEstimateSource("native", "当前选中图片")).toBe("原生精确预估（当前选中图片）");
+    expect(formatCompressionEstimateSource("fallback", "原生预估失败：不可用")).toBe("本地估算（原生预估失败：不可用）");
+  });
+
+  it("rejects stale or aborted native estimate responses", () => {
+    expect(isCurrentCompressionEstimate(3, 3, false)).toBe(true);
+    expect(isCurrentCompressionEstimate(2, 3, false)).toBe(false);
+    expect(isCurrentCompressionEstimate(3, 3, true)).toBe(false);
   });
 
   it("validates safe source subdirectory names", () => {

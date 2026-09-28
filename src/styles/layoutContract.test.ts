@@ -87,6 +87,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("当前文件：");
     expect(compressionView).toContain("复制失败详情");
     expect(compressionView).toContain("formatCompressionFailureDetails");
+    expect(compressionView).toContain("estimateImageCompression");
+    expect(compressionView).toContain("estimateRequestIdRef");
+    expect(compressionView).toContain("isCurrentCompressionEstimate");
+    expect(compressionView).toContain("原生精确预估");
+    expect(compressionView).toContain("formatCompressionEstimateSource");
     expect(compressionView).toContain("逐项结果");
     expect(compressionView).toContain("formatCompressionItemResultStatus");
     expect(compressionView).toContain("getSuccessfulCompressionOutputPath");
@@ -155,6 +160,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-custom-presets");
     expect(compressionCss).toContain(".compression-preset-actions");
     expect(compressionCss).toContain(".compression-preset-message");
+    expect(compressionCss).toContain(".compression-estimate-note");
     expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
   });
 

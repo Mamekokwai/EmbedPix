@@ -114,7 +114,7 @@
 .compression-summary-card { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 14px; padding: 14px 18px; }
 .compression-result-card { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 10px; padding: 14px 18px; }
 .compression-summary-stat { display: grid; gap: 5px; min-width: 100px; }
-.compression-summary-stat span, .compression-estimate-note { color: var(--qp-text-tertiary); font-size: 11px; }
+.compression-summary-stat span, .compression-estimate-note { min-width: 0; color: var(--qp-text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
 .compression-summary-stat strong { color: var(--qp-text-primary); font-family: var(--font-mono); font-size: 16px; }
 .compression-summary-stat .compression-saving { color: var(--qp-success); }
 .compression-summary-stat .compression-failure { color: var(--qp-danger, #df6a6a); }

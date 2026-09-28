@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import "../../styles/features/image-compression.css";
-import { cancelCompression, compressImage, createCompressionRequest, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
+import { cancelCompression, compressImage, createCompressionRequest, estimateImageCompression, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
 import { isTauriEnvironment, revealImageOutput } from "../../platform/image/imageExportGateway";
 import type { NativeImageFile } from "../../platform/image/imageExportGateway";
 import {
@@ -12,12 +12,14 @@ import {
   filterCompressionFiles,
   formatCompressionBytes,
   formatCompressionFailureDetails,
+  formatCompressionEstimateSource,
   formatCompressionItemResultStatus,
   formatCompressionReplaceOriginalConfirmation,
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
   getCompressionOutputLocationError,
   normalizeCompressionOutputModes,
+  isCurrentCompressionEstimate,
   supportsCompressionTargetSize,
 } from "./imageCompressionLogic";
 import {
@@ -129,6 +131,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const presetFileInputRef = useRef<HTMLInputElement>(null);
   const replaceItemIdRef = useRef<string | null>(null);
   const previewRequestIdRef = useRef(0);
+  const estimateRequestIdRef = useRef(0);
   const [initialPreferences] = useState(() => loadCompressionPreferences());
   const [items, setItems] = useState<CompressionItem[]>([]);
   const [format, setFormat] = useState<CompressionFormat>(initialPreferences.format);
@@ -219,11 +222,51 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   };
 
   useEffect(() => {
-    if (!active) return;
+    const requestId = ++estimateRequestIdRef.current;
+    const controller = new AbortController();
     const fallback = estimateFallback(items, options);
     setEstimate(fallback);
-    setEstimateNote(items.length === 0 ? "等待导入图片" : "本地预估，执行前由原生预检复核");
-  }, [active, format, items, options]);
+    if (!active || items.length === 0) {
+      setEstimateNote(items.length === 0 ? "等待导入图片" : formatCompressionEstimateSource("fallback", "选择桌面图片后可获取原生精确预估"));
+      return () => controller.abort();
+    }
+    if (busy) {
+      setEstimateNote(formatCompressionEstimateSource("fallback", "压缩任务进行中"));
+      return () => controller.abort();
+    }
+    if (!selectedItem?.sourcePath) {
+      setEstimateNote(formatCompressionEstimateSource("fallback", "浏览器文件不支持原生精确预估"));
+      return () => controller.abort();
+    }
+    if (!isTauriEnvironment()) {
+      setEstimateNote(formatCompressionEstimateSource("fallback", "当前环境不支持原生精确预估"));
+      return () => controller.abort();
+    }
+    void (async () => {
+      try {
+        const request = {
+          fileName: selectedItem.file.name,
+          inputData: new Uint8Array(await selectedItem.file.arrayBuffer()),
+          outputFormat: options.format,
+          jpegQuality: options.quality,
+          lossless: options.format === "png" || (options.format === "webp" && options.lossless),
+          skipIfLarger: true,
+          pngOptimizationLevel: options.pngOptimizationLevel,
+          maxOutputBytes: options.maxOutputBytes,
+          maxCandidates: options.maxCandidates,
+        };
+        if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
+        const result = await estimateImageCompression(request);
+        if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
+        setEstimate({ inputBytes: result.inputBytes, estimatedBytes: result.outputBytes, savingsPercent: result.savingsPercent });
+        setEstimateNote(formatCompressionEstimateSource("native", result.status === "skipped" && result.skippedReason ? `输出将跳过：${result.skippedReason}` : "当前选中图片"));
+      } catch (error) {
+        if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
+        setEstimateNote(formatCompressionEstimateSource("fallback", `原生预估失败：${errorMessage(error)}`));
+      }
+    })();
+    return () => controller.abort();
+  }, [active, busy, items, options, selectedItem]);
 
   useEffect(() => {
     if (replaceOriginal && !replaceOriginalAvailable) setReplaceOriginal(false);
