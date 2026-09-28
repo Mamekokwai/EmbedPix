@@ -1087,10 +1087,19 @@ fn uuid_like_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{DynamicImage, ImageBuffer, ImageOutputFormat, Rgba};
+    use image::{DynamicImage, ImageBuffer, ImageOutputFormat, Luma, Rgba};
 
     fn png_input() -> Vec<u8> {
         let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([255, 0, 0, 255])));
+        let mut bytes = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut bytes), ImageOutputFormat::Png)
+            .unwrap();
+        bytes
+    }
+
+    fn luma_png_input(width: u32, height: u32) -> Vec<u8> {
+        let image = DynamicImage::ImageLuma8(ImageBuffer::from_pixel(width, height, Luma([0])));
         let mut bytes = Vec::new();
         image
             .write_to(&mut Cursor::new(&mut bytes), ImageOutputFormat::Png)
@@ -1219,6 +1228,85 @@ mod tests {
         let request = parse_raw_payload(&payload).unwrap();
         assert_eq!(decode_image(&request.input).unwrap().dimensions(), (2, 2));
         assert!(encode_image(&request.input, request.format, 80, 2).is_ok());
+    }
+
+    #[test]
+    fn compression_rejects_empty_corrupt_oversized_and_over_budget_images() {
+        assert!(decode_image(&[]).unwrap_err().contains("between 1 and"));
+        assert!(decode_image(b"not an image").is_err());
+
+        let mut truncated = png_input();
+        truncated.truncate(truncated.len() / 2);
+        assert!(decode_image(&truncated).is_err());
+
+        let oversized_input = vec![0u8; MAX_INPUT_BYTES + 1];
+        assert!(decode_image(&oversized_input)
+            .unwrap_err()
+            .contains("between 1 and 32 MiB"));
+
+        let oversized_dimension = luma_png_input(MAX_IMAGE_DIMENSION + 1, 1);
+        assert!(decode_image(&oversized_dimension)
+            .unwrap_err()
+            .contains("dimensions exceed"));
+
+        let over_pixel_budget = luma_png_input(4_097, 4_097);
+        assert!(decode_image(&over_pixel_budget)
+            .unwrap_err()
+            .contains("dimensions exceed"));
+    }
+
+    #[test]
+    fn corrupt_input_does_not_publish_or_modify_an_existing_output() {
+        let output_path = crate::commands::test_temp_dir().join(format!(
+            "embedpix-compression-corrupt-{}.webp",
+            uuid_like_id()
+        ));
+        let original = b"existing output";
+        fs::write(&output_path, original).unwrap();
+        let request = CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "broken.png".into(),
+                output_format: "webp".into(),
+                output_path: Some(output_path.to_string_lossy().into_owned()),
+                output_location: Some("path".into()),
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                jpeg_quality: None,
+                lossless: Some(true),
+                skip_if_larger: true,
+                max_output_bytes: None,
+                max_candidates: None,
+                png_optimization_level: Some(2),
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: Some("corrupt-input-test".into()),
+            },
+            input: b"truncated image".to_vec(),
+            format: CompressionFormat::Webp,
+            lossless: true,
+            target_bytes: None,
+            max_candidates: DEFAULT_MAX_CANDIDATES,
+            png_optimization_level: 2,
+        };
+        let job = Arc::new(CompressionJob {
+            cancelled: AtomicBool::new(false),
+            progress: Mutex::new(CompressionProgress {
+                job_id: "corrupt-input-test".into(),
+                status: "running".into(),
+                stage: "preflight".into(),
+                output_path: None,
+                error: None,
+                code: None,
+            }),
+            terminal_at: Mutex::new(None),
+        });
+
+        assert!(run_compression(&request, &job).is_err());
+        assert_eq!(fs::read(&output_path).unwrap(), original);
+        assert_eq!(job.progress.lock().unwrap().status, "failed");
+        let _ = fs::remove_file(output_path);
     }
 
     #[test]
