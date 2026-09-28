@@ -86,6 +86,15 @@
 .compression-icon-button { width: 28px; height: 28px; flex: 0 0 auto; background: transparent; color: var(--qp-text-tertiary); }
 .compression-empty { margin: 14px 0 0; color: var(--qp-text-tertiary); font-size: 12px; line-height: 1.6; }
 .compression-settings-card { display: grid; align-content: start; gap: 15px; }
+.compression-advanced-settings { min-width: 0; grid-column: 1 / -1; border-top: 1px solid var(--qp-border-subtle); }
+.compression-advanced-settings summary { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; padding-top: 13px; color: var(--qp-text-secondary); cursor: pointer; list-style: none; }
+.compression-advanced-settings summary::-webkit-details-marker { display: none; }
+.compression-advanced-settings summary::after { flex: 0 0 auto; color: var(--qp-text-tertiary); content: "＋"; font-size: 16px; line-height: 1; }
+.compression-advanced-settings[open] summary::after { content: "−"; }
+.compression-advanced-settings summary:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 3px; border-radius: 4px; }
+.compression-advanced-settings summary strong { color: var(--qp-text-primary); font-size: 12px; }
+.compression-advanced-settings summary span { min-width: 0; color: var(--qp-text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
+.compression-advanced-settings-body { display: grid; min-width: 0; gap: 15px; padding-top: 15px; }
 .compression-custom-presets { display: grid; min-width: 0; gap: 8px; padding-top: 10px; border-top: 1px solid var(--qp-border-subtle); }
 .compression-preset-save-row, .compression-preset-actions { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
 .compression-preset-name { min-width: 0; flex: 1 1 150px; min-height: 32px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-primary); font: inherit; font-size: 12px; padding: 0 10px; }

@@ -139,6 +139,12 @@ describe("compact layout viewport contract", () => {
     expect(compressionPreferences).toContain("skipIfLarger");
     expect(compressionView).toContain("保留元数据（当前不可用：核心拒绝）");
     expect(compressionView).toContain("保留元数据请求会被核心拒绝");
+    expect(compressionView).toContain('<details className="compression-advanced-settings">');
+    expect(compressionView).toContain("高级输出选项");
+    expect(compressionView).toContain("元数据、路径与覆盖策略");
+    expect(compressionView).toContain("compression-advanced-settings-body");
+    expect(compressionView.indexOf("启用目标体积控制")).toBeLessThan(compressionView.indexOf('<details className="compression-advanced-settings">'));
+    expect(compressionView.slice(compressionView.indexOf('<details className="compression-advanced-settings">')).indexOf("允许覆盖同名文件")).toBeGreaterThan(-1);
     expect(compressionView).toContain("PNG 始终无损");
     expect(compressionView).toContain("formatCompressionProgressError");
     expect(compressionView).toContain("const progressError = formatCompressionProgressError(next);");
@@ -183,6 +189,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
     expect(compressionCss).toContain(".compression-webp-method-hint");
     expect(compressionCss).toContain(".compression-output-file-name-hint");
+    expect(compressionCss).toContain(".compression-advanced-settings { min-width: 0; grid-column: 1 / -1;");
+    expect(compressionCss).toContain(".compression-advanced-settings summary:focus-visible");
+    expect(compressionCss).toContain(".compression-advanced-settings-body { display: grid; min-width: 0;");
     expect(compressionCss).toContain(".compression-skip-larger-warning");
   });
 
