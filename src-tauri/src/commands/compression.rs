@@ -229,6 +229,11 @@ impl Drop for CompressionPermit {
     }
 }
 
+fn run_with_encoder_slot<T>(semaphore: Arc<CompressionSemaphore>, task: impl FnOnce() -> T) -> T {
+    let _permit = semaphore.acquire();
+    task()
+}
+
 impl CompressionJobState {
     fn register(&self, job_id: String, job: Arc<CompressionJob>) -> Result<(), String> {
         let mut jobs = self
@@ -347,21 +352,31 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn preview_compression(request: Request<'_>) -> Result<CompressionPreview, String> {
+pub async fn preview_compression(
+    request: Request<'_>,
+    state: State<'_, CompressionJobState>,
+) -> Result<CompressionPreview, String> {
     let request = parse_request(request)?;
-    tauri::async_runtime::spawn_blocking(move || run_preview(&request))
-        .await
-        .map_err(|error| format!("compression preview task failed: {error}"))?
+    let encoder_slots = Arc::clone(&state.encoder_slots);
+    tauri::async_runtime::spawn_blocking(move || {
+        run_with_encoder_slot(encoder_slots, || run_preview(&request))
+    })
+    .await
+    .map_err(|error| format!("compression preview task failed: {error}"))?
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn estimate_image_compression(
     request: Request<'_>,
+    state: State<'_, CompressionJobState>,
 ) -> Result<CompressionEstimate, String> {
     let request = parse_estimate_request(request)?;
-    tauri::async_runtime::spawn_blocking(move || run_estimate(&request))
-        .await
-        .map_err(|error| format!("compression estimate task failed: {error}"))?
+    let encoder_slots = Arc::clone(&state.encoder_slots);
+    tauri::async_runtime::spawn_blocking(move || {
+        run_with_encoder_slot(encoder_slots, || run_estimate(&request))
+    })
+    .await
+    .map_err(|error| format!("compression estimate task failed: {error}"))?
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -2512,6 +2527,30 @@ mod tests {
         assert_eq!(*semaphore.available.lock().unwrap(), 1);
         drop(second);
         assert_eq!(*semaphore.available.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn encoder_slot_helper_blocks_a_third_preview_or_estimate_task() {
+        let semaphore = Arc::new(CompressionSemaphore {
+            available: Mutex::new(2),
+            wake: Condvar::new(),
+        });
+        let first = semaphore.acquire();
+        let second = semaphore.acquire();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let worker_semaphore = Arc::clone(&semaphore);
+        let worker = std::thread::spawn(move || {
+            run_with_encoder_slot(worker_semaphore, || {
+                started_tx.send(()).unwrap();
+                7
+            })
+        });
+
+        assert!(started_rx.recv_timeout(Duration::from_millis(50)).is_err());
+        drop(first);
+        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        drop(second);
+        assert_eq!(worker.join().unwrap(), 7);
     }
 
     #[test]
