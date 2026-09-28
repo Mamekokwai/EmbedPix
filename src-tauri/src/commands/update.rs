@@ -1156,31 +1156,124 @@ fn is_generated_update_file_name(file_name: &str, version: &str) -> bool {
             .all(|character| character.is_ascii_digit())
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum VersionIdentifier {
+    Numeric(u64),
+    Text(String),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ParsedVersion {
+    core: [u64; 3],
+    prerelease: Option<Vec<VersionIdentifier>>,
+}
+
+fn parse_version(value: &str) -> Result<ParsedVersion, String> {
+    let trimmed = value.trim();
+    let normalized = trimmed
+        .strip_prefix('v')
+        .or_else(|| trimmed.strip_prefix('V'))
+        .unwrap_or(trimmed);
+    let (core_text, prerelease_text) = normalized
+        .split_once('-')
+        .map_or((normalized, None), |(core, prerelease)| {
+            (core, Some(prerelease))
+        });
+    let core_parts = core_text.split('.').collect::<Vec<_>>();
+    if core_parts.len() != 3 {
+        return Err("更新版本号无效。".to_string());
+    }
+    let mut core = [0_u64; 3];
+    for (index, part) in core_parts.into_iter().enumerate() {
+        if part.is_empty()
+            || (part.len() > 1 && part.starts_with('0'))
+            || !part.chars().all(|character| character.is_ascii_digit())
+        {
+            return Err("更新版本号无效。".to_string());
+        }
+        core[index] = part
+            .parse::<u64>()
+            .map_err(|_| "更新版本号无效。".to_string())?;
+    }
+    let prerelease = prerelease_text
+        .map(|text| {
+            if text.is_empty() {
+                return Err("更新版本号无效。".to_string());
+            }
+            text.split('.')
+                .map(|identifier| {
+                    if identifier.is_empty()
+                        || (identifier.len() > 1
+                            && identifier
+                                .chars()
+                                .all(|character| character.is_ascii_digit())
+                            && identifier.starts_with('0'))
+                        || !identifier
+                            .chars()
+                            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+                    {
+                        return Err("更新版本号无效。".to_string());
+                    }
+                    if identifier
+                        .chars()
+                        .all(|character| character.is_ascii_digit())
+                    {
+                        identifier
+                            .parse::<u64>()
+                            .map(VersionIdentifier::Numeric)
+                            .map_err(|_| "更新版本号无效。".to_string())
+                    } else {
+                        Ok(VersionIdentifier::Text(identifier.to_string()))
+                    }
+                })
+                .collect()
+        })
+        .transpose()?;
+    Ok(ParsedVersion { core, prerelease })
+}
+
 fn normalize_version(value: &str) -> Result<String, String> {
     let trimmed = value.trim();
     let normalized = trimmed
         .strip_prefix('v')
         .or_else(|| trimmed.strip_prefix('V'))
         .unwrap_or(trimmed);
-    let parts = normalized.split('.').collect::<Vec<_>>();
-    if parts.len() != 3
-        || parts.iter().any(|part| {
-            part.is_empty()
-                || !part.chars().all(|character| character.is_ascii_digit())
-                || part.parse::<u64>().is_err()
-        })
-    {
-        return Err("更新版本号无效。".to_string());
-    }
+    parse_version(normalized)?;
     Ok(normalized.to_string())
 }
 
 fn compare_versions(left: &str, right: &str) -> i8 {
-    let left = left.split('.').map(|part| part.parse::<u64>().unwrap_or(0));
-    let right = right
-        .split('.')
-        .map(|part| part.parse::<u64>().unwrap_or(0));
-    match left.cmp(right) {
+    let (Ok(left), Ok(right)) = (parse_version(left), parse_version(right)) else {
+        return 0;
+    };
+    let core_order = left.core.cmp(&right.core);
+    let order = if core_order != Ordering::Equal {
+        core_order
+    } else {
+        match (&left.prerelease, &right.prerelease) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(left), Some(right)) => left
+                .iter()
+                .zip(right)
+                .map(|(left, right)| match (left, right) {
+                    (VersionIdentifier::Numeric(left), VersionIdentifier::Numeric(right)) => {
+                        left.cmp(right)
+                    }
+                    (VersionIdentifier::Numeric(_), VersionIdentifier::Text(_)) => Ordering::Less,
+                    (VersionIdentifier::Text(_), VersionIdentifier::Numeric(_)) => {
+                        Ordering::Greater
+                    }
+                    (VersionIdentifier::Text(left), VersionIdentifier::Text(right)) => {
+                        left.cmp(right)
+                    }
+                })
+                .find(|order| *order != Ordering::Equal)
+                .unwrap_or_else(|| left.len().cmp(&right.len())),
+        }
+    };
+    match order {
         Ordering::Less => -1,
         Ordering::Equal => 0,
         Ordering::Greater => 1,
@@ -1491,7 +1584,10 @@ mod tests {
     #[test]
     fn validates_versions_and_sha256_digests() {
         assert_eq!(normalize_version("v1.2.3").unwrap(), "1.2.3");
+        assert_eq!(normalize_version("v1.2.3-rc.1").unwrap(), "1.2.3-rc.1");
         assert!(normalize_version("1.2").is_err());
+        assert!(normalize_version("1.2.3-").is_err());
+        assert!(normalize_version("1.2.3-rc.01").is_err());
         assert_eq!(
             parse_sha256(&format!("sha256:{}", "a".repeat(64)))
                 .unwrap()
@@ -1500,6 +1596,9 @@ mod tests {
         );
         assert!(parse_sha256("not-a-digest").is_err());
         assert_eq!(compare_versions("1.10.0", "1.2.0"), 1);
+        assert_eq!(compare_versions("1.2.3-rc.1", "1.2.3"), -1);
+        assert_eq!(compare_versions("1.2.3-rc.2", "1.2.3-rc.10"), -1);
+        assert_eq!(compare_versions("1.2.3-alpha", "1.2.3-alpha.1"), -1);
     }
 
     #[test]

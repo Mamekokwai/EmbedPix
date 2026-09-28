@@ -267,6 +267,8 @@ jobs:
 
           $binary = Join-Path $root 'EmbedPix.exe'
           if (-not (Test-Path -LiteralPath $binary)) { throw "Missing main binary: $binary" }
+          . .\scripts\release-pe-contract.ps1
+          Assert-WindowsGuiSubsystem $binary
 
           $outputDir = 'bundle-artifact'
           New-Item -ItemType Directory -Force $outputDir | Out-Null
@@ -438,7 +440,7 @@ jobs:
           RELEASE_REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.resolve.outputs.commit }}
-          WORKFLOW_REF: ${{ github.ref }}
+          WORKFLOW_REF: refs/tags/${{ needs.resolve.outputs.tag }}
           WORKFLOW_SHA: ${{ github.sha }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -464,6 +466,34 @@ jobs:
             "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
           }
           $lines | Set-Content -Path release-assets/SHA256SUMS.txt -Encoding utf8NoBOM
+
+      - name: Verify staged release contract before publish
+        shell: pwsh
+        env:
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          . .\scripts\release-asset-contract.ps1
+          $version = $env:RELEASE_VERSION
+          $tag = $env:RELEASE_TAG
+          $releaseDir = 'release-assets'
+          $assets = @(Get-ExpectedReleaseAssetNames $version | ForEach-Object {
+            $name = $_
+            [pscustomobject]@{
+              name = $name
+              browser_download_url = "https://github.com/$($env:RELEASE_REPOSITORY)/releases/download/$tag/$name"
+              size = (Get-Item -LiteralPath (Join-Path $releaseDir $name)).Length
+            }
+          })
+          $release = [pscustomobject]@{
+            draft = $false
+            prerelease = $version -match '-'
+            assets = $assets
+          }
+          Assert-ReleaseChannel -Release $release -Tag $tag
+          Assert-ReleaseAssetContract -Release $release -Root $releaseDir -Repository $env:RELEASE_REPOSITORY -Tag $tag | Out-Null
+          Write-Host "Staged release contract verified before publishing $tag."
 
       - name: Write release notes
         shell: pwsh

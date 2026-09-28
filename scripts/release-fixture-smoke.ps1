@@ -10,8 +10,9 @@ if (-not (Test-Path -LiteralPath $peContract -PathType Leaf)) { throw "Release P
 . $peContract
 
 $repository = 'Mamekokwai/EmbedPix'
-$tag = 'v0.7.0'
-$version = '0.7.0'
+$version = (Get-Content -Raw (Join-Path (Split-Path -Parent $PSScriptRoot) 'package.json') | ConvertFrom-Json).version
+if ([string]::IsNullOrWhiteSpace($version)) { throw 'Fixture version could not be read from package.json.' }
+$tag = "v$version"
 $root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-release-fixture-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $root | Out-Null
 
