@@ -904,6 +904,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       });
       framesRef.current = [];
       setSelectedIndex(0);
+      setSelectedFrameIndices(new Set());
+      selectionAnchorRef.current = 0;
       clearOutputSelection();
       setCanvasWidth(metadata.width);
       setCanvasHeight(metadata.height);

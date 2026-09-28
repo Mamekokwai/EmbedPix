@@ -396,7 +396,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   const removeItem = (id: string) => {
     if (sourceBusy) return;
+    const removedItem = items.find((item) => item.id === id);
+    if (!removedItem) return;
     setItems((current) => current.filter((item) => item.id !== id));
+    setFailures([]);
+    setSkipReasons([]);
+    setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
+    setMessage("");
     setStatus(items.length > 1 ? "ready" : "idle");
   };
 
