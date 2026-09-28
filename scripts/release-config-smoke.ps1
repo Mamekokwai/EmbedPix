@@ -26,6 +26,14 @@ $cargoVersion = $cargoVersionLine.Matches[0].Groups[1].Value
 if ($package.version -ne $cargoVersion -or $package.version -ne $tauri.version) {
   throw "Source version mismatch: package=$($package.version) cargo=$cargoVersion tauri=$($tauri.version)."
 }
+$releaseNotesPath = "docs/release-notes-v$($package.version).md"
+if (-not (Test-Path -LiteralPath $releaseNotesPath -PathType Leaf)) {
+  throw "Missing release notes for source version $($package.version): $releaseNotesPath"
+}
+$releaseNotes = Get-Content -Raw -LiteralPath $releaseNotesPath
+if ([string]::IsNullOrWhiteSpace($releaseNotes) -or $releaseNotes -notmatch "(?m)^# EmbedPix v$([regex]::Escape($package.version))\s*$") {
+  throw "Release notes title does not match source version $($package.version): $releaseNotesPath"
+}
 
 if (-not $tauri.bundle.active -or -not $tauri.bundle.createUpdaterArtifacts -or $tauri.bundle.targets -ne 'nsis') {
   throw 'Tauri bundle must enable NSIS and updater artifacts.'

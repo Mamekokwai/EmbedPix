@@ -80,6 +80,7 @@ function Assert-ReleaseAssetContract {
   if ($manifestFields.Count -ne 4 -or $manifestFields -notcontains 'version' -or $manifestFields -notcontains 'notes' -or $manifestFields -notcontains 'pub_date' -or $manifestFields -notcontains 'platforms') {
     throw 'latest.json root schema is invalid.'
   }
+  if ($latest.notes -ne "EmbedPix v$version") { throw 'latest.json notes do not match the release version.' }
   [DateTimeOffset]$pubDate = $latest.pub_date
   if ($pubDate -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) { throw 'latest.json pub_date is in the future.' }
   $platforms = @($latest.platforms.PSObject.Properties.Name)

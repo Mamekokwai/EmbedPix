@@ -426,7 +426,7 @@ jobs:
 
           $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $releaseDir 'latest.json') -Encoding utf8NoBOM
           $parsed = Get-Content -Raw (Join-Path $releaseDir 'latest.json') | ConvertFrom-Json
-          if ($parsed.version -ne $version) { throw 'latest.json version validation failed.' }
+          if ($parsed.version -ne $version -or $parsed.notes -ne "EmbedPix v$version") { throw 'latest.json version/notes validation failed.' }
           if ($parsed.platforms.'windows-x86_64'.signature -ne $x64Signature) { throw 'x64 signature validation failed.' }
           if ($parsed.platforms.'windows-aarch64'.signature -ne $arm64Signature) { throw 'arm64 signature validation failed.' }
           $expectedX64Url = "https://github.com/$repo/releases/download/v$version/$x64Name"

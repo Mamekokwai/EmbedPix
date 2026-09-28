@@ -37,7 +37,7 @@ try {
 
   $manifest = [ordered]@{
     version = $version
-    notes = 'fixture'
+    notes = "EmbedPix v$version"
     pub_date = (Get-Date).ToUniversalTime().ToString('o')
     platforms = [ordered]@{
       'windows-x86_64' = [ordered]@{
@@ -92,7 +92,7 @@ try {
   $originalManifest = Get-Content -Raw -LiteralPath (Join-Path $root 'latest.json')
   $invalidPlatformManifest = [ordered]@{
     version = $version
-    notes = 'fixture'
+    notes = "EmbedPix v$version"
     pub_date = (Get-Date).ToUniversalTime().ToString('o')
     platforms = [ordered]@{
       'windows-x86_64' = $manifest.platforms.'windows-x86_64'
@@ -108,6 +108,12 @@ try {
   $wrongUrlManifest.platforms.'windows-x86_64'.url = 'https://example.com/not-EmbedPix.exe'
   $wrongUrlManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
   Expect-Rejection 'signature/url mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
+
+  $wrongNotesManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+  $wrongNotesManifest.notes = 'EmbedPix v0.0.0'
+  $wrongNotesManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
+  Expect-Rejection 'manifest notes/version mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
   $wrongSignatureManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
