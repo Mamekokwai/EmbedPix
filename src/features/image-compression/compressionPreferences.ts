@@ -45,7 +45,7 @@ type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 
 const FORMATS = new Set<CompressionFormat>(["jpg", "webp", "png"]);
 const PRESETS = new Set<CompressionPreset>(["high-quality", "balanced", "small-size", "custom"]);
-const METADATA_POLICIES = new Set<MetadataPolicy>(["strip", "preserve"]);
+const METADATA_POLICIES = new Set<MetadataPolicy>(["strip"]);
 const OUTPUT_LOCATIONS = new Set<CompressionOutputLocation>(["source", "subfolder", "directory"]);
 
 function fallbackPreferences(): CompressionPreferences {

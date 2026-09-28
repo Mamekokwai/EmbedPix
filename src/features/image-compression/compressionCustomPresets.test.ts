@@ -51,6 +51,7 @@ describe("compression custom presets", () => {
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏预设", values: { ...values, quality: 101 } }] }))).toThrow("质量无效");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏方法", values: { ...values, webpMethod: 7 } }] }))).toThrow("WebP 编码方法无效");
     expect(() => createCompressionCustomPreset("坏方法", { ...values, webpMethod: 7 })).toThrow("WebP 编码方法必须");
+    expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "保留元数据", values: { ...values, metadataPolicy: "preserve" } }] }))).toThrow("元数据策略无效");
   });
 
   it("keeps older custom presets compatible with the safe default method", () => {

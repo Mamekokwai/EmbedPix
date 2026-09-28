@@ -77,7 +77,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
     lossless,
-    metadataPolicy: enumValue(record.metadataPolicy, ["strip", "preserve"], "元数据策略", index),
+    metadataPolicy: enumValue(record.metadataPolicy, ["strip"], "元数据策略", index),
   };
 }
 
