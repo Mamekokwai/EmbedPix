@@ -66,7 +66,7 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression -Req
 
 原则：新增编码器必须固定版本、完成许可证与版权清单、在 x64/ARM64 分别构建验证，并通过输出签名、SHA256、可解码和发布资产 smoke。
 
-当前自动依赖门禁：`scripts/release-dependency-smoke.ps1` 使用 `cargo metadata --locked` 和 feature tree 验证 `libwebp-sys2 0.2.0` 的 `BSD-3-Clause` 许可证、`webp-animation 0.10.0` 的 `MIT OR Apache-2.0` 许可证以及静态 feature 链路；Windows 构建阶段同时记录 `EmbedPix.exe` 和 NSIS 安装包字节数。当前不设置未经评审的硬性体积上限，体积预算需以同一提交、同一目标平台的基线对比后单独批准。
+当前自动依赖门禁：`scripts/release-dependency-smoke.ps1` 使用 `cargo metadata --locked` 和 feature tree 验证 `kamadak-exif 0.6.1`、`oxipng 9.1.5`、`webp-animation 0.10.0`、`libwebp-sys2 0.2.0/0.1.11` 的许可证，并检查 `NOTICE` 中存在对应版本、许可证和版权标记；同时验证静态 feature 链路。Windows 构建阶段同时记录 `EmbedPix.exe` 和 NSIS 安装包字节数。当前不设置未经评审的硬性体积上限，体积预算需以同一提交、同一目标平台的基线对比后单独批准。
 
 ### 编码器包体积评估建议
 

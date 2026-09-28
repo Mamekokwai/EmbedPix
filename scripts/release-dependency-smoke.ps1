@@ -23,6 +23,24 @@ if ($lock -notmatch '(?s)name = "libwebp-sys2"\s+version = "0\.2\.0"') {
 $metadataJson = cargo metadata --manifest-path src-tauri/Cargo.toml --locked --format-version 1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw 'Could not inspect locked Cargo metadata.' }
 $packages = ($metadataJson | ConvertFrom-Json).packages
+$notice = Get-Content -Raw 'NOTICE'
+
+$requiredNotices = @(
+  @{ name = 'kamadak-exif'; version = '0.6.1'; license = 'BSD-2-Clause'; marker = 'kamadak-exif 0.6.1'; attribution = "KAMADA Ken'ichi" },
+  @{ name = 'oxipng'; version = '9.1.5'; license = 'MIT'; marker = 'OxiPNG 9.1.5'; attribution = 'Joshua Holmer' },
+  @{ name = 'webp-animation'; version = '0.10.0'; license = 'MIT OR Apache-2.0'; marker = 'webp-animation 0.10.0'; attribution = 'Permission is hereby granted' },
+  @{ name = 'libwebp-sys2'; version = '0.2.0'; license = 'BSD-3-Clause'; marker = 'libwebp-sys2 0.2.0 and 0.1.11'; attribution = 'Masaki Hara' },
+  @{ name = 'libwebp-sys2'; version = '0.1.11'; license = 'BSD-3-Clause'; marker = 'libwebp-sys2 0.2.0 and 0.1.11'; attribution = 'Masaki Hara' }
+)
+foreach ($required in $requiredNotices) {
+  $package = $packages | Where-Object { $_.name -eq $required.name -and $_.version -eq $required.version } | Select-Object -First 1
+  if (-not $package -or $package.license -ne $required.license) {
+    throw "Cargo metadata does not report $($required.name) $($required.version) with $($required.license)."
+  }
+  if ($notice -notmatch [regex]::Escape($required.marker) -or $notice -notmatch [regex]::Escape($required.attribution)) {
+    throw "NOTICE does not contain the audited notice for $($required.name) $($required.version)."
+  }
+}
 $webpPackage = $packages | Where-Object { $_.name -eq 'libwebp-sys2' -and $_.version -eq '0.2.0' } | Select-Object -First 1
 if (-not $webpPackage -or $webpPackage.license -ne 'BSD-3-Clause') {
   throw 'Cargo metadata does not report libwebp-sys2 0.2.0 with BSD-3-Clause.'
@@ -52,6 +70,7 @@ foreach ($entry in @(
   libwebpLicense = $webpPackage.license
   webpAnimationVersion = $animationPackage.version
   webpAnimationLicense = $animationPackage.license
+  noticeAudit = $true
   staticFeatureTree = $true
   artifactSizes = [pscustomobject]$sizeReport
 } | ConvertTo-Json -Depth 4
