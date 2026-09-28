@@ -108,6 +108,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("最大输出体积（JPEG/WebP 有损）");
     expect(compressionView).toContain("getCompressionTargetSizeError");
     expect(compressionView).toContain("启用目标体积控制");
+    expect(compressionView).toContain("压缩后更大时跳过");
+    expect(compressionView).toContain("风险模式：压缩结果可能比原图更大");
+    expect(compressionView).toContain("skipIfLarger");
     expect(compressionView).toContain("覆盖原图并备份到 bak");
     expect(compressionView).toContain("formatCompressionReplaceOriginalConfirmation");
     expect(compressionView).toContain("window.confirm");
@@ -133,6 +136,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("compression-webp-method-hint");
     expect(compressionView).toContain("disabled={busy || !webpLossyActive}");
     expect(compressionPreferences).toContain("webpMethod");
+    expect(compressionPreferences).toContain("skipIfLarger");
     expect(compressionView).toContain("保留元数据（当前不可用：核心拒绝）");
     expect(compressionView).toContain("保留元数据请求会被核心拒绝");
     expect(compressionView).toContain("PNG 始终无损");
@@ -179,6 +183,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
     expect(compressionCss).toContain(".compression-webp-method-hint");
     expect(compressionCss).toContain(".compression-output-file-name-hint");
+    expect(compressionCss).toContain(".compression-skip-larger-warning");
   });
 
   it("keeps compression state mounted while navigation only toggles visibility", () => {

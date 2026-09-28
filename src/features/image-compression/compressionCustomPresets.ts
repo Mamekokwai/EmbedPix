@@ -13,6 +13,7 @@ export interface CompressionPresetValues {
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
+  skipIfLarger: boolean;
   lossless: boolean;
   metadataPolicy: MetadataPolicy;
 }
@@ -76,6 +77,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     pngOptimizationLevel: integerValue(record.pngOptimizationLevel, 0, 6, "PNG 优化级别", index),
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
+    skipIfLarger: record.skipIfLarger === undefined ? true : booleanValue(record.skipIfLarger, "压缩后更大时跳过", index),
     lossless,
     metadataPolicy: enumValue(record.metadataPolicy, ["strip"], "元数据策略", index),
   };

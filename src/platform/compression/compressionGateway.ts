@@ -25,6 +25,7 @@ export interface CompressionEnvelopeRequest {
   jpegQuality: number;
   webpMethod?: number;
   lossless: boolean;
+  skipIfLarger?: boolean;
   pngOptimizationLevel: number;
   maxOutputBytes?: number;
   maxCandidates?: number;
@@ -111,6 +112,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
     lossless: request.lossless,
+    skipIfLarger: request.skipIfLarger ?? true,
     pngOptimizationLevel: request.pngOptimizationLevel,
     ...(request.maxOutputBytes ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates ? { maxCandidates: request.maxCandidates } : {}),
@@ -197,6 +199,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     jpegQuality: options.quality,
     webpMethod: options.webpMethod,
     lossless: options.format === "png" || (options.format === "webp" && options.lossless),
+    skipIfLarger: options.skipIfLarger ?? true,
     pngOptimizationLevel: options.pngOptimizationLevel,
     maxOutputBytes: options.maxOutputBytes,
     maxCandidates: options.maxCandidates,

@@ -26,6 +26,7 @@ describe("compression preferences", () => {
       pngOptimizationLevel: 5,
       targetSizeEnabled: true,
       targetSizeKiB: "96",
+      skipIfLarger: false,
       lossless: false,
       preset: "custom" as const,
       outputLocation: "subfolder" as const,
@@ -45,6 +46,7 @@ describe("compression preferences", () => {
     expect(stored).not.toHaveProperty("items");
     expect(stored.outputFileName).toBe("旅行照片.jpg");
     expect(stored.webpMethod).toBe(2);
+    expect(stored.skipIfLarger).toBe(false);
     expect(loadCompressionPreferences(storage)).toEqual(preferences);
   });
 
@@ -89,6 +91,7 @@ describe("compression preferences", () => {
       pngOptimizationLevel: 0,
       targetSizeEnabled: false,
       targetSizeKiB: "",
+      skipIfLarger: true,
       lossless: true,
       outputLocation: "source",
       outputSubdirectory: "",
@@ -100,6 +103,11 @@ describe("compression preferences", () => {
   it("uses the safe default for older or malformed WebP method preferences", () => {
     expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "webp", lossless: false }) })).webpMethod).toBe(4);
     expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "webp", webpMethod: 99 }) })).webpMethod).toBe(4);
+  });
+
+  it("defaults the larger-output guard on for legacy or malformed preferences", () => {
+    expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, skipIfLarger: "no" }) })).skipIfLarger).toBe(true);
+    expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, skipIfLarger: false }) })).skipIfLarger).toBe(false);
   });
 
   it("falls back to strip when legacy preferences request unsupported metadata preservation", () => {
@@ -126,7 +134,7 @@ describe("compression preferences", () => {
       [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "webp", quality: 73, lossless: false, metadataPolicy: "strip" }),
     });
     const migrated = loadCompressionPreferences(storage);
-    expect(migrated).toMatchObject({ format: "webp", quality: 73, webpMethod: 4, outputFileName: "" });
+    expect(migrated).toMatchObject({ format: "webp", quality: 73, webpMethod: 4, outputFileName: "", skipIfLarger: true });
     saveCompressionPreferences(migrated, storage);
     expect(JSON.parse(storage.read(COMPRESSION_PREFERENCES_STORAGE_KEY) ?? "{}").version).toBe(2);
   });

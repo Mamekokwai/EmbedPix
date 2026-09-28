@@ -153,6 +153,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [pngOptimizationLevel, setPngOptimizationLevel] = useState(initialPreferences.pngOptimizationLevel);
   const [targetSizeKiB, setTargetSizeKiB] = useState(initialPreferences.targetSizeKiB);
   const [targetSizeEnabled, setTargetSizeEnabled] = useState(initialPreferences.targetSizeEnabled);
+  const [skipIfLarger, setSkipIfLarger] = useState(initialPreferences.skipIfLarger);
   const [lossless, setLossless] = useState(initialPreferences.lossless);
   const [preset, setPreset] = useState<CompressionPreset>(initialPreferences.preset);
   const [metadataPolicy, setMetadataPolicy] = useState<MetadataPolicy>(initialPreferences.metadataPolicy);
@@ -216,9 +217,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     overwrite: outputModes.overwrite,
     autoNumbering: outputModes.autoNumbering,
     replaceOriginal: outputModes.replaceOriginal,
+    skipIfLarger,
     maxOutputBytes,
     maxCandidates: qualityEnabled && maxOutputBytes ? 8 : undefined,
-  }), [format, quality, webpLossyActive, webpMethod, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, maxOutputBytes]);
+  }), [format, quality, webpLossyActive, webpMethod, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes]);
 
   const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, true), [outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
@@ -265,7 +267,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           jpegQuality: options.quality,
           webpMethod: options.webpMethod,
           lossless: options.format === "png" || (options.format === "webp" && options.lossless),
-          skipIfLarger: true,
+          skipIfLarger: options.skipIfLarger,
           pngOptimizationLevel: options.pngOptimizationLevel,
           maxOutputBytes: options.maxOutputBytes,
           maxCandidates: options.maxCandidates,
@@ -295,6 +297,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       pngOptimizationLevel,
       targetSizeEnabled: targetSizeActive,
       targetSizeKiB,
+      skipIfLarger,
       lossless,
       preset,
       metadataPolicy,
@@ -305,7 +308,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       autoNumbering,
       replaceOriginal,
     });
-  }, [autoNumbering, format, lossless, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, targetSizeActive, targetSizeKiB, webpMethod]);
+  }, [autoNumbering, format, lossless, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -691,9 +694,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setQuality(values.quality);
     setWebpMethod(COMPRESSION_WEBP_METHOD_DEFAULT);
     setPngOptimizationLevel(values.pngOptimizationLevel);
+    setSkipIfLarger(true);
   };
 
-  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, lossless, metadataPolicy });
+  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, lossless, metadataPolicy, skipIfLarger });
 
   const applyCustomPreset = (id: string) => {
     setCustomPresetId(id);
@@ -705,6 +709,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setPngOptimizationLevel(selected.values.pngOptimizationLevel);
     setTargetSizeEnabled(selected.values.targetSizeEnabled);
     setTargetSizeKiB(selected.values.targetSizeKiB);
+    setSkipIfLarger(selected.values.skipIfLarger);
     setLossless(selected.values.lossless);
     setMetadataPolicy(selected.values.metadataPolicy);
     setPreset("custom");
@@ -859,6 +864,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <label className="compression-check"><input type="checkbox" checked={targetSizeActive} onChange={(event) => setTargetSizeEnabled(event.target.checked)} disabled={busy || !qualityEnabled} /><span><strong>启用目标体积控制</strong><small>{format === "jpg" ? "启用后输入最大输出体积；核心最多尝试 8 个 JPEG 质量候选" : format === "webp" && !lossless ? "启用后输入最大输出体积；核心最多尝试 8 个 WebP 质量候选" : "PNG 和无损 WebP 不支持目标体积控制"}</small></span></label>
           <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（JPEG/WebP 有损）</span><strong>{targetSizeActive && targetSizeKiB ? `${targetSizeKiB} KiB` : "—"}</strong></span><input type="number" min="1" max={COMPRESSION_MAX_TARGET_SIZE_KIB} step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="启用后输入 KiB" disabled={busy || !qualityEnabled || !targetSizeActive} aria-invalid={Boolean(targetSizeError)} /><small className="compression-field-hint">{format === "jpg" ? `JPEG 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : format === "webp" && !lossless ? `WebP 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : "PNG 和无损 WebP 不支持目标体积控制"}</small></label>
           {targetSizeError ? <p className="compression-field-error" role="alert">{targetSizeError}</p> : null}
+          <label className="compression-check"><input type="checkbox" checked={skipIfLarger} onChange={(event) => { setSkipIfLarger(event.target.checked); setPreset("custom"); }} disabled={busy} /><span><strong>压缩后更大时跳过</strong><small className={skipIfLarger ? undefined : "compression-skip-larger-warning"}>{skipIfLarger ? "仅发布不大于原图的结果；目标体积仍按上方限制执行。" : "风险模式：压缩结果可能比原图更大，仍会写出；请确认输出位置和覆盖策略。"}</small></span></label>
           <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（推荐）</option><option value="preserve" disabled>保留元数据（当前不可用：核心拒绝）</option></select><small className="compression-field-hint">第一阶段仅支持移除元数据；保留元数据请求会被核心拒绝。</small></label>
           <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy || replaceOriginal}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>
           {outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}

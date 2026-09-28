@@ -18,6 +18,7 @@ const values: CompressionPresetValues = {
   pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
+  skipIfLarger: true,
   lossless: true,
   metadataPolicy: "strip",
 };
@@ -51,14 +52,17 @@ describe("compression custom presets", () => {
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏预设", values: { ...values, quality: 101 } }] }))).toThrow("质量无效");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏方法", values: { ...values, webpMethod: 7 } }] }))).toThrow("WebP 编码方法无效");
     expect(() => createCompressionCustomPreset("坏方法", { ...values, webpMethod: 7 })).toThrow("WebP 编码方法必须");
+    expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏开关", values: { ...values, skipIfLarger: "yes" } }] }))).toThrow("压缩后更大时跳过无效");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "保留元数据", values: { ...values, metadataPolicy: "preserve" } }] }))).toThrow("元数据策略无效");
   });
 
   it("keeps older custom presets compatible with the safe default method", () => {
     const legacyValues = { ...values };
     delete (legacyValues as Partial<typeof values>).webpMethod;
+    delete (legacyValues as Partial<typeof values>).skipIfLarger;
     const imported = importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "旧预设", values: legacyValues }] }));
     expect(imported[0]?.values.webpMethod).toBe(4);
+    expect(imported[0]?.values.skipIfLarger).toBe(true);
   });
 
   it("deduplicates imported names without applying or mutating existing presets", () => {

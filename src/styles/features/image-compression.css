@@ -123,6 +123,7 @@
 .compression-field-hint, .compression-output-file-name-hint { color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .compression-webp-method-hint { display: block; min-width: 0; }
 .compression-output-file-name-hint[role="alert"] { color: var(--qp-danger, #df6a6a); }
+.compression-skip-larger-warning { color: var(--qp-danger, #df6a6a) !important; }
 .compression-skip-details { display: grid; flex-basis: 100%; gap: 4px; padding-top: 8px; border-top: 1px solid var(--qp-border-subtle); color: var(--qp-text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
 .compression-skip-details strong { color: var(--qp-text-secondary); font-weight: 650; }
 .compression-output-actions { display: flex; min-width: 0; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 9px 14px; padding-top: 9px; border-top: 1px solid var(--qp-border-subtle); }

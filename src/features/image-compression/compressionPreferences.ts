@@ -8,6 +8,7 @@ export interface CompressionPreferences {
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
+  skipIfLarger: boolean;
   lossless: boolean;
   preset: CompressionPreset;
   metadataPolicy: MetadataPolicy;
@@ -31,6 +32,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   pngOptimizationLevel: 2,
   targetSizeEnabled: false,
   targetSizeKiB: "",
+  skipIfLarger: true,
   lossless: true,
   preset: "balanced",
   metadataPolicy: "strip",
@@ -119,6 +121,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
       targetSizeEnabled: record.targetSizeEnabled === true && supportsCompressionTargetSize(format, lossless),
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
+      skipIfLarger: typeof record.skipIfLarger === "boolean" ? record.skipIfLarger : DEFAULT_COMPRESSION_PREFERENCES.skipIfLarger,
       lossless,
       preset: enumValue(record, "preset", PRESETS, DEFAULT_COMPRESSION_PREFERENCES.preset),
       metadataPolicy: enumValue(record, "metadataPolicy", METADATA_POLICIES, DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy),
@@ -158,6 +161,7 @@ export function saveCompressionPreferences(
       pngOptimizationLevel: preferences.pngOptimizationLevel,
       targetSizeEnabled: preferences.targetSizeEnabled,
       targetSizeKiB: preferences.targetSizeKiB,
+      skipIfLarger: preferences.skipIfLarger,
       lossless: preferences.lossless,
       preset: preferences.preset,
       metadataPolicy: preferences.metadataPolicy,
