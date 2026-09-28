@@ -54,6 +54,27 @@ describe("GIF desktop gateway", () => {
     expect(vi.mocked(invoke).mock.calls).toHaveLength(202);
   });
 
+  it("discards the spool when a large-frame export fails after upload", async () => {
+    const frames = Array.from({ length: 200 }, (_, index) => ({
+      data: new Uint8Array([index & 255, 127, 0, 255]),
+      durationMs: 10,
+    }));
+    const input = { ...request(), frames };
+    vi.mocked(invoke).mockResolvedValueOnce("spool-id");
+    for (let index = 0; index < frames.length; index += 1) {
+      vi.mocked(invoke).mockResolvedValueOnce(undefined);
+    }
+    vi.mocked(invoke)
+      .mockRejectedValueOnce(new Error("export failed"))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(exportGif(input)).rejects.toThrow("export failed");
+    expect(vi.mocked(invoke).mock.calls.at(-1)).toEqual([
+      "discard_gif_frame_spool",
+      { spoolId: "spool-id" },
+    ]);
+  });
+
   it("preserves the camelCase contract, frame order, byte values and input buffers", async () => {
     const input = request();
     vi.mocked(invoke).mockResolvedValueOnce(input.outputPath);
