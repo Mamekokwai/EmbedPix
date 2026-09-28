@@ -2953,7 +2953,7 @@ mod tests {
                 jpeg_quality: None,
                 webp_method: None,
                 lossless: Some(true),
-                skip_if_larger: true,
+                skip_if_larger: false,
                 max_output_bytes: Some(1),
                 max_candidates: Some(DEFAULT_MAX_CANDIDATES),
                 png_optimization_level: Some(2),
@@ -2970,6 +2970,13 @@ mod tests {
         let selection = choose_encoded_output(&request, 2, 2).unwrap();
         assert!(!selection.target_met);
         assert!(selection
+            .skipped_reason
+            .as_deref()
+            .is_some_and(|reason| reason.starts_with("target_unreachable")));
+        let estimate = run_estimate(&request).unwrap();
+        assert_eq!(estimate.status, "skipped");
+        assert!(!estimate.target_met);
+        assert!(estimate
             .skipped_reason
             .as_deref()
             .is_some_and(|reason| reason.starts_with("target_unreachable")));
