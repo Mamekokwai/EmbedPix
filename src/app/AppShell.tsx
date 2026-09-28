@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Film,
   Info,
@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import AppTitleBar from "./AppTitleBar";
 import ImageConverter from "../features/image-converter/ImageConverter";
-import ImageCompressionView from "../features/image-compression/ImageCompressionView";
-import GifMakerView from "../features/gif-maker/GifMakerView";
 import AboutView from "../features/about/AboutView";
 import SettingsView from "../features/settings/SettingsView";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
@@ -26,6 +24,9 @@ import {
 } from "../platform/preferences/appPreferences";
 
 type AppView = "converter" | "compression" | "gif" | "settings" | "about";
+
+const LazyImageCompressionView = lazy(() => import("../features/image-compression/ImageCompressionView"));
+const LazyGifMakerView = lazy(() => import("../features/gif-maker/GifMakerView"));
 
 const NAV_ITEMS: ReadonlyArray<{ id: AppView; label: string; hint: string; icon: typeof Images }> = [
   { id: "converter", label: "图片转换", hint: "导入、调整并导出", icon: Images },
@@ -72,6 +73,7 @@ function getPrefersDark(): boolean {
 
 export default function AppShell() {
   const [view, setView] = useState<AppView>("converter");
+  const [mountedViews, setMountedViews] = useState(() => ({ gif: false, compression: false }));
   const [preferences, setPreferences] = useState<AppPreferences>(() => loadAppPreferences());
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() => preferences.sidebarMode);
   const [prefersDark, setPrefersDark] = useState(getPrefersDark);
@@ -95,6 +97,11 @@ export default function AppShell() {
     document.documentElement.dataset.theme = activeTheme;
     saveAppPreferences(preferences);
   }, [activeTheme, preferences]);
+
+  useEffect(() => {
+    if (view !== "gif" && view !== "compression") return;
+    setMountedViews((current) => current[view] ? current : { ...current, [view]: true });
+  }, [view]);
 
   const updatePreferences = (next: Partial<AppPreferences>) => {
     setPreferences((current) => ({ ...current, ...next }));
@@ -174,10 +181,14 @@ export default function AppShell() {
             />
           </div>
           <div className="app-kept-view app-kept-gif" hidden={view !== "gif"}>
-            <GifMakerView active={view === "gif"} />
+            <Suspense fallback={<div className="app-view-loading" role="status">正在加载 GIF 工作台…</div>}>
+              {mountedViews.gif ? <LazyGifMakerView active={view === "gif"} /> : null}
+            </Suspense>
           </div>
           <div className="app-kept-view app-kept-compression" hidden={view !== "compression"}>
-            <ImageCompressionView active={view === "compression"} />
+            <Suspense fallback={<div className="app-view-loading" role="status">正在加载压缩工作台…</div>}>
+              {mountedViews.compression ? <LazyImageCompressionView active={view === "compression"} /> : null}
+            </Suspense>
           </div>
           {view === "settings" ? (
             <SettingsView

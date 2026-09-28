@@ -197,8 +197,17 @@ describe("compact layout viewport contract", () => {
 
   it("keeps compression state mounted while navigation only toggles visibility", () => {
     expect(appShell).toContain('<div className="app-kept-view app-kept-compression" hidden={view !== "compression"}>');
-    expect(appShell).toContain('<ImageCompressionView active={view === "compression"} />');
+    expect(appShell).toContain("const LazyImageCompressionView = lazy(() => import(\"../features/image-compression/ImageCompressionView\"))");
+    expect(appShell).toContain("const LazyGifMakerView = lazy(() => import(\"../features/gif-maker/GifMakerView\"))");
+    expect(appShell).not.toContain('import ImageCompressionView from "../features/image-compression/ImageCompressionView"');
+    expect(appShell).not.toContain('import GifMakerView from "../features/gif-maker/GifMakerView"');
+    expect(appShell).toContain("const [mountedViews, setMountedViews]");
+    expect(appShell).toContain("{mountedViews.compression ? <LazyImageCompressionView active={view === \"compression\"} /> : null}");
+    expect(appShell).toContain("{mountedViews.gif ? <LazyGifMakerView active={view === \"gif\"} /> : null}");
     expect(appShell).not.toContain('{view === "compression" ? <ImageCompressionView');
+    expect(appShell).toContain("setMountedViews((current) => current[view] ? current : { ...current, [view]: true })");
+    expect(appShell).toContain("<Suspense fallback=");
+    expect(appShell).toContain("app-view-loading");
     expect(compressionView).toContain('if (!active || items.length === 0)');
     expect(compressionView).toContain('const sourceBusy = busy || importBusy;');
   });
