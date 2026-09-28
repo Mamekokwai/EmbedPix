@@ -2452,6 +2452,30 @@ mod tests {
     }
 
     #[test]
+    fn cancelled_job_id_can_be_reused_after_reaching_terminal_state() {
+        let state = CompressionJobState::default();
+        let cancelled = test_job("cancel-reuse-test");
+        state
+            .register("cancel-reuse-test".into(), Arc::clone(&cancelled))
+            .unwrap();
+
+        assert_eq!(cancel_job(&cancelled).unwrap().status, "cancelling");
+        assert!(state
+            .register("cancel-reuse-test".into(), test_job("cancel-reuse-test"))
+            .is_err());
+
+        update_progress(
+            &cancelled,
+            "cancelled",
+            None,
+            Some("compression cancelled".into()),
+        );
+        assert!(state
+            .register("cancel-reuse-test".into(), test_job("cancel-reuse-test"))
+            .is_ok());
+    }
+
+    #[test]
     fn repeated_compression_cancellation_is_idempotent_after_terminal_state() {
         let job = Arc::new(CompressionJob {
             cancelled: AtomicBool::new(false),
