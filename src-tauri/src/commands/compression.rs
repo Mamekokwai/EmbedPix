@@ -136,6 +136,8 @@ pub struct CompressionProgress {
     pub stage: String,
     pub output_path: Option<String>,
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 pub struct CompressionJobState {
@@ -324,6 +326,7 @@ pub async fn compress_image(
             stage: "preflight".into(),
             output_path: None,
             error: None,
+            code: None,
         }),
         terminal_at: Mutex::new(None),
     });
@@ -987,12 +990,43 @@ fn update_progress(
             progress.output_path = output_path;
         }
         progress.error = error;
+        progress.code = progress
+            .error
+            .as_deref()
+            .map(|message| classify_error_code(stage, message));
         if matches!(stage, "completed" | "skipped" | "cancelled" | "failed") {
             if let Ok(mut terminal_at) = job.terminal_at.lock() {
                 *terminal_at = Some(Instant::now());
             }
         }
     }
+}
+
+fn classify_error_code(stage: &str, message: &str) -> String {
+    if stage == "skipped" {
+        return "skipped".into();
+    }
+    if stage == "cancelled" || stage == "cancelling" {
+        return "cancelled".into();
+    }
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("decode")
+        || lower.contains("inspect input")
+        || lower.contains("dimensions")
+        || lower.contains("opaque")
+    {
+        return "decode".into();
+    }
+    if lower.contains("path")
+        || lower.contains("directory")
+        || lower.contains("output file")
+        || lower.contains("write")
+        || lower.contains("bak")
+        || lower.contains("publish")
+    {
+        return "publish".into();
+    }
+    "encode".into()
 }
 fn uuid_like_id() -> String {
     format!(
@@ -1128,6 +1162,7 @@ mod tests {
                 stage: "preflight".into(),
                 output_path: None,
                 error: None,
+                code: None,
             }),
             terminal_at: Mutex::new(None),
         });
@@ -1156,6 +1191,7 @@ mod tests {
                     stage: "encoding".into(),
                     output_path: None,
                     error: None,
+                    code: None,
                 }),
                 terminal_at: Mutex::new(None),
             })
@@ -1177,6 +1213,30 @@ mod tests {
         assert_eq!(*semaphore.available.lock().unwrap(), 1);
         drop(second);
         assert_eq!(*semaphore.available.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn progress_error_codes_are_stable_without_changing_error_text() {
+        assert_eq!(
+            classify_error_code("failed", "failed to decode input image"),
+            "decode"
+        );
+        assert_eq!(
+            classify_error_code("failed", "failed to write output file"),
+            "publish"
+        );
+        assert_eq!(
+            classify_error_code("failed", "failed to optimize png"),
+            "encode"
+        );
+        assert_eq!(
+            classify_error_code("cancelled", "compression cancelled"),
+            "cancelled"
+        );
+        assert_eq!(
+            classify_error_code("skipped", "target_unreachable"),
+            "skipped"
+        );
     }
 
     #[test]
@@ -1308,6 +1368,7 @@ mod tests {
                 stage: "encoding".into(),
                 output_path: None,
                 error: None,
+                code: None,
             }),
             terminal_at: Mutex::new(None),
         });
