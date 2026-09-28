@@ -1264,6 +1264,89 @@ mod tests {
             .unwrap_err()
             .contains("opaque"));
     }
+
+    #[test]
+    fn jpeg_quality_boundaries_encode_decodable_rgb_outputs() {
+        let image = DynamicImage::ImageRgb8(ImageBuffer::from_fn(7, 5, |x, y| {
+            image::Rgb([
+                (x * 31 + y * 7) as u8,
+                (y * 43 + x * 11) as u8,
+                ((x * 17) ^ (y * 29)) as u8,
+            ])
+        }));
+        let mut input = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut input), ImageOutputFormat::Png)
+            .unwrap();
+
+        for quality in [1, 100] {
+            let output =
+                encode_and_verify(&input, CompressionFormat::Jpeg, quality, 2, 7, 5, false)
+                    .unwrap();
+            let decoded = decode_image(&output).unwrap();
+            assert_eq!(decoded.dimensions(), (7, 5));
+            assert_eq!(decoded.color().channel_count(), 3);
+            assert_eq!(decoded.to_rgb8().as_raw().len(), 7 * 5 * 3);
+        }
+    }
+
+    #[test]
+    fn jpeg_transparency_rejection_does_not_publish_output() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([10, 20, 30, 64])));
+        let mut input = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut input), ImageOutputFormat::Png)
+            .unwrap();
+        let output_path = crate::commands::test_temp_dir().join(format!(
+            "embedpix-compression-transparent-jpeg-{}.jpg",
+            uuid_like_id()
+        ));
+        let request = CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "transparent.png".into(),
+                output_format: "jpeg".into(),
+                output_path: Some(output_path.to_string_lossy().into_owned()),
+                output_location: Some("path".into()),
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                jpeg_quality: Some(80),
+                lossless: Some(false),
+                skip_if_larger: false,
+                max_output_bytes: None,
+                max_candidates: None,
+                png_optimization_level: Some(2),
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: Some("transparent-jpeg-publish-test".into()),
+            },
+            input,
+            format: CompressionFormat::Jpeg,
+            lossless: false,
+            target_bytes: None,
+            max_candidates: DEFAULT_MAX_CANDIDATES,
+            png_optimization_level: 2,
+        };
+        let job = Arc::new(CompressionJob {
+            cancelled: AtomicBool::new(false),
+            progress: Mutex::new(CompressionProgress {
+                job_id: "transparent-jpeg-publish-test".into(),
+                status: "running".into(),
+                stage: "preflight".into(),
+                output_path: None,
+                error: None,
+                code: None,
+            }),
+            terminal_at: Mutex::new(None),
+        });
+
+        let error = run_compression(&request, &job).unwrap_err();
+        assert!(error.contains("opaque"));
+        assert_eq!(job.progress.lock().unwrap().status, "failed");
+        assert!(!output_path.exists());
+    }
+
     #[test]
     fn validates_quality_and_metadata_policy() {
         assert!(CompressionFormat::parse("jpeg").is_ok());
