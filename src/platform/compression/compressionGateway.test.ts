@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, createCompressionRequest, encodeCompressionEnvelope, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, preflightCompression, previewCompression } from "./compressionGateway";
+import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, ESTIMATE_IMAGE_COMPRESSION_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, createCompressionRequest, encodeCompressionEnvelope, encodeCompressionEstimateEnvelope, estimateImageCompression, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, preflightCompression, previewCompression } from "./compressionGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -115,6 +115,31 @@ describe("compression gateway", () => {
     const controller = new AbortController();
     await expect(previewCompression(request, controller.signal)).resolves.toMatchObject({ format: "webp", outputBytes: 3 });
     expect(invoke).toHaveBeenCalledWith(PREVIEW_COMPRESSION_COMMAND, expect.any(Uint8Array));
+  });
+
+  it("encodes a publish-free estimate envelope without output fields", () => {
+    const encoded = encodeCompressionEstimateEnvelope({
+      fileName: "icon.png",
+      inputData: new Uint8Array([1, 2, 3]),
+      outputFormat: "webp",
+      jpegQuality: 82,
+      lossless: true,
+      pngOptimizationLevel: 3,
+      maxOutputBytes: 64 * 1024,
+      maxCandidates: 4,
+    });
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", lossless: true, pngOptimizationLevel: 3, maxOutputBytes: 64 * 1024, maxCandidates: 4 });
+    expect(metadata).not.toHaveProperty("outputPath");
+    expect(metadata).not.toHaveProperty("overwriteExisting");
+    expect(metadata).not.toHaveProperty("replaceOriginal");
+  });
+
+  it("uses the publish-free image estimate command", async () => {
+    vi.mocked(invoke).mockResolvedValue({ inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: true, status: "completed", skippedReason: null, targetBytes: null, targetMet: false, selectedQuality: null });
+    await expect(estimateImageCompression({ fileName: "icon.png", inputData: new Uint8Array([1, 2, 3]), outputFormat: "webp", jpegQuality: 82, lossless: true, pngOptimizationLevel: 2 })).resolves.toMatchObject({ format: "webp", outputBytes: 2 });
+    expect(invoke).toHaveBeenCalledWith(ESTIMATE_IMAGE_COMPRESSION_COMMAND, expect.any(Uint8Array));
   });
 
   it("does not surface a stale preview after cancellation", async () => {

@@ -50,7 +50,7 @@ function Assert-NativeCompressionContract([switch]$Required) {
   if (-not (Test-Path -LiteralPath $gatewayPath -PathType Leaf)) { throw "Compression gateway source is missing: $gatewayPath" }
   $source = Get-Content -Raw -LiteralPath $sourcePath
   $gateway = Get-Content -Raw -LiteralPath $gatewayPath
-  $requiredTokens = @('pub async fn preflight_compression', 'pub async fn preview_compression', 'pub async fn compress_image', 'pub fn cancel_compression', 'fn resolve_output_path', 'output_location', 'output_directory', 'output_subdirectory', 'replace_original', 'write_exported_file', 'COMPRESS_IMAGE_COMMAND', 'PREVIEW_COMPRESSION_COMMAND')
+$requiredTokens = @('pub async fn preflight_compression', 'pub async fn preview_compression', 'pub async fn estimate_image_compression', 'pub async fn compress_image', 'pub fn cancel_compression', 'fn resolve_output_path', 'output_location', 'output_directory', 'output_subdirectory', 'replace_original', 'write_exported_file', 'COMPRESS_IMAGE_COMMAND', 'PREVIEW_COMPRESSION_COMMAND', 'ESTIMATE_IMAGE_COMPRESSION_COMMAND')
   $missing = @($requiredTokens | Where-Object { $source -notmatch [regex]::Escape($_) -and $gateway -notmatch [regex]::Escape($_) })
   if ($missing.Count -gt 0) { throw "Native compression contract is missing: $($missing -join ', ')" }
   $hasSkipIfLarger = $source -match 'skip[_-]?if[_-]?larger' -or $gateway -match 'skip[_-]?if[_-]?larger'

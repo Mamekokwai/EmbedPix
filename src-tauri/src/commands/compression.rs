@@ -124,6 +124,25 @@ struct CompressionMetadata {
     job_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CompressionEstimateMetadata {
+    file_name: String,
+    output_format: String,
+    #[serde(default)]
+    jpeg_quality: Option<u8>,
+    #[serde(default)]
+    lossless: Option<bool>,
+    #[serde(default = "default_skip_if_larger")]
+    skip_if_larger: bool,
+    #[serde(default)]
+    max_output_bytes: Option<u64>,
+    #[serde(default)]
+    max_candidates: Option<usize>,
+    #[serde(default)]
+    png_optimization_level: Option<u8>,
+}
+
 #[derive(Debug)]
 struct CompressionRequest {
     metadata: CompressionMetadata,
@@ -289,6 +308,24 @@ pub struct CompressionPreview {
     pub selected_quality: Option<u8>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressionEstimate {
+    pub input_bytes: u64,
+    pub output_bytes: u64,
+    pub saved_bytes: i64,
+    pub savings_percent: f64,
+    pub width: u32,
+    pub height: u32,
+    pub format: String,
+    pub lossless: bool,
+    pub status: String,
+    pub skipped_reason: Option<String>,
+    pub target_bytes: Option<u64>,
+    pub target_met: bool,
+    pub selected_quality: Option<u8>,
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPreflight, String> {
     let request = parse_request(request)?;
@@ -311,6 +348,16 @@ pub async fn preview_compression(request: Request<'_>) -> Result<CompressionPrev
     tauri::async_runtime::spawn_blocking(move || run_preview(&request))
         .await
         .map_err(|error| format!("compression preview task failed: {error}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn estimate_image_compression(
+    request: Request<'_>,
+) -> Result<CompressionEstimate, String> {
+    let request = parse_estimate_request(request)?;
+    tauri::async_runtime::spawn_blocking(move || run_estimate(&request))
+        .await
+        .map_err(|error| format!("compression estimate task failed: {error}"))?
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -695,6 +742,49 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
     })
 }
 
+fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, String> {
+    let (width, height) = inspect_image(&request.input)?;
+    let EncodedSelection {
+        bytes,
+        selected_quality,
+        target_met,
+        skipped_reason: selection_skipped_reason,
+    } = choose_encoded_output(request, width, height)?;
+    let input_bytes = request.input.len() as u64;
+    let output_bytes = bytes.len() as u64;
+    let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
+    let skipped_reason = selection_skipped_reason.or_else(|| {
+        request
+            .metadata
+            .skip_if_larger
+            .then_some(output_bytes > input_bytes)
+            .filter(|value| *value)
+            .map(|_| {
+                "compressed output is larger than the source; estimate would skip publishing"
+                    .to_string()
+            })
+    });
+    Ok(CompressionEstimate {
+        input_bytes,
+        output_bytes,
+        saved_bytes,
+        savings_percent,
+        width,
+        height,
+        format: request.format.name().into(),
+        lossless: request.lossless,
+        status: if skipped_reason.is_some() {
+            "skipped".into()
+        } else {
+            "completed".into()
+        },
+        skipped_reason,
+        target_bytes: request.target_bytes,
+        target_met,
+        selected_quality,
+    })
+}
+
 #[cfg(test)]
 fn encode_image(
     input: &[u8],
@@ -906,6 +996,108 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     }
     Ok(CompressionRequest {
         metadata,
+        input,
+        format,
+        lossless,
+        target_bytes,
+        max_candidates,
+        png_optimization_level,
+    })
+}
+
+fn parse_estimate_request(request: Request<'_>) -> Result<CompressionRequest, String> {
+    let body = match request.body() {
+        InvokeBody::Raw(bytes) => bytes,
+        _ => return Err("compression estimate requires a raw binary IPC request".into()),
+    };
+    parse_estimate_raw_payload(body)
+}
+
+fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
+    if body.len() < 8 {
+        return Err("compression estimate request is truncated".into());
+    }
+    if &body[..4] != b"EGF1" {
+        return Err("compression estimate request has invalid magic; expected EGF1".into());
+    }
+    let metadata_len = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
+    if metadata_len > MAX_METADATA_BYTES {
+        return Err(format!(
+            "compression estimate metadata is too large: maximum is {MAX_METADATA_BYTES} bytes"
+        ));
+    }
+    let end = 8usize
+        .checked_add(metadata_len)
+        .ok_or_else(|| "compression estimate metadata length overflowed".to_string())?;
+    if end > body.len() {
+        return Err("compression estimate metadata length exceeds payload size".into());
+    }
+    let metadata: CompressionEstimateMetadata = serde_json::from_slice(&body[8..end])
+        .map_err(|error| format!("invalid compression estimate metadata JSON: {error}"))?;
+    let format = CompressionFormat::parse(&metadata.output_format)?;
+    let lossless = metadata.lossless.unwrap_or(matches!(
+        format,
+        CompressionFormat::Png | CompressionFormat::Webp
+    ));
+    if metadata.file_name.trim().is_empty()
+        || metadata.file_name.len() > 1024
+        || metadata.file_name.chars().any(char::is_control)
+    {
+        return Err("fileName is invalid".into());
+    }
+    if let Some(quality) = metadata.jpeg_quality {
+        if !(1..=100).contains(&quality) {
+            return Err("jpegQuality must be between 1 and 100".into());
+        }
+    }
+    if let Some(target_bytes) = metadata.max_output_bytes {
+        if target_bytes == 0 || target_bytes > MAX_OUTPUT_BYTES as u64 {
+            return Err(format!(
+                "maxOutputBytes must be between 1 and {} MiB",
+                MAX_OUTPUT_BYTES / (1024 * 1024)
+            ));
+        }
+    }
+    let target_bytes = metadata.max_output_bytes;
+    let max_candidates = metadata.max_candidates.unwrap_or(DEFAULT_MAX_CANDIDATES);
+    if !(1..=MAX_CANDIDATES).contains(&max_candidates) {
+        return Err(format!(
+            "maxCandidates must be between 1 and {MAX_CANDIDATES}"
+        ));
+    }
+    let png_optimization_level = metadata.png_optimization_level.unwrap_or(2);
+    if png_optimization_level > 6 {
+        return Err("pngOptimizationLevel must be between 0 and 6".into());
+    }
+    if matches!(format, CompressionFormat::Jpeg) && lossless {
+        return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
+    }
+    let input = body[end..].to_vec();
+    if input.len() > MAX_INPUT_BYTES {
+        return Err("input image exceeds the 32 MiB limit".into());
+    }
+    Ok(CompressionRequest {
+        metadata: CompressionMetadata {
+            file_name: metadata.file_name,
+            output_format: format.name().into(),
+            output_path: None,
+            output_location: None,
+            source_path: None,
+            output_directory: None,
+            output_subdirectory: None,
+            overwrite_existing: false,
+            replace_original: false,
+            auto_sequence: false,
+            auto_rename: false,
+            jpeg_quality: metadata.jpeg_quality,
+            lossless: Some(lossless),
+            skip_if_larger: metadata.skip_if_larger,
+            max_output_bytes: metadata.max_output_bytes,
+            max_candidates: metadata.max_candidates,
+            png_optimization_level: metadata.png_optimization_level,
+            metadata_policy: MetadataPolicy::Strip,
+            job_id: None,
+        },
         input,
         format,
         lossless,
@@ -2233,6 +2425,98 @@ mod tests {
             .unwrap_err()
             .contains("pngOptimizationLevel"));
     }
+
+    #[test]
+    fn estimate_covers_png_jpeg_webp_and_target_search_without_output_path() {
+        for (format, lossless, quality, optimization_level) in [
+            ("png", true, None, 6),
+            ("jpeg", false, Some(1), 2),
+            ("webp", false, Some(100), 2),
+        ] {
+            let quality = quality
+                .map(|value| format!(",\"jpegQuality\":{value}"))
+                .unwrap_or_default();
+            let metadata = format!(
+                "{{\"fileName\":\"sample.png\",\"outputFormat\":\"{format}\",\"lossless\":{lossless},\"pngOptimizationLevel\":{optimization_level}{quality}}}"
+            );
+            let request =
+                parse_estimate_raw_payload(&raw_payload(&metadata, &png_input())).unwrap();
+            let estimate = run_estimate(&request).unwrap();
+            assert_eq!((estimate.width, estimate.height), (2, 2));
+            assert_eq!(
+                estimate.format,
+                if format == "jpeg" { "jpeg" } else { format }
+            );
+            assert!(estimate.output_bytes > 0);
+            assert!(estimate.saved_bytes <= estimate.input_bytes as i64);
+        }
+
+        let target_metadata = r#"{"fileName":"sample.png","outputFormat":"png","lossless":true,"maxOutputBytes":1,"maxCandidates":1}"#;
+        let target_request =
+            parse_estimate_raw_payload(&raw_payload(target_metadata, &png_input())).unwrap();
+        let target_estimate = run_estimate(&target_request).unwrap();
+        assert_eq!(target_estimate.status, "skipped");
+        assert!(!target_estimate.target_met);
+        assert!(target_estimate
+            .skipped_reason
+            .as_deref()
+            .is_some_and(|reason| reason.starts_with("target_unreachable")));
+    }
+
+    #[test]
+    fn estimate_rejects_publish_fields_invalid_limits_and_transparency_without_disk_changes() {
+        let output_path = crate::commands::test_temp_dir().join(format!(
+            "embedpix-compression-estimate-{}.webp",
+            uuid_like_id()
+        ));
+        let publish_metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"webp\",\"outputPath\":\"{}\"}}",
+            output_path.to_string_lossy().replace('\\', "/")
+        );
+        let publish_error =
+            parse_estimate_raw_payload(&raw_payload(&publish_metadata, &png_input())).unwrap_err();
+        assert!(publish_error.contains("unknown field") || publish_error.contains("outputPath"));
+        assert!(!output_path.exists());
+
+        for invalid_metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","jpegQuality":0}"#,
+            r#"{"fileName":"sample.png","outputFormat":"png","pngOptimizationLevel":7}"#,
+            r#"{"fileName":"sample.png","outputFormat":"png","maxOutputBytes":0}"#,
+            r#"{"fileName":"sample.png","outputFormat":"png","maxCandidates":13}"#,
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","lossless":true}"#,
+        ] {
+            assert!(
+                parse_estimate_raw_payload(&raw_payload(invalid_metadata, &png_input())).is_err()
+            );
+        }
+        let oversized_input = vec![0u8; MAX_INPUT_BYTES + 1];
+        assert!(parse_estimate_raw_payload(&raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"png"}"#,
+            &oversized_input,
+        ))
+        .unwrap_err()
+        .contains("32 MiB"));
+
+        let transparent =
+            DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([10, 20, 30, 64])));
+        let mut transparent_input = Vec::new();
+        transparent
+            .write_to(
+                &mut Cursor::new(&mut transparent_input),
+                ImageOutputFormat::Png,
+            )
+            .unwrap();
+        let transparent_request = parse_estimate_raw_payload(&raw_payload(
+            r#"{"fileName":"transparent.png","outputFormat":"jpeg","jpegQuality":80,"lossless":false}"#,
+            &transparent_input,
+        ))
+        .unwrap();
+        assert!(run_estimate(&transparent_request)
+            .unwrap_err()
+            .contains("opaque"));
+        assert!(!output_path.exists());
+    }
+
     #[test]
     fn cancellation_checkpoint_is_observable() {
         let job = Arc::new(CompressionJob {

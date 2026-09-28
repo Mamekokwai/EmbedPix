@@ -4,6 +4,7 @@ import type { CompressionFormat, CompressionOptions, CompressionOutputLocation, 
 
 export const PREFLIGHT_COMPRESSION_COMMAND = "preflight_compression" as const;
 export const PREVIEW_COMPRESSION_COMMAND = "preview_compression" as const;
+export const ESTIMATE_IMAGE_COMPRESSION_COMMAND = "estimate_image_compression" as const;
 export const COMPRESS_IMAGE_COMMAND = "compress_image" as const;
 export const CANCEL_COMPRESSION_COMMAND = "cancel_compression" as const;
 export const GET_COMPRESSION_PROGRESS_COMMAND = "get_compression_progress" as const;
@@ -61,6 +62,33 @@ export interface CompressionPreview {
   targetMet: boolean;
   selectedQuality: number | null;
 }
+export interface CompressionEstimate {
+  inputBytes: number;
+  outputBytes: number;
+  savedBytes: number;
+  savingsPercent: number;
+  width: number;
+  height: number;
+  format: string;
+  lossless: boolean;
+  status: CompressionResultStatus;
+  skippedReason: string | null;
+  targetBytes: number | null;
+  targetMet: boolean;
+  selectedQuality: number | null;
+}
+
+export interface CompressionEstimateRequest {
+  fileName: string;
+  inputData: Uint8Array;
+  outputFormat: Exclude<CompressionFormat, "original">;
+  jpegQuality: number;
+  lossless: boolean;
+  skipIfLarger?: boolean;
+  pngOptimizationLevel: number;
+  maxOutputBytes?: number;
+  maxCandidates?: number;
+}
 
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
   if (request.metadataPolicy !== "strip") throw new Error("第一阶段原生压缩仅支持移除元数据。");
@@ -93,6 +121,30 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
   if (request.outputLocation === "subfolder" && !request.outputSubdirectory) throw new Error("源文件夹子目录不能为空。");
   if (request.outputLocation === "directory" && !request.outputDirectory) throw new Error("指定目录输出需要目录路径。");
   const metadataBytes = new TextEncoder().encode(JSON.stringify(getCompressionMetadata(request)));
+  const payload = new Uint8Array(8 + metadataBytes.byteLength + request.inputData.byteLength);
+  payload.set(new Uint8Array([0x45, 0x47, 0x46, 0x31]));
+  new DataView(payload.buffer).setUint32(4, metadataBytes.byteLength, true);
+  payload.set(metadataBytes, 8);
+  payload.set(request.inputData, 8 + metadataBytes.byteLength);
+  return payload;
+}
+
+export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRequest): Uint8Array {
+  if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
+  if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
+  if (!Number.isInteger(request.jpegQuality) || request.jpegQuality < 1 || request.jpegQuality > 100) throw new Error("jpegQuality 必须在 1 到 100 之间。");
+  if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
+  if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
+  const metadataBytes = new TextEncoder().encode(JSON.stringify({
+    fileName: request.fileName,
+    outputFormat: request.outputFormat,
+    ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
+    lossless: request.lossless,
+    skipIfLarger: request.skipIfLarger ?? true,
+    pngOptimizationLevel: request.pngOptimizationLevel,
+    ...(request.maxOutputBytes !== undefined ? { maxOutputBytes: request.maxOutputBytes } : {}),
+    ...(request.maxCandidates !== undefined ? { maxCandidates: request.maxCandidates } : {}),
+  }));
   const payload = new Uint8Array(8 + metadataBytes.byteLength + request.inputData.byteLength);
   payload.set(new Uint8Array([0x45, 0x47, 0x46, 0x31]));
   new DataView(payload.buffer).setUint32(4, metadataBytes.byteLength, true);
@@ -149,6 +201,11 @@ export async function previewCompression(request: CompressionEnvelopeRequest, si
   const preview = await invoke<CompressionPreview>(PREVIEW_COMPRESSION_COMMAND, encodeCompressionEnvelope(request));
   if (signal?.aborted) throw new DOMException("压缩预览已取消。", "AbortError");
   return preview;
+}
+
+export async function estimateImageCompression(request: CompressionEstimateRequest): Promise<CompressionEstimate> {
+  if (!isTauriEnvironment()) throw new Error("图片压缩预估需要桌面原生命令，当前环境仅可编辑参数。");
+  return invoke<CompressionEstimate>(ESTIMATE_IMAGE_COMPRESSION_COMMAND, encodeCompressionEstimateEnvelope(request));
 }
 
 export async function compressImage(request: CompressionEnvelopeRequest): Promise<CompressionResult> {
