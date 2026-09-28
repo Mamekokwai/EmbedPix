@@ -156,6 +156,25 @@ impl Default for CompressionJobState {
 }
 
 impl CompressionJobState {
+    fn register(&self, job_id: String, job: Arc<CompressionJob>) -> Result<(), String> {
+        let mut jobs = self
+            .jobs
+            .lock()
+            .map_err(|_| "compression job state is unavailable".to_string())?;
+        if let Some(existing) = jobs.get(&job_id) {
+            let active = existing
+                .progress
+                .lock()
+                .map(|progress| matches!(progress.status.as_str(), "running" | "cancelling"))
+                .unwrap_or(true);
+            if active {
+                return Err("compression job id is already active".to_string());
+            }
+        }
+        jobs.insert(job_id, job);
+        Ok(())
+    }
+
     fn prune(&self) {
         let now = Instant::now();
         if let Ok(mut jobs) = self.jobs.lock() {
@@ -265,11 +284,7 @@ pub async fn compress_image(
         }),
         terminal_at: Mutex::new(None),
     });
-    state
-        .jobs
-        .lock()
-        .map_err(|_| "compression job state is unavailable".to_string())?
-        .insert(job_id.clone(), Arc::clone(&job));
+    state.register(job_id.clone(), Arc::clone(&job))?;
     let result = tauri::async_runtime::spawn_blocking(move || run_compression(&request, &job))
         .await
         .map_err(|error| format!("compression task failed: {error}"))?;
@@ -619,6 +634,12 @@ fn encode_image(
     png_optimization_level: u8,
 ) -> Result<Vec<u8>, String> {
     let image = decode_image(input)?;
+    if format == CompressionFormat::Jpeg && image.to_rgba8().pixels().any(|pixel| pixel[3] < 255) {
+        return Err(
+            "JPEG compression requires an opaque image; composite transparency before encoding"
+                .into(),
+        );
+    }
     let mut output = LimitedWriter {
         bytes: Vec::new(),
         limit: MAX_OUTPUT_BYTES,
@@ -989,6 +1010,18 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn jpeg_rejects_transparency_instead_of_dropping_alpha() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([10, 20, 30, 64])));
+        let mut input = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut input), ImageOutputFormat::Png)
+            .unwrap();
+        assert!(encode_image(&input, CompressionFormat::Jpeg, 80, 2)
+            .unwrap_err()
+            .contains("opaque"));
+    }
     #[test]
     fn validates_quality_and_metadata_policy() {
         assert!(CompressionFormat::parse("jpeg").is_ok());
@@ -1062,6 +1095,26 @@ mod tests {
     fn compression_statistics_are_signed_for_larger_outputs() {
         assert_eq!(compression_statistics(100, 80), (20, 20.0));
         assert_eq!(compression_statistics(100, 120), (-20, -20.0));
+    }
+
+    #[test]
+    fn active_job_ids_cannot_replace_each_other() {
+        let state = CompressionJobState::default();
+        let job = || {
+            Arc::new(CompressionJob {
+                cancelled: AtomicBool::new(false),
+                progress: Mutex::new(CompressionProgress {
+                    job_id: "duplicate-test".into(),
+                    status: "running".into(),
+                    stage: "encoding".into(),
+                    output_path: None,
+                    error: None,
+                }),
+                terminal_at: Mutex::new(None),
+            })
+        };
+        state.register("duplicate-test".into(), job()).unwrap();
+        assert!(state.register("duplicate-test".into(), job()).is_err());
     }
 
     #[test]
