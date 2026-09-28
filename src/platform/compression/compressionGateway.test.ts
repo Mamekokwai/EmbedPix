@@ -34,7 +34,7 @@ describe("compression gateway", () => {
     expect(Array.from(encoded.slice(0, 4))).toEqual([0x45, 0x47, 0x46, 0x31]);
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
-    expect(metadata).toMatchObject({ fileName: "icon.png", outputFileName: "旅行照片", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip", pngOptimizationLevel: 2 });
+    expect(metadata).toMatchObject({ schemaVersion: 1, fileName: "icon.png", outputFileName: "旅行照片", outputFormat: "webp", outputLocation: "source", sourcePath: "C:/icon.png", metadataPolicy: "strip", pngOptimizationLevel: 2 });
     expect(metadata).not.toHaveProperty("jpegQuality");
   });
 
@@ -42,7 +42,7 @@ describe("compression gateway", () => {
     const encoded = encodeCompressionEnvelope({ ...request, lossless: false, jpegQuality: 64, webpMethod: 4 });
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
-    expect(metadata).toMatchObject({ outputFormat: "webp", lossless: false, jpegQuality: 64, webpMethod: 4 });
+    expect(metadata).toMatchObject({ schemaVersion: 1, outputFormat: "webp", lossless: false, jpegQuality: 64, webpMethod: 4 });
   });
 
   it("validates the optional WebP method at the IPC boundary", () => {
@@ -147,7 +147,7 @@ describe("compression gateway", () => {
     });
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
-    expect(metadata).toMatchObject({ fileName: "icon.png", outputFormat: "webp", lossless: false, pngOptimizationLevel: 3, maxOutputBytes: 64 * 1024, maxCandidates: 4, webpMethod: 6 });
+    expect(metadata).toMatchObject({ schemaVersion: 1, fileName: "icon.png", outputFormat: "webp", lossless: false, pngOptimizationLevel: 3, maxOutputBytes: 64 * 1024, maxCandidates: 4, webpMethod: 6 });
     expect(metadata).not.toHaveProperty("outputPath");
     expect(metadata).not.toHaveProperty("overwriteExisting");
     expect(metadata).not.toHaveProperty("replaceOriginal");

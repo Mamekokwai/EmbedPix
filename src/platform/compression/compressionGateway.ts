@@ -8,6 +8,7 @@ export const ESTIMATE_IMAGE_COMPRESSION_COMMAND = "estimate_image_compression" a
 export const COMPRESS_IMAGE_COMMAND = "compress_image" as const;
 export const CANCEL_COMPRESSION_COMMAND = "cancel_compression" as const;
 export const GET_COMPRESSION_PROGRESS_COMMAND = "get_compression_progress" as const;
+export const COMPRESSION_SCHEMA_VERSION = 1 as const;
 
 export interface CompressionEnvelopeRequest {
   fileName: string;
@@ -96,6 +97,7 @@ export interface CompressionEstimateRequest {
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
   if (request.metadataPolicy !== "strip") throw new Error("第一阶段原生压缩仅支持移除元数据。");
   return {
+    schemaVersion: COMPRESSION_SCHEMA_VERSION,
     fileName: request.fileName,
     ...(request.outputFileName !== undefined ? { outputFileName: request.outputFileName } : {}),
     outputFormat: request.outputFormat,
@@ -145,6 +147,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
   if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
   if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
   const metadataBytes = new TextEncoder().encode(JSON.stringify({
+    schemaVersion: COMPRESSION_SCHEMA_VERSION,
     fileName: request.fileName,
     outputFormat: request.outputFormat,
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),

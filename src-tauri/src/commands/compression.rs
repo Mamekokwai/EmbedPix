@@ -40,6 +40,7 @@ const MAX_AUTO_RENAME_ATTEMPTS: usize = 10_000;
 const PREFLIGHT_SPACE_ERROR_CODE: &str = "[preflight_output_space_insufficient]";
 const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
 const MAX_COMPRESSION_CONCURRENCY: usize = 2;
+const COMPRESSION_SCHEMA_VERSION: u8 = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -87,6 +88,8 @@ enum MetadataPolicy {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CompressionMetadata {
+    #[serde(default = "default_compression_schema_version")]
+    schema_version: u8,
     file_name: String,
     #[serde(default)]
     output_file_name: Option<String>,
@@ -132,6 +135,8 @@ struct CompressionMetadata {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CompressionEstimateMetadata {
+    #[serde(default = "default_compression_schema_version")]
+    schema_version: u8,
     file_name: String,
     output_format: String,
     #[serde(default)]
@@ -565,6 +570,19 @@ fn run_compression(
 
 fn default_skip_if_larger() -> bool {
     true
+}
+
+fn default_compression_schema_version() -> u8 {
+    COMPRESSION_SCHEMA_VERSION
+}
+
+fn validate_compression_schema_version(version: u8) -> Result<(), String> {
+    if version != COMPRESSION_SCHEMA_VERSION {
+        return Err(format!(
+            "unsupported compression schemaVersion {version}; expected {COMPRESSION_SCHEMA_VERSION}"
+        ));
+    }
+    Ok(())
 }
 
 fn validate_webp_method(
@@ -1004,6 +1022,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     }
     let metadata: CompressionMetadata = serde_json::from_slice(&body[8..end])
         .map_err(|error| format!("invalid compression metadata JSON: {error}"))?;
+    validate_compression_schema_version(metadata.schema_version)?;
     let format = CompressionFormat::parse(&metadata.output_format)?;
     let output_location = normalize_output_location(metadata.output_location.as_deref())?;
     let lossless = metadata.lossless.unwrap_or(matches!(
@@ -1119,6 +1138,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     }
     let metadata: CompressionEstimateMetadata = serde_json::from_slice(&body[8..end])
         .map_err(|error| format!("invalid compression estimate metadata JSON: {error}"))?;
+    validate_compression_schema_version(metadata.schema_version)?;
     let format = CompressionFormat::parse(&metadata.output_format)?;
     let lossless = metadata.lossless.unwrap_or(matches!(
         format,
@@ -1164,6 +1184,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     }
     Ok(CompressionRequest {
         metadata: CompressionMetadata {
+            schema_version: COMPRESSION_SCHEMA_VERSION,
             file_name: metadata.file_name,
             output_file_name: None,
             output_format: format.name().into(),
@@ -1675,6 +1696,7 @@ mod tests {
     fn path_request(output_path: &Path) -> CompressionRequest {
         CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "sample.png".into(),
                 output_file_name: None,
                 output_format: "webp".into(),
@@ -1865,6 +1887,7 @@ mod tests {
         ));
         let request = CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "transparent.png".into(),
                 output_file_name: None,
                 output_format: "jpeg".into(),
@@ -1919,6 +1942,34 @@ mod tests {
         assert!(CompressionFormat::parse("bmp").is_err());
         assert!(!(1..=100).contains(&0));
         assert_eq!(MetadataPolicy::default(), MetadataPolicy::Strip);
+    }
+
+    #[test]
+    fn compression_schema_version_is_explicit_and_backward_compatible() {
+        let legacy = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"png"}"#,
+            &png_input(),
+        );
+        assert!(parse_raw_payload(&legacy).is_ok());
+        assert!(parse_estimate_raw_payload(&legacy).is_ok());
+
+        let current = raw_payload(
+            r#"{"schemaVersion":1,"fileName":"sample.png","outputFormat":"png"}"#,
+            &png_input(),
+        );
+        assert!(parse_raw_payload(&current).is_ok());
+        assert!(parse_estimate_raw_payload(&current).is_ok());
+
+        let unsupported = raw_payload(
+            r#"{"schemaVersion":2,"fileName":"sample.png","outputFormat":"png"}"#,
+            &png_input(),
+        );
+        assert!(parse_raw_payload(&unsupported)
+            .unwrap_err()
+            .contains("schemaVersion"));
+        assert!(parse_estimate_raw_payload(&unsupported)
+            .unwrap_err()
+            .contains("schemaVersion"));
     }
 
     #[test]
@@ -1983,6 +2034,7 @@ mod tests {
         let missing_output = missing_directory.join("image.webp");
         let missing_request = CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "sample.png".into(),
                 output_file_name: None,
                 output_format: "webp".into(),
@@ -2374,6 +2426,7 @@ mod tests {
         fs::write(&output_path, original).unwrap();
         let request = CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "broken.png".into(),
                 output_file_name: None,
                 output_format: "webp".into(),
@@ -2440,6 +2493,7 @@ mod tests {
             .join(format!("embedpix-compression-skip-{}.png", uuid_like_id()));
         let request = CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "sample.jpg".into(),
                 output_file_name: None,
                 output_format: "png".into(),
@@ -2686,6 +2740,7 @@ mod tests {
             .len() as u64;
         let request = CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "sample.png".into(),
                 output_file_name: None,
                 output_format: "jpeg".into(),
@@ -2729,6 +2784,7 @@ mod tests {
             .len() as u64;
         let request = CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "sample.png".into(),
                 output_file_name: None,
                 output_format: "webp".into(),
@@ -2769,6 +2825,7 @@ mod tests {
         let input = lossy_webp_input();
         let request = CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "sample.png".into(),
                 output_file_name: None,
                 output_format: "webp".into(),
@@ -2812,6 +2869,7 @@ mod tests {
         let input = png_input();
         let request = CompressionRequest {
             metadata: CompressionMetadata {
+                schema_version: COMPRESSION_SCHEMA_VERSION,
                 file_name: "sample.png".into(),
                 output_file_name: None,
                 output_format: "png".into(),
