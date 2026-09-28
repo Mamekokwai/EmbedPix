@@ -38,7 +38,7 @@ describe("compression preferences", () => {
 
     saveCompressionPreferences(preferences, storage);
     const stored = JSON.parse(storage.read(COMPRESSION_PREFERENCES_STORAGE_KEY) ?? "{}");
-    expect(stored.version).toBe(1);
+    expect(stored.version).toBe(2);
     expect(stored).not.toHaveProperty("sourcePath");
     expect(stored).not.toHaveProperty("outputPath");
     expect(stored).not.toHaveProperty("outputDirectory");
@@ -119,6 +119,16 @@ describe("compression preferences", () => {
   it("falls back completely for broken or old-version storage", () => {
     expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: "broken" }))).toEqual(DEFAULT_COMPRESSION_PREFERENCES);
     expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 0, quality: 1 }) }))).toEqual(DEFAULT_COMPRESSION_PREFERENCES);
+  });
+
+  it("migrates version 1 preferences by applying safe defaults for new fields", () => {
+    const storage = createStorage({
+      [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "webp", quality: 73, lossless: false, metadataPolicy: "strip" }),
+    });
+    const migrated = loadCompressionPreferences(storage);
+    expect(migrated).toMatchObject({ format: "webp", quality: 73, webpMethod: 4, outputFileName: "" });
+    saveCompressionPreferences(migrated, storage);
+    expect(JSON.parse(storage.read(COMPRESSION_PREFERENCES_STORAGE_KEY) ?? "{}").version).toBe(2);
   });
 
   it("ignores storage failures because preferences are optional", () => {

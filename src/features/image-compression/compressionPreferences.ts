@@ -20,7 +20,8 @@ export interface CompressionPreferences {
 }
 
 export const COMPRESSION_PREFERENCES_STORAGE_KEY = "embedpix.image-compression-preferences.v1";
-export const COMPRESSION_PREFERENCES_VERSION = 1;
+export const COMPRESSION_PREFERENCES_VERSION = 2;
+const LEGACY_COMPRESSION_PREFERENCES_VERSION = 1;
 export const COMPRESSION_MAX_TARGET_SIZE_KIB = 128 * 1024;
 
 export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
@@ -108,7 +109,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
   if (!value) return fallbackPreferences();
   try {
     const record = recordFrom(JSON.parse(value));
-    if (!record || record.version !== COMPRESSION_PREFERENCES_VERSION) return fallbackPreferences();
+    if (!record || (record.version !== COMPRESSION_PREFERENCES_VERSION && record.version !== LEGACY_COMPRESSION_PREFERENCES_VERSION)) return fallbackPreferences();
     const format = enumValue(record, "format", FORMATS, DEFAULT_COMPRESSION_PREFERENCES.format);
     const lossless = format === "png" ? true : format === "jpg" ? false : typeof record.lossless === "boolean" ? record.lossless : DEFAULT_COMPRESSION_PREFERENCES.lossless;
     return {

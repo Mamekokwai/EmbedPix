@@ -101,7 +101,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("revealImageOutput");
     expect(compressionView).toContain("loadCompressionPreferences");
     expect(compressionView).toContain("saveCompressionPreferences");
-    expect(compressionPreferences).toContain("COMPRESSION_PREFERENCES_VERSION = 1");
+    expect(compressionPreferences).toContain("COMPRESSION_PREFERENCES_VERSION = 2");
     expect(compressionPreferences).not.toContain("outputDirectory");
     expect(compressionPreferences).not.toContain("sourcePath");
     expect(compressionView).toContain("AbortController");
