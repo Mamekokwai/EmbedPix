@@ -77,4 +77,14 @@ describe("video metadata lifecycle", () => {
     expect(video.src).toBe("");
     expect(video.loadCalls).toBe(1);
   });
+
+  it("explains the supported video formats when decoding fails", async () => {
+    const video = new FakeVideo();
+    const pending = loadVideoMetadata("blob:video", undefined, () => video as unknown as HTMLVideoElement);
+    video.emit("error");
+
+    await expect(pending).rejects.toThrow("MP4、WebM 或 OGG");
+    expect(video.src).toBe("");
+    expect(video.loadCalls).toBe(1);
+  });
 });

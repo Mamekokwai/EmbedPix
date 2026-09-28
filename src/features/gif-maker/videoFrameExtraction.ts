@@ -50,7 +50,7 @@ function waitForVideoMetadata(video: HTMLVideoElement, signal?: AbortSignal): Pr
     };
     const handleError = () => {
       cleanup();
-      reject(new Error("无法解码视频，请尝试 MP4 或 WebM。"));
+      reject(new Error("无法解码视频，请尝试 MP4、WebM 或 OGG。"));
     };
     const handleAbort = () => {
       cleanup();

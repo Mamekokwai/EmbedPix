@@ -116,7 +116,7 @@ type GifStatus =
 const DEFAULT_DURATION = 100;
 const DEFAULT_FILE_NAME = "embedpix-animation.gif";
 const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/bmp,.png,.jpg,.jpeg,.webp,.bmp";
-const VIDEO_ACCEPT = "video/mp4,video/webm,video/ogg,.mp4,.webm,.ogv";
+const VIDEO_ACCEPT = "video/mp4,video/webm,video/ogg,.mp4,.webm,.ogv,.ogg";
 const MAX_VIDEO_FRAME_LIMIT = 200;
 
 interface VideoSourceModel {
@@ -215,8 +215,8 @@ function isImageFile(file: File): boolean {
   return /\.(bmp|jpe?g|png|webp)$/iu.test(file.name) && !file.type.startsWith("video/");
 }
 
-function isVideoFile(file: File): boolean {
-  return file.type.startsWith("video/") || /\.(mp4|webm|ogv)$/iu.test(file.name);
+export function isVideoFile(file: File): boolean {
+  return file.type.startsWith("video/") || /\.(mp4|webm|ogv|ogg)$/iu.test(file.name);
 }
 
 function getErrorMessage(error: unknown): string {

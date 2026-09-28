@@ -38,7 +38,7 @@ export function loadVideoMetadata(
       }
       finish(null, { width: video.videoWidth, height: video.videoHeight, duration });
     };
-    const handleError = () => finish(new Error("当前环境无法读取该视频格式，请尝试 MP4 或 WebM。"));
+    const handleError = () => finish(new Error("当前环境无法读取该视频格式，请尝试 MP4、WebM 或 OGG。"));
     const handleAbort = () => finish(createAbortError());
 
     if (signal?.aborted) {

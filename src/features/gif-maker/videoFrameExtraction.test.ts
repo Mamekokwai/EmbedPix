@@ -156,6 +156,18 @@ describe("video frame extraction lifecycle", () => {
     expect(state.revokedUrls).toEqual([]);
   });
 
+  it("explains the supported video formats when metadata decoding fails", async () => {
+    const state = setup();
+    const pending = extract(state, new AbortController());
+    state.video.emit("error");
+
+    await expect(pending).rejects.toThrow("MP4、WebM 或 OGG");
+    expect(state.video.src).toBe("");
+    expect(state.video.pauseCalls).toBe(1);
+    expect(state.video.loadCalls).toBe(1);
+    expect(state.revokedUrls).toEqual([]);
+  });
+
   it("cancels from the seeked stage and clears the canvas and video", async () => {
     const state = setup();
     const controller = new AbortController();

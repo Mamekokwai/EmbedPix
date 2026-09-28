@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nativeImageFileToGifFile } from "./GifMakerView";
-import { canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifOutputLocationError, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
+import { canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifOutputLocationError, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, isVideoFile, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("converts native image bytes into a browser File without changing the payload", async () => {
@@ -19,6 +19,11 @@ describe("GIF export presets", () => {
 });
 
 describe("GIF settings layout defaults", () => {
+  it("accepts OGG video files by extension when MIME metadata is absent", () => {
+    expect(isVideoFile(new File([], "clip.ogg", { type: "" }))).toBe(true);
+    expect(isVideoFile(new File([], "clip.avi", { type: "" }))).toBe(false);
+  });
+
   it("clamps the export time range and exposes readable zoom steps", () => {
     expect(clampGifTimelineRange(-2, 99, 4)).toEqual({ start: 0, end: 3 });
     expect(clampGifTimelineRange(3, 1, 4)).toEqual({ start: 3, end: 3 });
