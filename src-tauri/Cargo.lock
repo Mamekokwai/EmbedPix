@@ -993,6 +993,7 @@ dependencies = [
  "gif",
  "image",
  "kamadak-exif",
+ "libc",
  "libwebp-sys2 0.2.0",
  "minisign-verify",
  "oxipng",

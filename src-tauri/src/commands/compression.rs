@@ -37,6 +37,7 @@ const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_MAX_CANDIDATES: usize = 8;
 const MAX_CANDIDATES: usize = 12;
 const MAX_AUTO_RENAME_ATTEMPTS: usize = 10_000;
+const PREFLIGHT_SPACE_ERROR_CODE: &str = "[preflight_output_space_insufficient]";
 const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
 const MAX_COMPRESSION_CONCURRENCY: usize = 2;
 
@@ -331,6 +332,7 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
     let request = parse_request(request)?;
     let (width, height) = inspect_image(&request.input)?;
     let output_path = resolve_preflight_output_path(&request)?;
+    ensure_preflight_available_space(&output_path, estimate_preflight_required_space(&request))?;
     Ok(CompressionPreflight {
         format: request.format.name().to_string(),
         width,
@@ -1231,7 +1233,7 @@ fn choose_auto_rename_path_with_limit(
     ))
 }
 
-fn validate_preflight_output_directory(output_path: &Path) -> Result<(), String> {
+fn existing_preflight_output_directory(output_path: &Path) -> Result<PathBuf, String> {
     let requested_directory = output_path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -1278,8 +1280,82 @@ fn validate_preflight_output_directory(output_path: &Path) -> Result<(), String>
                 directory.display()
             ));
         }
-        return Ok(());
+        return Ok(directory.to_path_buf());
     }
+}
+
+fn validate_preflight_output_directory(output_path: &Path) -> Result<(), String> {
+    existing_preflight_output_directory(output_path).map(|_| ())
+}
+
+fn estimate_preflight_required_space(request: &CompressionRequest) -> Option<u64> {
+    let input_bytes = request.input.len() as u64;
+    let candidate_slots = (request.max_candidates as u64).checked_add(1)?;
+    let candidate_bytes = (MAX_OUTPUT_BYTES as u64).checked_mul(candidate_slots)?;
+    input_bytes.checked_add(candidate_bytes)
+}
+
+fn ensure_preflight_available_space(
+    output_path: &Path,
+    required_bytes: Option<u64>,
+) -> Result<(), String> {
+    let Some(required_bytes) = required_bytes else {
+        return Ok(());
+    };
+    let directory = existing_preflight_output_directory(output_path)?;
+    let Some(available_bytes) = query_available_space(&directory) else {
+        return Ok(());
+    };
+    evaluate_preflight_available_space(Some(available_bytes), required_bytes)
+}
+
+fn evaluate_preflight_available_space(
+    available_bytes: Option<u64>,
+    required_bytes: u64,
+) -> Result<(), String> {
+    let Some(available_bytes) = available_bytes else {
+        return Ok(());
+    };
+    if available_bytes < required_bytes {
+        return Err(format!(
+            "{PREFLIGHT_SPACE_ERROR_CODE} insufficient available disk space for compression: required at least {required_bytes} bytes, available {available_bytes} bytes"
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn query_available_space(path: &Path) -> Option<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+
+    let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
+    wide.push(0);
+    let mut available = 0u64;
+    let success = unsafe {
+        GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut available,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    (success != 0).then_some(available)
+}
+
+#[cfg(unix)]
+fn query_available_space(path: &Path) -> Option<u64> {
+    use std::{ffi::CString, os::unix::ffi::OsStrExt};
+
+    let path = CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut stats = unsafe { std::mem::zeroed::<libc::statvfs>() };
+    let success = unsafe { libc::statvfs(path.as_ptr(), &mut stats) } == 0;
+    success.then(|| (stats.f_bavail as u64).checked_mul(stats.f_frsize as u64))?
+}
+
+#[cfg(not(any(unix, windows)))]
+fn query_available_space(_path: &Path) -> Option<u64> {
+    None
 }
 
 fn resolve_preflight_output_path(request: &CompressionRequest) -> Result<PathBuf, String> {
@@ -1777,6 +1853,53 @@ mod tests {
 
         fs::set_permissions(&directory, original_permissions).unwrap();
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn preflight_space_guard_has_stable_error_and_allows_unknown_space() {
+        let output = Path::new("compression-output.webp");
+        assert!(ensure_preflight_available_space(output, None).is_ok());
+        assert!(evaluate_preflight_available_space(None, u64::MAX).is_ok());
+        assert!(evaluate_preflight_available_space(Some(100), 100).is_ok());
+
+        let error = evaluate_preflight_available_space(Some(99), 100).unwrap_err();
+        assert!(error.starts_with(PREFLIGHT_SPACE_ERROR_CODE));
+        assert!(error.contains("required at least"));
+        assert!(error.contains("available"));
+    }
+
+    #[test]
+    fn preflight_required_space_uses_input_and_candidate_bounds() {
+        let request = path_request(Path::new("compression-output.webp"));
+        let required = estimate_preflight_required_space(&request).unwrap();
+        let expected = request.input.len() as u64
+            + (MAX_OUTPUT_BYTES as u64) * (request.max_candidates as u64 + 1);
+        assert_eq!(required, expected);
+    }
+
+    #[test]
+    fn available_space_query_does_not_create_or_modify_files() {
+        let marker = crate::commands::test_temp_dir().join(format!(
+            "embedpix-preflight-space-marker-{}",
+            uuid_like_id()
+        ));
+        fs::write(&marker, b"keep me").unwrap();
+        let before = fs::read(&marker).unwrap();
+        let _ = query_available_space(marker.parent().unwrap());
+        assert_eq!(fs::read(&marker).unwrap(), before);
+        fs::remove_file(marker).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_available_space_query_is_supported_or_degrades_to_unknown() {
+        let _ = query_available_space(Path::new("."));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn non_windows_available_space_query_is_supported_or_degrades_to_unknown() {
+        let _ = query_available_space(Path::new("."));
     }
 
     #[test]
