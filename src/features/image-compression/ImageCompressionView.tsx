@@ -18,6 +18,7 @@ import {
   formatCompressionEstimateSource,
   formatCompressionItemResultStatus,
   formatCompressionReplaceOriginalConfirmation,
+  getCompressionTargetSizeError,
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
   getCompressionOutputLocationError,
@@ -198,12 +199,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const replaceOriginalAvailable = canReplaceCompressionOriginal(items, isTauriEnvironment());
   const outputModes = useMemo(() => normalizeCompressionOutputModes({ autoNumbering, overwrite, replaceOriginal }), [autoNumbering, overwrite, replaceOriginal]);
   const targetSizeActive = targetSizeEnabled && qualityEnabled;
-  const targetSizeError = useMemo(() => {
-    if (!targetSizeActive || !targetSizeKiB.trim()) return null;
-    const value = Number(targetSizeKiB);
-    if (!Number.isFinite(value) || value < 1 || value > COMPRESSION_MAX_TARGET_SIZE_KIB) return `目标体积需为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB。`;
-    return null;
-  }, [targetSizeActive, targetSizeKiB]);
+  const targetSizeError = useMemo(() => getCompressionTargetSizeError(targetSizeActive, targetSizeKiB, COMPRESSION_MAX_TARGET_SIZE_KIB), [targetSizeActive, targetSizeKiB]);
   const maxOutputBytes = targetSizeActive && !targetSizeError && targetSizeKiB.trim() ? Math.round(Number(targetSizeKiB) * 1024) : undefined;
   const outputFileNameError = useMemo(() => replaceOriginal ? null : getCompressionOutputFileNameError(outputFileName, format), [format, outputFileName, replaceOriginal]);
   const options = useMemo<CompressionOptions>(() => ({

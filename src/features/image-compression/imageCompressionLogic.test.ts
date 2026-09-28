@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
@@ -25,6 +25,14 @@ describe("image compression logic", () => {
     expect(supportsCompressionTargetSize("webp", false)).toBe(true);
     expect(supportsCompressionTargetSize("webp", true)).toBe(false);
     expect(supportsCompressionTargetSize("png", true)).toBe(false);
+  });
+
+  it("requires a target size when target-size control is enabled", () => {
+    expect(getCompressionTargetSizeError(false, "", 128 * 1024)).toBeNull();
+    expect(getCompressionTargetSizeError(true, "", 128 * 1024)).toContain("请输入");
+    expect(getCompressionTargetSizeError(true, "0", 128 * 1024)).toContain("1–");
+    expect(getCompressionTargetSizeError(true, "128", 128 * 1024)).toBeNull();
+    expect(getCompressionTargetSizeError(true, "131073", 128 * 1024)).toContain("131,072");
   });
 
   it("keeps only completed output paths as successful results", () => {

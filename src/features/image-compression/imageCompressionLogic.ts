@@ -13,6 +13,13 @@ export function getCompressionPreset(preset: Exclude<CompressionPreset, "custom"
   return COMPRESSION_PRESETS.find((option) => option.value === preset) ?? COMPRESSION_PRESETS[1];
 }
 export function supportsCompressionTargetSize(format: CompressionFormat, lossless: boolean): boolean { return format === "jpg" || (format === "webp" && !lossless); }
+export function getCompressionTargetSizeError(enabled: boolean, value: string, maxKiB: number): string | null {
+  if (!enabled) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return "请输入目标体积。";
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 1 && parsed <= maxKiB ? null : `目标体积需为 1–${maxKiB.toLocaleString()} KiB。`;
+}
 export function getSuccessfulCompressionOutputPath(status: "completed" | "skipped", outputPath: string): string | null { const normalizedPath = outputPath.trim(); return status === "completed" && normalizedPath ? normalizedPath : null; }
 export function formatCompressionFailureDetails(details: ReadonlyArray<{ fileName: string; message: string }>): string { return details.map(({ fileName, message }) => `${fileName}：${message}`).join("\n"); }
 export function formatCompressionItemResultStatus(status: CompressionItemResultStatus): string { return status === "completed" ? "已完成" : status === "skipped" ? "已跳过" : "失败"; }

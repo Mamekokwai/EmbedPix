@@ -106,6 +106,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionPreferences).not.toContain("sourcePath");
     expect(compressionView).toContain("AbortController");
     expect(compressionView).toContain("最大输出体积（JPEG/WebP 有损）");
+    expect(compressionView).toContain("getCompressionTargetSizeError");
     expect(compressionView).toContain("启用目标体积控制");
     expect(compressionView).toContain("覆盖原图并备份到 bak");
     expect(compressionView).toContain("formatCompressionReplaceOriginalConfirmation");
