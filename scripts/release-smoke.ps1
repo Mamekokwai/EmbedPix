@@ -13,7 +13,7 @@ function Assert-WindowsGuiSubsystem([string]$Path) {
   $bytes = [IO.File]::ReadAllBytes($Path)
   if ($bytes.Length -lt 0x100 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw "Executable is not a Windows PE file: $Path" }
   $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
-  if ($peOffset -lt 0 -or $peOffset + 0x60 -gt $bytes.Length) { throw "Executable PE header is invalid: $Path" }
+  if ($peOffset -lt 0 -or $peOffset -gt $bytes.Length - 0x60) { throw "Executable PE header is invalid: $Path" }
   if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) { throw "Executable PE signature is invalid: $Path" }
   $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 0x5c)
   if ($subsystem -ne 2) { throw "Installed EmbedPix executable uses subsystem $subsystem; expected Windows GUI subsystem 2." }
@@ -22,6 +22,7 @@ function Assert-WindowsGuiSubsystem([string]$Path) {
 
 $configSmoke = Join-Path $PSScriptRoot 'release-config-smoke.ps1'
 if (-not (Test-Path -LiteralPath $configSmoke -PathType Leaf)) { throw "Release config smoke is missing: $configSmoke" }
+$global:LASTEXITCODE = 0
 & $configSmoke
 $configExitCode = $LASTEXITCODE
 if ($null -ne $configExitCode -and $configExitCode -ne 0) { throw "Release configuration smoke failed with exit code $configExitCode." }

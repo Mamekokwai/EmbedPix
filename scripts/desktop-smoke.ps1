@@ -11,6 +11,7 @@ Set-Location $repoRoot
 
 function Invoke-SmokeStep([string]$Name, [scriptblock]$Action) {
   Write-Host "[desktop-smoke] $Name"
+  $global:LASTEXITCODE = 0
   & $Action
   $exitCode = $LASTEXITCODE
   if ($null -ne $exitCode -and $exitCode -ne 0) { throw "$Name failed with exit code $exitCode." }

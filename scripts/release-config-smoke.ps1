@@ -54,7 +54,7 @@ if (-not (Test-Path -LiteralPath 'src-tauri/src/bin/embedpix-cli.rs' -PathType L
 }
 
 $releaseSmoke = Get-Content -Raw 'scripts/release-smoke.ps1'
-foreach ($required in @('latest.json', 'SHA256SUMS.txt', 'release-provenance.json', 'embedpix-minisign-verifier', 'Assert-WindowsGuiSubsystem', 'Install')) {
+foreach ($required in @('latest.json', 'SHA256SUMS.txt', 'release-provenance.json', 'embedpix-minisign-verifier', 'Assert-WindowsGuiSubsystem', 'peOffset -gt $bytes.Length - 0x60', 'Install')) {
   if ($releaseSmoke -notmatch [regex]::Escape($required)) { throw "Release smoke is missing: $required" }
 }
 $workflow = Get-Content -Raw '.github/workflows/prepare-release.yml'
