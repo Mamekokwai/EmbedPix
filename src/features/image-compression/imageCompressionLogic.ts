@@ -1,4 +1,7 @@
 import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionItemResult, CompressionItemResultStatus, CompressionOptions, CompressionOutputLocation, CompressionPreset } from "./types";
+export const COMPRESSION_WEBP_METHOD_MIN = 0;
+export const COMPRESSION_WEBP_METHOD_MAX = 6;
+export const COMPRESSION_WEBP_METHOD_DEFAULT = 4;
 export const COMPRESSION_FORMATS: ReadonlyArray<{ value: CompressionFormat; label: string }> = [{ value: "jpg", label: "JPEG" }, { value: "webp", label: "WebP" }, { value: "png", label: "PNG" }];
 export const COMPRESSION_PRESETS: ReadonlyArray<{ value: Exclude<CompressionPreset, "custom">; label: string; description: string; quality: number; pngOptimizationLevel: number }> = [
   { value: "high-quality", label: "高质量", description: "JPEG/WebP 有损质量 92；PNG 优化 2；WebP 默认无损", quality: 92, pngOptimizationLevel: 2 },

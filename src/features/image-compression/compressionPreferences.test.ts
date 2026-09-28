@@ -22,6 +22,7 @@ describe("compression preferences", () => {
       ...DEFAULT_COMPRESSION_PREFERENCES,
       format: "jpg" as const,
       quality: 68,
+      webpMethod: 2,
       pngOptimizationLevel: 5,
       targetSizeEnabled: true,
       targetSizeKiB: "96",
@@ -43,6 +44,7 @@ describe("compression preferences", () => {
     expect(stored).not.toHaveProperty("outputDirectory");
     expect(stored).not.toHaveProperty("items");
     expect(stored.outputFileName).toBe("旅行照片.jpg");
+    expect(stored.webpMethod).toBe(2);
     expect(loadCompressionPreferences(storage)).toEqual(preferences);
   });
 
@@ -75,7 +77,8 @@ describe("compression preferences", () => {
         lossless: false,
         outputLocation: "invalid",
         outputSubdirectory: "../escape",
-        outputFileName: "../escape.webp",
+      outputFileName: "../escape.webp",
+      webpMethod: 99,
         unknownFutureField: true,
       }),
     });
@@ -90,7 +93,13 @@ describe("compression preferences", () => {
       outputLocation: "source",
       outputSubdirectory: "",
       outputFileName: "",
+      webpMethod: 4,
     });
+  });
+
+  it("uses the safe default for older or malformed WebP method preferences", () => {
+    expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "webp", lossless: false }) })).webpMethod).toBe(4);
+    expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "webp", webpMethod: 99 }) })).webpMethod).toBe(4);
   });
 
   it("restores only a safe custom filename and never stores a path", () => {

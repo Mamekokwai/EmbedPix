@@ -1,9 +1,10 @@
-import { getCompressionOutputFileNameError, getCompressionSubdirectoryError, normalizeCompressionOutputFileName, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, getCompressionOutputFileNameError, getCompressionSubdirectoryError, normalizeCompressionOutputFileName, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionFormat, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
 
 export interface CompressionPreferences {
   format: CompressionFormat;
   quality: number;
+  webpMethod: number;
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
@@ -25,6 +26,7 @@ export const COMPRESSION_MAX_TARGET_SIZE_KIB = 128 * 1024;
 export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   format: "webp",
   quality: 82,
+  webpMethod: COMPRESSION_WEBP_METHOD_DEFAULT,
   pngOptimizationLevel: 2,
   targetSizeEnabled: false,
   targetSizeKiB: "",
@@ -73,6 +75,13 @@ function integerValue(record: Record<string, unknown>, key: string, min: number,
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+function webpMethodValue(record: Record<string, unknown>): number {
+  const value = record.webpMethod;
+  return typeof value === "number" && Number.isInteger(value) && value >= COMPRESSION_WEBP_METHOD_MIN && value <= COMPRESSION_WEBP_METHOD_MAX
+    ? value
+    : DEFAULT_COMPRESSION_PREFERENCES.webpMethod;
+}
+
 function sizeInputValue(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   if (typeof value !== "string") return "";
@@ -105,6 +114,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
     return {
       format,
       quality: integerValue(record, "quality", 1, 100, DEFAULT_COMPRESSION_PREFERENCES.quality),
+      webpMethod: webpMethodValue(record),
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
       targetSizeEnabled: record.targetSizeEnabled === true && supportsCompressionTargetSize(format, lossless),
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
@@ -143,6 +153,7 @@ export function saveCompressionPreferences(
       version: COMPRESSION_PREFERENCES_VERSION,
       format: preferences.format,
       quality: preferences.quality,
+      webpMethod: preferences.webpMethod,
       pngOptimizationLevel: preferences.pngOptimizationLevel,
       targetSizeEnabled: preferences.targetSizeEnabled,
       targetSizeKiB: preferences.targetSizeKiB,

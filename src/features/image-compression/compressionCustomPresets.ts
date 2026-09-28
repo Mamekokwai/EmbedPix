@@ -1,4 +1,4 @@
-import { supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionFormat, MetadataPolicy } from "./types";
 
 export const COMPRESSION_CUSTOM_PRESETS_STORAGE_KEY = "embedpix.image-compression-custom-presets.v1";
@@ -9,6 +9,7 @@ const MAX_PRESET_NAME_LENGTH = 80;
 export interface CompressionPresetValues {
   format: CompressionFormat;
   quality: number;
+  webpMethod: number;
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
@@ -71,6 +72,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
   return {
     format,
     quality: integerValue(record.quality, 1, 100, "质量", index),
+    webpMethod: record.webpMethod === undefined ? COMPRESSION_WEBP_METHOD_DEFAULT : integerValue(record.webpMethod, COMPRESSION_WEBP_METHOD_MIN, COMPRESSION_WEBP_METHOD_MAX, "WebP 编码方法", index),
     pngOptimizationLevel: integerValue(record.pngOptimizationLevel, 0, 6, "PNG 优化级别", index),
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
@@ -86,6 +88,7 @@ function createId(): string {
 export function createCompressionCustomPreset(name: string, values: CompressionPresetValues): CompressionCustomPreset {
   const trimmedName = name.trim();
   if (!trimmedName || trimmedName.length > MAX_PRESET_NAME_LENGTH) throw new Error("压缩预设名称不能为空且不能超过 80 个字符。");
+  if (!Number.isInteger(values.webpMethod) || values.webpMethod < COMPRESSION_WEBP_METHOD_MIN || values.webpMethod > COMPRESSION_WEBP_METHOD_MAX) throw new Error("WebP 编码方法必须在 0 到 6 之间。");
   return { id: createId(), name: trimmedName, values: { ...values }, createdAt: new Date().toISOString() };
 }
 

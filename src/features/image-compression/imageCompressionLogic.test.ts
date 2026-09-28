@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
@@ -119,6 +119,8 @@ describe("image compression logic", () => {
     expect(getCompressionBatchFinalState([], false)).toEqual({ status: "success", stage: "completed" });
     expect(getCompressionBatchFinalState(["bad.png"], false)).toEqual({ status: "error", stage: "failed" });
     expect(getCompressionBatchFinalState(["bad.png"], true)).toEqual({ status: "error", stage: "cancelled" });
+    expect(COMPRESSION_WEBP_METHOD_DEFAULT).toBe(4);
+    expect([COMPRESSION_WEBP_METHOD_MIN, COMPRESSION_WEBP_METHOD_MAX]).toEqual([0, 6]);
   });
 
   it("merges, replaces, removes, retries, and cancels batch items without mutating inputs", () => {

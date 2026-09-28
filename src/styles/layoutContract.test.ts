@@ -127,6 +127,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("当前为有损 WebP；质量滑块控制编码质量");
     expect(compressionView).toContain("核心最多尝试 8 个 WebP 质量候选");
     expect(compressionView).toContain("WebP 无损编码");
+    expect(compressionView).toContain("WebP 编码方法");
+    expect(compressionView).toContain("webpMethod");
+    expect(compressionView).toContain("compression-webp-method-hint");
+    expect(compressionView).toContain("disabled={busy || !webpLossyActive}");
+    expect(compressionPreferences).toContain("webpMethod");
     expect(compressionView).toContain("PNG 始终无损");
     expect(compressionView).toContain("formatCompressionProgressError");
     expect(compressionView).toContain("const progressError = formatCompressionProgressError(next);");
@@ -169,6 +174,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-preset-message");
     expect(compressionCss).toContain(".compression-estimate-note");
     expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
+    expect(compressionCss).toContain(".compression-webp-method-hint");
     expect(compressionCss).toContain(".compression-output-file-name-hint");
   });
 

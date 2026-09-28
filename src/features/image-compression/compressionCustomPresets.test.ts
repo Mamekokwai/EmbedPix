@@ -14,6 +14,7 @@ import type { CompressionPresetValues } from "./compressionCustomPresets";
 const values: CompressionPresetValues = {
   format: "webp",
   quality: 82,
+  webpMethod: 4,
   pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
@@ -48,6 +49,15 @@ describe("compression custom presets", () => {
     expect(importCompressionPresetsJson(json)[0].name).toBe("未来兼容");
     expect(() => importCompressionPresetsJson("not-json")).toThrow("压缩预设 JSON 格式无效");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏预设", values: { ...values, quality: 101 } }] }))).toThrow("质量无效");
+    expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏方法", values: { ...values, webpMethod: 7 } }] }))).toThrow("WebP 编码方法无效");
+    expect(() => createCompressionCustomPreset("坏方法", { ...values, webpMethod: 7 })).toThrow("WebP 编码方法必须");
+  });
+
+  it("keeps older custom presets compatible with the safe default method", () => {
+    const legacyValues = { ...values };
+    delete (legacyValues as Partial<typeof values>).webpMethod;
+    const imported = importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "旧预设", values: legacyValues }] }));
+    expect(imported[0]?.values.webpMethod).toBe(4);
   });
 
   it("deduplicates imported names without applying or mutating existing presets", () => {
