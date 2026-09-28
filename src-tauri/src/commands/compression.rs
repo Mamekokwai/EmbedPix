@@ -40,6 +40,7 @@ const MAX_AUTO_RENAME_ATTEMPTS: usize = 10_000;
 const PREFLIGHT_SPACE_ERROR_CODE: &str = "[preflight_output_space_insufficient]";
 const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
 const MAX_COMPRESSION_CONCURRENCY: usize = 2;
+const MAX_ACTIVE_COMPRESSION_JOBS: usize = MAX_COMPRESSION_CONCURRENCY * 4;
 const COMPRESSION_SCHEMA_VERSION: u8 = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -258,6 +259,22 @@ impl CompressionJobState {
             if active {
                 return Err("compression job id is already active".to_string());
             }
+        }
+        let active_jobs = jobs
+            .values()
+            .filter(|existing| {
+                existing
+                    .progress
+                    .lock()
+                    .map(|progress| matches!(progress.status.as_str(), "running" | "cancelling"))
+                    .unwrap_or(true)
+            })
+            .count();
+        if active_jobs >= MAX_ACTIVE_COMPRESSION_JOBS {
+            return Err(
+                "too many compression jobs are in progress; retry after an active job finishes"
+                    .to_string(),
+            );
         }
         jobs.insert(job_id, job);
         Ok(())
@@ -2567,6 +2584,31 @@ mod tests {
         };
         state.register("duplicate-test".into(), job()).unwrap();
         assert!(state.register("duplicate-test".into(), job()).is_err());
+    }
+
+    #[test]
+    fn active_job_registry_has_a_bounded_queue_but_terminal_jobs_do_not_consume_capacity() {
+        let state = CompressionJobState::default();
+        for index in 0..MAX_ACTIVE_COMPRESSION_JOBS {
+            let job_id = format!("capacity-{index}");
+            state.register(job_id.clone(), test_job(&job_id)).unwrap();
+        }
+        let rejected = state
+            .register("capacity-overflow".into(), test_job("capacity-overflow"))
+            .unwrap_err();
+        assert!(rejected.contains("too many compression jobs"));
+
+        let terminal = state
+            .jobs
+            .lock()
+            .unwrap()
+            .get("capacity-0")
+            .cloned()
+            .unwrap();
+        update_progress(&terminal, "completed", None, None);
+        assert!(state
+            .register("capacity-terminal".into(), test_job("capacity-terminal"))
+            .is_ok());
     }
 
     #[test]
