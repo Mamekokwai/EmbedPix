@@ -91,6 +91,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("当前核心 WebP 固定无损");
     expect(compressionView).toContain("const sourceBusy = busy || importBusy;");
     expect(compressionView).toContain("清空");
+    expect(compressionView).toContain("替换当前");
+    expect(compressionView).toContain("replaceItemIdRef");
+    expect(compressionView).toContain("仅使用所选文件中的第一张");
     expect(compressionView).toContain("compression-item-select");
     expect(compressionView).toContain("event.preventDefault(); void chooseFiles()");
     expect(compressionView).toContain("setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0");

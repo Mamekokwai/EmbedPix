@@ -65,6 +65,7 @@ function previewMimeType(format: string): string {
 
 export default function ImageCompressionView({ active = true }: ImageCompressionViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceItemIdRef = useRef<string | null>(null);
   const previewRequestIdRef = useRef(0);
   const [items, setItems] = useState<CompressionItem[]>([]);
   const [format, setFormat] = useState<CompressionFormat>("webp");
@@ -196,25 +197,31 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     };
   }, [active, options, selectedItem]);
 
-  const addBrowserFiles = (files: File[]) => {
+  const addBrowserFiles = (files: File[], replaceItemId: string | null = null) => {
     const next = toBrowserItems(files);
     if (next.length === 0) {
       setMessage("没有找到支持的图片格式（PNG、JPEG、WebP、BMP、GIF）。");
       setStatus("error");
       return;
     }
+    const replacement = replaceItemId ? next[0] : null;
+    const replacingExisting = Boolean(replacement && items.some((item) => item.id === replaceItemId));
     setItems((current) => {
+      if (replacingExisting && replacement) {
+        return current.map((item) => item.id === replaceItemId ? { ...replacement, id: replaceItemId } : item);
+      }
       const existing = new Set(current.map((item) => item.id));
       return [...current, ...next.filter((item) => !existing.has(item.id))];
     });
-    setMessage("");
+    if (replacingExisting) setSelectedItemId(replaceItemId);
+    setMessage(replacingExisting ? "已替换当前图片。" : "");
     setFailures([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setStatus("ready");
   };
 
-  const importNativeFiles = async (nativeFiles: NativeImageFile[]) => {
+  const importNativeFiles = async (nativeFiles: NativeImageFile[], replaceItemId: string | null = null) => {
     const imported: CompressionItem[] = [];
     const skipped: string[] = [];
     for (const nativeFile of nativeFiles) {
@@ -225,7 +232,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       }
     }
     if (imported.length > 0) {
-      setItems((current) => [...current, ...imported]);
+      const replacement = replaceItemId ? imported[0] : null;
+      const replacingExisting = Boolean(replacement && items.some((item) => item.id === replaceItemId));
+      setItems((current) => {
+        if (replacingExisting && replacement) {
+          return current.map((item) => item.id === replaceItemId ? { ...replacement, id: replaceItemId } : item);
+        }
+        return [...current, ...imported];
+      });
+      if (replacingExisting) {
+        setSelectedItemId(replaceItemId);
+        setMessage(nativeFiles.length > 1 ? "已替换当前图片（仅使用所选文件中的第一张）。" : "已替换当前图片。");
+      }
       setSkipReasons([]);
       setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
       setStatus("ready");
@@ -245,11 +263,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     }
     setImportBusy(true);
     try {
-      await importNativeFiles(await pickCompressionFiles());
+      const replaceItemId = replaceItemIdRef.current;
+      await importNativeFiles(await pickCompressionFiles(), replaceItemId);
     } catch (error) {
       setMessage(errorMessage(error));
       setStatus("error");
     } finally {
+      replaceItemIdRef.current = null;
       setImportBusy(false);
     }
   };
@@ -273,8 +293,16 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    addBrowserFiles(Array.from(event.target.files ?? []));
+    const replaceItemId = replaceItemIdRef.current;
+    replaceItemIdRef.current = null;
+    addBrowserFiles(Array.from(event.target.files ?? []), replaceItemId);
     event.target.value = "";
+  };
+
+  const replaceSelectedItem = () => {
+    if (sourceBusy || !selectedItemId) return;
+    replaceItemIdRef.current = selectedItemId;
+    void chooseFiles();
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -462,6 +490,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={sourceBusy} />
           <div className="compression-source-actions">
             <button type="button" className="compression-secondary-button" onClick={() => { void chooseFiles(); }} disabled={sourceBusy}><Images size={15} aria-hidden="true" /> {importBusy ? "正在导入" : "选择图片"}</button>
+            <button type="button" className="compression-secondary-button" onClick={replaceSelectedItem} disabled={sourceBusy || !selectedItemId}><RefreshCw size={15} aria-hidden="true" /> 替换当前</button>
             <button type="button" className="compression-secondary-button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
           </div>
           <div className="compression-list" aria-label="待压缩图片列表">
