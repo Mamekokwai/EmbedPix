@@ -13,6 +13,7 @@ export interface CompressionPreferences {
   outputLocation: CompressionOutputLocation;
   outputSubdirectory: string;
   overwrite: boolean;
+  replaceOriginal: boolean;
 }
 
 export const COMPRESSION_PREFERENCES_STORAGE_KEY = "embedpix.image-compression-preferences.v1";
@@ -31,6 +32,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   outputLocation: "source",
   outputSubdirectory: "",
   overwrite: false,
+  replaceOriginal: false,
 };
 
 type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -102,6 +104,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       outputLocation: enumValue(record, "outputLocation", OUTPUT_LOCATIONS, DEFAULT_COMPRESSION_PREFERENCES.outputLocation),
       outputSubdirectory: subdirectoryValue(record),
       overwrite: typeof record.overwrite === "boolean" ? record.overwrite : DEFAULT_COMPRESSION_PREFERENCES.overwrite,
+      replaceOriginal: typeof record.replaceOriginal === "boolean" ? record.replaceOriginal : DEFAULT_COMPRESSION_PREFERENCES.replaceOriginal,
     };
   } catch {
     return fallbackPreferences();
@@ -136,6 +139,7 @@ export function saveCompressionPreferences(
       outputLocation: preferences.outputLocation,
       outputSubdirectory: preferences.outputSubdirectory,
       overwrite: preferences.overwrite,
+      replaceOriginal: preferences.replaceOriginal,
     }));
   } catch {
     // Preferences are optional; a locked-down WebView must not break compression.

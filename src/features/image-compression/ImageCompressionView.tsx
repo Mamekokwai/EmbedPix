@@ -7,10 +7,12 @@ import type { NativeImageFile } from "../../platform/image/imageExportGateway";
 import {
   COMPRESSION_FORMATS,
   COMPRESSION_PRESETS,
+  canReplaceCompressionOriginal,
   estimateFallback,
   filterCompressionFiles,
   formatCompressionBytes,
   formatCompressionFailureDetails,
+  formatCompressionReplaceOriginalConfirmation,
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
   getCompressionOutputLocationError,
@@ -128,6 +130,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [outputSubdirectory, setOutputSubdirectory] = useState(initialPreferences.outputSubdirectory);
   const [outputDirectory, setOutputDirectory] = useState("");
   const [overwrite, setOverwrite] = useState(initialPreferences.overwrite);
+  const [replaceOriginal, setReplaceOriginal] = useState(initialPreferences.replaceOriginal);
   const [status, setStatus] = useState<CompressionStatus>("idle");
   const [importBusy, setImportBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -155,6 +158,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const busy = status === "busy";
   const sourceBusy = busy || importBusy;
   const qualityEnabled = supportsCompressionTargetSize(format, lossless);
+  const replaceOriginalAvailable = canReplaceCompressionOriginal(items, isTauriEnvironment());
   const targetSizeActive = targetSizeEnabled && qualityEnabled;
   const targetSizeError = useMemo(() => {
     if (!targetSizeActive || !targetSizeKiB.trim()) return null;
@@ -173,11 +177,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     outputSubdirectory: outputLocation === "subfolder" ? outputSubdirectory.trim() || undefined : undefined,
     outputDirectory: outputLocation === "directory" ? outputDirectory.trim() || undefined : undefined,
     overwrite,
+    replaceOriginal,
     maxOutputBytes,
     maxCandidates: qualityEnabled && maxOutputBytes ? 8 : undefined,
-  }), [format, quality, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, overwrite, maxOutputBytes]);
+  }), [format, quality, lossless, qualityEnabled, pngOptimizationLevel, metadataPolicy, outputLocation, outputSubdirectory, outputDirectory, overwrite, replaceOriginal, maxOutputBytes]);
 
-  const outputLocationError = useMemo(() => getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, !isTauriEnvironment() || (items.length > 0 && items.every((item) => Boolean(item.sourcePath)))), [items, outputDirectory, outputLocation, outputSubdirectory]);
+  const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, !isTauriEnvironment() || (items.length > 0 && items.every((item) => Boolean(item.sourcePath)))), [items, outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
   const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
@@ -200,6 +205,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   }, [active, format, items, options]);
 
   useEffect(() => {
+    if (replaceOriginal && !replaceOriginalAvailable) setReplaceOriginal(false);
+  }, [replaceOriginal, replaceOriginalAvailable]);
+
+  useEffect(() => {
     saveCompressionPreferences({
       format,
       quality,
@@ -212,8 +221,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       outputLocation,
       outputSubdirectory,
       overwrite,
+      replaceOriginal,
     });
-  }, [format, lossless, metadataPolicy, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, targetSizeActive, targetSizeKiB]);
+  }, [format, lossless, metadataPolicy, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, targetSizeActive, targetSizeKiB]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -452,10 +462,23 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setStatus("error");
       return;
     }
+    const queue = failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : items;
+    if (replaceOriginal) {
+      if (!canReplaceCompressionOriginal(queue, true)) {
+        setMessage("覆盖原图仅支持全部来自桌面源文件的队列。");
+        setStatus("error");
+        return;
+      }
+      const sourcePaths = queue.map((item) => item.sourcePath as string);
+      if (!window.confirm(formatCompressionReplaceOriginalConfirmation(sourcePaths))) {
+        setMessage("已取消覆盖原图，未开始压缩。");
+        setStatus("ready");
+        return;
+      }
+    }
     setStatus("busy");
     setMessage("");
     setStage("preflight");
-    const queue = failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : items;
     setFailures([]);
     setFailureDetails([]);
     setSkipReasons([]);
@@ -667,10 +690,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（JPEG/WebP 有损）</span><strong>{targetSizeActive && targetSizeKiB ? `${targetSizeKiB} KiB` : "—"}</strong></span><input type="number" min="1" max={COMPRESSION_MAX_TARGET_SIZE_KIB} step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="启用后输入 KiB" disabled={busy || !qualityEnabled || !targetSizeActive} aria-invalid={Boolean(targetSizeError)} /><small className="compression-field-hint">{format === "jpg" ? `JPEG 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : format === "webp" && !lossless ? `WebP 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : "PNG 和无损 WebP 不支持目标体积控制"}</small></label>
           {targetSizeError ? <p className="compression-field-error" role="alert">{targetSizeError}</p> : null}
           <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（推荐）</option><option value="preserve" disabled>保留元数据（核心待支持）</option></select></label>
-          <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>
-          {outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy} /></label> : null}
-          {outputLocation === "directory" ? <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="例如 D:\\Export" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy} /></label> : null}
+          <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy || replaceOriginal}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>
+          {outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
+          {outputLocation === "directory" ? <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="例如 D:\\Export" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
           {outputLocationError ? <p className="compression-field-error" role="alert">{outputLocationError}</p> : null}
+          <label className="compression-check"><input type="checkbox" checked={replaceOriginal && replaceOriginalAvailable} onChange={(event) => setReplaceOriginal(event.target.checked)} disabled={busy || !replaceOriginalAvailable} /><span><strong>覆盖原图并备份到 bak</strong><small>{replaceOriginalAvailable ? "启用后会先备份原图，再写入压缩结果；输出位置设置暂不生效" : isTauriEnvironment() ? "仅全部桌面源文件队列可用，浏览器文件或混合队列会禁用" : "仅桌面应用支持覆盖原图"}</small></span></label>
           <label className="compression-check"><input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} disabled={busy} /><span><strong>允许覆盖同名文件</strong><small>关闭时同名目标会拒绝写入</small></span></label>
         </aside>
       </div>

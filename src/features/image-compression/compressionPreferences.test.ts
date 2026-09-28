@@ -30,6 +30,7 @@ describe("compression preferences", () => {
       outputLocation: "subfolder" as const,
       outputSubdirectory: "compressed",
       overwrite: true,
+      replaceOriginal: true,
     };
 
     saveCompressionPreferences(preferences, storage);
@@ -40,6 +41,13 @@ describe("compression preferences", () => {
     expect(stored).not.toHaveProperty("outputDirectory");
     expect(stored).not.toHaveProperty("items");
     expect(loadCompressionPreferences(storage)).toEqual(preferences);
+  });
+
+  it("keeps the dangerous source-replacement option disabled by default", () => {
+    expect(DEFAULT_COMPRESSION_PREFERENCES.replaceOriginal).toBe(false);
+    expect(loadCompressionPreferences(createStorage({
+      [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "jpg", replaceOriginal: "yes" }),
+    })).replaceOriginal).toBe(false);
   });
 
   it("ignores unknown fields and repairs malformed known fields", () => {

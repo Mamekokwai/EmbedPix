@@ -17,6 +17,7 @@ export interface CompressionEnvelopeRequest {
   outputSubdirectory?: string;
   outputDirectory?: string;
   overwriteExisting: boolean;
+  replaceOriginal?: boolean;
   jpegQuality: number;
   lossless: boolean;
   pngOptimizationLevel: number;
@@ -70,6 +71,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.outputSubdirectory ? { outputSubdirectory: request.outputSubdirectory } : {}),
     ...(request.outputDirectory ? { outputDirectory: request.outputDirectory } : {}),
     overwriteExisting: request.overwriteExisting,
+    ...(request.replaceOriginal ? { replaceOriginal: true } : {}),
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
     lossless: request.lossless,
     pngOptimizationLevel: request.pngOptimizationLevel,
@@ -120,6 +122,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     outputSubdirectory: options.outputLocation === "subfolder" ? options.outputSubdirectory : undefined,
     outputDirectory: options.outputLocation === "directory" ? options.outputDirectory : undefined,
     overwriteExisting: options.overwrite,
+    replaceOriginal: options.replaceOriginal ?? false,
     jpegQuality: options.quality,
     lossless: options.format === "png" || (options.format === "webp" && options.lossless),
     pngOptimizationLevel: options.pngOptimizationLevel,
