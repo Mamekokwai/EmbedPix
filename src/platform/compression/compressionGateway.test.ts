@@ -70,6 +70,14 @@ describe("compression gateway", () => {
     expect(metadata).toMatchObject({ maxOutputBytes: 64 * 1024, maxCandidates: 8 });
   });
 
+  it("does not invent target-size metadata when the UI leaves the control off", () => {
+    const encoded = encodeCompressionEnvelope(request);
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata).not.toHaveProperty("maxOutputBytes");
+    expect(metadata).not.toHaveProperty("maxCandidates");
+  });
+
   it("uses preflight and single-image compression command contracts", async () => {
     vi.mocked(invoke).mockResolvedValueOnce({ outputPath: "C:/icon.webp", overwritesExisting: false }).mockResolvedValueOnce({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "completed", skippedReason: null, inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: true, targetBytes: null, targetMet: false, selectedQuality: null });
     await preflightCompression(request);

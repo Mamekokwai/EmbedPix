@@ -82,6 +82,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("真实压缩预览");
     expect(compressionView).toContain("AbortController");
     expect(compressionView).toContain("最大输出体积（JPEG/WebP 有损）");
+    expect(compressionView).toContain("启用目标体积控制");
+    expect(compressionView).toContain('disabled={busy || !qualityEnabled}');
+    expect(compressionView).toContain('disabled={busy || !qualityEnabled || !targetSizeActive}');
     expect(compressionView).toContain("maxCandidates: qualityEnabled && maxOutputBytes ? 8 : undefined");
     expect(compressionView).toContain("selectedQuality");
     expect(compressionView).toContain("PNG 优化级别");

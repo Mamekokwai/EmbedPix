@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, estimateFallback, filterCompressionFiles, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, estimateFallback, filterCompressionFiles, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, supportsCompressionTargetSize } from "./imageCompressionLogic";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -17,6 +17,13 @@ describe("image compression logic", () => {
     expect(getCompressionPreset("small-size")).toMatchObject({ quality: 70, pngOptimizationLevel: 6 });
     expect(getCompressionPreset("balanced").description).toContain("JPEG/WebP 有损质量 82");
     expect(getCompressionPreset("balanced").description).toContain("WebP 默认无损");
+  });
+
+  it("enables target-size control only for lossy JPEG and WebP", () => {
+    expect(supportsCompressionTargetSize("jpg", true)).toBe(true);
+    expect(supportsCompressionTargetSize("webp", false)).toBe(true);
+    expect(supportsCompressionTargetSize("webp", true)).toBe(false);
+    expect(supportsCompressionTargetSize("png", true)).toBe(false);
   });
 
   it("validates safe source subdirectory names", () => {
