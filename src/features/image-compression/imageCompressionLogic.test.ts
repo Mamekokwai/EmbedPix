@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionFailureDetails, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_PRESETS, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionOutputLocationError, getCompressionPreset, getCompressionSubdirectoryError, getSuccessfulCompressionOutputPath, supportsCompressionTargetSize } from "./imageCompressionLogic";
 
 describe("image compression logic", () => {
   it("estimates savings deterministically", () => {
@@ -45,6 +45,12 @@ describe("image compression logic", () => {
     expect(canReplaceCompressionOriginal([{ sourcePath: "C:/images/a.png" }], false)).toBe(false);
     expect(formatCompressionReplaceOriginalConfirmation(["C:/images/a.png"])).toContain("bak");
     expect(formatCompressionReplaceOriginalConfirmation(["C:/images/a.png"])).toContain("取消确认不会开始压缩");
+  });
+
+  it("labels each batch result state without implying an output for skips", () => {
+    expect(formatCompressionItemResultStatus("completed")).toBe("已完成");
+    expect(formatCompressionItemResultStatus("skipped")).toBe("已跳过");
+    expect(formatCompressionItemResultStatus("failed")).toBe("失败");
   });
 
   it("validates safe source subdirectory names", () => {

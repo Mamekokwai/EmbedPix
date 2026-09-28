@@ -86,6 +86,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("当前文件：");
     expect(compressionView).toContain("复制失败详情");
     expect(compressionView).toContain("formatCompressionFailureDetails");
+    expect(compressionView).toContain("逐项结果");
+    expect(compressionView).toContain("formatCompressionItemResultStatus");
     expect(compressionView).toContain("getSuccessfulCompressionOutputPath");
     expect(compressionView).toContain("revealImageOutput");
     expect(compressionView).toContain("loadCompressionPreferences");
@@ -138,6 +140,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-output-actions");
     expect(compressionCss).toContain(".compression-current-file");
     expect(compressionCss).toContain(".compression-failure-details");
+    expect(compressionCss).toContain(".compression-item-results");
+    expect(compressionCss).toContain(".compression-item-result-actions");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {

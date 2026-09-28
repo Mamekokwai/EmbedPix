@@ -1,4 +1,4 @@
-import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionOptions, CompressionOutputLocation, CompressionPreset } from "./types";
+import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionItemResultStatus, CompressionOptions, CompressionOutputLocation, CompressionPreset } from "./types";
 export const COMPRESSION_FORMATS: ReadonlyArray<{ value: CompressionFormat; label: string }> = [{ value: "jpg", label: "JPEG" }, { value: "webp", label: "WebP" }, { value: "png", label: "PNG" }];
 export const COMPRESSION_PRESETS: ReadonlyArray<{ value: Exclude<CompressionPreset, "custom">; label: string; description: string; quality: number; pngOptimizationLevel: number }> = [
   { value: "high-quality", label: "高质量", description: "JPEG/WebP 有损质量 92；PNG 优化 2；WebP 默认无损", quality: 92, pngOptimizationLevel: 2 },
@@ -12,6 +12,7 @@ export function getCompressionPreset(preset: Exclude<CompressionPreset, "custom"
 export function supportsCompressionTargetSize(format: CompressionFormat, lossless: boolean): boolean { return format === "jpg" || (format === "webp" && !lossless); }
 export function getSuccessfulCompressionOutputPath(status: "completed" | "skipped", outputPath: string): string | null { const normalizedPath = outputPath.trim(); return status === "completed" && normalizedPath ? normalizedPath : null; }
 export function formatCompressionFailureDetails(details: ReadonlyArray<{ fileName: string; message: string }>): string { return details.map(({ fileName, message }) => `${fileName}：${message}`).join("\n"); }
+export function formatCompressionItemResultStatus(status: CompressionItemResultStatus): string { return status === "completed" ? "已完成" : status === "skipped" ? "已跳过" : "失败"; }
 export function canReplaceCompressionOriginal(items: ReadonlyArray<Pick<CompressionItem, "sourcePath">>, desktopEnvironment: boolean): boolean { return desktopEnvironment && items.length > 0 && items.every((item) => Boolean(item.sourcePath?.trim())); }
 export function formatCompressionReplaceOriginalConfirmation(sourcePaths: ReadonlyArray<string>): string { return [`危险操作：将覆盖 ${sourcePaths.length} 个源文件。`, "每个原图会先移动到同目录的 bak 文件夹，再写入压缩结果。", "失败或跳过不会删除或破坏源文件。取消确认不会开始压缩。", "是否继续？"].join("\n"); }
 export function estimateFallback(items: ReadonlyArray<CompressionItem>, options: CompressionOptions): CompressionEstimate { const inputBytes = items.reduce((sum, item) => sum + item.size, 0); const ratio = options.lossless || options.format === "png" ? 0.82 : Math.max(0.15, 0.65 - options.quality / 300); const estimatedBytes = Math.max(1, Math.round(inputBytes * ratio)); return { inputBytes, estimatedBytes, savingsPercent: Math.max(0, (1 - estimatedBytes / Math.max(1, inputBytes)) * 100) }; }

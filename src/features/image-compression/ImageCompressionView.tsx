@@ -12,6 +12,7 @@ import {
   filterCompressionFiles,
   formatCompressionBytes,
   formatCompressionFailureDetails,
+  formatCompressionItemResultStatus,
   formatCompressionReplaceOriginalConfirmation,
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
@@ -23,7 +24,7 @@ import {
   loadCompressionPreferences,
   saveCompressionPreferences,
 } from "./compressionPreferences";
-import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionOptions, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
+import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionItemResult, CompressionOptions, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
 import type { CompressionPreview } from "../../platform/compression/compressionGateway";
 
 type CompressionStatus = "idle" | "ready" | "busy" | "success" | "error";
@@ -142,6 +143,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [importErrors, setImportErrors] = useState<CompressionImportError[]>([]);
   const [failures, setFailures] = useState<string[]>([]);
   const [failureDetails, setFailureDetails] = useState<CompressionFailureDetail[]>([]);
+  const [itemResults, setItemResults] = useState<CompressionItemResult[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [preview, setPreview] = useState<CompressionPreview | null>(null);
@@ -313,6 +315,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setImportErrors(unsupportedFiles.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })));
     setFailures([]);
     setFailureDetails([]);
+    setItemResults([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setStatus("ready");
@@ -354,6 +357,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setImportErrors(importFailureNames.map((fileName, index) => ({ id: `native-${fileName}-${index}`, fileName, message: "读取失败或被文件夹扫描跳过。" })));
       setFailures([]);
       setFailureDetails([]);
+      setItemResults([]);
       setStatus(imported.length > 0 ? "ready" : "error");
     }
   };
@@ -481,6 +485,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setStage("preflight");
     setFailures([]);
     setFailureDetails([]);
+    setItemResults([]);
     setSkipReasons([]);
     cancelRequestedRef.current = false;
     setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
@@ -497,6 +502,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         const preflight = await preflightCompression(request);
         if (preflight.overwritesExisting && !options.overwrite) {
           setResultStats((current) => ({ ...current, skipped: current.skipped + 1 }));
+          setItemResults((current) => [...current, { fileName: item.file.name, status: "skipped", reason: "同名目标已存在" }]);
           setSkipReasons((current) => [...current, `${item.file.name}：同名目标已存在`]);
           setMessage(`已跳过同名目标：${item.file.name}`);
           setProgress({ current: index + 1, total: queue.length });
@@ -508,12 +514,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         activeJobIdRef.current = null;
         await progressPoll;
         if (result.status === "skipped") {
+          const skippedReason = result.skippedReason || "原生压缩策略跳过，未发布输出";
           setResultStats((current) => ({ ...current, skipped: current.skipped + 1, targetMet: result.targetMet ?? (options.maxOutputBytes === undefined ? current.targetMet : false) }));
-          setSkipReasons((current) => [...current, `${item.file.name}：${result.skippedReason || "原生压缩策略跳过，未发布输出"}`]);
-          setMessage(`已跳过 ${item.file.name}：${result.skippedReason || "未发布输出"}`);
+          setItemResults((current) => [...current, { fileName: item.file.name, status: "skipped", reason: skippedReason }]);
+          setSkipReasons((current) => [...current, `${item.file.name}：${skippedReason}`]);
+          setMessage(`已跳过 ${item.file.name}：${skippedReason}`);
         } else {
           const successfulOutputPath = getSuccessfulCompressionOutputPath(result.status, result.outputPath);
           if (successfulOutputPath) setLastSuccessfulOutputPath(successfulOutputPath);
+          setItemResults((current) => [...current, { fileName: item.file.name, status: "completed", outputPath: successfulOutputPath ?? undefined, reason: successfulOutputPath ? undefined : "原生结果未返回输出路径" }]);
           const targetMet = result.targetMet ?? (options.maxOutputBytes === undefined ? null : result.outputBytes <= options.maxOutputBytes);
           setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes, targetMet: targetMet === null ? current.targetMet : current.targetMet === false || targetMet === false ? false : true, selectedQualities: typeof result.selectedQuality === "number" ? [...current.selectedQualities, result.selectedQuality] : current.selectedQualities }));
         }
@@ -527,10 +536,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         }
         activeJobIdRef.current = null;
         failedNames.push(item.file.name);
+        setItemResults((current) => [...current, { fileName: item.file.name, status: "failed", reason: detail }]);
         setFailureDetails((current) => [...current, { fileName: item.file.name, message: detail }]);
         lastError = detail;
         setResultStats((current) => ({ ...current, failed: current.failed + 1 }));
         if (cancelRequestedRef.current) {
+          setItemResults((current) => [...current, ...queue.slice(index + 1).map((pendingItem) => ({ fileName: pendingItem.file.name, status: "skipped" as const, reason: "已取消，未处理" }))]);
           setResultStats((current) => ({ ...current, skipped: current.skipped + queue.length - index - 1 }));
           setMessage("已取消当前任务，其余文件未处理。");
           setProgress({ current: queue.length, total: queue.length });
@@ -560,6 +571,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setItems((current) => current.filter((item) => item.id !== id));
     setFailures([]);
     setFailureDetails([]);
+    setItemResults([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setMessage("");
@@ -572,6 +584,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setSelectedItemId(null);
     setFailures([]);
     setFailureDetails([]);
+    setItemResults([]);
     setImportErrors([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
@@ -587,11 +600,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setPngOptimizationLevel(values.pngOptimizationLevel);
   };
 
-  const copySuccessfulOutputPath = async () => {
-    if (!lastSuccessfulOutputPath) return;
+  const copyOutputPath = async (outputPath: string) => {
     try {
       if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择输出路径。");
-      await navigator.clipboard.writeText(lastSuccessfulOutputPath);
+      await navigator.clipboard.writeText(outputPath);
       setMessage("输出路径已复制");
       setStatus("ready");
     } catch (error) {
@@ -613,10 +625,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     }
   };
 
-  const openSuccessfulOutputFolder = async () => {
-    if (!lastSuccessfulOutputPath) return;
+  const openOutputFolder = async (outputPath: string) => {
     try {
-      await revealImageOutput(lastSuccessfulOutputPath);
+      await revealImageOutput(outputPath);
       setMessage("已打开输出文件夹");
       setStatus("ready");
     } catch (error) {
@@ -723,7 +734,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         {maxOutputBytes ? <div className="compression-summary-stat"><span>目标体积</span><strong className={resultStats.targetMet === false ? "compression-failure" : "compression-saving"}>{resultStats.targetMet === null ? "待处理" : resultStats.targetMet ? "已达成" : "未达成"}</strong></div> : null}
         {resultStats.selectedQualities.length > 0 ? <div className="compression-summary-stat"><span>实际质量</span><strong>{resultStats.selectedQualities.join(" / ")}</strong></div> : null}
         <span className="compression-estimate-note">输出 {formatCompressionBytes(resultStats.outputBytes)} / 已处理输入 {formatCompressionBytes(resultStats.processedInputBytes)}</span>
-        {lastSuccessfulOutputPath ? <div className="compression-output-actions" aria-label="最近成功输出"><div className="compression-output-path"><span>最近成功输出</span><code>{lastSuccessfulOutputPath}</code></div><div className="compression-output-buttons"><button type="button" className="compression-secondary-button" onClick={() => { void copySuccessfulOutputPath(); }}>复制输出路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openSuccessfulOutputFolder(); }}>打开输出文件夹</button></div></div> : null}
+        {lastSuccessfulOutputPath ? <div className="compression-output-actions" aria-label="最近成功输出"><div className="compression-output-path"><span>最近成功输出</span><code>{lastSuccessfulOutputPath}</code></div><div className="compression-output-buttons"><button type="button" className="compression-secondary-button" onClick={() => { void copyOutputPath(lastSuccessfulOutputPath); }}>复制输出路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openOutputFolder(lastSuccessfulOutputPath); }}>打开输出文件夹</button></div></div> : null}
+        {itemResults.length > 0 ? <div className="compression-item-results" aria-label="逐项压缩结果"><div className="compression-item-results-heading"><strong>逐项结果（{itemResults.length}）</strong></div><ul>{itemResults.map((result, index) => <li className={`compression-item-result compression-item-result-${result.status}`} key={`${result.fileName}:${index}`}><div className="compression-item-result-copy"><strong>{result.fileName}</strong><span>{formatCompressionItemResultStatus(result.status)} · {result.outputPath || result.reason || "无附加信息"}</span></div>{result.status === "completed" && result.outputPath ? <div className="compression-item-result-actions"><button type="button" className="compression-secondary-button" onClick={() => { void copyOutputPath(result.outputPath as string); }}>复制路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openOutputFolder(result.outputPath as string); }}>打开文件夹</button></div> : null}</li>)}</ul></div> : null}
         {failureDetails.length > 0 ? <div className="compression-failure-details" role="alert" aria-label="失败详情"><div className="compression-failure-heading"><strong>失败详情（{failureDetails.length}）</strong><button type="button" className="compression-secondary-button" onClick={() => { void copyFailureDetails(); }}>复制失败详情</button></div><ul>{failureDetails.map((detail) => <li key={`${detail.fileName}:${detail.message}`}><strong>{detail.fileName}</strong><span>{detail.message}</span></li>)}</ul></div> : null}
         {skipReasons.length > 0 ? <div className="compression-skip-details"><strong>跳过原因</strong>{skipReasons.map((reason) => <span key={reason}>{reason}</span>)}</div> : null}
       </section>
