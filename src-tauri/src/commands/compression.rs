@@ -1065,6 +1065,28 @@ mod tests {
             assert!(decode_image(&output).is_ok());
         }
         assert!(decode_image(b"bad").is_err());
+        assert!(decode_image(&[]).is_err());
+    }
+
+    #[test]
+    fn lossless_webp_preserves_rgba_pixels_and_alpha() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_fn(3, 2, |x, y| {
+            Rgba([
+                (x * 70 + y * 13) as u8,
+                (y * 90 + x * 17) as u8,
+                210,
+                if x == 1 { 48 } else { 255 },
+            ])
+        }));
+        let expected = image.to_rgba8().into_raw();
+        let mut input = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut input), ImageOutputFormat::Png)
+            .unwrap();
+
+        let output = encode_image(&input, CompressionFormat::Webp, 80, 2).unwrap();
+        let actual = decode_image(&output).unwrap().to_rgba8().into_raw();
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -1109,6 +1131,33 @@ mod tests {
         assert!(CompressionFormat::parse("bmp").is_err());
         assert!(!(1..=100).contains(&0));
         assert_eq!(MetadataPolicy::default(), MetadataPolicy::Strip);
+    }
+
+    #[test]
+    fn compression_rejects_metadata_preserve_contract() {
+        let metadata =
+            br#"{"fileName":"sample.png","outputFormat":"webp","metadataPolicy":"preserve"}"#;
+        let mut payload = Vec::from(*b"EGF1");
+        payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
+        payload.extend_from_slice(metadata);
+        payload.extend_from_slice(&png_input());
+
+        assert!(parse_raw_payload(&payload)
+            .unwrap_err()
+            .contains("metadataPolicy=preserve"));
+    }
+
+    #[test]
+    fn compression_decodes_bytes_instead_of_trusting_filename_extension() {
+        let metadata = br#"{"fileName":"photo.jpg","outputFormat":"webp"}"#;
+        let mut payload = Vec::from(*b"EGF1");
+        payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
+        payload.extend_from_slice(metadata);
+        payload.extend_from_slice(&png_input());
+
+        let request = parse_raw_payload(&payload).unwrap();
+        assert_eq!(decode_image(&request.input).unwrap().dimensions(), (2, 2));
+        assert!(encode_image(&request.input, request.format, 80, 2).is_ok());
     }
 
     #[test]
