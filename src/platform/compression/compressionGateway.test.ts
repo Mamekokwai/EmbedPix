@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, createCompressionRequest, encodeCompressionEnvelope, formatCompressionProgressError, getCompressionProgress, preflightCompression, previewCompression } from "./compressionGateway";
+import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, createCompressionRequest, encodeCompressionEnvelope, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, preflightCompression, previewCompression } from "./compressionGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -103,6 +103,11 @@ describe("compression gateway", () => {
     const directoryLength = new DataView(directory.buffer).getUint32(4, true);
     const directoryMetadata = JSON.parse(new TextDecoder().decode(directory.slice(8, 8 + directoryLength))) as Record<string, unknown>;
     expect(directoryMetadata).toMatchObject({ outputLocation: "directory", outputDirectory: "C:/export" });
+  });
+
+  it("keeps per-file directory import skips available to the compression UI", async () => {
+    vi.mocked(invoke).mockResolvedValue({ root: "C:/images", files: [], skipped: ["bad.txt：格式不支持"], totalBytes: 0 });
+    await expect(pickCompressionDirectoryResult()).resolves.toMatchObject({ skipped: ["bad.txt：格式不支持"] });
   });
 
   it("exposes native progress and cancellation commands", async () => {

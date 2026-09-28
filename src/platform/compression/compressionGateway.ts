@@ -100,9 +100,13 @@ export async function pickCompressionFiles(): Promise<NativeImageFile[]> {
   return pickImageFiles();
 }
 
-export async function pickCompressionDirectory(): Promise<NativeImageFile[]> {
+export async function pickCompressionDirectoryResult(): Promise<ImageDirectoryImportResult | null> {
   if (!isTauriEnvironment()) throw new Error("导入文件夹仅在桌面应用中可用。");
-  const result: ImageDirectoryImportResult | null = await pickImageDirectory();
+  return pickImageDirectory();
+}
+
+export async function pickCompressionDirectory(): Promise<NativeImageFile[]> {
+  const result = await pickCompressionDirectoryResult();
   return result?.files ?? [];
 }
 

@@ -118,6 +118,8 @@
 .compression-field-hint { color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; }
 .compression-skip-details { display: grid; flex-basis: 100%; gap: 4px; padding-top: 8px; border-top: 1px solid var(--qp-border-subtle); color: var(--qp-text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
 .compression-skip-details strong { color: var(--qp-text-secondary); font-weight: 650; }
+.compression-import-errors { display: grid; gap: 4px; margin-top: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--qp-danger, #df6a6a) 38%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); color: var(--qp-danger, #df6a6a); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.compression-import-errors strong { font-weight: 650; }
 .compression-footer { flex-wrap: wrap; gap: 12px; margin-top: 14px; }
 .compression-status { min-width: 0; flex: 1 1 260px; gap: 7px; color: var(--qp-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
 .compression-status > span { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }

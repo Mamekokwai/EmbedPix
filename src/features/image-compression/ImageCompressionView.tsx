@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import "../../styles/features/image-compression.css";
-import { cancelCompression, compressImage, createCompressionRequest, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectory, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
+import { cancelCompression, compressImage, createCompressionRequest, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
 import { isTauriEnvironment } from "../../platform/image/imageExportGateway";
 import type { NativeImageFile } from "../../platform/image/imageExportGateway";
 import {
@@ -35,6 +35,12 @@ interface CompressionResultStats {
   selectedQualities: number[];
 }
 
+interface CompressionImportError {
+  id: string;
+  fileName: string;
+  message: string;
+}
+
 const MAX_TARGET_SIZE_KIB = 128 * 1024;
 
 function fileTypeForPath(path: string): string {
@@ -53,6 +59,36 @@ function toBrowserItems(files: File[]): CompressionItem[] {
     file,
     size: file.size,
   }));
+}
+
+function getCompressionInputFormat(file: File): string {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension === "jpg" || extension === "jpeg" || file.type === "image/jpeg") return "JPEG";
+  if (extension) return extension.toUpperCase();
+  return file.type.startsWith("image/") ? file.type.slice(6).toUpperCase() : "图片";
+}
+
+function readCompressionDimensions(file: File): Promise<{ width: number; height: number }> {
+  if (typeof createImageBitmap === "function") {
+    return createImageBitmap(file).then((bitmap) => {
+      const dimensions = { width: bitmap.width, height: bitmap.height };
+      bitmap.close();
+      return dimensions;
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("无法读取图片尺寸。"));
+    };
+    image.src = objectUrl;
+  });
 }
 
 function errorMessage(error: unknown): string {
@@ -87,6 +123,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [estimate, setEstimate] = useState<CompressionEstimate>({ inputBytes: 0, estimatedBytes: 0, savingsPercent: 0 });
   const [estimateNote, setEstimateNote] = useState("等待导入图片");
   const [message, setMessage] = useState("");
+  const [importErrors, setImportErrors] = useState<CompressionImportError[]>([]);
   const [failures, setFailures] = useState<string[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -130,6 +167,14 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
   const previewSavedBytes = selectedItem && preview ? selectedItem.size - preview.outputBytes : 0;
   const previewSavingsPercent = selectedItem && preview && selectedItem.size > 0 ? (previewSavedBytes / selectedItem.size) * 100 : 0;
+
+  const queueCompressionDimensions = (item: CompressionItem) => {
+    void Promise.resolve().then(() => readCompressionDimensions(item.file)).then((dimensions) => {
+      setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, dimensions } : candidate));
+    }).catch((error) => {
+      setImportErrors((current) => [...current, { id: `dimensions-${item.id}`, fileName: item.file.name, message: errorMessage(error) }]);
+    });
+  };
 
   useEffect(() => {
     if (!active) return;
@@ -200,30 +245,38 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   }, [active, options, selectedItem]);
 
   const addBrowserFiles = (files: File[], replaceItemId: string | null = null) => {
+    const supportedFiles = filterCompressionFiles(files);
+    const unsupportedFiles = files.filter((file) => !supportedFiles.includes(file));
     const next = toBrowserItems(files);
     if (next.length === 0) {
+      setImportErrors(unsupportedFiles.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })));
       setMessage("没有找到支持的图片格式（PNG、JPEG、WebP、BMP、GIF）。");
       setStatus("error");
       return;
     }
     const replacement = replaceItemId ? next[0] : null;
     const replacingExisting = Boolean(replacement && items.some((item) => item.id === replaceItemId));
+    const appendedItems = replacingExisting ? [] : next.filter((item) => !items.some((current) => current.id === item.id));
+    const hydratedItems = replacingExisting && replacement ? [{ ...replacement, id: replaceItemId as string }] : appendedItems;
     setItems((current) => {
       if (replacingExisting && replacement) {
         return current.map((item) => item.id === replaceItemId ? { ...replacement, id: replaceItemId } : item);
       }
       const existing = new Set(current.map((item) => item.id));
-      return [...current, ...next.filter((item) => !existing.has(item.id))];
+      return [...current, ...appendedItems.filter((item) => !existing.has(item.id))];
     });
+    hydratedItems.forEach(queueCompressionDimensions);
     if (replacingExisting) setSelectedItemId(replaceItemId);
     setMessage(replacingExisting ? "已替换当前图片。" : "");
+    setImportErrors(unsupportedFiles.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })));
     setFailures([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setStatus("ready");
   };
 
-  const importNativeFiles = async (nativeFiles: NativeImageFile[], replaceItemId: string | null = null) => {
+  const importNativeFiles = async (nativeFiles: NativeImageFile[], replaceItemId: string | null = null, directorySkipped: string[] = []) => {
+    setImportErrors([]);
     const imported: CompressionItem[] = [];
     const skipped: string[] = [];
     for (const nativeFile of nativeFiles) {
@@ -242,6 +295,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         }
         return [...current, ...imported];
       });
+      const itemForDimensions = replacingExisting && replacement ? [{ ...replacement, id: replaceItemId as string }] : imported;
+      itemForDimensions.forEach(queueCompressionDimensions);
       if (replacingExisting) {
         setSelectedItemId(replaceItemId);
         setMessage(nativeFiles.length > 1 ? "已替换当前图片（仅使用所选文件中的第一张）。" : "已替换当前图片。");
@@ -250,9 +305,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
       setStatus("ready");
     }
-    if (skipped.length > 0) {
-      setMessage(`有 ${skipped.length} 个文件读取失败，已跳过。`);
-      setFailures(skipped);
+    const importFailureNames = [...directorySkipped, ...skipped];
+    if (importFailureNames.length > 0) {
+      setMessage(`有 ${importFailureNames.length} 个文件导入失败，已跳过。`);
+      setImportErrors(importFailureNames.map((fileName, index) => ({ id: `native-${fileName}-${index}`, fileName, message: "读取失败或被文件夹扫描跳过。" })));
+      setFailures([]);
       setStatus(imported.length > 0 ? "ready" : "error");
     }
   };
@@ -285,7 +342,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     }
     setImportBusy(true);
     try {
-      await importNativeFiles(await pickCompressionDirectory());
+      const result = await pickCompressionDirectoryResult();
+      if (result) await importNativeFiles(result.files, null, result.skipped);
     } catch (error) {
       setMessage(errorMessage(error));
       setStatus("error");
@@ -448,6 +506,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setItems([]);
     setSelectedItemId(null);
     setFailures([]);
+    setImportErrors([]);
     setSkipReasons([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setMessage("");
@@ -507,12 +566,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
               <div className="compression-item" key={item.id}>
                 <button type="button" className={`compression-item-select${selectedItemId === item.id ? " compression-item-selected" : ""}`} aria-pressed={selectedItemId === item.id} onClick={() => { if (!sourceBusy) setSelectedItemId(item.id); }} disabled={sourceBusy}>
                   <div className="compression-item-icon"><Images size={15} aria-hidden="true" /></div>
-                  <span className="compression-item-copy"><strong>{item.file.name}</strong><span>{formatCompressionBytes(item.size)}{item.sourcePath ? " · 桌面文件" : " · 浏览器文件"}</span></span>
+                  <span className="compression-item-copy"><strong>{item.file.name}</strong><span>{item.dimensions ? `${item.dimensions.width} × ${item.dimensions.height} px` : "读取尺寸中"} · {getCompressionInputFormat(item.file)} · {formatCompressionBytes(item.size)}{item.sourcePath ? " · 桌面文件" : " · 浏览器文件"}</span></span>
                 </button>
                 <button type="button" className="compression-icon-button" aria-label={`移除 ${item.file.name}`} onClick={() => removeItem(item.id)} disabled={sourceBusy}><Trash2 size={15} aria-hidden="true" /></button>
               </div>
             ))}
           </div>
+          {importErrors.length > 0 ? <div className="compression-import-errors" role="alert" aria-label="导入问题"><strong>导入问题</strong>{importErrors.map((entry) => <span key={entry.id}>{entry.fileName}：{entry.message}</span>)}</div> : null}
         </div>
 
         <aside className="compression-card compression-settings-card">

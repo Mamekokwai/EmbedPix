@@ -98,6 +98,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("替换当前");
     expect(compressionView).toContain("replaceItemIdRef");
     expect(compressionView).toContain("仅使用所选文件中的第一张");
+    expect(compressionView).toContain("getCompressionInputFormat(item.file)");
+    expect(compressionView).toContain("item.dimensions.width");
+    expect(compressionView).toContain("compression-import-errors");
+    expect(compressionView).toContain("读取失败或被文件夹扫描跳过");
+    expect(compressionView).toContain("pickCompressionDirectoryResult");
     expect(compressionView).toContain("compression-item-select");
     expect(compressionView).toContain("event.preventDefault(); void chooseFiles()");
     expect(compressionView).toContain("setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0");
@@ -108,6 +113,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain("@media (max-height: 620px)");
     expect(compressionCss).toContain(".compression-status > span { min-width: 0;");
     expect(compressionCss).toContain(".compression-clear-button:focus-visible");
+    expect(compressionCss).toContain(".compression-import-errors");
   });
 
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {
