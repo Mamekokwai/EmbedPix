@@ -10,11 +10,11 @@
 
 - 第一阶段闭环已交付：PNG/JPEG/WebP 单图批处理、桌面原生压缩命令、预检、进度、取消、失败重试、临时文件与原子发布、覆盖保护、响应式工作台；新增活动 `jobId` 冲突保护和最多 2 个并发编码 slot，避免取消/进度串任务及内存峰值失控。
 - 交互与诊断增强：格式感知的高质量/平衡/小体积/自定义预设已落地；进度响应增加兼容性的可选错误码；发布链路增加本地 manifest/PE 边界 fixture。
-- 本轮回归结论：WebP 有损已接入静态 `libwebp-sys2` 0.2.0 封装；仅使用官方 `WebPEncodeRGB/RGBA`，由 Rust 边界负责质量范围、输出复制与释放，并验证无动画块、尺寸、解码和 Alpha。当前 x64 Windows 静态构建已通过；ARM64 尚未在本环境安装目标，发布前仍需按架构复核。JPEG EXIF Orientation 已通过固定 `kamadak-exif` 0.6.1 在 strip 解码入口归一化。
+- 本轮回归结论：WebP 有损已接入静态 `libwebp-sys2` 0.2.0 封装；method 0–6 已通过初始化 FFI 接入 RGB/RGBA、预览、估算和候选搜索，默认 method=4 与旧路径兼容；由 Rust 边界负责质量范围、输出复制与释放，并验证无动画块、尺寸、解码和 Alpha。当前 x64 Windows 静态构建已通过；ARM64 尚未在本环境安装目标，发布前仍需按架构复核。JPEG EXIF Orientation 已通过固定 `kamadak-exif` 0.6.1 在 strip 解码入口归一化。
 - 第二阶段已交付：压缩后更大则跳过、源文件夹/子目录/指定目录输出、实际输入输出体积与节省统计、跳过原因展示。
-- 第一阶段限制：WebP 有损使用质量 1–100 和 libwebp 默认 Alpha 质量，不开放 effort/method；JPEG 不支持无损且拒绝含透明像素的输入；元数据仅支持移除；浏览器预览不能直接执行原生压缩；同名文件默认拒绝写入，不自动改名。
-- 下一阶段优先级：WebP effort/method、完整元数据策略、可回收临时资源、关闭窗口时的任务清理，以及跨架构发布复核。
-- 当前门禁：前端 27 个测试文件 / 295 个测试通过；类型检查、ESLint 和构建通过；Rust 193 个库测试 + 3 个 CLI 测试通过；构建、clippy、OxiPNG 强制 smoke、GIF 8/8 性能与 3/3 质量门禁、桌面 smoke、发布配置与本地 release fixture smoke、压缩 CLI smoke 通过；真实 `v0.7.0` 发布资产 smoke 已完成。
+- 第一阶段限制：WebP 有损使用质量 1–100、method 0–6 和 libwebp 默认 Alpha 质量，effort/near-lossless 仍未开放；JPEG 不支持无损且拒绝含透明像素的输入；元数据仅支持移除；浏览器预览不能直接执行原生压缩；同名文件默认拒绝写入，不自动改名。
+- 下一阶段优先级：WebP effort/near-lossless、完整元数据策略、可回收临时资源、关闭窗口时的任务清理，以及跨架构发布复核。
+- 当前门禁：前端 27 个测试文件 / 298 个测试通过；类型检查、ESLint 和构建通过；Rust 198 个库测试 + 3 个 CLI 测试通过；构建、clippy、OxiPNG 强制 smoke、GIF 8/8 性能与 3/3 质量门禁、桌面 smoke、发布配置与本地 release fixture smoke、压缩 CLI smoke 通过；真实 `v0.7.0` 发布资产 smoke 已完成。
 
 ## 0. 总体门禁
 
@@ -104,9 +104,10 @@
 
 - [x] 支持有损 WebP。
 - [x] 支持无损 WebP。
-- [x] 支持质量参数：有损 WebP 接受质量 1–100；不开放 effort/method。
+- [x] 支持质量参数：有损 WebP 接受质量 1–100，并支持 method 0–6；method 仅影响编码耗时与压缩率，不代表画质。
 - [x] 支持 Alpha 质量或明确使用默认值：使用 libwebp 默认 Alpha 质量，并覆盖透明度回读。
-- [ ] 支持编码 effort/method。
+- [x] 支持编码 method 0–6；默认 4，正式压缩、预览、估算和候选搜索保持一致。
+- [ ] 支持编码 effort/near-lossless。
 - [x] 保持透明度和透明边缘正确。
 - [x] 验证输出可解码、尺寸正确、Alpha 正确。
 - [x] 评估目标体积参数能否由底层后端直接支持：JPEG/WebP 有损均使用有界质量候选搜索，超目标返回明确的 `target_unmet`。
@@ -372,14 +373,14 @@
 
 1. [x] 创建设计文档和本 TODO。
 2. [~] M0 数据契约和资源限制：第一阶段契约完成，高级模式/后端枚举待扩展。
-3. [~] M1 Rust 压缩核心与安全发布：PNG/JPEG/WebP、预览、目标搜索和 OxiPNG 已完成；WebP effort/method 与进程异常清理仍待后续。
+3. [~] M1 Rust 压缩核心与安全发布：PNG/JPEG/WebP、预览、目标搜索、OxiPNG 和 WebP method 已完成；WebP effort/near-lossless 与进程异常清理仍待后续。
 4. [~] M2 PNG/JPEG/WebP 策略与预估：JPEG/WebP 有损目标体积搜索已完成，尺寸联动与更高阶自动择优待后续。
 5. [x] M3 压缩工作区 UI。
 6. [ ] M4 设置、预设和工作区。
 7. [~] M5 安全与异常流程：核心路径已覆盖，窗口关闭/持久化任务待补齐。
 8. [x] M6 测试与门禁（当前阶段）。
 9. [~] Alpha/Beta/RC 验收：Alpha/Beta 当前功能门禁通过，RC 仍需真实发布资产验收。
-10. [~] M7 自动择优：JPEG/WebP 有损候选已完成，视觉质量阈值与高级编码参数待后续。
+10. [~] M7 自动择优：JPEG/WebP 有损候选和 WebP method 已完成，视觉质量阈值与 effort/near-lossless 待后续。
 11. [ ] M8 动画压缩。
 
 ## 12. 暂不实现或需要额外决策
