@@ -161,6 +161,9 @@ jobs:
       - name: Run release configuration smoke
         run: npm run check:release-config
 
+      - name: Run local release fixture smoke
+        run: npm run check:release-fixture
+
       - name: Run frontend quality gate
         run: npm test
 

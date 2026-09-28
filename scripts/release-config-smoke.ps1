@@ -54,9 +54,18 @@ if (-not (Test-Path -LiteralPath 'src-tauri/src/bin/embedpix-cli.rs' -PathType L
 }
 
 $releaseSmoke = Get-Content -Raw 'scripts/release-smoke.ps1'
-foreach ($required in @('latest.json', 'SHA256SUMS.txt', 'release-provenance.json', 'embedpix-minisign-verifier', 'Assert-WindowsGuiSubsystem', 'peOffset -gt $bytes.Length - 0x60', 'Install')) {
+foreach ($required in @('embedpix-minisign-verifier', 'release-asset-contract.ps1', 'release-pe-contract.ps1', 'Assert-ReleaseAssetContract', 'Install')) {
   if ($releaseSmoke -notmatch [regex]::Escape($required)) { throw "Release smoke is missing: $required" }
 }
+$assetContract = Get-Content -Raw 'scripts/release-asset-contract.ps1'
+foreach ($required in @('latest.json', 'SHA256SUMS.txt', 'release-provenance.json', 'Get-ExpectedReleaseAssetNames', 'Assert-ReleaseAssetContract', 'asset.size', 'pub_date', 'windows-x86_64', 'windows-aarch64')) {
+  if ($assetContract -notmatch [regex]::Escape($required)) { throw "Release asset contract is missing: $required" }
+}
+$peContract = Get-Content -Raw 'scripts/release-pe-contract.ps1'
+foreach ($required in @('Assert-WindowsGuiSubsystem', 'peOffset -gt $bytes.Length - 0x60')) {
+  if ($peContract -notmatch [regex]::Escape($required)) { throw "Release PE contract is missing: $required" }
+}
+if (-not (Test-Path -LiteralPath 'scripts/release-fixture-smoke.ps1' -PathType Leaf)) { throw 'Release fixture smoke is missing.' }
 $workflow = Get-Content -Raw '.github/workflows/prepare-release.yml'
 foreach ($required in @('windows-x86_64', 'windows-aarch64', 'TAURI_SIGNING_PRIVATE_KEY', 'latest.json', 'overwrite_files: false')) {
   if ($workflow -notmatch [regex]::Escape($required)) { throw "Release workflow is missing: $required" }

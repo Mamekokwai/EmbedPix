@@ -8,17 +8,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $headers = @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'EmbedPix release smoke' }
 
-function Assert-WindowsGuiSubsystem([string]$Path) {
-  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Installed executable is missing: $Path" }
-  $bytes = [IO.File]::ReadAllBytes($Path)
-  if ($bytes.Length -lt 0x100 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw "Executable is not a Windows PE file: $Path" }
-  $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
-  if ($peOffset -lt 0 -or $peOffset -gt $bytes.Length - 0x60) { throw "Executable PE header is invalid: $Path" }
-  if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) { throw "Executable PE signature is invalid: $Path" }
-  $subsystem = [BitConverter]::ToUInt16($bytes, $peOffset + 0x5c)
-  if ($subsystem -ne 2) { throw "Installed EmbedPix executable uses subsystem $subsystem; expected Windows GUI subsystem 2." }
-  Write-Host "Verified Windows GUI subsystem for $Path."
-}
+$assetContract = Join-Path $PSScriptRoot 'release-asset-contract.ps1'
+$peContract = Join-Path $PSScriptRoot 'release-pe-contract.ps1'
+if (-not (Test-Path -LiteralPath $assetContract -PathType Leaf)) { throw "Release asset contract is missing: $assetContract" }
+if (-not (Test-Path -LiteralPath $peContract -PathType Leaf)) { throw "Release PE contract is missing: $peContract" }
+. $assetContract
+. $peContract
 
 $configSmoke = Join-Path $PSScriptRoot 'release-config-smoke.ps1'
 if (-not (Test-Path -LiteralPath $configSmoke -PathType Leaf)) { throw "Release config smoke is missing: $configSmoke" }
@@ -32,17 +27,6 @@ if ($release.draft -or $release.prerelease) { throw "Release $Tag is draft or pr
 
 $version = $Tag.TrimStart('v')
 $publicKeyPath = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-updater-public-key-" + [guid]::NewGuid() + '.pub')
-$expected = @(
-  "EmbedPix_${version}_x64-setup.exe",
-  "EmbedPix_${version}_x64-setup.exe.sig",
-  "EmbedPix_${version}_arm64-setup.exe",
-  "EmbedPix_${version}_arm64-setup.exe.sig",
-  'latest.json', 'SHA256SUMS.txt', 'release-provenance.json'
-)
-$actual = @($release.assets | ForEach-Object name)
-if ($actual.Count -ne $expected.Count -or @($expected | Where-Object { $actual -notcontains $_ }).Count -ne 0) {
-  throw "Release assets do not match the expected seven-asset set: $($actual -join ', ')"
-}
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-release-smoke-" + [guid]::NewGuid())
 $diagnosticRoot = if ($env:GITHUB_WORKSPACE) { Join-Path $env:GITHUB_WORKSPACE 'release-smoke-diagnostics' } else { Join-Path ([IO.Path]::GetTempPath()) 'embedpix-release-smoke-diagnostics' }
@@ -51,64 +35,7 @@ try {
   foreach ($asset in $release.assets) {
     Invoke-WebRequest -Headers $headers -Uri $asset.browser_download_url -OutFile (Join-Path $root $asset.name)
   }
-  $latest = Get-Content -Raw (Join-Path $root 'latest.json') | ConvertFrom-Json
-  if ($latest.version -ne $version) { throw 'latest.json version mismatch.' }
-  $manifestFields = @($latest.PSObject.Properties.Name)
-  if ($manifestFields.Count -ne 4 -or $manifestFields -notcontains 'version' -or $manifestFields -notcontains 'notes' -or $manifestFields -notcontains 'pub_date' -or $manifestFields -notcontains 'platforms') {
-    throw 'latest.json root schema is invalid.'
-  }
-  [DateTimeOffset]$pubDate = $latest.pub_date
-  if ($pubDate -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) { throw 'latest.json pub_date is in the future.' }
-  $platforms = @($latest.platforms.PSObject.Properties.Name)
-  if ($platforms.Count -ne 2 -or $platforms -notcontains 'windows-x86_64' -or $platforms -notcontains 'windows-aarch64') {
-    throw 'latest.json platform set mismatch.'
-  }
-  $expectedPlatformAssets = @{
-    'windows-x86_64' = "EmbedPix_${version}_x64-setup.exe"
-    'windows-aarch64' = "EmbedPix_${version}_arm64-setup.exe"
-  }
-  foreach ($platform in $platforms) {
-    $platformFields = @($latest.platforms.$platform.PSObject.Properties.Name)
-    if ($platformFields.Count -ne 2 -or $platformFields -notcontains 'signature' -or $platformFields -notcontains 'url') {
-      throw "$platform manifest schema is invalid."
-    }
-    $encoded = $latest.platforms.$platform.signature
-    $assetName = $expectedPlatformAssets[$platform]
-    $asset = $release.assets | Where-Object name -eq $assetName | Select-Object -First 1
-    $expectedUrl = "https://github.com/$Repository/releases/download/$Tag/$assetName"
-    if ($latest.platforms.$platform.url -ne $expectedUrl) { throw "$platform manifest URL does not match $expectedUrl." }
-    $assetSignature = (Get-Content -Raw (Join-Path $root "$assetName.sig")).Trim()
-    if ($encoded.Trim() -ne $assetSignature) { throw "$platform manifest signature does not match $assetName.sig." }
-    try { $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) } catch { throw "$platform signature is not valid base64." }
-    $lines = @($decoded -split "\r?\n" | Where-Object { $_ -ne '' })
-    $b64 = '^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$'
-    if ($lines.Count -lt 4 -or $lines[0] -notmatch '^untrusted comment: .+$' -or $lines[1] -notmatch $b64 -or $lines[2] -notmatch '^trusted comment: .+$' -or $lines[3] -notmatch $b64) {
-      throw "$platform signature does not have a valid minisign structure."
-    }
-  }
-  $provenance = Get-Content -Raw (Join-Path $root 'release-provenance.json') | ConvertFrom-Json
-  if ($provenance.repository -ne $Repository -or $provenance.release_tag -ne $Tag -or
-      $provenance.workflow_ref -ne "refs/tags/$Tag" -or
-      $provenance.release_commit -notmatch '^[0-9a-fA-F]{40}$' -or
-      $provenance.workflow_sha -notmatch '^[0-9a-fA-F]{40}$') {
-    throw 'release-provenance.json does not match the published tag or immutable commit format.'
-  }
-  $checks = Get-Content (Join-Path $root 'SHA256SUMS.txt')
-  $checkedNames = @()
-  foreach ($line in $checks) {
-    if ($line -notmatch '^([0-9a-fA-F]{64})\s+(.+)$') { throw "Invalid SHA256SUMS line: $line" }
-    $assetName = $Matches[2]
-    if ($checkedNames -contains $assetName -or -not ($expected -contains $assetName)) { throw "Unexpected or duplicate SHA256SUMS asset: $assetName" }
-    $checkedNames += $assetName
-    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $root $assetName)).Hash
-    if ($actualHash -ine $Matches[1]) { throw "SHA256 mismatch for $assetName." }
-  }
-  $checksumExpected = @($expected | Where-Object { $_ -ne 'SHA256SUMS.txt' })
-  $checkedSet = (@($checkedNames | Sort-Object) -join ',')
-  $expectedSet = (@($checksumExpected | Sort-Object) -join ',')
-  if ($checkedSet -ne $expectedSet) {
-    throw 'SHA256SUMS.txt does not cover the expected published assets.'
-  }
+  Assert-ReleaseAssetContract -Release $release -Root $root -Repository $Repository -Tag $Tag | Out-Null
   $decodedPublicKey = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String((Get-Content -Raw 'src-tauri/update-public-key.txt').Trim()))
   [IO.File]::WriteAllText($publicKeyPath, $decodedPublicKey, (New-Object Text.UTF8Encoding($false)))
   cargo build --manifest-path tools/minisign-verifier/Cargo.toml --release --locked --quiet
