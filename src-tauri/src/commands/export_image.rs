@@ -3016,6 +3016,34 @@ mod tests {
     }
 
     #[test]
+    fn original_output_restores_source_when_existing_output_backup_fails() {
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-original-replace-rollback-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let source_directory = root.join("source");
+        let output_directory = root.join("output");
+        fs::create_dir_all(&source_directory).unwrap();
+        fs::create_dir_all(&output_directory).unwrap();
+        let source = source_directory.join("screen.png");
+        let output = output_directory.join("screen.bmp");
+        fs::write(&source, b"old-source").unwrap();
+        fs::write(&output, b"old-output").unwrap();
+        fs::write(output_directory.join("bak"), b"backup path is occupied").unwrap();
+
+        let error =
+            replace_original_file(&output, b"new-output".to_vec(), source.to_str()).unwrap_err();
+
+        assert!(!error.is_empty());
+        assert_eq!(fs::read(&source).unwrap(), b"old-source");
+        assert_eq!(fs::read(&output).unwrap(), b"old-output");
+        assert!(!source_directory.join("bak/screen.png").exists());
+        assert!(output_directory.join("bak").is_file());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn original_output_same_extension_backs_up_source_before_writeback() {
         let directory = crate::commands::test_temp_dir().join(format!(
             "embedpix-original-same-extension-test-{}",
