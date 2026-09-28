@@ -10,7 +10,7 @@
 - [ ] 资产集合恰为 7 项：4 个安装资产、`latest.json`、`SHA256SUMS.txt`、`release-provenance.json`
 - [ ] `latest.json` 版本、平台 URL、Base64 minisign 签名与资产一致
 - [ ] provenance 指向发布 tag/commit，SHA256SUMS 可对下载文件复算
-- [ ] Release 为非 draft、非 prerelease（除非版本明确为预发布）
+- [ ] Release 非 draft，且 prerelease 状态与 Tag 是否包含预发布标识一致；稳定 Tag 不得标为 prerelease，预发布 Tag 不得伪装为稳定版
 
 ## 安装与更新 smoke
 
@@ -33,6 +33,13 @@
 | 下载中断 | [ ] | [ ] | 临时文件清理，可重试 |
 
 自动门禁：`scripts/release-config-smoke.ps1` 负责发布配置、公钥一致性和脚本契约；`scripts/release-fixture-smoke.ps1` 用临时伪造数据覆盖 7 项资产集合、manifest schema、平台 URL/签名、`pub_date`、资产大小和 PE 边界负例；`scripts/release-smoke.ps1` 负责真实发布资产下载、SHA256、独立 minisign、PE GUI subsystem 和 Windows x64 安装/启动 smoke；发布工作流在上传后执行它，不改变生产审批配置。
+
+## v0.7.0 真实发布 smoke 记录
+
+- 已对 GitHub Release `v0.7.0` 执行真实 smoke：x64/ARM64 资产均完成下载、大小、SHA256SUMS 和独立 minisign 验证。
+- x64 安装器静默安装成功，安装后的 `EmbedPix.exe` 为 GUI subsystem=2，应用保持运行至少 8 秒，随后静默卸载并确认安装文件已移除。
+- ARM64 安装器未在 x64 runner 上执行安装和启动；其资产下载、大小和签名已验证，原生 ARM64 安装/启动仍需 ARM64 runner 记录。
+- 更新下载中断、断点续传、签名门禁和 `.part`/`.etag`/临时签名清理由本地 fixture 与 17 个 updater tests 覆盖；安装失败自动回滚仍未实现，当前行为是安装前阻断、失败诊断和首次启动健康 marker。
 
 ## v0.4.0 发布准备
 
