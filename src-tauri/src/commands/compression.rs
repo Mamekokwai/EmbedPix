@@ -551,7 +551,9 @@ fn choose_encoded_output(
         });
     };
 
-    if request.format != CompressionFormat::Jpeg {
+    let quality_search = request.format == CompressionFormat::Jpeg
+        || (request.format == CompressionFormat::Webp && !request.lossless);
+    if !quality_search {
         let bytes = encode_and_verify(
             &request.input,
             request.format,
@@ -569,7 +571,7 @@ fn choose_encoded_output(
                 "target_unmet: WebP quality candidate search is not available".to_string()
             }),
             bytes,
-            selected_quality: (request.format == CompressionFormat::Webp).then_some(quality),
+            selected_quality: None,
         });
     }
 
@@ -615,15 +617,29 @@ fn choose_encoded_output(
     }
     let target_met = best.is_some();
     let Some((selected_quality, bytes)) = best.or(smallest) else {
-        return Err("JPEG candidate search produced no encoded output".into());
+        return Err(format!(
+            "{} candidate search produced no encoded output",
+            if request.format == CompressionFormat::Jpeg {
+                "JPEG"
+            } else {
+                "WebP"
+            }
+        ));
+    };
+    let skipped_reason = if !target_met {
+        Some(if request.format == CompressionFormat::Jpeg {
+            "target_unreachable: no JPEG quality candidate fits maxOutputBytes".to_string()
+        } else {
+            "target_unmet: no WebP quality candidate fits maxOutputBytes".to_string()
+        })
+    } else {
+        None
     };
     Ok(EncodedSelection {
         bytes,
         selected_quality: Some(selected_quality),
         target_met,
-        skipped_reason: (!target_met).then_some(
-            "target_unreachable: no JPEG quality candidate fits maxOutputBytes".to_string(),
-        ),
+        skipped_reason,
     })
 }
 
@@ -1073,6 +1089,22 @@ mod tests {
             .unwrap();
         bytes
     }
+
+    fn lossy_webp_input() -> Vec<u8> {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_fn(64, 48, |x, y| {
+            Rgba([
+                (x.wrapping_mul(17) ^ y.wrapping_mul(11)) as u8,
+                (x.wrapping_mul(7) ^ y.wrapping_mul(29)) as u8,
+                (x.wrapping_mul(31) ^ y.wrapping_mul(3)) as u8,
+                255,
+            ])
+        }));
+        let mut bytes = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut bytes), ImageOutputFormat::Png)
+            .unwrap();
+        bytes
+    }
     #[test]
     fn encodes_supported_formats_and_rejects_bad_input() {
         let input = png_input();
@@ -1346,6 +1378,84 @@ mod tests {
         assert!(selection.target_met);
         assert!(selection.selected_quality.unwrap() >= 50);
         assert!((selection.bytes.len() as u64) <= target);
+    }
+
+    #[test]
+    fn webp_target_search_returns_highest_quality_candidate_within_bound() {
+        let input = lossy_webp_input();
+        let target = encode_image_with_mode(&input, CompressionFormat::Webp, 50, 2, false)
+            .unwrap()
+            .len() as u64;
+        let request = CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "sample.png".into(),
+                output_format: "webp".into(),
+                output_path: None,
+                output_location: None,
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                jpeg_quality: Some(100),
+                lossless: Some(false),
+                skip_if_larger: true,
+                max_output_bytes: Some(target),
+                max_candidates: Some(MAX_CANDIDATES),
+                png_optimization_level: Some(2),
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: None,
+            },
+            input,
+            format: CompressionFormat::Webp,
+            lossless: false,
+            target_bytes: Some(target),
+            max_candidates: MAX_CANDIDATES,
+            png_optimization_level: 2,
+        };
+        let selection = choose_encoded_output(&request, 64, 48).unwrap();
+        assert!(selection.target_met);
+        assert!(selection.selected_quality.unwrap() >= 50);
+        assert!((selection.bytes.len() as u64) <= target);
+    }
+
+    #[test]
+    fn webp_target_search_reports_target_unmet_and_respects_candidate_bound() {
+        let input = lossy_webp_input();
+        let request = CompressionRequest {
+            metadata: CompressionMetadata {
+                file_name: "sample.png".into(),
+                output_format: "webp".into(),
+                output_path: None,
+                output_location: None,
+                source_path: None,
+                output_directory: None,
+                output_subdirectory: None,
+                overwrite_existing: false,
+                replace_original: false,
+                jpeg_quality: Some(100),
+                lossless: Some(false),
+                skip_if_larger: true,
+                max_output_bytes: Some(1),
+                max_candidates: Some(1),
+                png_optimization_level: Some(2),
+                metadata_policy: MetadataPolicy::Strip,
+                job_id: None,
+            },
+            input,
+            format: CompressionFormat::Webp,
+            lossless: false,
+            target_bytes: Some(1),
+            max_candidates: 1,
+            png_optimization_level: 2,
+        };
+        let selection = choose_encoded_output(&request, 64, 48).unwrap();
+        assert!(!selection.target_met);
+        assert_eq!(selection.selected_quality, Some(100));
+        assert!(selection
+            .skipped_reason
+            .as_deref()
+            .is_some_and(|reason| reason.starts_with("target_unmet")));
     }
 
     #[test]

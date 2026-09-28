@@ -147,7 +147,7 @@ function Assert-ImageTargetCompressionContract([switch]$Required) {
   $requiredSourceTokens = @(
     'max_output_bytes', 'max_candidates', 'DEFAULT_MAX_CANDIDATES', 'MAX_CANDIDATES',
     'fn choose_encoded_output', 'while candidates.len\(\) < request.max_candidates',
-    'target_unreachable', 'MAX_OUTPUT_BYTES', 'fn encode_and_verify'
+    'target_unreachable', 'target_unmet', 'quality_search', 'MAX_OUTPUT_BYTES', 'fn encode_and_verify'
   )
   $missing = @($requiredSourceTokens | Where-Object { $source -notmatch $_ })
   if ($missing.Count -gt 0) { throw "Image target-volume contract is missing: $($missing -join ', ')" }
@@ -159,6 +159,12 @@ function Assert-ImageTargetCompressionContract([switch]$Required) {
   }
   if ($source -notmatch '\(1\.\.=MAX_CANDIDATES\)\.contains\(&max_candidates\)') {
     throw 'Image maxCandidates is not bounded by MAX_CANDIDATES at request validation.'
+  }
+  if ($source -notmatch 'CompressionFormat::Webp && !request\.lossless') {
+    throw 'WebP lossy target-volume search is missing from the image selector.'
+  }
+  if ($source -notmatch 'webp_target_search_returns_highest_quality_candidate_within_bound') {
+    throw 'WebP target-volume search regression coverage is missing.'
   }
   if ($selection -match 'write_exported_file|fs::write|fs::rename|remove_file|create_dir') {
     throw 'Image target-volume selection invokes a publishing or filesystem mutation call.'
@@ -173,7 +179,9 @@ function Assert-ImageTargetCompressionContract([switch]$Required) {
     checked = $true
     maxOutputBytesBounded = $true
     maxCandidatesUpperBound = 12
+    qualityCandidateSearchBounded = $true
     jpegCandidateSearchBounded = $true
+    webpLossyCandidateSearchBounded = $true
     candidateSearchWriterFree = $true
     targetUnreachableNoPublish = $true
     cliTargetSearchOperation = $false
