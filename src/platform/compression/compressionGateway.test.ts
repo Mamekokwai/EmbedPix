@@ -145,6 +145,21 @@ describe("compression gateway", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("rejects oversized input before compression IPC", () => {
+    const oversizedInput = new Uint8Array(32 * 1024 * 1024 + 1);
+    expect(() => encodeCompressionEnvelope({ ...request, inputData: oversizedInput })).toThrow("32 MiB");
+    expect(() => encodeCompressionEstimateEnvelope({
+      fileName: "icon.png",
+      inputData: oversizedInput,
+      outputFormat: "webp",
+      jpegQuality: 82,
+      lossless: true,
+      metadataPolicy: "strip",
+      pngOptimizationLevel: 2,
+    })).toThrow("32 MiB");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("rejects metadata preservation with a stable user-facing explanation before IPC", () => {
     expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "preserve" })).toThrow("第一阶段原生压缩仅支持移除元数据");
     expect(invoke).not.toHaveBeenCalled();
