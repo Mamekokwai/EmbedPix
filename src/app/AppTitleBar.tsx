@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Maximize2, Minimize2, Minus, X } from "lucide-react";
 import {
   closeCurrentWindow,
@@ -6,6 +6,7 @@ import {
   readCurrentWindowMaximized,
   startCurrentWindowDrag,
   toggleCurrentWindowMaximized,
+  watchCurrentWindowCloseRequested,
   watchCurrentWindowMaximized,
 } from "../platform/window/windowControlGateway";
 import { requestWindowClose } from "../platform/window/windowCloseCoordinator";
@@ -20,6 +21,7 @@ function runWindowAction(action: () => Promise<void>, actionName: string) {
 
 export default function AppTitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
+  const closingAfterNativeRequestRef = useRef(false);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -27,6 +29,21 @@ export default function AppTitleBar() {
       void readCurrentWindowMaximized().then(setIsMaximized).catch(() => undefined);
       void watchCurrentWindowMaximized(setIsMaximized).then((unlisten) => {
         cleanup = unlisten;
+      }).catch(() => undefined);
+      void watchCurrentWindowCloseRequested((event) => {
+        if (closingAfterNativeRequestRef.current) return;
+        event.preventDefault();
+        closingAfterNativeRequestRef.current = true;
+        void requestWindowClose().then(closeCurrentWindow).catch((error) => {
+          closingAfterNativeRequestRef.current = false;
+          console.warn("close current window failed", error);
+        });
+      }).then((unlisten) => {
+        const previousCleanup = cleanup;
+        cleanup = () => {
+          previousCleanup?.();
+          unlisten();
+        };
       }).catch(() => undefined);
     } catch {
       // The browser preview does not expose Tauri window controls.
@@ -37,6 +54,20 @@ export default function AppTitleBar() {
   const handleDragMouseDown = (event: MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0 || event.detail > 1) return;
     runWindowAction(startCurrentWindowDrag, "start window drag");
+  };
+
+  const handleClose = () => {
+    if (closingAfterNativeRequestRef.current) return;
+    closingAfterNativeRequestRef.current = true;
+    void (async () => {
+      try {
+      await requestWindowClose();
+      await closeCurrentWindow();
+      } catch (error) {
+        closingAfterNativeRequestRef.current = false;
+        console.warn("close current window failed", error);
+      }
+    })();
   };
 
   return (
@@ -79,10 +110,7 @@ export default function AppTitleBar() {
           type="button"
           className="app-titlebar-button app-titlebar-close"
           aria-label="关闭"
-          onClick={() => runWindowAction(async () => {
-            await requestWindowClose();
-            await closeCurrentWindow();
-          }, "close current window")}
+          onClick={handleClose}
         >
           <X size={14} strokeWidth={2} />
         </button>

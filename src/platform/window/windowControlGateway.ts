@@ -1,4 +1,4 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, type CloseRequestedEvent } from "@tauri-apps/api/window";
 
 function currentWindow() {
   return getCurrentWindow();
@@ -36,4 +36,10 @@ export async function watchCurrentWindowMaximized(
 
   sync();
   return window.onResized(sync);
+}
+
+export async function watchCurrentWindowCloseRequested(
+  handler: (event: CloseRequestedEvent) => void | Promise<void>,
+): Promise<() => void> {
+  return currentWindow().onCloseRequested(handler);
 }

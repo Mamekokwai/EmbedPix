@@ -33,4 +33,19 @@ describe("window close coordinator", () => {
     await expect(first).resolves.toBeUndefined();
     expect(handler).toHaveBeenCalledOnce();
   });
+
+  it("does not call an unfinished handler again after the timeout", async () => {
+    vi.useFakeTimers();
+    let resolveHandler!: () => void;
+    const handler = vi.fn(() => new Promise<void>((resolve) => { resolveHandler = resolve; }));
+    registerWindowCloseHandler(handler);
+
+    const first = requestWindowClose();
+    await vi.advanceTimersByTimeAsync(1500);
+    await first;
+    const second = requestWindowClose();
+    expect(handler).toHaveBeenCalledOnce();
+    resolveHandler();
+    await second;
+  });
 });
