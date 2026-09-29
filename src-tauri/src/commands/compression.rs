@@ -780,6 +780,9 @@ fn validate_webp_alpha_quality(
     format: CompressionFormat,
     lossless: bool,
 ) -> Result<(), String> {
+    if alpha_quality.is_some_and(|value| value > 100) {
+        return Err("webpAlphaQuality must be between 0 and 100".into());
+    }
     if alpha_quality.is_some() && (format != CompressionFormat::Webp || lossless) {
         return Err("webpAlphaQuality is only supported for lossy WebP".into());
     }
@@ -2523,6 +2526,7 @@ mod tests {
         assert_eq!(legacy.metadata.webp_alpha_quality, None);
 
         for metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"webpAlphaQuality":101}"#,
             r#"{"fileName":"sample.png","outputFormat":"png","webpAlphaQuality":50}"#,
             r#"{"fileName":"sample.png","outputFormat":"jpeg","webpAlphaQuality":50}"#,
             r#"{"fileName":"sample.png","outputFormat":"webp","lossless":true,"webpAlphaQuality":50}"#,
