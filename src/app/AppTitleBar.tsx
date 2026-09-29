@@ -32,7 +32,9 @@ export default function AppTitleBar() {
       void readCurrentWindowMaximized().then((maximized) => {
         if (!lifecycle.disposed) setIsMaximized(maximized);
       }).catch(() => undefined);
-      void watchCurrentWindowMaximized(setIsMaximized).then((unlisten) => {
+      void watchCurrentWindowMaximized((maximized) => {
+        if (!lifecycle.disposed) setIsMaximized(maximized);
+      }).then((unlisten) => {
         retainWindowListener(lifecycle, (cleanup) => { maximizedCleanup = cleanup; }, unlisten);
       }).catch(() => undefined);
       void watchCurrentWindowCloseRequested((event) => {
