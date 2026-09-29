@@ -280,6 +280,12 @@ try {
 
   [void](Invoke-CliRequest $CliPath @{ id = 'compression-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $compressionOutput; format = 'webp'; quality = 82; maxInputBytes = 1MB } 'compression')
   $compressionResult = Assert-Output $compressionOutput 'webp' 'compression'
+  $invalidRequest = Join-Path $script:root 'invalid-compression.request.json'
+  $invalidStderr = Join-Path $script:root 'invalid-compression.stderr.log'
+  @{ id = 'invalid-compression'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'must-not-exist.webp'); quality = '82' } | ConvertTo-Json | Set-Content -LiteralPath $invalidRequest -Encoding utf8NoBOM
+  Get-Content -Raw -LiteralPath $invalidRequest | & $CliPath 2> $invalidStderr | Out-Null
+  $invalidExitCode = $LASTEXITCODE
+  if ($invalidExitCode -ne 1 -or (Get-Content -Raw -LiteralPath $invalidStderr) -notmatch 'request_error') { throw "CLI strict validation smoke failed (exit=$invalidExitCode): $(Get-Content -Raw -LiteralPath $invalidStderr)" }
 
   $gifEvent = Invoke-CliRequest $CliPath @{ id = 'gif-smoke'; op = 'gif'; outputPath = $gifOutput; width = 32; height = 32; loopMode = 'infinite'; loopCount = 0; frames = @(@{ path = $pngInput; durationMs = 100 }, @{ path = $pngInput; durationMs = 100 }) } 'gif'
   $gifResult = Assert-Output $gifOutput 'gif' 'GIF'

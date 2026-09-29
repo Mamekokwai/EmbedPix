@@ -135,15 +135,38 @@ fn execute(request: CliRequest) -> Result<Value, (&'static str, String)> {
 fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> {
     let input_path = required_string(&payload, "inputPath")?;
     let output_path = required_string(&payload, "outputPath")?;
-    let format = payload
-        .get("format")
-        .and_then(Value::as_str)
-        .unwrap_or("webp");
-    let quality = payload.get("quality").and_then(Value::as_u64).unwrap_or(82);
-    if quality > 100 {
-        return Err(("request_error", "quality 必须在 1 到 100 之间".into()));
-    }
-    let max_input_bytes = payload.get("maxInputBytes").and_then(Value::as_u64);
+    let format = match payload.get("format") {
+        None => "webp",
+        Some(value) => value
+            .as_str()
+            .filter(|value| {
+                matches!(
+                    value.to_ascii_lowercase().as_str(),
+                    "jpg" | "jpeg" | "png" | "webp"
+                )
+            })
+            .ok_or((
+                "request_error",
+                "format 必须是 jpg、jpeg、png 或 webp".into(),
+            ))?,
+    };
+    let quality = match payload.get("quality") {
+        None => 82,
+        Some(value) => value
+            .as_u64()
+            .filter(|value| (1..=100).contains(value))
+            .ok_or((
+                "request_error",
+                "quality 必须是 1 到 100 的无符号整数".into(),
+            ))?,
+    };
+    let max_input_bytes = match payload.get("maxInputBytes") {
+        None => None,
+        Some(value) => Some(value.as_u64().ok_or((
+            "request_error",
+            "maxInputBytes 必须是 1 到 32 MiB 的无符号整数".into(),
+        ))?),
+    };
     let result = compression::compress_file_cli(
         std::path::Path::new(&input_path),
         std::path::Path::new(&output_path),
@@ -313,5 +336,25 @@ mod tests {
         assert_eq!(classify_exit_code(0, 2, false), 1);
         assert_eq!(classify_exit_code(1, 1, false), 2);
         assert_eq!(classify_exit_code(1, 0, true), 2);
+    }
+
+    #[test]
+    fn compression_parameters_are_strict_when_present() {
+        for (field, value) in [
+            ("format", json!(true)),
+            ("format", json!("tiff")),
+            ("quality", json!(0)),
+            ("quality", json!(-1)),
+            ("quality", json!(82.5)),
+            ("quality", json!("82")),
+            ("maxInputBytes", json!(-1)),
+            ("maxInputBytes", json!(1048576.5)),
+            ("maxInputBytes", json!("1048576")),
+        ] {
+            let mut payload = json!({ "inputPath": "input.png", "outputPath": "output.webp" });
+            payload[field] = value;
+            assert_eq!(execute_compression(payload).unwrap_err().0, "request_error");
+        }
+        assert_eq!(execute_compression(json!({ "inputPath": "missing.png", "outputPath": "output.webp", "format": "webp", "quality": 82 })).unwrap_err().0, "compression_error");
     }
 }
