@@ -46,6 +46,56 @@ const MAX_COMPRESSION_CONCURRENCY: usize = 2;
 const MAX_ACTIVE_COMPRESSION_JOBS: usize = MAX_COMPRESSION_CONCURRENCY * 4;
 const COMPRESSION_SCHEMA_VERSION: u8 = 1;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompressionStage {
+    Queued,
+    Preflight,
+    Reading,
+    Decoding,
+    Planning,
+    Encoding,
+    Validating,
+    Publishing,
+    Completed,
+    Skipped,
+    Cancelling,
+    Cancelled,
+    Failed,
+}
+
+impl CompressionStage {
+    fn from_status(status: &str) -> Self {
+        match status {
+            "skipped" => Self::Skipped,
+            "completed" => Self::Completed,
+            _ => Self::Failed,
+        }
+    }
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Queued => "queued",
+            Self::Preflight => "preflight",
+            Self::Reading => "reading",
+            Self::Decoding => "decoding",
+            Self::Planning => "planning",
+            Self::Encoding => "encoding",
+            Self::Validating => "validating",
+            Self::Publishing => "publishing",
+            Self::Completed => "completed",
+            Self::Skipped => "skipped",
+            Self::Cancelling => "cancelling",
+            Self::Cancelled => "cancelled",
+            Self::Failed => "failed",
+        }
+    }
+    fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            Self::Completed | Self::Skipped | Self::Cancelled | Self::Failed
+        )
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum CompressionFormat {
@@ -292,7 +342,7 @@ impl CompressionSemaphore {
         let mut announced_queued = false;
         while *available == 0 {
             if !announced_queued {
-                update_progress(job, "queued", None, None);
+                update_progress(job, CompressionStage::Queued, None, None);
                 announced_queued = true;
             }
             if job.cancelled.load(Ordering::Acquire) {
@@ -510,7 +560,7 @@ pub async fn preview_compression(
         progress: Mutex::new(CompressionProgress {
             job_id: job_id.clone(),
             status: "running".into(),
-            stage: "preflight".into(),
+            stage: CompressionStage::Preflight.as_str().into(),
             output_path: None,
             error: None,
             code: None,
@@ -534,7 +584,12 @@ pub async fn preview_compression(
     })?;
     match result {
         Ok(preview) => {
-            update_progress(&job, preview.status.as_str(), None, None);
+            update_progress(
+                &job,
+                CompressionStage::from_status(&preview.status),
+                None,
+                None,
+            );
             Ok(preview)
         }
         Err(error) => Err(fail_message(&job, error)),
@@ -572,7 +627,7 @@ pub async fn compress_image(
         progress: Mutex::new(CompressionProgress {
             job_id: job_id.clone(),
             status: "running".into(),
-            stage: "preflight".into(),
+            stage: CompressionStage::Preflight.as_str().into(),
             output_path: None,
             error: None,
             code: None,
@@ -633,7 +688,7 @@ pub fn compress_file_cli(
         progress: Mutex::new(CompressionProgress {
             job_id,
             status: "running".into(),
-            stage: "preflight".into(),
+            stage: CompressionStage::Preflight.as_str().into(),
             output_path: None,
             error: None,
             code: None,
@@ -689,12 +744,12 @@ fn run_compression(
     job: &Arc<CompressionJob>,
 ) -> Result<CompressionResult, String> {
     checkpoint(job)?;
-    update_progress(job, "reading", None, None);
-    update_progress(job, "decoding", None, None);
+    update_progress(job, CompressionStage::Reading, None, None);
+    update_progress(job, CompressionStage::Decoding, None, None);
     let (width, height) =
         inspect_image(&request.input).map_err(|error| fail_message(job, error))?;
-    update_progress(job, "planning", None, None);
-    update_progress(job, "encoding", None, None);
+    update_progress(job, CompressionStage::Planning, None, None);
+    update_progress(job, CompressionStage::Encoding, None, None);
     let EncodedSelection {
         bytes,
         selected_quality,
@@ -705,7 +760,7 @@ fn run_compression(
     } = choose_encoded_output_with_cancellation(request, width, height, Some(job))
         .map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
-    update_progress(job, "validating", None, None);
+    update_progress(job, CompressionStage::Validating, None, None);
     let output_path =
         resolve_final_output_path(request).map_err(|error| fail_message(job, error))?;
     let input_bytes = request.input.len() as u64;
@@ -723,7 +778,12 @@ fn run_compression(
             })
     });
     if let Some(skipped_reason) = skipped_reason {
-        update_progress(job, "skipped", None, Some(skipped_reason.to_string()));
+        update_progress(
+            job,
+            CompressionStage::Skipped,
+            None,
+            Some(skipped_reason.to_string()),
+        );
         return Ok(CompressionResult {
             job_id: job
                 .progress
@@ -751,7 +811,7 @@ fn run_compression(
             candidate_count,
         });
     }
-    update_progress(job, "publishing", None, None);
+    update_progress(job, CompressionStage::Publishing, None, None);
     let source_path = request.metadata.source_path.as_deref();
     write_exported_file(
         &output_path,
@@ -799,7 +859,12 @@ fn run_compression(
         candidate_search_ms,
         candidate_count,
     };
-    update_progress(job, "completed", Some(result.output_path.clone()), None);
+    update_progress(
+        job,
+        CompressionStage::Completed,
+        Some(result.output_path.clone()),
+        None,
+    );
     Ok(result)
 }
 
@@ -1183,13 +1248,13 @@ fn run_preview_core(
 ) -> Result<CompressionPreview, String> {
     if let Some(job) = job {
         checkpoint(job)?;
-        update_progress(job, "reading", None, None);
-        update_progress(job, "decoding", None, None);
+        update_progress(job, CompressionStage::Reading, None, None);
+        update_progress(job, CompressionStage::Decoding, None, None);
     }
     let (width, height) = inspect_image(&request.input)?;
     if let Some(job) = job {
-        update_progress(job, "planning", None, None);
-        update_progress(job, "encoding", None, None);
+        update_progress(job, CompressionStage::Planning, None, None);
+        update_progress(job, CompressionStage::Encoding, None, None);
     }
     let EncodedSelection {
         bytes: data,
@@ -1207,7 +1272,7 @@ fn run_preview_core(
     }
     if let Some(job) = job {
         checkpoint(job)?;
-        update_progress(job, "validating", None, None);
+        update_progress(job, CompressionStage::Validating, None, None);
     }
     let verified = decode_image(&data)?;
     if verified.dimensions() != (width, height) {
@@ -2127,7 +2192,7 @@ fn cancel_job(job: &Arc<CompressionJob>) -> Result<CompressionProgress, String> 
         .unwrap_or(true);
     if !is_terminal {
         job.cancelled.store(true, Ordering::Release);
-        update_progress(job, "cancelling", None, None);
+        update_progress(job, CompressionStage::Cancelling, None, None);
     }
     job.progress
         .lock()
@@ -2139,9 +2204,9 @@ fn fail_message(job: &Arc<CompressionJob>, message: String) -> String {
     update_progress(
         job,
         if job.cancelled.load(Ordering::Acquire) {
-            "cancelled"
+            CompressionStage::Cancelled
         } else {
-            "failed"
+            CompressionStage::Failed
         },
         None,
         Some(message.clone()),
@@ -2150,12 +2215,12 @@ fn fail_message(job: &Arc<CompressionJob>, message: String) -> String {
 }
 fn update_progress(
     job: &Arc<CompressionJob>,
-    stage: &str,
+    stage: CompressionStage,
     output_path: Option<String>,
     error: Option<String>,
 ) {
     if let Ok(mut progress) = job.progress.lock() {
-        if stage == "cancelling"
+        if stage == CompressionStage::Cancelling
             && matches!(
                 progress.status.as_str(),
                 "completed" | "failed" | "cancelled"
@@ -2163,13 +2228,13 @@ fn update_progress(
         {
             return;
         }
-        progress.stage = stage.to_string();
+        progress.stage = stage.as_str().into();
         progress.status = match stage {
-            "completed" => "completed",
-            "skipped" => "skipped",
-            "cancelled" => "cancelled",
-            "failed" => "failed",
-            "cancelling" => "cancelling",
+            CompressionStage::Completed => "completed",
+            CompressionStage::Skipped => "skipped",
+            CompressionStage::Cancelled => "cancelled",
+            CompressionStage::Failed => "failed",
+            CompressionStage::Cancelling => "cancelling",
             _ => "running",
         }
         .to_string();
@@ -2181,7 +2246,7 @@ fn update_progress(
             .error
             .as_deref()
             .map(|message| classify_error_code(stage, message));
-        if matches!(stage, "completed" | "skipped" | "cancelled" | "failed") {
+        if stage.is_terminal() {
             if let Ok(mut terminal_at) = job.terminal_at.lock() {
                 *terminal_at = Some(Instant::now());
             }
@@ -2204,11 +2269,14 @@ fn update_progress_bytes(
     }
 }
 
-fn classify_error_code(stage: &str, message: &str) -> String {
-    if stage == "skipped" {
+fn classify_error_code(stage: CompressionStage, message: &str) -> String {
+    if stage == CompressionStage::Skipped {
         return "skipped".into();
     }
-    if stage == "cancelled" || stage == "cancelling" {
+    if matches!(
+        stage,
+        CompressionStage::Cancelled | CompressionStage::Cancelling
+    ) {
         return "cancelled".into();
     }
     let lower = message.to_ascii_lowercase();
@@ -2313,7 +2381,7 @@ mod tests {
             progress: Mutex::new(CompressionProgress {
                 job_id: job_id.into(),
                 status: "running".into(),
-                stage: "preflight".into(),
+                stage: CompressionStage::Preflight.as_str().into(),
                 output_path: None,
                 error: None,
                 code: None,
@@ -2575,7 +2643,7 @@ mod tests {
             progress: Mutex::new(CompressionProgress {
                 job_id: "transparent-jpeg-publish-test".into(),
                 status: "running".into(),
-                stage: "preflight".into(),
+                stage: CompressionStage::Preflight.as_str().into(),
                 output_path: None,
                 error: None,
                 code: None,
@@ -3325,7 +3393,7 @@ mod tests {
             progress: Mutex::new(CompressionProgress {
                 job_id: "corrupt-input-test".into(),
                 status: "running".into(),
-                stage: "preflight".into(),
+                stage: CompressionStage::Preflight.as_str().into(),
                 output_path: None,
                 error: None,
                 code: None,
@@ -3427,7 +3495,7 @@ mod tests {
             progress: Mutex::new(CompressionProgress {
                 job_id: "skip-test".into(),
                 status: "running".into(),
-                stage: "preflight".into(),
+                stage: CompressionStage::Preflight.as_str().into(),
                 output_path: None,
                 error: None,
                 code: None,
@@ -3551,7 +3619,7 @@ mod tests {
             .get("capacity-0")
             .cloned()
             .unwrap();
-        update_progress(&terminal, "completed", None, None);
+        update_progress(&terminal, CompressionStage::Completed, None, None);
         assert!(state
             .register("capacity-terminal".into(), test_job("capacity-terminal"))
             .is_ok());
@@ -3621,7 +3689,7 @@ mod tests {
 
         update_progress(
             &cancelled,
-            "cancelled",
+            CompressionStage::Cancelled,
             None,
             Some("compression cancelled".into()),
         );
@@ -3649,7 +3717,12 @@ mod tests {
 
         assert_eq!(cancel_job(&job).unwrap().status, "cancelling");
         assert_eq!(cancel_job(&job).unwrap().status, "cancelling");
-        update_progress(&job, "completed", Some("output.webp".into()), None);
+        update_progress(
+            &job,
+            CompressionStage::Completed,
+            Some("output.webp".into()),
+            None,
+        );
         let progress = cancel_job(&job).unwrap();
         assert_eq!(progress.status, "completed");
         assert_eq!(progress.stage, "completed");
@@ -3663,7 +3736,7 @@ mod tests {
         state
             .register("preview-completed".into(), Arc::clone(&job))
             .unwrap();
-        update_progress(&job, "completed", None, None);
+        update_progress(&job, CompressionStage::Completed, None, None);
 
         assert_eq!(cancel_job(&job).unwrap().status, "completed");
         assert_eq!(cancel_job(&job).unwrap().status, "completed");
@@ -3758,30 +3831,30 @@ mod tests {
     #[test]
     fn progress_error_codes_are_stable_without_changing_error_text() {
         assert_eq!(
-            classify_error_code("failed", "failed to decode input image"),
+            classify_error_code(CompressionStage::Failed, "failed to decode input image"),
             "decode"
         );
         assert_eq!(
-            classify_error_code("failed", "failed to write output file"),
+            classify_error_code(CompressionStage::Failed, "failed to write output file"),
             "publish"
         );
         assert_eq!(
-            classify_error_code("failed", "failed to optimize png"),
+            classify_error_code(CompressionStage::Failed, "failed to optimize png"),
             "encode"
         );
         assert_eq!(
-            classify_error_code("cancelled", "compression cancelled"),
+            classify_error_code(CompressionStage::Cancelled, "compression cancelled"),
             "cancelled"
         );
         assert_eq!(
             classify_error_code(
-                "failed",
+                CompressionStage::Failed,
                 "metadataPolicy=preserve is not supported by first-stage compression"
             ),
             "metadata_policy_unsupported"
         );
         assert_eq!(
-            classify_error_code("skipped", "target_unreachable"),
+            classify_error_code(CompressionStage::Skipped, "target_unreachable"),
             "skipped"
         );
     }
