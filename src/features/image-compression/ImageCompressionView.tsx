@@ -270,6 +270,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     format === "webp" ? (lossless ? "WebP 无损" : "WebP 有损") : format.toUpperCase(),
     format === "png" ? `优化级别 ${pngOptimizationLevel}` : `质量 ${quality}`,
     webpLossyActive ? `method ${webpMethod}` : null,
+    webpLossyActive ? `Alpha 质量 ${webpAlphaQuality}` : null,
+    webpLossyActive ? `分析遍数 ${webpPass}` : null,
     format === "webp" && lossless && webpNearLossless !== null ? `近无损 ${webpNearLossless}` : null,
     format === "jpg" ? `JPEG 背景 ${jpegBackground}` : null,
     targetSizeActive && maxOutputBytes ? `目标 ≤ ${targetSizeKiB.trim()} KiB · 候选 ${maxCandidates}` : "不启用目标体积",

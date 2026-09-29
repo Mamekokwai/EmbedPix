@@ -140,9 +140,12 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("WebP 无损编码");
     expect(compressionView).toContain("WebP 编码方法");
     expect(compressionView).toContain("webpMethod");
+    expect(compressionView).toContain("Alpha 质量 ${webpAlphaQuality}");
+    expect(compressionView).toContain("分析遍数 ${webpPass}");
     expect(compressionView).toContain("compression-webp-method-hint");
     expect(compressionView).toContain("disabled={busy || !webpLossyActive}");
     expect(compressionPreferences).toContain("webpMethod");
+    expect(compressionPreferences).toContain("webpPass");
     expect(compressionPreferences).toContain("skipIfLarger");
     expect(compressionView).toContain("保留元数据（当前不可用：核心拒绝）");
     expect(compressionView).toContain("保留元数据请求会被核心拒绝");
