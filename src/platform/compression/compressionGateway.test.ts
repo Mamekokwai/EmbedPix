@@ -256,6 +256,26 @@ describe("compression gateway", () => {
     expect(invoke).toHaveBeenCalledWith(CANCEL_COMPRESSION_COMMAND, { jobId: "compression-preview-test" });
   });
 
+  it("retries preview cancellation when native registration is still pending", async () => {
+    let resolvePreview!: (value: unknown) => void;
+    let cancelAttempts = 0;
+    const pendingPreview = new Promise<unknown>((resolve) => { resolvePreview = resolve; });
+    vi.mocked(invoke).mockImplementation((command) => {
+      if (command === PREVIEW_COMPRESSION_COMMAND) return pendingPreview;
+      cancelAttempts += 1;
+      return cancelAttempts === 1
+        ? Promise.reject(new Error("compression job not found"))
+        : Promise.resolve({ jobId: "compression-preview-test", status: "cancelling", stage: "cancelling", outputPath: null, error: null, code: null });
+    });
+    const controller = new AbortController();
+    const preview = previewCompression({ ...request, jobId: "compression-preview-test" }, controller.signal);
+    controller.abort();
+    resolvePreview({ data: [1, 2, 3], width: 2, height: 2, format: "webp", outputBytes: 3, lossless: true, status: "completed", skippedReason: null, targetBytes: null, targetMet: false, selectedQuality: null });
+    await expect(preview).rejects.toMatchObject({ name: "AbortError" });
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 30));
+    expect(cancelAttempts).toBe(2);
+  });
+
   it("keeps skipped results distinct from completed output", async () => {
     vi.mocked(invoke).mockResolvedValue({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "skipped", skippedReason: "compressed output is larger than the source; output was not published", inputBytes: 3, outputBytes: 5, savedBytes: -2, savingsPercent: -66.7, width: 1, height: 1, format: "webp", lossless: true, targetBytes: null, targetMet: false, selectedQuality: null });
     const result = await compressImage(request);
