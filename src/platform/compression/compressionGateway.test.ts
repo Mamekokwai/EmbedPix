@@ -60,6 +60,17 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpMethod: 6 })).not.toThrow();
   });
 
+  it("validates and serializes the optional WebP near-lossless level", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, webpNearLossless: 90 });
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata.webpNearLossless).toBe(90);
+    expect(() => encodeCompressionEnvelope({ ...request, webpNearLossless: 0 })).toThrow("webpNearLossless");
+    expect(() => encodeCompressionEnvelope({ ...request, webpNearLossless: 100 })).toThrow("webpNearLossless");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpNearLossless: 90 })).toThrow("仅支持无损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "png", webpNearLossless: 90 })).toThrow("仅支持无损 WebP");
+  });
+
   it("normalizes lossless mode by output format when creating requests", () => {
     const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
     const base = { quality: 64, pngOptimizationLevel: 2, metadataPolicy: "strip" as const, outputLocation: "source" as const, overwrite: false };

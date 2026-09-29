@@ -10,6 +10,7 @@ export interface CompressionPresetValues {
   format: CompressionFormat;
   quality: number;
   webpMethod: number;
+  webpNearLossless: number | null;
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
@@ -62,6 +63,12 @@ function targetSizeValue(value: unknown, index: number): string {
   return trimmed;
 }
 
+function webpNearLosslessValue(value: unknown, index: number): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 99) throw new Error(`第 ${index + 1} 个压缩预设的 WebP 近无损等级无效。`);
+  return value;
+}
+
 function parseValues(value: unknown, index: number): CompressionPresetValues {
   const record = recordFrom(value);
   if (!record) throw new Error(`第 ${index + 1} 个压缩预设参数格式无效。`);
@@ -70,10 +77,13 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
   if ((format === "png" && !lossless) || (format === "jpg" && lossless)) throw new Error(`第 ${index + 1} 个压缩预设的无损选项与格式不匹配。`);
   const targetSizeEnabled = booleanValue(record.targetSizeEnabled, "目标体积开关", index);
   if (targetSizeEnabled && !supportsCompressionTargetSize(format, lossless)) throw new Error(`第 ${index + 1} 个压缩预设的目标体积不适用于当前格式。`);
+  const webpNearLossless = webpNearLosslessValue(record.webpNearLossless, index);
+  if (webpNearLossless !== null && (format !== "webp" || !lossless)) throw new Error(`第 ${index + 1} 个压缩预设的 WebP 近无损等级仅适用于无损 WebP。`);
   return {
     format,
     quality: integerValue(record.quality, 1, 100, "质量", index),
     webpMethod: record.webpMethod === undefined ? COMPRESSION_WEBP_METHOD_DEFAULT : integerValue(record.webpMethod, COMPRESSION_WEBP_METHOD_MIN, COMPRESSION_WEBP_METHOD_MAX, "WebP 编码方法", index),
+    webpNearLossless,
     pngOptimizationLevel: integerValue(record.pngOptimizationLevel, 0, 6, "PNG 优化级别", index),
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
@@ -91,6 +101,8 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   const trimmedName = name.trim();
   if (!trimmedName || trimmedName.length > MAX_PRESET_NAME_LENGTH) throw new Error("压缩预设名称不能为空且不能超过 80 个字符。");
   if (!Number.isInteger(values.webpMethod) || values.webpMethod < COMPRESSION_WEBP_METHOD_MIN || values.webpMethod > COMPRESSION_WEBP_METHOD_MAX) throw new Error("WebP 编码方法必须在 0 到 6 之间。");
+  if (values.webpNearLossless !== null && (!Number.isInteger(values.webpNearLossless) || values.webpNearLossless < 1 || values.webpNearLossless > 99)) throw new Error("WebP 近无损等级必须在 1 到 99 之间。");
+  if (values.webpNearLossless !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 近无损等级仅适用于无损 WebP。");
   return { id: createId(), name: trimmedName, values: { ...values }, createdAt: new Date().toISOString() };
 }
 

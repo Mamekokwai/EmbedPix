@@ -5,6 +5,7 @@ export interface CompressionPreferences {
   format: CompressionFormat;
   quality: number;
   webpMethod: number;
+  webpNearLossless: number | null;
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
@@ -29,6 +30,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   format: "webp",
   quality: 82,
   webpMethod: COMPRESSION_WEBP_METHOD_DEFAULT,
+  webpNearLossless: null,
   pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
@@ -85,6 +87,11 @@ function webpMethodValue(record: Record<string, unknown>): number {
     : DEFAULT_COMPRESSION_PREFERENCES.webpMethod;
 }
 
+function webpNearLosslessValue(record: Record<string, unknown>): number | null {
+  const value = record.webpNearLossless;
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 99 ? value : null;
+}
+
 function sizeInputValue(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   if (typeof value !== "string") return "";
@@ -118,6 +125,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       format,
       quality: integerValue(record, "quality", 1, 100, DEFAULT_COMPRESSION_PREFERENCES.quality),
       webpMethod: webpMethodValue(record),
+      webpNearLossless: format === "webp" && lossless ? webpNearLosslessValue(record) : null,
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
       targetSizeEnabled: record.targetSizeEnabled === true && supportsCompressionTargetSize(format, lossless),
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
@@ -158,6 +166,7 @@ export function saveCompressionPreferences(
       format: preferences.format,
       quality: preferences.quality,
       webpMethod: preferences.webpMethod,
+      webpNearLossless: preferences.webpNearLossless,
       pngOptimizationLevel: preferences.pngOptimizationLevel,
       targetSizeEnabled: preferences.targetSizeEnabled,
       targetSizeKiB: preferences.targetSizeKiB,

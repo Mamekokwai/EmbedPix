@@ -248,7 +248,7 @@ pub struct CompressImageResponse {
 |---|---|---|---|---|
 | PNG | PNG | OxiPNG 重滤波/重压缩 | 暂不默认启用颜色量化 | 必须 |
 | JPEG | JPEG | 仅允许无损重排时保留原文件，否则需重编码 | Image JPEG；后续 MozJPEG | 必须 |
-| WebP | WebP | WebP lossless | libwebp 或现有 WebP 后端 | 必须 |
+| WebP | WebP | WebP lossless；已支持 80/90/95 近无损等级 | libwebp；有损质量 1–100、method 0–6 | 必须 |
 | BMP | PNG/WebP/JPEG | 重新编码到无损 PNG/WebP | 按用户选择输出 JPEG/WebP | 支持转换，不做 BMP 原位压缩 |
 | TIFF | TIFF/PNG/WebP | TIFF 无损重写或转换 | WebP/JPEG | 第二阶段 |
 | GIF 静态 | PNG/WebP | 解码首帧后无损输出 | 用户明确选择后有损输出 | 第一阶段可选 |
@@ -740,4 +740,3 @@ EmbedPix 不应直接复制某一个压缩器的全部参数，而应将成熟�
 - 以安全预检、原子发布、失败回滚和可解释状态作为 EmbedPix 的核心差异。
 
 第一阶段的重点不是“支持最多算法”，而是让用户在本地批量压缩时始终知道：用了什么算法、输出为什么变小、元数据是否被删除、结果是否真的可用，以及失败后原文件是否安全。
-

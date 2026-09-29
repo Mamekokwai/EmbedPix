@@ -157,6 +157,92 @@ pub(crate) fn encode_lossy_rgba_with_method(
     Ok(bytes)
 }
 
+pub(crate) fn encode_near_lossless_rgba(
+    image: &RgbaImage,
+    near_lossless: u8,
+    method: u8,
+) -> Result<Vec<u8>, String> {
+    if !(1..=99).contains(&near_lossless) {
+        return Err("WebP near-lossless level must be between 1 and 99".into());
+    }
+    if method > 6 {
+        return Err("WebP method must be between 0 and 6".into());
+    }
+
+    let width = i32::try_from(image.width()).map_err(|_| "WebP width is too large")?;
+    let height = i32::try_from(image.height()).map_err(|_| "WebP height is too large")?;
+    let pixels = image.as_raw();
+    let opaque = pixels.chunks_exact(4).all(|pixel| pixel[3] == 255);
+    let rgb_pixels = opaque.then(|| {
+        pixels
+            .chunks_exact(4)
+            .flat_map(|pixel| [pixel[0], pixel[1], pixel[2]])
+            .collect::<Vec<_>>()
+    });
+    let (input, stride) = if let Some(rgb_pixels) = rgb_pixels.as_deref() {
+        (
+            rgb_pixels.as_ptr(),
+            width
+                .checked_mul(3)
+                .ok_or_else(|| "WebP RGB stride is too large".to_string())?,
+        )
+    } else {
+        (
+            pixels.as_ptr(),
+            width
+                .checked_mul(4)
+                .ok_or_else(|| "WebP RGBA stride is too large".to_string())?,
+        )
+    };
+
+    let mut config = unsafe { std::mem::zeroed::<webp::WebPConfig>() };
+    let initialized =
+        unsafe { webp::WebPConfigPreset(&mut config, webp::WEBP_PRESET_DEFAULT, 75.0) } != 0;
+    if !initialized {
+        return Err("libwebp failed to initialize WebP near-lossless configuration".into());
+    }
+    config.lossless = 1;
+    config.near_lossless = c_int::from(near_lossless);
+    config.method = c_int::from(method);
+    config.exact = 1;
+    if unsafe { webp::WebPValidateConfig(&config) } == 0 {
+        return Err("libwebp rejected the WebP near-lossless configuration".into());
+    }
+
+    let mut picture = unsafe { std::mem::zeroed::<webp::WebPPicture>() };
+    if unsafe { webp::WebPPictureInit(&mut picture) } == 0 {
+        return Err("libwebp failed to initialize WebP near-lossless picture".into());
+    }
+    let mut writer = unsafe { std::mem::zeroed::<webp::WebPMemoryWriter>() };
+    unsafe { webp::WebPMemoryWriterInit(&mut writer) };
+    picture.width = width;
+    picture.height = height;
+    picture.writer = Some(write_to_memory);
+    picture.custom_ptr = (&mut writer as *mut webp::WebPMemoryWriter).cast::<c_void>();
+
+    let imported = unsafe {
+        if opaque {
+            webp::WebPPictureImportRGB(&mut picture, input, stride)
+        } else {
+            webp::WebPPictureImportRGBA(&mut picture, input, stride)
+        }
+    } != 0;
+    let encoded = imported && unsafe { webp::WebPEncode(&config, &mut picture) } != 0;
+    let bytes = if encoded && !writer.mem.is_null() {
+        unsafe { slice::from_raw_parts(writer.mem, writer.size).to_vec() }
+    } else {
+        Vec::new()
+    };
+    unsafe {
+        webp::WebPPictureFree(&mut picture);
+        webp::WebPMemoryWriterClear(&mut writer);
+    }
+    if !encoded || bytes.is_empty() {
+        return Err("libwebp failed to encode a near-lossless WebP image".into());
+    }
+    Ok(bytes)
+}
+
 extern "C" fn write_to_memory(
     data: *const u8,
     data_size: usize,
@@ -283,6 +369,28 @@ mod tests {
     #[test]
     fn rejects_webp_methods_outside_the_supported_range() {
         assert!(encode_lossy_rgba_with_method(&sample_image(false), 75, 7).is_err());
+    }
+
+    #[test]
+    fn near_lossless_webp_is_decodable_and_preserves_alpha() {
+        let source = sample_image(true);
+        let output = encode_near_lossless_rgba(&source, 90, DEFAULT_WEBP_METHOD).unwrap();
+        let decoded = image::load_from_memory(&output).unwrap().to_rgba8();
+        assert_eq!(decoded.dimensions(), source.dimensions());
+        for (actual, expected) in decoded.pixels().zip(source.pixels()) {
+            assert_eq!(actual[3], expected[3]);
+        }
+        assert!(chunk_types(&output)
+            .iter()
+            .all(|kind| kind != b"ANIM" && kind != b"ANMF"));
+    }
+
+    #[test]
+    fn rejects_invalid_near_lossless_levels() {
+        let source = sample_image(false);
+        assert!(encode_near_lossless_rgba(&source, 0, DEFAULT_WEBP_METHOD).is_err());
+        assert!(encode_near_lossless_rgba(&source, 100, DEFAULT_WEBP_METHOD).is_err());
+        assert!(encode_near_lossless_rgba(&source, 90, 7).is_err());
     }
 
     #[test]
