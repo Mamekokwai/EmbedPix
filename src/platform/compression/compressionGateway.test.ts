@@ -253,7 +253,8 @@ describe("compression gateway", () => {
     controller.abort();
     resolvePreview({ data: [1, 2, 3], width: 2, height: 2, format: "webp", outputBytes: 3, lossless: true, status: "completed", skippedReason: null, targetBytes: null, targetMet: false, selectedQuality: null });
     await expect(preview).rejects.toMatchObject({ name: "AbortError" });
-    expect(invoke).toHaveBeenCalledWith(CANCEL_COMPRESSION_COMMAND, { jobId: "compression-preview-test" });
+    const cancelCall = vi.mocked(invoke).mock.calls.find(([command]) => command === CANCEL_COMPRESSION_COMMAND);
+    expect(cancelCall?.[1]).toMatchObject({ jobId: expect.stringMatching(/^compression-preview-test-native-/) });
   });
 
   it("stops preview cancellation retries after the old preview settles", async () => {
@@ -274,6 +275,35 @@ describe("compression gateway", () => {
     await expect(preview).rejects.toMatchObject({ name: "AbortError" });
     await new Promise((resolve) => globalThis.setTimeout(resolve, 30));
     expect(cancelAttempts).toBe(1);
+  });
+
+  it("assigns unique native IDs when preview requests reuse an external job ID", async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    vi.mocked(invoke).mockImplementation((command) => command === PREVIEW_COMPRESSION_COMMAND
+      ? new Promise((resolve) => { resolvers.push(resolve); })
+      : Promise.resolve({ jobId: "native", status: "cancelled", stage: "cancelled", outputPath: null, error: null, code: null }));
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const first = previewCompression({ ...request, jobId: "shared-preview" }, firstController.signal);
+    const second = previewCompression({ ...request, jobId: "shared-preview" }, secondController.signal);
+    firstController.abort();
+    secondController.abort();
+    resolvers[0]?.({ data: [1], width: 1, height: 1, format: "webp", outputBytes: 1, lossless: true, status: "completed", skippedReason: null, targetBytes: null, targetMet: false, selectedQuality: null });
+    resolvers[1]?.({ data: [1], width: 1, height: 1, format: "webp", outputBytes: 1, lossless: true, status: "completed", skippedReason: null, targetBytes: null, targetMet: false, selectedQuality: null });
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    const previewCalls = vi.mocked(invoke).mock.calls.filter(([command]) => command === PREVIEW_COMPRESSION_COMMAND);
+    const nativeIds = previewCalls.map(([, payload]) => {
+      const bytes = payload as Uint8Array;
+      const length = new DataView(bytes.buffer).getUint32(4, true);
+      return (JSON.parse(new TextDecoder().decode(bytes.slice(8, 8 + length))) as { jobId: string }).jobId;
+    });
+    expect(nativeIds).toHaveLength(2);
+    expect(nativeIds[0]).not.toBe(nativeIds[1]);
+    const cancelIds = vi.mocked(invoke).mock.calls
+      .filter(([command]) => command === CANCEL_COMPRESSION_COMMAND)
+      .map(([, args]) => (args as { jobId: string }).jobId);
+    expect(cancelIds).toEqual(expect.arrayContaining(nativeIds));
   });
 
   it("keeps skipped results distinct from completed output", async () => {
