@@ -933,22 +933,25 @@ fn validate_encoded_gif(file: &mut File, request: &GifExportRequest) -> Result<(
     file.seek(SeekFrom::Start(end))
         .map_err(|error| format!("无法恢复 GIF 输出位置：{error}"))?;
 
-    let frames = GifDecoder::new(Cursor::new(&encoded))
+    let (frame_count, invalid_dimensions) = GifDecoder::new(Cursor::new(&encoded))
         .map_err(|error| format!("GIF 解码验证失败：{error}"))?
         .into_frames()
-        .collect_frames()
+        .try_fold((0usize, false), |(count, invalid), frame| {
+            let frame = frame?;
+            Ok::<_, image::ImageError>((
+                count + 1,
+                invalid || frame.buffer().dimensions() != (request.width, request.height),
+            ))
+        })
         .map_err(|error| format!("GIF 帧解码验证失败：{error}"))?;
-    if frames.len() != request.frames.len() {
+    if frame_count != request.frames.len() {
         return Err(format!(
             "GIF 解码验证失败：输出包含 {} 帧，预期为 {} 帧。",
-            frames.len(),
+            frame_count,
             request.frames.len()
         ));
     }
-    if frames
-        .iter()
-        .any(|frame| frame.buffer().dimensions() != (request.width, request.height))
-    {
+    if invalid_dimensions {
         return Err(format!(
             "GIF 解码验证失败：输出帧尺寸不是 {} × {}。",
             request.width, request.height

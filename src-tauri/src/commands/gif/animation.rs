@@ -182,9 +182,8 @@ fn validate_encoded_animation(
             let frame_count = decoder
                 .apng()
                 .into_frames()
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| format!("APNG 帧解码验证失败：{error}"))?
-                .len();
+                .try_fold(0usize, |count, frame| frame.map(|_| count + 1))
+                .map_err(|error| format!("APNG 帧解码验证失败：{error}"))?;
             (dimensions, frame_count)
         }
         _ => return Err("动图输出格式必须为 WebP 或 APNG。".to_string()),
