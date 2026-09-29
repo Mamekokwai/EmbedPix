@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    fs,
+    fs::{self, File, OpenOptions},
+    io,
     path::PathBuf,
     sync::Mutex,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -33,8 +34,110 @@ struct CleanupSnapshot {
 
 struct SpoolEntry {
     directory: PathBuf,
+    lock_path: PathBuf,
+    _lock: SpoolLock,
     next_index: usize,
     total_bytes: usize,
+}
+
+struct SpoolLock {
+    file: File,
+}
+
+impl SpoolLock {
+    fn create(path: &PathBuf) -> io::Result<Self> {
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(path)?;
+        lock_file(&file)?;
+        Ok(Self { file })
+    }
+
+    fn try_open(path: &PathBuf) -> io::Result<Option<Self>> {
+        let file = match OpenOptions::new().read(true).write(true).open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        match lock_file(&file) {
+            Ok(()) => Ok(Some(Self { file })),
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+impl Drop for SpoolLock {
+    fn drop(&mut self) {
+        unlock_file(&self.file);
+    }
+}
+
+#[cfg(unix)]
+fn lock_file(file: &File) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+
+    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if result == 0 {
+        Ok(())
+    } else {
+        let error = io::Error::last_os_error();
+        if matches!(error.raw_os_error(), Some(libc::EAGAIN | libc::EWOULDBLOCK)) {
+            Err(io::Error::new(io::ErrorKind::WouldBlock, error))
+        } else {
+            Err(error)
+        }
+    }
+}
+
+#[cfg(unix)]
+fn unlock_file(file: &File) {
+    use std::os::fd::AsRawFd;
+
+    let _ = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) };
+}
+
+#[cfg(windows)]
+fn lock_file(file: &File) -> io::Result<()> {
+    use std::{mem::zeroed, os::windows::io::AsRawHandle};
+    use windows_sys::Win32::{
+        Storage::FileSystem::{LockFileEx, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY},
+        System::IO::OVERLAPPED,
+    };
+
+    let mut overlapped = unsafe { zeroed::<OVERLAPPED>() };
+    let result = unsafe {
+        LockFileEx(
+            file.as_raw_handle(),
+            LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+            0,
+            u32::MAX,
+            u32::MAX,
+            &mut overlapped,
+        )
+    };
+    if result != 0 {
+        Ok(())
+    } else {
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() == Some(33) {
+            Err(io::Error::new(io::ErrorKind::WouldBlock, error))
+        } else {
+            Err(error)
+        }
+    }
+}
+
+#[cfg(windows)]
+fn unlock_file(file: &File) {
+    use std::{mem::zeroed, os::windows::io::AsRawHandle};
+    use windows_sys::Win32::{Storage::FileSystem::UnlockFileEx, System::IO::OVERLAPPED};
+
+    let mut overlapped = unsafe { zeroed::<OVERLAPPED>() };
+    let _ = unsafe { UnlockFileEx(file.as_raw_handle(), 0, u32::MAX, u32::MAX, &mut overlapped) };
 }
 
 impl Default for GifFrameSpoolState {
@@ -73,6 +176,14 @@ impl GifFrameSpoolState {
             }
             fs::create_dir(&directory)
                 .map_err(|error| format!("无法创建 GIF 临时帧目录：{error}"))?;
+            let lock_path = self.root.join(format!("{id}.lock"));
+            let lock = match SpoolLock::create(&lock_path) {
+                Ok(lock) => lock,
+                Err(error) => {
+                    let _ = fs::remove_dir_all(&directory);
+                    return Err(format!("无法锁定 GIF 临时帧目录：{error}"));
+                }
+            };
             self.entries
                 .lock()
                 .map_err(|_| "GIF 临时帧状态已损坏。".to_string())?
@@ -80,6 +191,8 @@ impl GifFrameSpoolState {
                     id.clone(),
                     SpoolEntry {
                         directory,
+                        lock_path,
+                        _lock: lock,
                         next_index: 0,
                         total_bytes: 0,
                     },
@@ -162,8 +275,17 @@ impl GifFrameSpoolState {
                 skipped_grace_period += 1;
                 continue;
             }
+            let lock_path = path.with_extension("lock");
+            let Some(lock) = SpoolLock::try_open(&lock_path)
+                .map_err(|error| format!("无法检查 GIF 临时帧目录锁：{error}"))?
+            else {
+                skipped_active += 1;
+                continue;
+            };
             remove_dir_all_idempotent(&path)
                 .map_err(|error| format!("无法清理 GIF 孤儿临时目录：{error}"))?;
+            drop(lock);
+            let _ = fs::remove_file(lock_path);
             removed += 1;
         }
         let snapshot = CleanupSnapshot {
@@ -223,6 +345,8 @@ impl GifFrameSpoolState {
                 .collect()
         })();
         let _ = fs::remove_dir_all(&entry.directory);
+        drop(entry._lock);
+        let _ = fs::remove_file(entry.lock_path);
         result
     }
 
@@ -235,6 +359,8 @@ impl GifFrameSpoolState {
         if let Some(entry) = entry {
             remove_dir_all_idempotent(&entry.directory)
                 .map_err(|error| format!("无法清理 GIF 临时帧：{error}"))?;
+            drop(entry._lock);
+            let _ = fs::remove_file(entry.lock_path);
         }
         Ok(())
     }
@@ -334,6 +460,7 @@ mod tests {
         fs::create_dir_all(&state.root).unwrap();
         let orphan = state.root.join("orphaned");
         fs::create_dir_all(&orphan).unwrap();
+        drop(SpoolLock::create(&state.root.join("orphaned.lock")).unwrap());
         let active_id = state.create().unwrap();
         state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
         let snapshot = state.latest_cleanup_snapshot().unwrap();
@@ -353,6 +480,7 @@ mod tests {
         fs::create_dir_all(&state.root).unwrap();
         let fresh = state.root.join("fresh");
         fs::create_dir_all(&fresh).unwrap();
+        drop(SpoolLock::create(&state.root.join("fresh.lock")).unwrap());
         state
             .cleanup_orphaned_directories(ORPHAN_GRACE_PERIOD)
             .unwrap();
@@ -361,6 +489,21 @@ mod tests {
         assert_eq!(snapshot.skipped_active, 0);
         assert_eq!(snapshot.skipped_grace_period, 1);
         assert!(fresh.exists());
+        let _ = fs::remove_dir_all(state.root);
+    }
+
+    #[test]
+    fn cleanup_does_not_remove_a_spool_locked_by_another_instance() {
+        let state = test_state("foreign-lock");
+        fs::create_dir_all(&state.root).unwrap();
+        let foreign = state.root.join("foreign");
+        fs::create_dir_all(&foreign).unwrap();
+        let _foreign_lock = SpoolLock::create(&state.root.join("foreign.lock")).unwrap();
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        let snapshot = state.latest_cleanup_snapshot().unwrap();
+        assert_eq!(snapshot.removed, 0);
+        assert_eq!(snapshot.skipped_active, 1);
+        assert!(foreign.exists());
         let _ = fs::remove_dir_all(state.root);
     }
 }
