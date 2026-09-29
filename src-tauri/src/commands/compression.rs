@@ -566,7 +566,8 @@ fn run_compression(
         skipped_reason: selection_skipped_reason,
         candidate_search_ms,
         candidate_count,
-    } = choose_encoded_output(request, width, height).map_err(|error| fail_message(job, error))?;
+    } = choose_encoded_output_with_cancellation(request, width, height, Some(job))
+        .map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
     let output_path =
         resolve_final_output_path(request).map_err(|error| fail_message(job, error))?;
@@ -776,6 +777,7 @@ fn compression_statistics(input_bytes: u64, output_bytes: u64) -> (i64, f64) {
     )
 }
 
+#[derive(Debug)]
 struct EncodedSelection {
     bytes: Vec<u8>,
     selected_quality: Option<u8>,
@@ -790,6 +792,18 @@ fn choose_encoded_output(
     width: u32,
     height: u32,
 ) -> Result<EncodedSelection, String> {
+    choose_encoded_output_with_cancellation(request, width, height, None)
+}
+
+fn choose_encoded_output_with_cancellation(
+    request: &CompressionRequest,
+    width: u32,
+    height: u32,
+    job: Option<&Arc<CompressionJob>>,
+) -> Result<EncodedSelection, String> {
+    if let Some(job) = job {
+        checkpoint(job)?;
+    }
     let quality = request.metadata.jpeg_quality.unwrap_or(82);
     let Some(target_bytes) = request.target_bytes else {
         let bytes = encode_and_verify(
@@ -853,6 +867,9 @@ fn choose_encoded_output(
     let mut best: Option<(u8, Vec<u8>)> = None;
     let mut smallest: Option<(u8, Vec<u8>)> = None;
     while candidates.len() < request.max_candidates && low <= high {
+        if let Some(job) = job {
+            checkpoint(job)?;
+        }
         let candidate = if candidates.is_empty() {
             max_quality
         } else if candidates.len() == 1 {
@@ -876,6 +893,9 @@ fn choose_encoded_output(
             request.metadata.webp_method,
             request.metadata.webp_near_lossless,
         )?;
+        if let Some(job) = job {
+            checkpoint(job)?;
+        }
         if smallest
             .as_ref()
             .is_none_or(|(_, current)| bytes.len() < current.len())
@@ -3703,6 +3723,31 @@ mod tests {
             terminal_at: Mutex::new(None),
         });
         assert!(checkpoint(&job).is_err());
+        assert_eq!(job.progress.lock().unwrap().status, "cancelled");
+    }
+
+    #[test]
+    fn candidate_search_honors_cancellation_before_encoding() {
+        let job = Arc::new(CompressionJob {
+            cancelled: AtomicBool::new(true),
+            progress: Mutex::new(CompressionProgress {
+                job_id: "candidate-cancel".into(),
+                status: "running".into(),
+                stage: "encoding".into(),
+                output_path: None,
+                error: None,
+                code: None,
+                input_bytes: None,
+                output_bytes: None,
+            }),
+            terminal_at: Mutex::new(None),
+        });
+        let request = path_request(Path::new("candidate-cancel.webp"));
+
+        let error =
+            choose_encoded_output_with_cancellation(&request, 2, 2, Some(&job)).unwrap_err();
+
+        assert_eq!(error, "compression cancelled");
         assert_eq!(job.progress.lock().unwrap().status, "cancelled");
     }
 }
