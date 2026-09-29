@@ -53,6 +53,7 @@ export interface CompressionResult {
   targetBytes: number | null;
   targetMet: boolean;
   selectedQuality: number | null;
+  candidateSearchMs?: number;
 }
 export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; code?: string | null; inputBytes?: number; outputBytes?: number; }
 export interface CompressionPreview {
@@ -67,6 +68,7 @@ export interface CompressionPreview {
   targetBytes: number | null;
   targetMet: boolean;
   selectedQuality: number | null;
+  candidateSearchMs?: number;
 }
 export interface CompressionEstimate {
   inputBytes: number;
@@ -82,6 +84,7 @@ export interface CompressionEstimate {
   targetBytes: number | null;
   targetMet: boolean;
   selectedQuality: number | null;
+  candidateSearchMs?: number;
 }
 
 export interface CompressionEstimateRequest {

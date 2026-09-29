@@ -336,6 +336,8 @@ pub struct CompressionResult {
     pub target_bytes: Option<u64>,
     pub target_met: bool,
     pub selected_quality: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_search_ms: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -364,6 +366,8 @@ pub struct CompressionPreview {
     pub target_bytes: Option<u64>,
     pub target_met: bool,
     pub selected_quality: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_search_ms: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -382,6 +386,8 @@ pub struct CompressionEstimate {
     pub target_bytes: Option<u64>,
     pub target_met: bool,
     pub selected_quality: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_search_ms: Option<u64>,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -522,6 +528,7 @@ fn run_compression(
         selected_quality,
         target_met,
         skipped_reason: selection_skipped_reason,
+        candidate_search_ms,
     } = choose_encoded_output(request, width, height).map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
     let output_path =
@@ -563,6 +570,7 @@ fn run_compression(
             target_bytes: request.target_bytes,
             target_met,
             selected_quality,
+            candidate_search_ms,
         });
     }
     update_progress(job, "publishing", None, None);
@@ -608,6 +616,7 @@ fn run_compression(
         target_bytes: request.target_bytes,
         target_met,
         selected_quality,
+        candidate_search_ms,
     };
     update_progress(job, "completed", Some(result.output_path.clone()), None);
     Ok(result)
@@ -721,6 +730,7 @@ struct EncodedSelection {
     selected_quality: Option<u8>,
     target_met: bool,
     skipped_reason: Option<String>,
+    candidate_search_ms: Option<u64>,
 }
 
 fn choose_encoded_output(
@@ -749,6 +759,7 @@ fn choose_encoded_output(
                 .then_some(quality),
             target_met: false,
             skipped_reason: None,
+            candidate_search_ms: None,
         });
     };
 
@@ -776,9 +787,11 @@ fn choose_encoded_output(
             }),
             bytes,
             selected_quality: None,
+            candidate_search_ms: None,
         });
     }
 
+    let search_started_at = Instant::now();
     let max_quality = quality;
     let mut low = 1u8;
     let mut high = max_quality;
@@ -847,6 +860,12 @@ fn choose_encoded_output(
         selected_quality: Some(selected_quality),
         target_met,
         skipped_reason,
+        candidate_search_ms: Some(
+            search_started_at
+                .elapsed()
+                .as_millis()
+                .min(u64::MAX as u128) as u64,
+        ),
     })
 }
 
@@ -891,6 +910,7 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
         selected_quality,
         target_met,
         skipped_reason,
+        candidate_search_ms,
     } = choose_encoded_output(request, width, height)?;
     if data.len() > MAX_PREVIEW_BYTES {
         return Err(format!(
@@ -920,6 +940,7 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
         target_bytes: request.target_bytes,
         target_met,
         selected_quality,
+        candidate_search_ms,
     })
 }
 
@@ -930,6 +951,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         selected_quality,
         target_met,
         skipped_reason: selection_skipped_reason,
+        candidate_search_ms,
     } = choose_encoded_output(request, width, height)?;
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
@@ -963,6 +985,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         target_bytes: request.target_bytes,
         target_met,
         selected_quality,
+        candidate_search_ms,
     })
 }
 
@@ -3135,6 +3158,7 @@ mod tests {
         let selection = choose_encoded_output(&request, 2, 2).unwrap();
         assert!(selection.target_met);
         assert!(selection.selected_quality.unwrap() >= 50);
+        assert!(selection.candidate_search_ms.is_some());
         assert!((selection.bytes.len() as u64) <= target);
     }
 
@@ -3181,6 +3205,7 @@ mod tests {
         let selection = choose_encoded_output(&request, 64, 48).unwrap();
         assert!(selection.target_met);
         assert!(selection.selected_quality.unwrap() >= 50);
+        assert!(selection.candidate_search_ms.is_some());
         assert!((selection.bytes.len() as u64) <= target);
     }
 
