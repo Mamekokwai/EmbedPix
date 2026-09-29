@@ -376,6 +376,16 @@ pub struct CompressionPreview {
     pub candidate_search_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_count: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality_metrics: Option<CompressionQualityMetrics>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressionQualityMetrics {
+    pub rgb_mae: f64,
+    pub psnr_db: Option<f64>,
+    pub alpha_mismatch_pixels: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -942,6 +952,12 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
     if verified.dimensions() != (width, height) {
         return Err("compressed preview dimensions do not match the source image".into());
     }
+    let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
+        let source = decode_image(&request.input)?;
+        Some(calculate_quality_metrics(&source, &verified)?)
+    } else {
+        None
+    };
     let output_bytes = data.len() as u64;
     Ok(CompressionPreview {
         data,
@@ -962,6 +978,47 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
         selected_quality,
         candidate_search_ms,
         candidate_count,
+        quality_metrics,
+    })
+}
+
+fn calculate_quality_metrics(
+    source: &DynamicImage,
+    output: &DynamicImage,
+) -> Result<CompressionQualityMetrics, String> {
+    if source.dimensions() != output.dimensions() {
+        return Err("quality comparison requires matching image dimensions".into());
+    }
+    let source = source.to_rgba8();
+    let output = output.to_rgba8();
+    let channel_count = source.width() as f64 * source.height() as f64 * 3.0;
+    if channel_count == 0.0 {
+        return Err("quality comparison requires a non-empty image".into());
+    }
+    let mut absolute_error = 0.0;
+    let mut squared_error = 0.0;
+    let mut alpha_mismatch_pixels = 0u64;
+    for (source_pixel, output_pixel) in source.pixels().zip(output.pixels()) {
+        for channel in 0..3 {
+            let difference = f64::from(source_pixel[channel]) - f64::from(output_pixel[channel]);
+            absolute_error += difference.abs();
+            squared_error += difference * difference;
+        }
+        if source_pixel[3] != output_pixel[3] {
+            alpha_mismatch_pixels = alpha_mismatch_pixels.saturating_add(1);
+        }
+    }
+    let rgb_mae = absolute_error / channel_count;
+    let mean_squared_error = squared_error / channel_count;
+    let psnr_db = if mean_squared_error == 0.0 {
+        None
+    } else {
+        Some(10.0 * (255.0_f64 * 255.0 / mean_squared_error).log10())
+    };
+    Ok(CompressionQualityMetrics {
+        rgb_mae,
+        psnr_db,
+        alpha_mismatch_pixels,
     })
 }
 
@@ -3144,6 +3201,29 @@ mod tests {
         let value = serde_json::to_value(without_sizes).unwrap();
         assert!(value.get("inputBytes").is_none());
         assert!(value.get("outputBytes").is_none());
+    }
+
+    #[test]
+    fn webp_quality_metrics_are_stable_and_report_alpha_differences() {
+        let source = image::load_from_memory(&lossy_webp_input()).unwrap();
+        let encoded =
+            encode_image_with_mode(&lossy_webp_input(), CompressionFormat::Webp, 52, 2, false)
+                .unwrap();
+        let decoded = decode_image(&encoded).unwrap();
+        let metrics = calculate_quality_metrics(&source, &decoded).unwrap();
+        let repeated = calculate_quality_metrics(&source, &decoded).unwrap();
+        assert_eq!(metrics.rgb_mae, repeated.rgb_mae);
+        assert_eq!(metrics.psnr_db, repeated.psnr_db);
+        assert_eq!(metrics.alpha_mismatch_pixels, 0);
+        assert!(metrics.rgb_mae.is_finite());
+        assert!(metrics.rgb_mae >= 0.0);
+        assert!(metrics.psnr_db.is_some());
+
+        let mut changed = decoded.to_rgba8();
+        changed.get_pixel_mut(0, 0)[3] ^= 1;
+        let changed_metrics =
+            calculate_quality_metrics(&source, &DynamicImage::ImageRgba8(changed)).unwrap();
+        assert_eq!(changed_metrics.alpha_mismatch_pixels, 1);
     }
 
     #[test]

@@ -71,6 +71,7 @@ export interface CompressionPreview {
   selectedQuality: number | null;
   candidateSearchMs?: number;
   candidateCount?: number;
+  qualityMetrics?: CompressionQualityMetrics;
 }
 export interface CompressionEstimate {
   inputBytes: number;
@@ -89,6 +90,7 @@ export interface CompressionEstimate {
   candidateSearchMs?: number;
   candidateCount?: number;
 }
+export interface CompressionQualityMetrics { rgbMae: number; psnrDb: number | null; alphaMismatchPixels: number; }
 
 export interface CompressionEstimateRequest {
   fileName: string;
