@@ -311,7 +311,7 @@
 
 - [ ] Windows x64 构建。
 - [ ] Windows ARM64 构建。
-- [ ] 压缩命令行输出、错误输出和退出码。
+- [x] 压缩命令行输出、错误输出和退出码：`embedpix-cli` 使用 JSON/JSONL 事件输出成功与进度，错误事件写入 stdout、stderr 保留进程级诊断，退出码区分成功（0）、失败（1）和中断/部分失败（2）；强制 CLI/OxiPNG smoke 已覆盖 PNG、WebP、GIF 输出与二次解码。
 - [ ] x64 安装、启动、压缩、卸载。
 - [ ] ARM64 资产下载、SHA256、签名校验。
 - [~] `latest.json` 与签名文件一致性：本地 fixture 已覆盖清单、URL、签名、摘要与尺寸；真实线上资产待发布时验收。
