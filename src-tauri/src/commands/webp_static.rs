@@ -383,6 +383,26 @@ mod tests {
     }
 
     #[test]
+    fn combined_alpha_quality_and_analysis_passes_change_decodable_webp() {
+        let image = sample_image(true);
+        let baseline =
+            encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, Some(0), Some(1))
+                .unwrap();
+        let tuned =
+            encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, Some(100), Some(1))
+                .unwrap();
+        assert_ne!(baseline, tuned);
+        assert_eq!(
+            image::load_from_memory(&baseline).unwrap().dimensions(),
+            (64, 48)
+        );
+        assert_eq!(
+            image::load_from_memory(&tuned).unwrap().dimensions(),
+            (64, 48)
+        );
+    }
+
+    #[test]
     fn analysis_pass_changes_output_and_remains_decodable() {
         let image = sample_image(true);
         let fast =

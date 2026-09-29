@@ -3803,9 +3803,20 @@ mod tests {
     #[test]
     fn webp_target_search_returns_highest_quality_candidate_within_bound() {
         let input = lossy_webp_input();
-        let target = encode_image_with_mode(&input, CompressionFormat::Webp, 50, 2, false)
-            .unwrap()
-            .len() as u64;
+        let target = encode_image_with_webp_method(
+            &input,
+            CompressionFormat::Webp,
+            50,
+            2,
+            false,
+            None,
+            Some(6),
+            Some(60),
+            Some(10),
+            None,
+        )
+        .unwrap()
+        .len() as u64;
         let request = CompressionRequest {
             metadata: CompressionMetadata {
                 schema_version: COMPRESSION_SCHEMA_VERSION,
@@ -3825,8 +3836,8 @@ mod tests {
                 jpeg_quality: Some(100),
                 jpeg_background: None,
                 webp_method: Some(6),
-                webp_alpha_quality: None,
-                webp_pass: None,
+                webp_alpha_quality: Some(60),
+                webp_pass: Some(10),
                 webp_near_lossless: None,
                 lossless: Some(false),
                 skip_if_larger: true,
