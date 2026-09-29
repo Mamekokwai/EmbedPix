@@ -137,6 +137,14 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, pngOptimizationLevel: 7 })).toThrow("pngOptimizationLevel");
   });
 
+  it("rejects invalid JPEG quality and target size before IPC", () => {
+    expect(() => encodeCompressionEnvelope({ ...request, jpegQuality: 0 })).toThrow("jpegQuality");
+    expect(() => encodeCompressionEnvelope({ ...request, jpegQuality: 101 })).toThrow("jpegQuality");
+    expect(() => encodeCompressionEnvelope({ ...request, maxOutputBytes: 0 })).toThrow("maxOutputBytes");
+    expect(() => encodeCompressionEnvelope({ ...request, maxOutputBytes: 128 * 1024 * 1024 + 1 })).toThrow("maxOutputBytes");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("rejects metadata preservation with a stable user-facing explanation before IPC", () => {
     expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "preserve" })).toThrow("第一阶段原生压缩仅支持移除元数据");
     expect(invoke).not.toHaveBeenCalled();
