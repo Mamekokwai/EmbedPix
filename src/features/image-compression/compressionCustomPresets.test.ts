@@ -23,6 +23,7 @@ const values: CompressionPresetValues = {
   targetSizeEnabled: false,
   targetSizeKiB: "",
   maxCandidates: 8,
+  maxInputMiB: 32,
   skipIfLarger: true,
   lossless: true,
   metadataPolicy: "strip",

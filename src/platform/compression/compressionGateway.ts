@@ -10,6 +10,7 @@ export const CANCEL_COMPRESSION_COMMAND = "cancel_compression" as const;
 export const GET_COMPRESSION_PROGRESS_COMMAND = "get_compression_progress" as const;
 export const COMPRESSION_SCHEMA_VERSION = 1 as const;
 export const MAX_COMPRESSION_INPUT_BYTES = 32 * 1024 * 1024;
+export const MIN_COMPRESSION_INPUT_BYTES = 1 * 1024 * 1024;
 
 export interface CompressionEnvelopeRequest {
   fileName: string;
@@ -35,6 +36,7 @@ export interface CompressionEnvelopeRequest {
   pngOptimizationLevel: number;
   maxOutputBytes?: number;
   maxCandidates?: number;
+  maxInputBytes?: number;
   metadataPolicy: MetadataPolicy;
   jobId?: string;
 }
@@ -116,6 +118,7 @@ export interface CompressionEstimateRequest {
   pngOptimizationLevel: number;
   maxOutputBytes?: number;
   maxCandidates?: number;
+  maxInputBytes?: number;
 }
 
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
@@ -144,6 +147,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     pngOptimizationLevel: request.pngOptimizationLevel,
     ...(request.maxOutputBytes ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates ? { maxCandidates: request.maxCandidates } : {}),
+    ...(request.maxInputBytes !== undefined ? { maxInputBytes: request.maxInputBytes } : {}),
     metadataPolicy: "strip",
     ...(request.jobId ? { jobId: request.jobId } : {}),
   };
@@ -152,6 +156,8 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
 export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): Uint8Array {
   if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
   if (request.inputData.byteLength > MAX_COMPRESSION_INPUT_BYTES) throw new Error("图片数据超过 32 MiB 限制。");
+  if (request.maxInputBytes !== undefined && (!Number.isInteger(request.maxInputBytes) || request.maxInputBytes < MIN_COMPRESSION_INPUT_BYTES || request.maxInputBytes > MAX_COMPRESSION_INPUT_BYTES)) throw new Error("maxInputBytes 必须在 1 到 32 MiB 之间。");
+  if (request.maxInputBytes !== undefined && request.inputData.byteLength > request.maxInputBytes) throw new Error("图片数据超过当前配置的单文件输入上限。");
   if (!Number.isInteger(request.jpegQuality) || request.jpegQuality < 1 || request.jpegQuality > 100) throw new Error("jpegQuality 必须在 1 到 100 之间。");
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
   if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
@@ -184,6 +190,8 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
 export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRequest): Uint8Array {
   if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
   if (request.inputData.byteLength > MAX_COMPRESSION_INPUT_BYTES) throw new Error("图片数据超过 32 MiB 限制。");
+  if (request.maxInputBytes !== undefined && (!Number.isInteger(request.maxInputBytes) || request.maxInputBytes < MIN_COMPRESSION_INPUT_BYTES || request.maxInputBytes > MAX_COMPRESSION_INPUT_BYTES)) throw new Error("maxInputBytes 必须在 1 到 32 MiB 之间。");
+  if (request.maxInputBytes !== undefined && request.inputData.byteLength > request.maxInputBytes) throw new Error("图片数据超过当前配置的单文件输入上限。");
   if (request.metadataPolicy !== "strip") throw new Error("第一阶段原生压缩仅支持移除元数据。");
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
   if (!Number.isInteger(request.jpegQuality) || request.jpegQuality < 1 || request.jpegQuality > 100) throw new Error("jpegQuality 必须在 1 到 100 之间。");
@@ -213,6 +221,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     pngOptimizationLevel: request.pngOptimizationLevel,
     ...(request.maxOutputBytes !== undefined ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates !== undefined ? { maxCandidates: request.maxCandidates } : {}),
+    ...(request.maxInputBytes !== undefined ? { maxInputBytes: request.maxInputBytes } : {}),
     metadataPolicy: "strip",
   }));
   const payload = new Uint8Array(8 + metadataBytes.byteLength + request.inputData.byteLength);
@@ -263,6 +272,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     pngOptimizationLevel: options.pngOptimizationLevel,
     maxOutputBytes: options.maxOutputBytes,
     maxCandidates: options.maxCandidates,
+    maxInputBytes: options.maxInputBytes,
     metadataPolicy: options.metadataPolicy,
     jobId,
   };

@@ -181,6 +181,19 @@ describe("compression gateway", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("enforces the configurable single-file input limit for raw and estimate envelopes", () => {
+    expect(() => encodeCompressionEnvelope({ ...request, maxInputBytes: 0 })).toThrow("maxInputBytes");
+    expect(() => encodeCompressionEnvelope({ ...request, maxInputBytes: 1024 * 1024 - 1 })).toThrow("maxInputBytes");
+    expect(() => encodeCompressionEnvelope({ ...request, maxInputBytes: 33 * 1024 * 1024 })).toThrow("maxInputBytes");
+    expect(() => encodeCompressionEnvelope({ ...request, maxInputBytes: 32 * 1024 * 1024 + 1 })).toThrow("maxInputBytes");
+    expect(() => encodeCompressionEnvelope({ ...request, maxInputBytes: 1024 * 1024 })).not.toThrow();
+    expect(() => encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "webp", jpegQuality: 82, lossless: true, metadataPolicy: "strip", pngOptimizationLevel: 2, maxInputBytes: 1024 * 1024 - 1 })).toThrow("maxInputBytes");
+    const encoded = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "webp", jpegQuality: 82, lossless: true, metadataPolicy: "strip", pngOptimizationLevel: 2, maxInputBytes: 32 * 1024 * 1024 });
+    const length = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
+    expect(metadata.maxInputBytes).toBe(32 * 1024 * 1024);
+  });
+
   it("rejects metadata preservation with a stable user-facing explanation before IPC", () => {
     expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "preserve" })).toThrow("第一阶段原生压缩仅支持移除元数据");
     expect(invoke).not.toHaveBeenCalled();

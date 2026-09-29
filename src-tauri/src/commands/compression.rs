@@ -148,6 +148,8 @@ struct CompressionMetadata {
     #[serde(default)]
     max_candidates: Option<usize>,
     #[serde(default)]
+    max_input_bytes: Option<u64>,
+    #[serde(default)]
     png_optimization_level: Option<u8>,
     #[serde(default)]
     metadata_policy: MetadataPolicy,
@@ -182,6 +184,8 @@ struct CompressionEstimateMetadata {
     max_output_bytes: Option<u64>,
     #[serde(default)]
     max_candidates: Option<usize>,
+    #[serde(default)]
+    max_input_bytes: Option<u64>,
     #[serde(default)]
     png_optimization_level: Option<u8>,
     #[serde(default)]
@@ -805,6 +809,15 @@ fn validate_webp_pass(
         return Err("webpPass is only supported for lossy WebP".into());
     }
     Ok(())
+}
+
+fn validate_max_input_bytes(value: Option<u64>) -> Result<usize, String> {
+    let bytes = value.unwrap_or(MAX_INPUT_BYTES as u64);
+    const MIN_INPUT_BYTES: u64 = 1024 * 1024;
+    if !(MIN_INPUT_BYTES..=MAX_INPUT_BYTES as u64).contains(&bytes) {
+        return Err("maxInputBytes must be between 1 and 32 MiB".into());
+    }
+    Ok(bytes as usize)
 }
 
 fn validate_webp_near_lossless(
@@ -1504,6 +1517,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
         }
     }
     let target_bytes = metadata.max_output_bytes;
+    let max_input_bytes = validate_max_input_bytes(metadata.max_input_bytes)?;
     let max_candidates = metadata.max_candidates.unwrap_or(DEFAULT_MAX_CANDIDATES);
     if !(1..=MAX_CANDIDATES).contains(&max_candidates) {
         return Err(format!(
@@ -1557,8 +1571,12 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
             .map_err(|error| format!("invalid sourcePath: {error:?}"))?;
     }
     let input = body[end..].to_vec();
-    if input.len() > MAX_INPUT_BYTES {
-        return Err("input image exceeds the 32 MiB limit".into());
+    if input.len() > max_input_bytes {
+        return Err(if max_input_bytes == MAX_INPUT_BYTES {
+            "input image exceeds the 32 MiB limit".into()
+        } else {
+            "input image exceeds the configured maxInputBytes limit".into()
+        });
     }
     Ok(CompressionRequest {
         metadata,
@@ -1627,6 +1645,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
         }
     }
     let target_bytes = metadata.max_output_bytes;
+    let max_input_bytes = validate_max_input_bytes(metadata.max_input_bytes)?;
     let max_candidates = metadata.max_candidates.unwrap_or(DEFAULT_MAX_CANDIDATES);
     if !(1..=MAX_CANDIDATES).contains(&max_candidates) {
         return Err(format!(
@@ -1648,8 +1667,12 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
         );
     }
     let input = body[end..].to_vec();
-    if input.len() > MAX_INPUT_BYTES {
-        return Err("input image exceeds the 32 MiB limit".into());
+    if input.len() > max_input_bytes {
+        return Err(if max_input_bytes == MAX_INPUT_BYTES {
+            "input image exceeds the 32 MiB limit".into()
+        } else {
+            "input image exceeds the configured maxInputBytes limit".into()
+        });
     }
     Ok(CompressionRequest {
         metadata: CompressionMetadata {
@@ -1677,6 +1700,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             skip_if_larger: metadata.skip_if_larger,
             max_output_bytes: metadata.max_output_bytes,
             max_candidates: metadata.max_candidates,
+            max_input_bytes: metadata.max_input_bytes,
             png_optimization_level: metadata.png_optimization_level,
             metadata_policy: metadata.metadata_policy,
             job_id: None,
@@ -2209,6 +2233,7 @@ mod tests {
                 skip_if_larger: false,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("auto-rename-test".into()),
@@ -2473,6 +2498,7 @@ mod tests {
                 skip_if_larger: false,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("transparent-jpeg-publish-test".into()),
@@ -2803,6 +2829,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
@@ -3167,6 +3194,27 @@ mod tests {
     }
 
     #[test]
+    fn configurable_input_limit_is_bounded_and_checked_before_encoding() {
+        assert!(validate_max_input_bytes(Some(1024 * 1024 - 1)).is_err());
+        assert_eq!(validate_max_input_bytes(Some(1024 * 1024)), Ok(1024 * 1024));
+        assert_eq!(
+            validate_max_input_bytes(Some(32 * 1024 * 1024)),
+            Ok(MAX_INPUT_BYTES)
+        );
+        assert!(validate_max_input_bytes(Some(32 * 1024 * 1024 + 1)).is_err());
+        let output_path = crate::commands::test_temp_dir()
+            .join(format!("embedpix-input-limit-{}.png", uuid_like_id()));
+        let metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"png\",\"maxInputBytes\":1048576,\"outputPath\":\"{}\"}}",
+            output_path.to_string_lossy().replace('\\', "/")
+        );
+        let error =
+            parse_raw_payload(&raw_payload(&metadata, &vec![0u8; 1024 * 1024 + 1])).unwrap_err();
+        assert!(error.contains("configured maxInputBytes"));
+        assert!(!output_path.exists());
+    }
+
+    #[test]
     fn corrupt_input_does_not_publish_or_modify_an_existing_output() {
         let output_path = crate::commands::test_temp_dir().join(format!(
             "embedpix-compression-corrupt-{}.webp",
@@ -3200,6 +3248,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("corrupt-input-test".into()),
@@ -3301,6 +3350,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("skip-test".into()),
@@ -3778,6 +3828,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
                 max_candidates: Some(MAX_CANDIDATES),
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
@@ -3843,6 +3894,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
                 max_candidates: Some(MAX_CANDIDATES),
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
@@ -3894,6 +3946,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: Some(1),
                 max_candidates: Some(1),
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
@@ -3943,6 +3996,7 @@ mod tests {
                 skip_if_larger: false,
                 max_output_bytes: Some(1),
                 max_candidates: Some(DEFAULT_MAX_CANDIDATES),
+                max_input_bytes: None,
                 png_optimization_level: Some(2),
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,

@@ -18,6 +18,7 @@ export interface CompressionPresetValues {
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
   maxCandidates: number;
+  maxInputMiB: number;
   skipIfLarger: boolean;
   lossless: boolean;
   metadataPolicy: MetadataPolicy;
@@ -101,6 +102,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
     maxCandidates: record.maxCandidates === undefined ? COMPRESSION_MAX_CANDIDATES_DEFAULT : integerValue(record.maxCandidates, COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_MAX_CANDIDATES_MAX, "候选搜索次数", index),
+    maxInputMiB: record.maxInputMiB === undefined ? 32 : integerValue(record.maxInputMiB, 1, 32, "单文件输入上限", index),
     skipIfLarger: record.skipIfLarger === undefined ? true : booleanValue(record.skipIfLarger, "压缩后更大时跳过", index),
     lossless,
     metadataPolicy: enumValue(record.metadataPolicy, ["strip"], "元数据策略", index),
@@ -121,6 +123,7 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   if (values.webpNearLossless !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 近无损等级仅适用于无损 WebP。");
   if (!/^#[0-9a-f]{6}$/iu.test(values.jpegBackground.trim())) throw new Error("JPEG 透明背景必须是 #RRGGBB 颜色。");
   if (!Number.isInteger(values.maxCandidates) || values.maxCandidates < COMPRESSION_MAX_CANDIDATES_MIN || values.maxCandidates > COMPRESSION_MAX_CANDIDATES_MAX) throw new Error(`候选搜索次数必须在 ${COMPRESSION_MAX_CANDIDATES_MIN} 到 ${COMPRESSION_MAX_CANDIDATES_MAX} 之间。`);
+  if (!Number.isInteger(values.maxInputMiB) || values.maxInputMiB < 1 || values.maxInputMiB > 32) throw new Error("单文件输入上限必须在 1 到 32 MiB 之间。");
   return { id: createId(), name: trimmedName, values: { ...values }, createdAt: new Date().toISOString() };
 }
 

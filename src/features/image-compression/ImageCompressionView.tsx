@@ -99,9 +99,9 @@ function fileTypeForPath(path: string): string {
   return extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension ? `image/${extension}` : "application/octet-stream";
 }
 
-function nativeFileToItem(nativeFile: NativeImageFile): CompressionItem {
-  if (nativeFile.data.length > COMPRESSION_MAX_INPUT_BYTES) {
-    throw new Error(`文件超过 ${COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB 输入限制。`);
+function nativeFileToItem(nativeFile: NativeImageFile, maxInputBytes = COMPRESSION_MAX_INPUT_BYTES): CompressionItem {
+  if (nativeFile.data.length > maxInputBytes) {
+    throw new Error(`文件超过 ${maxInputBytes / (1024 * 1024)} MiB 输入限制。`);
   }
   const file = new File([new Uint8Array(nativeFile.data)], nativeFile.fileName, { type: fileTypeForPath(nativeFile.fileName) });
   return { id: `${nativeFile.path}-${file.size}`, file, sourcePath: nativeFile.path, size: file.size };
@@ -171,6 +171,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [pngOptimizationLevel, setPngOptimizationLevel] = useState(initialPreferences.pngOptimizationLevel);
   const [targetSizeKiB, setTargetSizeKiB] = useState(initialPreferences.targetSizeKiB);
   const [maxCandidates, setMaxCandidates] = useState(initialPreferences.maxCandidates);
+  const [maxInputMiB, setMaxInputMiB] = useState(initialPreferences.maxInputMiB);
   const [targetSizeEnabled, setTargetSizeEnabled] = useState(initialPreferences.targetSizeEnabled);
   const [skipIfLarger, setSkipIfLarger] = useState(initialPreferences.skipIfLarger);
   const [lossless, setLossless] = useState(initialPreferences.lossless);
@@ -231,6 +232,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const targetSizeActive = targetSizeEnabled && qualityEnabled;
   const targetSizeError = useMemo(() => getCompressionTargetSizeError(targetSizeActive, targetSizeKiB, COMPRESSION_MAX_TARGET_SIZE_KIB), [targetSizeActive, targetSizeKiB]);
   const maxOutputBytes = targetSizeActive && !targetSizeError && targetSizeKiB.trim() ? Math.round(Number(targetSizeKiB) * 1024) : undefined;
+  const maxInputBytes = maxInputMiB * 1024 * 1024;
   const outputFileNameError = useMemo(() => replaceOriginal ? null : getCompressionOutputFileNameError(outputFileName, format), [format, outputFileName, replaceOriginal]);
   const options = useMemo<CompressionOptions>(() => ({
     format,
@@ -254,7 +256,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     skipIfLarger,
     maxOutputBytes,
     maxCandidates: maxOutputBytes ? maxCandidates : undefined,
-  }), [deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates]);
+    maxInputBytes,
+  }), [deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates, maxInputBytes]);
 
   const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, true), [outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
@@ -275,6 +278,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     format === "webp" && lossless && webpNearLossless !== null ? `近无损 ${webpNearLossless}` : null,
     format === "jpg" ? `JPEG 背景 ${jpegBackground}` : null,
     targetSizeActive && maxOutputBytes ? `目标 ≤ ${targetSizeKiB.trim()} KiB · 候选 ${maxCandidates}` : "不启用目标体积",
+    `单文件输入 ≤ ${maxInputMiB} MiB`,
     metadataPolicy === "strip" ? "移除元数据" : `元数据 ${metadataPolicy}`,
     replaceOriginal ? "覆盖原图并备份到 bak" : outputLocation === "source" ? "输出到源文件夹" : outputLocation === "subfolder" ? `输出到子目录 ${outputSubdirectory.trim() || "（未设置）"}` : `输出到指定目录 ${outputDirectory.trim() || "（未设置）"}`,
     outputModes.overwrite ? "允许覆盖同名" : outputModes.autoNumbering ? "自动序号" : "同名时拒绝写入",
@@ -328,6 +332,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           pngOptimizationLevel: options.pngOptimizationLevel,
           maxOutputBytes: options.maxOutputBytes,
           maxCandidates: options.maxCandidates,
+          maxInputBytes: options.maxInputBytes,
         };
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
         const result = await estimateImageCompression(request);
@@ -363,6 +368,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       targetSizeEnabled: targetSizeActive,
       targetSizeKiB,
       maxCandidates,
+      maxInputMiB,
       skipIfLarger,
       lossless,
       preset,
@@ -375,7 +381,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       replaceOriginal,
       deleteSource,
     });
-  }, [autoNumbering, deleteSource, format, lossless, maxCandidates, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground]);
+  }, [autoNumbering, deleteSource, format, lossless, maxCandidates, maxInputMiB, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -444,15 +450,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   }, [active, busy, options, selectedItem]);
 
   const addBrowserFiles = (files: File[], replaceItemId: string | null = null) => {
-    const { accepted, unsupported, oversized } = splitCompressionImportFiles(files);
+    const { accepted, unsupported, oversized } = splitCompressionImportFiles(files, maxInputBytes);
     const next = toBrowserItems(accepted);
     const importErrorsForFiles = [
       ...unsupported.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })),
-      ...oversized.map((file, index) => ({ id: `browser-size-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: `文件超过 ${COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB 输入限制。` })),
+      ...oversized.map((file, index) => ({ id: `browser-size-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: `文件超过 ${maxInputMiB} MiB 输入限制。` })),
     ];
     if (next.length === 0) {
       setImportErrors(importErrorsForFiles);
-      setMessage(importErrorsForFiles.length > 0 ? "没有可导入的图片；请检查格式和 32 MiB 输入限制。" : "没有找到支持的图片格式（PNG、JPEG、WebP、BMP、GIF）。");
+      setMessage(importErrorsForFiles.length > 0 ? `没有可导入的图片；请检查格式和 ${maxInputMiB} MiB 输入限制。` : "没有找到支持的图片格式（PNG、JPEG、WebP、BMP、GIF）。");
       setStatus("error");
       return;
     }
@@ -476,7 +482,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     const skipped: Array<{ fileName: string; message: string }> = [];
     for (const nativeFile of nativeFiles) {
       try {
-        imported.push(nativeFileToItem(nativeFile));
+        imported.push(nativeFileToItem(nativeFile, maxInputBytes));
       } catch (error) {
         skipped.push({ fileName: nativeFile.fileName, message: errorMessage(error) });
       }
@@ -806,7 +812,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setSkipIfLarger(true);
   };
 
-  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, maxCandidates, lossless, metadataPolicy, skipIfLarger });
+  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, maxCandidates, maxInputMiB, lossless, metadataPolicy, skipIfLarger });
 
   const applyCustomPreset = (id: string) => {
     setCustomPresetId(id);
@@ -823,6 +829,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setTargetSizeEnabled(selected.values.targetSizeEnabled);
     setTargetSizeKiB(selected.values.targetSizeKiB);
     setMaxCandidates(selected.values.maxCandidates ?? COMPRESSION_MAX_CANDIDATES_DEFAULT);
+    setMaxInputMiB(selected.values.maxInputMiB ?? 32);
     setSkipIfLarger(selected.values.skipIfLarger);
     setLossless(selected.values.lossless);
     setMetadataPolicy(selected.values.metadataPolicy);
@@ -977,6 +984,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <label className="compression-check"><input type="checkbox" checked={targetSizeActive} onChange={(event) => setTargetSizeEnabled(event.target.checked)} disabled={busy || !qualityEnabled} /><span><strong>启用目标体积控制</strong><small>{format === "jpg" ? `启用后输入最大输出体积；核心最多尝试 ${maxCandidates} 个 JPEG 质量候选` : format === "webp" && !lossless ? `启用后输入最大输出体积；核心最多尝试 ${maxCandidates} 个 WebP 质量候选` : "PNG 和无损 WebP 不支持目标体积控制"}</small></span></label>
           <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（JPEG/WebP 有损）</span><strong>{targetSizeActive && targetSizeKiB ? `${targetSizeKiB} KiB` : "—"}</strong></span><input type="number" min="1" max={COMPRESSION_MAX_TARGET_SIZE_KIB} step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="启用后输入 KiB" disabled={busy || !qualityEnabled || !targetSizeActive} aria-invalid={Boolean(targetSizeError)} /><small className="compression-field-hint">{format === "jpg" ? `JPEG 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : format === "webp" && !lossless ? `WebP 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : "PNG 和无损 WebP 不支持目标体积控制"}</small></label>
           {targetSizeActive ? <label className="compression-field"><span className="compression-label-row"><span>候选搜索次数</span><strong>{maxCandidates}</strong></span><input type="number" min={COMPRESSION_MAX_CANDIDATES_MIN} max={COMPRESSION_MAX_CANDIDATES_MAX} step="1" value={maxCandidates} onChange={(event) => { const next = Number(event.target.value); setMaxCandidates(Number.isFinite(next) ? Math.min(COMPRESSION_MAX_CANDIDATES_MAX, Math.max(COMPRESSION_MAX_CANDIDATES_MIN, Math.round(next))) : COMPRESSION_MAX_CANDIDATES_DEFAULT); setPreset("custom"); }} disabled={busy || !qualityEnabled} /><small className="compression-field-hint">次数越多越接近目标体积，但编码耗时会增加；范围 {COMPRESSION_MAX_CANDIDATES_MIN}–{COMPRESSION_MAX_CANDIDATES_MAX}，默认 {COMPRESSION_MAX_CANDIDATES_DEFAULT}。</small></label> : null}
+          <label className="compression-field"><span className="compression-label-row"><span>单文件最大输入体积</span><strong>{maxInputMiB} MiB</strong></span><input type="number" min="1" max="32" step="1" value={maxInputMiB} onChange={(event) => { const next = Number(event.target.value); setMaxInputMiB(Number.isFinite(next) ? Math.min(32, Math.max(1, Math.round(next))) : 32); setPreset("custom"); }} disabled={busy} /><small className="compression-field-hint">范围 1–32 MiB；仅能收紧默认 32 MiB 上限，导入、预览、估算和正式压缩均生效。</small></label>
           {targetSizeError ? <p className="compression-field-error" role="alert">{targetSizeError}</p> : null}
           <label className="compression-check"><input type="checkbox" checked={skipIfLarger} onChange={(event) => { setSkipIfLarger(event.target.checked); setPreset("custom"); }} disabled={busy} /><span><strong>压缩后更大时跳过</strong><small className={skipIfLarger ? undefined : "compression-skip-larger-warning"}>{skipIfLarger ? "仅发布不大于原图的结果；目标体积仍按上方限制执行。" : "风险模式：压缩结果可能比原图更大，仍会写出；请确认输出位置和覆盖策略。"}</small></span></label>
           <details className="compression-advanced-settings">
