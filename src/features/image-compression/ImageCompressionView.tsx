@@ -500,7 +500,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       try {
         const next = await getCompressionProgress(jobId);
         setStage(next.stage);
-        setProgressBytes({ input: typeof next.inputBytes === "number" ? next.inputBytes : null, output: typeof next.outputBytes === "number" ? next.outputBytes : null });
+        setProgressBytes((current) => ({
+          input: typeof next.inputBytes === "number" ? next.inputBytes : current.input,
+          output: typeof next.outputBytes === "number" ? next.outputBytes : current.output,
+        }));
         const progressError = formatCompressionProgressError(next);
         if (progressError) setMessage(progressError);
       } catch {
