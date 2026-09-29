@@ -20,7 +20,12 @@ impl TemporaryOutput {
         let parent = output.parent().unwrap_or_else(|| Path::new("."));
         for index in 0..=10_000 {
             let path = parent.join(format!(".embedpix-gif-{}-{index}.tmp", std::process::id()));
-            match OpenOptions::new().write(true).create_new(true).open(&path) {
+            match OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
                 Ok(file) => {
                     return Ok(Self {
                         path,

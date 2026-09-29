@@ -1,12 +1,16 @@
 use std::{
-    io::{Cursor, Write},
+    fs::File,
+    io::{Cursor, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use apng::image_png::{BitDepth, ColorType, FilterType};
 use apng::{BlendOp, DisposeOp, Frame as ApngFrame, PNGImage};
-use image::{imageops::FilterType as ResizeFilter, io::Reader as ImageReader};
+use image::{
+    codecs::png::PngDecoder, imageops::FilterType as ResizeFilter, io::Reader as ImageReader,
+    AnimationDecoder, ImageDecoder,
+};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use webp_animation::{AnimParams, Encoder as WebpEncoder, EncoderOptions, EncodingConfig};
@@ -133,16 +137,72 @@ fn export_animation_blocking_with_job(
         storage::MAX_OUTPUT_BYTES,
         |file| {
             if format == "webp" {
-                encode_webp_with_job(file, &request, &job)
+                encode_webp_with_job(file, &request, &job)?;
             } else {
-                encode_apng_with_job(file, &request, &job)
+                encode_apng_with_job(file, &request, &job)?;
             }
+            validate_encoded_animation(file, format, &request)
         },
         || job_checkpoint(&job),
         move || job_begin_publish(&publish_job),
         move || job_mark_published(&completed_job, completed_path),
     )?;
     Ok(output_path.to_string_lossy().into_owned())
+}
+
+fn validate_encoded_animation(
+    file: &mut File,
+    format: &str,
+    request: &AnimationExportRequest,
+) -> Result<(), String> {
+    storage::validate_output_size(file, storage::MAX_OUTPUT_BYTES, "输出")?;
+    file.flush()
+        .map_err(|error| format!("无法准备动图验证：{error}"))?;
+    let end = file
+        .stream_position()
+        .map_err(|error| format!("无法定位动图输出：{error}"))?;
+    file.seek(SeekFrom::Start(0))
+        .map_err(|error| format!("无法读取动图输出：{error}"))?;
+    let mut encoded = Vec::with_capacity(end as usize);
+    file.read_to_end(&mut encoded)
+        .map_err(|error| format!("无法读取动图输出：{error}"))?;
+    file.seek(SeekFrom::Start(end))
+        .map_err(|error| format!("无法恢复动图输出位置：{error}"))?;
+
+    let (dimensions, frame_count) = match format {
+        "webp" => {
+            let decoder = webp_animation::Decoder::new(&encoded)
+                .map_err(|error| format!("WebP 动图解码验证失败：{error}"))?;
+            (decoder.dimensions(), decoder.into_iter().count())
+        }
+        "apng" => {
+            let decoder = PngDecoder::with_limits(Cursor::new(&encoded), decode_limits())
+                .map_err(|error| format!("APNG 解码验证失败：{error}"))?;
+            let dimensions = decoder.dimensions();
+            let frame_count = decoder
+                .apng()
+                .into_frames()
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| format!("APNG 帧解码验证失败：{error}"))?
+                .len();
+            (dimensions, frame_count)
+        }
+        _ => return Err("动图输出格式必须为 WebP 或 APNG。".to_string()),
+    };
+
+    if dimensions != (request.width, request.height) {
+        return Err(format!(
+            "动图解码验证失败：输出画布为 {} × {}，预期为 {} × {}。",
+            dimensions.0, dimensions.1, request.width, request.height
+        ));
+    }
+    if frame_count != request.frames.len() {
+        return Err(format!(
+            "动图解码验证失败：输出包含 {frame_count} 帧，预期为 {} 帧。",
+            request.frames.len()
+        ));
+    }
+    Ok(())
 }
 
 fn estimate_animation_size_blocking(
@@ -519,6 +579,18 @@ mod tests {
             assert!(!directory.0.join(format!("animation.{format}")).exists());
         }
         directory.assert_empty();
+    }
+
+    #[test]
+    fn published_animation_is_decoded_and_frame_count_is_verified_before_publish() {
+        let directory = TestDirectory::new();
+        for format in ["webp", "apng"] {
+            let request = directory.request(format);
+            let output = PathBuf::from(&request.output_path);
+            export_animation_blocking(request, format).unwrap();
+            assert!(fs::metadata(output).unwrap().len() > 0);
+        }
+        assert_eq!(fs::read_dir(directory.0.clone()).unwrap().count(), 2);
     }
 
     #[test]
