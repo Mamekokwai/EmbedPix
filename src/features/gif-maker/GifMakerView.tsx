@@ -620,6 +620,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     videoMetadataControllerRef.current?.abort();
     videoExtractControllerRef.current?.abort();
     compressionControllerRef.current?.abort();
+    const exportJobId = gifExportJobIdRef.current;
+    if (exportJobId && isTauriEnvironment()) {
+      void cancelGifExport(exportJobId).catch(() => undefined);
+    }
     gifExportJobIdRef.current = null;
     gifCancelRequestedRef.current = null;
     gifCancelFailureRef.current = null;
