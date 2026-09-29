@@ -12,7 +12,9 @@ import {
   COMPRESSION_WEBP_METHOD_MIN,
   canReplaceCompressionOriginal,
   estimateFallback,
+  COMPRESSION_MAX_INPUT_BYTES,
   filterCompressionFiles,
+  splitCompressionImportFiles,
   formatCompressionBytes,
   formatCompressionFailureDetails,
   formatCompressionEstimateSource,
@@ -90,6 +92,9 @@ function fileTypeForPath(path: string): string {
 }
 
 function nativeFileToItem(nativeFile: NativeImageFile): CompressionItem {
+  if (nativeFile.data.length > COMPRESSION_MAX_INPUT_BYTES) {
+    throw new Error(`文件超过 ${COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB 输入限制。`);
+  }
   const file = new File([new Uint8Array(nativeFile.data)], nativeFile.fileName, { type: fileTypeForPath(nativeFile.fileName) });
   return { id: `${nativeFile.path}-${file.size}`, file, sourcePath: nativeFile.path, size: file.size };
 }
@@ -386,12 +391,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   }, [active, options, selectedItem]);
 
   const addBrowserFiles = (files: File[], replaceItemId: string | null = null) => {
-    const supportedFiles = filterCompressionFiles(files);
-    const unsupportedFiles = files.filter((file) => !supportedFiles.includes(file));
-    const next = toBrowserItems(files);
+    const { accepted, unsupported, oversized } = splitCompressionImportFiles(files);
+    const next = toBrowserItems(accepted);
+    const importErrorsForFiles = [
+      ...unsupported.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })),
+      ...oversized.map((file, index) => ({ id: `browser-size-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: `文件超过 ${COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB 输入限制。` })),
+    ];
     if (next.length === 0) {
-      setImportErrors(unsupportedFiles.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })));
-      setMessage("没有找到支持的图片格式（PNG、JPEG、WebP、BMP、GIF）。");
+      setImportErrors(importErrorsForFiles);
+      setMessage(importErrorsForFiles.length > 0 ? "没有可导入的图片；请检查格式和 32 MiB 输入限制。" : "没有找到支持的图片格式（PNG、JPEG、WebP、BMP、GIF）。");
       setStatus("error");
       return;
     }
@@ -400,7 +408,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     merged.itemsToHydrate.forEach(queueCompressionDimensions);
     if (merged.replacingExisting) setSelectedItemId(replaceItemId);
     setMessage(merged.replacingExisting ? "已替换当前图片。" : "");
-    setImportErrors(unsupportedFiles.map((file, index) => ({ id: `browser-${file.name}-${file.lastModified}-${file.size}-${index}`, fileName: file.name, message: "格式不受支持，仅支持 PNG、JPEG、WebP、BMP、GIF。" })));
+    setImportErrors(importErrorsForFiles);
     setFailures([]);
     setFailureDetails([]);
     setItemResults([]);
@@ -412,12 +420,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const importNativeFiles = async (nativeFiles: NativeImageFile[], replaceItemId: string | null = null, directorySkipped: string[] = []) => {
     setImportErrors([]);
     const imported: CompressionItem[] = [];
-    const skipped: string[] = [];
+    const skipped: Array<{ fileName: string; message: string }> = [];
     for (const nativeFile of nativeFiles) {
       try {
         imported.push(nativeFileToItem(nativeFile));
-      } catch {
-        skipped.push(nativeFile.fileName);
+      } catch (error) {
+        skipped.push({ fileName: nativeFile.fileName, message: errorMessage(error) });
       }
     }
     if (imported.length > 0) {
@@ -435,10 +443,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
       setStatus("ready");
     }
-    const importFailureNames = [...directorySkipped, ...skipped];
-    if (importFailureNames.length > 0) {
-      setMessage(`有 ${importFailureNames.length} 个文件导入失败，已跳过。`);
-      setImportErrors(importFailureNames.map((fileName, index) => ({ id: `native-${fileName}-${index}`, fileName, message: "读取失败或被文件夹扫描跳过。" })));
+    const importFailures = [...directorySkipped.map((fileName) => ({ fileName, message: "读取失败或被文件夹扫描跳过。" })), ...skipped];
+    if (importFailures.length > 0) {
+      setMessage(`有 ${importFailures.length} 个文件导入失败，已跳过。`);
+      setImportErrors(importFailures.map(({ fileName, message }, index) => ({ id: `native-${fileName}-${index}`, fileName, message })));
       setFailures([]);
       setFailureDetails([]);
       setItemResults([]);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
@@ -10,6 +10,13 @@ describe("image compression logic", () => {
 
   it("filters unsupported files", () => {
     expect(filterCompressionFiles([new File([], "a.png", { type: "image/png" }), new File([], "a.txt", { type: "text/plain" })])).toHaveLength(1);
+  });
+
+  it("rejects supported images above the native input limit before queueing them", () => {
+    const oversized = new File([new Uint8Array(COMPRESSION_MAX_INPUT_BYTES + 1)], "large.png", { type: "image/png" });
+    const unsupported = new File([new Uint8Array([1])], "notes.txt", { type: "text/plain" });
+    const accepted = new File([new Uint8Array([1])], "small.png", { type: "image/png" });
+    expect(splitCompressionImportFiles([accepted, oversized, unsupported])).toEqual({ accepted: [accepted], unsupported: [unsupported], oversized: [oversized] });
   });
 
   it("keeps preset quality semantics format-specific", () => {
