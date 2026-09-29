@@ -63,6 +63,29 @@ enum CompressionStage {
     Failed,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompressionErrorCode {
+    Skipped,
+    Cancelled,
+    MetadataPolicyUnsupported,
+    Decode,
+    Publish,
+    Encode,
+}
+
+impl CompressionErrorCode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Skipped => "skipped",
+            Self::Cancelled => "cancelled",
+            Self::MetadataPolicyUnsupported => "metadata_policy_unsupported",
+            Self::Decode => "decode",
+            Self::Publish => "publish",
+            Self::Encode => "encode",
+        }
+    }
+}
+
 impl CompressionStage {
     fn from_status(status: &str) -> Self {
         match status {
@@ -2245,7 +2268,7 @@ fn update_progress(
         progress.code = progress
             .error
             .as_deref()
-            .map(|message| classify_error_code(stage, message));
+            .map(|message| classify_error_code(stage, message).as_str().into());
         if stage.is_terminal() {
             if let Ok(mut terminal_at) = job.terminal_at.lock() {
                 *terminal_at = Some(Instant::now());
@@ -2269,26 +2292,26 @@ fn update_progress_bytes(
     }
 }
 
-fn classify_error_code(stage: CompressionStage, message: &str) -> String {
+fn classify_error_code(stage: CompressionStage, message: &str) -> CompressionErrorCode {
     if stage == CompressionStage::Skipped {
-        return "skipped".into();
+        return CompressionErrorCode::Skipped;
     }
     if matches!(
         stage,
         CompressionStage::Cancelled | CompressionStage::Cancelling
     ) {
-        return "cancelled".into();
+        return CompressionErrorCode::Cancelled;
     }
     let lower = message.to_ascii_lowercase();
     if lower.contains("metadatapolicy=preserve") {
-        return "metadata_policy_unsupported".into();
+        return CompressionErrorCode::MetadataPolicyUnsupported;
     }
     if lower.contains("decode")
         || lower.contains("inspect input")
         || lower.contains("dimensions")
         || lower.contains("opaque")
     {
-        return "decode".into();
+        return CompressionErrorCode::Decode;
     }
     if lower.contains("path")
         || lower.contains("directory")
@@ -2297,9 +2320,9 @@ fn classify_error_code(stage: CompressionStage, message: &str) -> String {
         || lower.contains("bak")
         || lower.contains("publish")
     {
-        return "publish".into();
+        return CompressionErrorCode::Publish;
     }
-    "encode".into()
+    CompressionErrorCode::Encode
 }
 fn uuid_like_id() -> String {
     format!(
@@ -3831,31 +3854,55 @@ mod tests {
     #[test]
     fn progress_error_codes_are_stable_without_changing_error_text() {
         assert_eq!(
-            classify_error_code(CompressionStage::Failed, "failed to decode input image"),
+            classify_error_code(CompressionStage::Failed, "failed to decode input image").as_str(),
             "decode"
         );
         assert_eq!(
-            classify_error_code(CompressionStage::Failed, "failed to write output file"),
+            classify_error_code(CompressionStage::Failed, "failed to write output file").as_str(),
             "publish"
         );
         assert_eq!(
-            classify_error_code(CompressionStage::Failed, "failed to optimize png"),
+            classify_error_code(CompressionStage::Failed, "failed to optimize png").as_str(),
             "encode"
         );
         assert_eq!(
-            classify_error_code(CompressionStage::Cancelled, "compression cancelled"),
+            classify_error_code(CompressionStage::Cancelled, "compression cancelled").as_str(),
             "cancelled"
         );
         assert_eq!(
             classify_error_code(
                 CompressionStage::Failed,
                 "metadataPolicy=preserve is not supported by first-stage compression"
-            ),
+            )
+            .as_str(),
             "metadata_policy_unsupported"
         );
         assert_eq!(
-            classify_error_code(CompressionStage::Skipped, "target_unreachable"),
+            classify_error_code(CompressionStage::Skipped, "target_unreachable").as_str(),
             "skipped"
+        );
+    }
+
+    #[test]
+    fn typed_error_codes_keep_the_existing_wire_strings() {
+        let codes = [
+            CompressionErrorCode::Skipped,
+            CompressionErrorCode::Cancelled,
+            CompressionErrorCode::MetadataPolicyUnsupported,
+            CompressionErrorCode::Decode,
+            CompressionErrorCode::Publish,
+            CompressionErrorCode::Encode,
+        ];
+        assert_eq!(
+            codes.iter().map(|code| code.as_str()).collect::<Vec<_>>(),
+            [
+                "skipped",
+                "cancelled",
+                "metadata_policy_unsupported",
+                "decode",
+                "publish",
+                "encode",
+            ]
         );
     }
 
