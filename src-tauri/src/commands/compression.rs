@@ -2371,6 +2371,39 @@ mod tests {
     }
 
     #[test]
+    fn strip_policy_does_not_copy_jpeg_exif_into_any_supported_output() {
+        let jpeg = encode_image(&png_input(), CompressionFormat::Jpeg, 82, 2).unwrap();
+        let exif = b"Exif\0\0EmbedPix-test";
+        let app1_length = u16::try_from(exif.len() + 2).unwrap().to_be_bytes();
+        let mut source = vec![0xff, 0xd8, 0xff, 0xe1, app1_length[0], app1_length[1]];
+        source.extend_from_slice(exif);
+        source.extend_from_slice(&jpeg[2..]);
+        assert!(decode_image(&source).is_ok());
+
+        for format in [
+            CompressionFormat::Png,
+            CompressionFormat::Jpeg,
+            CompressionFormat::Webp,
+        ] {
+            let output = encode_image_with_webp_method(
+                &source,
+                format,
+                82,
+                2,
+                format != CompressionFormat::Jpeg,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            assert!(!output.windows(exif.len()).any(|window| window == exif));
+            if format == CompressionFormat::Jpeg {
+                assert!(!output.windows(2).any(|window| window == [0xff, 0xe1]));
+            }
+        }
+    }
+
+    #[test]
     fn preflight_rejects_unsafe_paths_with_stable_codes() {
         let traversal = raw_payload(
             r#"{"fileName":"sample.png","outputFormat":"webp","outputPath":"out/../escape.webp"}"#,
