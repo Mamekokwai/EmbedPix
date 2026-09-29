@@ -12,6 +12,7 @@
 - [ ] `latest.json` 版本、notes、平台 URL、Base64 minisign 签名与资产一致
 - [ ] provenance 指向发布 tag/commit，SHA256SUMS 可对下载文件复算
 - [ ] Release 非 draft，且 prerelease 状态与 Tag 是否包含预发布标识一致；稳定 Tag 不得标为 prerelease，预发布 Tag 不得伪装为稳定版
+- [ ] GitHub Actions 构建前确认已配置 `TAURI_SIGNING_PRIVATE_KEY`；私钥加密时同时配置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，不得把私钥写入仓库、日志或聊天
 
 ## 安装与更新 smoke
 
