@@ -7,7 +7,7 @@ use std::{
 };
 
 use base64::Engine;
-use embedpix_lib::commands::{export_image, gif};
+use embedpix_lib::commands::{compression, export_image, gif};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -122,6 +122,7 @@ fn parse_requests(input: &str) -> Result<Vec<CliRequest>, String> {
 fn execute(request: CliRequest) -> Result<Value, (&'static str, String)> {
     match request.op.as_str() {
         "image" => execute_image(request.payload),
+        "compress" | "compression" => execute_compression(request.payload),
         "gif" => execute_gif(request.payload),
         "pngSequence" => execute_png_sequence(request.payload),
         _ => Err((
@@ -129,6 +130,29 @@ fn execute(request: CliRequest) -> Result<Value, (&'static str, String)> {
             format!("不支持的操作：{}", request.op),
         )),
     }
+}
+
+fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> {
+    let input_path = required_string(&payload, "inputPath")?;
+    let output_path = required_string(&payload, "outputPath")?;
+    let format = payload
+        .get("format")
+        .and_then(Value::as_str)
+        .unwrap_or("webp");
+    let quality = payload.get("quality").and_then(Value::as_u64).unwrap_or(82);
+    if quality > 100 {
+        return Err(("request_error", "quality 必须在 1 到 100 之间".into()));
+    }
+    let max_input_bytes = payload.get("maxInputBytes").and_then(Value::as_u64);
+    let result = compression::compress_file_cli(
+        std::path::Path::new(&input_path),
+        std::path::Path::new(&output_path),
+        format,
+        quality as u8,
+        max_input_bytes,
+    )
+    .map_err(|error| ("compression_error", error))?;
+    serde_json::to_value(result).map_err(|error| ("response_error", error.to_string()))
 }
 
 fn execute_image(payload: Value) -> Result<Value, (&'static str, String)> {
@@ -235,17 +259,19 @@ fn required_string(payload: &Value, field: &str) -> Result<String, (&'static str
 }
 
 fn emit(id: Option<String>, event_type: &str, code: &str, message: &str, output: Option<Value>) {
-    println!(
-        "{}",
-        serde_json::to_string(&Event {
-            event_type,
-            id,
-            code,
-            message: message.to_string(),
-            output
-        })
-        .unwrap()
-    );
+    let encoded = serde_json::to_string(&Event {
+        event_type,
+        id,
+        code,
+        message: message.to_string(),
+        output,
+    })
+    .unwrap();
+    if event_type == "error" {
+        eprintln!("{encoded}");
+    } else {
+        println!("{encoded}");
+    }
 }
 
 #[cfg(test)]

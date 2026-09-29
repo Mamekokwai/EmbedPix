@@ -598,6 +598,55 @@ pub async fn compress_image(
     result
 }
 
+/// Runs the same validated compression core for the standalone CLI.
+pub fn compress_file_cli(
+    input_path: &Path,
+    output_path: &Path,
+    format: &str,
+    quality: u8,
+    max_input_bytes: Option<u64>,
+) -> Result<CompressionResult, String> {
+    let input =
+        fs::read(input_path).map_err(|error| format!("failed to read input image: {error}"))?;
+    let metadata = serde_json::json!({
+        "fileName": output_path.file_name().and_then(|value| value.to_str()).unwrap_or("output"),
+        "outputFormat": format,
+        "outputPath": output_path,
+        "outputLocation": "path",
+        "sourcePath": input_path,
+        "overwriteExisting": false,
+        "jpegQuality": quality,
+        "lossless": format.eq_ignore_ascii_case("png"),
+        "skipIfLarger": false,
+        "maxInputBytes": max_input_bytes,
+        "metadataPolicy": "strip",
+    });
+    let metadata = serde_json::to_vec(&metadata).map_err(|error| error.to_string())?;
+    let mut payload = b"EGF1".to_vec();
+    payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
+    payload.extend_from_slice(&metadata);
+    payload.extend_from_slice(&input);
+    let request = parse_raw_payload(&payload)?;
+    let job_id = format!("compression-cli-{}", uuid_like_id());
+    let job = Arc::new(CompressionJob {
+        cancelled: AtomicBool::new(false),
+        progress: Mutex::new(CompressionProgress {
+            job_id,
+            status: "running".into(),
+            stage: "preflight".into(),
+            output_path: None,
+            error: None,
+            code: None,
+            input_bytes: Some(request.input.len() as u64),
+            output_bytes: None,
+        }),
+        terminal_at: Mutex::new(None),
+    });
+    let state = CompressionJobState::default();
+    let _permit = state.encoder_slots.acquire();
+    run_compression(&request, &job)
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub fn cancel_compression(
     job_id: String,

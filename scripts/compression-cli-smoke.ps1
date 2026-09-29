@@ -34,10 +34,13 @@ function Assert-Output([string]$Path, [string]$Format, [string]$Label) {
   $bytes = [IO.File]::ReadAllBytes($Path)
   $signature = if ($Format -eq 'gif') {
     [Text.Encoding]::ASCII.GetString($bytes, 0, [Math]::Min(6, $bytes.Length))
+  } elseif ($Format -eq 'webp') {
+    ([BitConverter]::ToString($bytes[0..3])).Replace('-', '').ToLowerInvariant()
   } else {
     ([BitConverter]::ToString($bytes[0..7])).Replace('-', '').ToLowerInvariant()
   }
   $expected = if ($Format -eq 'gif') { @('GIF87a', 'GIF89a') } else { @('89504e470d0a1a0a') }
+  if ($Format -eq 'webp') { $expected = @('52494646') }
   if ($expected -notcontains $signature) { throw "$Label output signature is invalid: $signature" }
   $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
   [pscustomobject]@{ label = $Label; format = $Format; path = $Path; bytes = $file.Length; sha256 = $hash; signature = $signature }
@@ -56,7 +59,7 @@ $requiredTokens = @('pub async fn preflight_compression', 'pub async fn preview_
   $hasSkipIfLarger = $source -match 'skip[_-]?if[_-]?larger' -or $gateway -match 'skip[_-]?if[_-]?larger'
   if ($Required -and -not $hasSkipIfLarger) { throw 'skipIfLarger is required by this smoke mode but is not present in the native compression contract.' }
   if (-not $hasSkipIfLarger) { Write-Warning 'skipIfLarger is not implemented in the native compression contract; no skip-if-larger claim is made.' }
-  [pscustomobject]@{ nativeCommands = $true; outputLocations = @('path', 'source', 'directory', 'subfolder', 'original'); skipIfLarger = $hasSkipIfLarger; cliCompressionOperation = $false }
+  [pscustomobject]@{ nativeCommands = $true; outputLocations = @('path', 'source', 'directory', 'subfolder', 'original'); skipIfLarger = $hasSkipIfLarger; cliCompressionOperation = $true }
 }
 
 function Assert-PreviewCompressionContract {
@@ -267,12 +270,16 @@ try {
   $gifInput = Join-Path $repoRoot 'benchmarks/cli-test/anim.gif'
   $pngOutput = Join-Path $script:root 'roundtrip.png'
   $gifOutput = Join-Path $script:root 'roundtrip.gif'
+  $compressionOutput = Join-Path $script:root 'compressed.webp'
 
   $imageEvent = Invoke-CliRequest $CliPath @{ id = 'image-smoke'; op = 'image'; inputPath = $pngInput; outputPath = $pngOutput; format = 'png'; width = 1; height = 1 } 'image'
   $imageResult = Assert-Output $pngOutput 'png' 'image'
   $decodeOutput = Join-Path $script:root 'decoded-again.png'
   [void](Invoke-CliRequest $CliPath @{ id = 'decode-smoke'; op = 'image'; inputPath = $pngOutput; outputPath = $decodeOutput; format = 'png'; width = 1; height = 1 } 'decode')
   $decodeResult = Assert-Output $decodeOutput 'png' 'decoded image'
+
+  [void](Invoke-CliRequest $CliPath @{ id = 'compression-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $compressionOutput; format = 'webp'; quality = 82; maxInputBytes = 1MB } 'compression')
+  $compressionResult = Assert-Output $compressionOutput 'webp' 'compression'
 
   $gifEvent = Invoke-CliRequest $CliPath @{ id = 'gif-smoke'; op = 'gif'; outputPath = $gifOutput; width = 32; height = 32; loopMode = 'infinite'; loopCount = 0; frames = @(@{ path = $pngInput; durationMs = 100 }, @{ path = $pngInput; durationMs = 100 }) } 'gif'
   $gifResult = Assert-Output $gifOutput 'gif' 'GIF'
@@ -284,8 +291,8 @@ try {
   $targetContract = Assert-TargetCompressionContract -Required:$RequireCompression
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
-    compressionCommand = 'not exposed by embedpix-cli; native Tauri contract checked separately'
-    outputs = @($imageResult, $decodeResult, $gifResult)
+    compressionCommand = 'compress'
+    outputs = @($imageResult, $decodeResult, $compressionResult, $gifResult)
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
