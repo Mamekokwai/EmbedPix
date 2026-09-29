@@ -80,7 +80,7 @@ foreach ($required in @('commands::update::tests::', 'Updater download and cache
 }
 if (-not (Test-Path -LiteralPath 'scripts/release-dependency-smoke.ps1' -PathType Leaf)) { throw 'Release dependency smoke is missing.' }
 $workflow = Get-Content -Raw '.github/workflows/prepare-release.yml'
-foreach ($required in @('windows-x86_64', 'windows-aarch64', 'TAURI_SIGNING_PRIVATE_KEY', 'latest.json', 'overwrite_files: false', 'Run release dependency smoke', 'release-dependency-smoke.ps1 -InstallerPath', 'Verify staged release contract before publish', 'Assert-ReleaseAssetContract -Release $release', 'WORKFLOW_REF: refs/tags/${{ needs.resolve.outputs.tag }}', 'Assert-WindowsGuiSubsystem $binary')) {
+foreach ($required in @('windows-x86_64', 'windows-aarch64', 'TAURI_SIGNING_PRIVATE_KEY', 'latest.json', 'overwrite_files: false', 'Run release dependency smoke', 'release-dependency-smoke.ps1 -InstallerPath', 'Verify staged release contract before publish', 'Assert-ReleaseAssetContract -Release $release', 'WORKFLOW_REF: refs/tags/${{ needs.resolve.outputs.tag }}', 'Assert-WindowsGuiSubsystem $binary', 'Published latest.json version/platform count is invalid', 'Published latest.json platform mapping is invalid')) {
   if ($workflow -notmatch [regex]::Escape($required)) { throw "Release workflow is missing: $required" }
 }
 

@@ -581,8 +581,13 @@ jobs:
           }
           $downloadHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; 'User-Agent' = 'EmbedPix release verifier' }
           $latest = Invoke-RestMethod -Headers $downloadHeaders -Uri $latestAsset.browser_download_url
-          if ($latest.version -ne $env:RELEASE_VERSION -or @($latest.platforms.PSObject.Properties.Name).Count -ne 2) {
-            throw 'Published latest.json version or platform count is invalid.'
+          $publishedPlatforms = @($latest.platforms.PSObject.Properties.Name)
+          $publishedVersion = [string]$latest.version
+          if ($publishedVersion -ne $env:RELEASE_VERSION -or $publishedPlatforms.Count -ne 2) {
+            throw "Published latest.json version/platform count is invalid. Expected version=$env:RELEASE_VERSION and platforms=2; actual version=$publishedVersion and platforms=$($publishedPlatforms -join ', ')."
+          }
+          if ($publishedPlatforms -notcontains 'windows-x86_64' -or $publishedPlatforms -notcontains 'windows-aarch64') {
+            throw "Published latest.json platform mapping is invalid. Expected windows-x86_64 and windows-aarch64; actual=$($publishedPlatforms -join ', ')."
           }
           function Assert-TauriSignature($encoded, $label) {
             if ([string]::IsNullOrWhiteSpace($encoded)) { throw "Published $label signature is empty." }
