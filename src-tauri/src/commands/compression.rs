@@ -274,7 +274,12 @@ impl CompressionSemaphore {
             .available
             .lock()
             .map_err(|_| "compression semaphore is unavailable".to_string())?;
+        let mut announced_queued = false;
         while *available == 0 {
+            if !announced_queued {
+                update_progress(job, "queued", None, None);
+                announced_queued = true;
+            }
             if job.cancelled.load(Ordering::Acquire) {
                 return Err(fail_message(job, "compression cancelled".to_string()));
             }
@@ -3332,6 +3337,13 @@ mod tests {
         let worker_job = Arc::clone(&job);
         let worker = std::thread::spawn(move || worker_semaphore.acquire_cancellable(&worker_job));
 
+        for _ in 0..1000 {
+            if job.progress.lock().unwrap().stage == "queued" {
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert_eq!(job.progress.lock().unwrap().stage, "queued");
         assert_eq!(cancel_job(&job).unwrap().status, "cancelling");
         let result = worker.join().unwrap();
         match result {
