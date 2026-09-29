@@ -2208,7 +2208,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   return (
-    <div className={`gif-maker-view page-view gif-source-${sourceMode}`}>
+    <div className={`gif-maker-view page-view gif-source-${sourceMode}${group ? " gif-settings-expanded" : ""}`}>
       <header className="page-header gif-maker-header">
         <div className="page-header-icon"><Film size={19} aria-hidden="true" /></div>
         <div className="page-header-copy">

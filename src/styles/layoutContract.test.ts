@@ -300,6 +300,8 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toContain(".gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 128px minmax(220px, auto); overflow: visible; }");
     expect(gifCss).toContain(".gif-main-column, .gif-preview-card { min-height: 220px; }");
     expect(gifCss).toContain(".gif-settings-card { max-height: none; overflow: visible; }");
+    expect(gifView).toContain('gif-settings-expanded');
+    expect(gifCss).toContain('.gif-maker-view.gif-settings-expanded > .gif-export-footer { position: static; }');
   });
 
   it("does not compress narrow short GIF cards below readable content height", () => {
