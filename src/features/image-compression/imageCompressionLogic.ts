@@ -122,11 +122,14 @@ export function removeCompressionItem(items: ReadonlyArray<CompressionItem>, id:
 }
 
 export function getCompressionRetryQueue(items: ReadonlyArray<CompressionItem>, failures: ReadonlyArray<string>): CompressionItem[] {
-  return failures.length > 0 ? items.filter((item) => failures.includes(item.file.name)) : [...items];
+  if (failures.length === 0) return [...items];
+  const failureSet = new Set(failures);
+  const itemIds = new Set(items.map((item) => item.id));
+  return items.filter((item) => failureSet.has(item.id) || (!itemIds.has(item.file.name) && failureSet.has(item.file.name)));
 }
 
 export function getCompressionCancelledItemResults(items: ReadonlyArray<CompressionItem>, currentIndex: number): CompressionItemResult[] {
-  return items.slice(currentIndex + 1).map((item) => ({ fileName: item.file.name, status: "skipped", reason: "已取消，未处理" }));
+  return items.slice(currentIndex + 1).map((item) => ({ itemId: item.id, fileName: item.file.name, status: "skipped", reason: "已取消，未处理" }));
 }
 
 export function getCompressionBatchFinalState(failedNames: ReadonlyArray<string>, cancelled: boolean): { status: "success" | "error"; stage: "completed" | "cancelled" | "failed" } {

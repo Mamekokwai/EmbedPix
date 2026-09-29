@@ -152,7 +152,9 @@ describe("image compression logic", () => {
     expect(replaced.itemsToHydrate[0]?.id).toBe("b");
     expect(removeCompressionItem(replaced.items, "a").map((item) => item.file.name)).toEqual(["new.png"]);
     expect(getCompressionRetryQueue([first, second], ["b.png"]).map((item) => item.file.name)).toEqual(["b.png"]);
+    const duplicateName = createItem("duplicate", "b.png");
+    expect(getCompressionRetryQueue([second, duplicateName], ["duplicate"]).map((item) => item.id)).toEqual(["duplicate"]);
     expect(getCompressionRetryQueue([first, second], []).map((item) => item.file.name)).toEqual(["a.png", "b.png"]);
-    expect(getCompressionCancelledItemResults([first, second, replacement], 0)).toEqual([{ fileName: "b.png", status: "skipped", reason: "已取消，未处理" }, { fileName: "new.png", status: "skipped", reason: "已取消，未处理" }]);
+    expect(getCompressionCancelledItemResults([first, second, replacement], 0)).toEqual([{ itemId: "b", fileName: "b.png", status: "skipped", reason: "已取消，未处理" }, { itemId: "new", fileName: "new.png", status: "skipped", reason: "已取消，未处理" }]);
   });
 });

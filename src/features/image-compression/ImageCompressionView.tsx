@@ -560,9 +560,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         const missingSourceItems = queue.filter((item) => !item.sourcePath);
         const sourceError = getCompressionSourcePathError(outputLocation, false, true) ?? "覆盖原图需要可访问的桌面源文件路径。";
         setImportErrors((current) => [...current.filter((entry) => !missingSourceItems.some((item) => item.id === entry.id)), ...missingSourceItems.map((item) => ({ id: item.id, fileName: item.file.name, message: sourceError }))]);
-        setItemResults((current) => [...current, ...missingSourceItems.map((item) => ({ fileName: item.file.name, status: "failed" as const, reason: sourceError }))]);
+        setItemResults((current) => [...current, ...missingSourceItems.map((item) => ({ itemId: item.id, fileName: item.file.name, status: "failed" as const, reason: sourceError }))]);
         setFailureDetails((current) => [...current, ...missingSourceItems.map((item) => ({ fileName: item.file.name, message: sourceError }))]);
-        setFailures(missingSourceItems.map((item) => item.file.name));
+        setFailures(missingSourceItems.map((item) => item.id));
         setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: missingSourceItems.length, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
         setProgress({ current: queue.length, total: queue.length });
         setMessage("部分文件缺少可访问的桌面源路径，未开始覆盖原图。");
@@ -588,6 +588,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setProgress({ current: 0, total: queue.length });
     setProgressBytes({ input: null, output: null });
     const failedNames: string[] = [];
+    const failedItemIds: string[] = [];
     let lastError = "";
     for (const [index, item] of queue.entries()) {
       setCurrentFileName(item.file.name);
@@ -597,9 +598,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         const sourcePathError = getCompressionSourcePathError(outputLocation, Boolean(item.sourcePath), replaceOriginal);
         if (sourcePathError) {
           failedNames.push(item.file.name);
+          failedItemIds.push(item.id);
           lastError = sourcePathError;
           setImportErrors((current) => [...current.filter((entry) => entry.id !== item.id), { id: item.id, fileName: item.file.name, message: sourcePathError }]);
-          setItemResults((current) => [...current, { fileName: item.file.name, status: "failed", reason: sourcePathError }]);
+          setItemResults((current) => [...current, { itemId: item.id, fileName: item.file.name, status: "failed", reason: sourcePathError }]);
           setFailureDetails((current) => [...current, { fileName: item.file.name, message: sourcePathError }]);
           setResultStats((current) => ({ ...current, failed: current.failed + 1 }));
           setProgress({ current: index + 1, total: queue.length });
@@ -610,7 +612,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         const preflight = await preflightCompression(request);
         if (preflight.overwritesExisting && !options.overwrite) {
           setResultStats((current) => ({ ...current, skipped: current.skipped + 1 }));
-          setItemResults((current) => [...current, { fileName: item.file.name, status: "skipped", reason: "同名目标已存在" }]);
+          setItemResults((current) => [...current, { itemId: item.id, fileName: item.file.name, status: "skipped", reason: "同名目标已存在" }]);
           setSkipReasons((current) => [...current, `${item.file.name}：同名目标已存在`]);
           setMessage(`已跳过同名目标：${item.file.name}`);
           setProgress({ current: index + 1, total: queue.length });
@@ -625,14 +627,14 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           const skippedReason = result.skippedReason || "原生压缩策略跳过，未发布输出";
           const itemMetrics = getCompressionItemResultMetrics(result, item.size);
           setResultStats((current) => ({ ...current, skipped: current.skipped + 1, targetMet: result.targetMet ?? (options.maxOutputBytes === undefined ? current.targetMet : false) }));
-          setItemResults((current) => [...current, { fileName: item.file.name, status: "skipped", reason: skippedReason, ...itemMetrics }]);
+          setItemResults((current) => [...current, { itemId: item.id, fileName: item.file.name, status: "skipped", reason: skippedReason, ...itemMetrics }]);
           setSkipReasons((current) => [...current, `${item.file.name}：${skippedReason}`]);
           setMessage(`已跳过 ${item.file.name}：${skippedReason}`);
         } else {
           const successfulOutputPath = getSuccessfulCompressionOutputPath(result.status, result.outputPath);
           const itemMetrics = getCompressionItemResultMetrics(result, item.size);
           if (successfulOutputPath) setLastSuccessfulOutputPath(successfulOutputPath);
-          setItemResults((current) => [...current, { fileName: item.file.name, status: "completed", outputPath: successfulOutputPath ?? undefined, reason: successfulOutputPath ? undefined : "原生结果未返回输出路径", ...itemMetrics }]);
+          setItemResults((current) => [...current, { itemId: item.id, fileName: item.file.name, status: "completed", outputPath: successfulOutputPath ?? undefined, reason: successfulOutputPath ? undefined : "原生结果未返回输出路径", ...itemMetrics }]);
           const targetMet = result.targetMet ?? (options.maxOutputBytes === undefined ? null : result.outputBytes <= options.maxOutputBytes);
           setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes, targetMet: targetMet === null ? current.targetMet : current.targetMet === false || targetMet === false ? false : true, selectedQualities: typeof result.selectedQuality === "number" ? [...current.selectedQualities, result.selectedQuality] : current.selectedQualities }));
         }
@@ -646,10 +648,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         }
         activeJobIdRef.current = null;
         failedNames.push(item.file.name);
+        failedItemIds.push(item.id);
         if (isCompressionSourcePathError(detail)) {
           setImportErrors((current) => [...current.filter((entry) => entry.id !== item.id), { id: item.id, fileName: item.file.name, message: "桌面源文件不可访问，未导出。" }]);
         }
-        setItemResults((current) => [...current, { fileName: item.file.name, status: "failed", reason: detail }]);
+        setItemResults((current) => [...current, { itemId: item.id, fileName: item.file.name, status: "failed", reason: detail }]);
         setFailureDetails((current) => [...current, { fileName: item.file.name, message: detail }]);
         lastError = detail;
         setResultStats((current) => ({ ...current, failed: current.failed + 1 }));
@@ -667,7 +670,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setCurrentFileName(null);
     const finalState = getCompressionBatchFinalState(failedNames, cancelRequestedRef.current);
     if (finalState.status === "error") {
-      setFailures(failedNames);
+      setFailures(failedItemIds);
       setStage(finalState.stage);
       setMessage(cancelRequestedRef.current ? "已取消当前任务，其余文件未处理。" : `部分任务完成，请查看统计。${lastError ? ` ${lastError}` : ""}`);
       setStatus("error");
@@ -934,7 +937,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         {resultStats.selectedQualities.length > 0 ? <div className="compression-summary-stat"><span>实际质量</span><strong>{resultStats.selectedQualities.join(" / ")}</strong></div> : null}
         <span className="compression-estimate-note">输出 {formatCompressionBytes(resultStats.outputBytes)} / 已处理输入 {formatCompressionBytes(resultStats.processedInputBytes)}</span>
         {lastSuccessfulOutputPath ? <div className="compression-output-actions" aria-label="最近成功输出"><div className="compression-output-path"><span>最近成功输出</span><code>{lastSuccessfulOutputPath}</code></div><div className="compression-output-buttons"><button type="button" className="compression-secondary-button" onClick={() => { void copyOutputPath(lastSuccessfulOutputPath); }}>复制输出路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openOutputFolder(lastSuccessfulOutputPath); }}>打开输出文件夹</button></div></div> : null}
-        {itemResults.length > 0 ? <div className="compression-item-results" aria-label="逐项压缩结果"><div className="compression-item-results-heading"><strong>逐项结果（{itemResults.length}）</strong></div><ul>{itemResults.map((result, index) => { const sourceItem = items.find((item) => item.file.name === result.fileName); const metrics = getCompressionItemResultMetrics(result, sourceItem?.size ?? 0); const sizeSummary = [`原图 ${formatCompressionBytes(metrics.inputBytes)}`, metrics.outputBytes === undefined ? null : `${result.status === "skipped" ? "候选" : "输出"} ${formatCompressionBytes(metrics.outputBytes)}`, metrics.savedBytes === undefined || metrics.savingsPercent === undefined ? null : `${metrics.savedBytes >= 0 ? "节省" : "增加"} ${formatCompressionBytes(Math.abs(metrics.savedBytes))}（${Math.abs(metrics.savingsPercent).toFixed(1)}%）`].filter((entry): entry is string => Boolean(entry)).join(" · "); return <li className={`compression-item-result compression-item-result-${result.status}`} key={`${result.fileName}:${index}`}><div className="compression-item-result-copy"><strong>{result.fileName}</strong><span>{formatCompressionItemResultStatus(result.status)} · {sizeSummary}{result.outputPath || result.reason ? ` · ${result.outputPath || result.reason}` : ""}</span></div>{result.status === "completed" && result.outputPath ? <div className="compression-item-result-actions"><button type="button" className="compression-secondary-button" onClick={() => { void copyOutputPath(result.outputPath as string); }}>复制路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openOutputFolder(result.outputPath as string); }}>打开文件夹</button></div> : null}</li>; })}</ul></div> : null}
+        {itemResults.length > 0 ? <div className="compression-item-results" aria-label="逐项压缩结果"><div className="compression-item-results-heading"><strong>逐项结果（{itemResults.length}）</strong></div><ul>{itemResults.map((result, index) => { const sourceItem = items.find((item) => item.id === result.itemId) ?? items.find((item) => item.file.name === result.fileName); const metrics = getCompressionItemResultMetrics(result, sourceItem?.size ?? 0); const sizeSummary = [`原图 ${formatCompressionBytes(metrics.inputBytes)}`, metrics.outputBytes === undefined ? null : `${result.status === "skipped" ? "候选" : "输出"} ${formatCompressionBytes(metrics.outputBytes)}`, metrics.savedBytes === undefined || metrics.savingsPercent === undefined ? null : `${metrics.savedBytes >= 0 ? "节省" : "增加"} ${formatCompressionBytes(Math.abs(metrics.savedBytes))}（${Math.abs(metrics.savingsPercent).toFixed(1)}%）`].filter((entry): entry is string => Boolean(entry)).join(" · "); return <li className={`compression-item-result compression-item-result-${result.status}`} key={`${result.itemId ?? result.fileName}:${index}`}><div className="compression-item-result-copy"><strong>{result.fileName}</strong><span>{formatCompressionItemResultStatus(result.status)} · {sizeSummary}{result.outputPath || result.reason ? ` · ${result.outputPath || result.reason}` : ""}</span></div>{result.status === "completed" && result.outputPath ? <div className="compression-item-result-actions"><button type="button" className="compression-secondary-button" onClick={() => { void copyOutputPath(result.outputPath as string); }}>复制路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openOutputFolder(result.outputPath as string); }}>打开文件夹</button></div> : null}</li>; })}</ul></div> : null}
         {failureDetails.length > 0 ? <div className="compression-failure-details" role="alert" aria-label="失败详情"><div className="compression-failure-heading"><strong>失败详情（{failureDetails.length}）</strong><button type="button" className="compression-secondary-button" onClick={() => { void copyFailureDetails(); }}>复制失败详情</button></div><ul>{failureDetails.map((detail) => <li key={`${detail.fileName}:${detail.message}`}><strong>{detail.fileName}</strong><span>{detail.message}</span></li>)}</ul></div> : null}
         {skipReasons.length > 0 ? <div className="compression-skip-details"><strong>跳过原因</strong>{skipReasons.map((reason) => <span key={reason}>{reason}</span>)}</div> : null}
       </section>
