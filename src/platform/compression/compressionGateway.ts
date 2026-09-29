@@ -273,9 +273,19 @@ export async function getCompressionProgress(jobId: string): Promise<Compression
   return invoke<CompressionProgress>(GET_COMPRESSION_PROGRESS_COMMAND, { jobId });
 }
 
+const COMPRESSION_ERROR_LABELS: Record<string, string> = {
+  cancelled: "已取消",
+  decode: "解码",
+  encode: "编码",
+  metadata_policy_unsupported: "元数据策略",
+  publish: "发布/写入",
+  skipped: "已跳过",
+};
+
 export function formatCompressionProgressError(progress: Pick<CompressionProgress, "error" | "code">): string | null {
   if (!progress.error) return null;
-  return progress.code ? `[${progress.code}] ${progress.error}` : progress.error;
+  const label = progress.code ? COMPRESSION_ERROR_LABELS[progress.code] : undefined;
+  return label ? `${label}（${progress.code}）：${progress.error}` : progress.code ? `[${progress.code}] ${progress.error}` : progress.error;
 }
 
 export async function cancelCompression(jobId: string): Promise<CompressionProgress> {

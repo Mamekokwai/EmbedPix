@@ -253,8 +253,11 @@ describe("compression gateway", () => {
   });
 
   it("keeps native progress error codes visible without inventing missing codes", () => {
-    expect(formatCompressionProgressError({ error: "failed to decode input image", code: "decode" })).toBe("[decode] failed to decode input image");
+    expect(formatCompressionProgressError({ error: "failed to decode input image", code: "decode" })).toBe("解码（decode）：failed to decode input image");
+    expect(formatCompressionProgressError({ error: "failed to write output", code: "publish" })).toBe("发布/写入（publish）：failed to write output");
+    expect(formatCompressionProgressError({ error: "unsupported policy", code: "metadata_policy_unsupported" })).toBe("元数据策略（metadata_policy_unsupported）：unsupported policy");
     expect(formatCompressionProgressError({ error: "failed to encode", code: null })).toBe("failed to encode");
+    expect(formatCompressionProgressError({ error: "unknown failure", code: "future_code" })).toBe("[future_code] unknown failure");
     expect(formatCompressionProgressError({ error: null, code: "encode" })).toBeNull();
   });
 
