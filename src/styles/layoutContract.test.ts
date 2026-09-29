@@ -293,6 +293,14 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toContain(".gif-settings-card { max-height: none; overflow: visible; }");
   });
 
+  it("does not compress narrow short GIF cards below readable content height", () => {
+    expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 621px) and (max-height: 760px)");
+    expect(gifCss).toContain(".gif-workspace-grid { grid-template-rows: minmax(128px, auto) minmax(220px, auto); }");
+    expect(gifCss).not.toContain("grid-template-rows: minmax(96px, .85fr) minmax(96px, 1.15fr)");
+    expect(gifCss).toContain(".gif-assets-card,");
+    expect(gifCss).toContain(".gif-preview-card,");
+  });
+
   it("keeps GIF drag and drop isolated from the hidden image converter", () => {
     expect(appShell).toContain('<div className="app-kept-view" hidden={view !== "converter"}>');
     expect(appShell).toContain('<div className="app-kept-view app-kept-gif" hidden={view !== "gif"}>');
