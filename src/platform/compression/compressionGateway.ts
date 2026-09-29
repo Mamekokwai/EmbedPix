@@ -207,7 +207,6 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
     ...(request.outputFormat === "webp" && !request.lossless && request.webpAlphaQuality !== undefined ? { webpAlphaQuality: request.webpAlphaQuality } : {}),
     ...(request.outputFormat === "webp" && !request.lossless && request.webpPass !== undefined ? { webpPass: request.webpPass } : {}),
-    ...(request.outputFormat === "webp" && !request.lossless && request.webpPass !== undefined ? { webpPass: request.webpPass } : {}),
     ...(request.outputFormat === "webp" && request.lossless && request.webpNearLossless !== undefined ? { webpNearLossless: request.webpNearLossless } : {}),
     lossless: request.lossless,
     skipIfLarger: request.skipIfLarger ?? true,

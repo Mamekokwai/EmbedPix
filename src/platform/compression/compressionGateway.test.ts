@@ -250,6 +250,27 @@ describe("compression gateway", () => {
     expect(metadata).not.toHaveProperty("replaceOriginal");
   });
 
+  it("serializes WebP analysis passes once in both raw and estimate metadata", () => {
+    const readMetadata = (encoded: Uint8Array) => {
+      const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+      return JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    };
+    const rawMetadata = readMetadata(encodeCompressionEnvelope({ ...request, lossless: false, webpPass: 10 }));
+    const estimateMetadata = readMetadata(encodeCompressionEstimateEnvelope({
+      fileName: "icon.png",
+      inputData: new Uint8Array([1, 2, 3]),
+      outputFormat: "webp",
+      jpegQuality: 82,
+      lossless: false,
+      webpPass: 10,
+      metadataPolicy: "strip",
+      pngOptimizationLevel: 2,
+    }));
+    expect(rawMetadata.webpPass).toBe(10);
+    expect(estimateMetadata.webpPass).toBe(10);
+    expect(JSON.stringify(estimateMetadata).match(/"webpPass"/g)).toHaveLength(1);
+  });
+
   it("uses the publish-free image estimate command", async () => {
     vi.mocked(invoke).mockResolvedValue({ inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: true, status: "completed", skippedReason: null, targetBytes: null, targetMet: false, selectedQuality: null });
     await expect(estimateImageCompression({ fileName: "icon.png", inputData: new Uint8Array([1, 2, 3]), outputFormat: "webp", jpegQuality: 82, lossless: true, metadataPolicy: "strip", pngOptimizationLevel: 2 })).resolves.toMatchObject({ format: "webp", outputBytes: 2 });
