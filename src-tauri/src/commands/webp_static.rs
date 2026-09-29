@@ -367,6 +367,21 @@ mod tests {
     }
 
     #[test]
+    fn lossy_method_outputs_are_deterministic_and_observable() {
+        let image = sample_image(false);
+        let outputs = (0..=6)
+            .map(|method| encode_lossy_rgba_with_method(&image, 75, method).unwrap())
+            .collect::<Vec<_>>();
+        for method in 0..=6 {
+            assert_eq!(
+                outputs[method as usize],
+                encode_lossy_rgba_with_method(&image, 75, method).unwrap()
+            );
+        }
+        assert!(outputs.windows(2).any(|pair| pair[0] != pair[1]));
+    }
+
+    #[test]
     fn rejects_webp_methods_outside_the_supported_range() {
         assert!(encode_lossy_rgba_with_method(&sample_image(false), 75, 7).is_err());
     }
