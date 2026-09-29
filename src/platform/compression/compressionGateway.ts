@@ -260,26 +260,30 @@ export async function previewCompression(request: CompressionEnvelopeRequest, si
   if (signal?.aborted) throw new DOMException("压缩预览已取消。", "AbortError");
   const jobId = request.jobId ?? `compression-preview-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const encoded = encodeCompressionEnvelope({ ...request, jobId });
-  const cancel = () => { void cancelPreviewJob(jobId); };
+  let settled = false;
+  const cancel = () => { void cancelPreviewJob(jobId, () => !settled); };
   signal?.addEventListener("abort", cancel, { once: true });
   let preview: CompressionPreview;
   try {
     preview = await invoke<CompressionPreview>(PREVIEW_COMPRESSION_COMMAND, encoded);
   } finally {
+    settled = true;
     signal?.removeEventListener("abort", cancel);
   }
   if (signal?.aborted) throw new DOMException("压缩预览已取消。", "AbortError");
   return preview;
 }
 
-async function cancelPreviewJob(jobId: string): Promise<void> {
+async function cancelPreviewJob(jobId: string, isActive: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (!isActive()) return;
     try {
       await cancelCompression(jobId);
       return;
     } catch (error) {
       if (!String(error).toLowerCase().includes("job not found") || attempt === 2) return;
       await new Promise((resolve) => globalThis.setTimeout(resolve, 20 * (attempt + 1)));
+      if (!isActive()) return;
     }
   }
 }

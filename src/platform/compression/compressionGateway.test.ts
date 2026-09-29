@@ -256,7 +256,7 @@ describe("compression gateway", () => {
     expect(invoke).toHaveBeenCalledWith(CANCEL_COMPRESSION_COMMAND, { jobId: "compression-preview-test" });
   });
 
-  it("retries preview cancellation when native registration is still pending", async () => {
+  it("stops preview cancellation retries after the old preview settles", async () => {
     let resolvePreview!: (value: unknown) => void;
     let cancelAttempts = 0;
     const pendingPreview = new Promise<unknown>((resolve) => { resolvePreview = resolve; });
@@ -273,7 +273,7 @@ describe("compression gateway", () => {
     resolvePreview({ data: [1, 2, 3], width: 2, height: 2, format: "webp", outputBytes: 3, lossless: true, status: "completed", skippedReason: null, targetBytes: null, targetMet: false, selectedQuality: null });
     await expect(preview).rejects.toMatchObject({ name: "AbortError" });
     await new Promise((resolve) => globalThis.setTimeout(resolve, 30));
-    expect(cancelAttempts).toBe(2);
+    expect(cancelAttempts).toBe(1);
   });
 
   it("keeps skipped results distinct from completed output", async () => {
