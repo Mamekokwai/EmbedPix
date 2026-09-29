@@ -258,7 +258,16 @@ export async function preflightCompression(request: CompressionEnvelopeRequest):
 export async function previewCompression(request: CompressionEnvelopeRequest, signal?: AbortSignal): Promise<CompressionPreview> {
   if (!isTauriEnvironment()) throw new Error("真实压缩预览需要桌面原生命令，当前环境仅可查看原图。");
   if (signal?.aborted) throw new DOMException("压缩预览已取消。", "AbortError");
-  const preview = await invoke<CompressionPreview>(PREVIEW_COMPRESSION_COMMAND, encodeCompressionEnvelope(request));
+  const jobId = request.jobId ?? `compression-preview-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const encoded = encodeCompressionEnvelope({ ...request, jobId });
+  const cancel = () => { void cancelCompression(jobId).catch(() => undefined); };
+  signal?.addEventListener("abort", cancel, { once: true });
+  let preview: CompressionPreview;
+  try {
+    preview = await invoke<CompressionPreview>(PREVIEW_COMPRESSION_COMMAND, encoded);
+  } finally {
+    signal?.removeEventListener("abort", cancel);
+  }
   if (signal?.aborted) throw new DOMException("压缩预览已取消。", "AbortError");
   return preview;
 }

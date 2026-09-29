@@ -484,12 +484,46 @@ pub async fn preview_compression(
     state: State<'_, CompressionJobState>,
 ) -> Result<CompressionPreview, String> {
     let request = parse_request(request)?;
+    state.prune();
+    let job_id = request
+        .metadata
+        .job_id
+        .clone()
+        .unwrap_or_else(|| format!("compression-preview-{}", uuid_like_id()));
+    let job = Arc::new(CompressionJob {
+        cancelled: AtomicBool::new(false),
+        progress: Mutex::new(CompressionProgress {
+            job_id: job_id.clone(),
+            status: "running".into(),
+            stage: "preflight".into(),
+            output_path: None,
+            error: None,
+            code: None,
+            input_bytes: Some(request.input.len() as u64),
+            output_bytes: None,
+        }),
+        terminal_at: Mutex::new(None),
+    });
+    state.register(job_id, Arc::clone(&job))?;
     let encoder_slots = Arc::clone(&state.encoder_slots);
-    tauri::async_runtime::spawn_blocking(move || {
-        run_with_encoder_slot(encoder_slots, || run_preview(&request))
+    let job_for_task = Arc::clone(&job);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _permit = encoder_slots.acquire_cancellable(&job_for_task)?;
+        run_preview_with_cancellation(&request, &job_for_task)
     })
     .await
-    .map_err(|error| format!("compression preview task failed: {error}"))?
+    .map_err(|error| {
+        let message = format!("compression preview task failed: {error}");
+        fail_message(&job, message.clone());
+        message
+    })?;
+    match result {
+        Ok(preview) => {
+            update_progress(&job, preview.status.as_str(), None, None);
+            Ok(preview)
+        }
+        Err(error) => Err(fail_message(&job, error)),
+    }
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -1016,7 +1050,25 @@ fn encode_and_verify(
     Ok(bytes)
 }
 
+#[cfg(test)]
 fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, String> {
+    run_preview_core(request, None)
+}
+
+fn run_preview_with_cancellation(
+    request: &CompressionRequest,
+    job: &Arc<CompressionJob>,
+) -> Result<CompressionPreview, String> {
+    run_preview_core(request, Some(job))
+}
+
+fn run_preview_core(
+    request: &CompressionRequest,
+    job: Option<&Arc<CompressionJob>>,
+) -> Result<CompressionPreview, String> {
+    if let Some(job) = job {
+        checkpoint(job)?;
+    }
     let (width, height) = inspect_image(&request.input)?;
     let EncodedSelection {
         bytes: data,
@@ -1025,24 +1077,33 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
         skipped_reason,
         candidate_search_ms,
         candidate_count,
-    } = choose_encoded_output(request, width, height)?;
+    } = choose_encoded_output_with_cancellation(request, width, height, job)?;
     if data.len() > MAX_PREVIEW_BYTES {
         return Err(format!(
             "compressed preview exceeds the {} MiB limit",
             MAX_PREVIEW_BYTES / (1024 * 1024)
         ));
     }
+    if let Some(job) = job {
+        checkpoint(job)?;
+    }
     let verified = decode_image(&data)?;
     if verified.dimensions() != (width, height) {
         return Err("compressed preview dimensions do not match the source image".into());
     }
     let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
+        if let Some(job) = job {
+            checkpoint(job)?;
+        }
         let source = decode_image(&request.input)?;
         Some(calculate_quality_metrics(&source, &verified)?)
     } else {
         None
     };
     let output_bytes = data.len() as u64;
+    if let Some(job) = job {
+        update_progress_bytes(job, None, Some(output_bytes));
+    }
     Ok(CompressionPreview {
         data,
         width,
