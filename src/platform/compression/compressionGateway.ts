@@ -35,7 +35,7 @@ export interface CompressionEnvelopeRequest {
   jobId?: string;
 }
 
-export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; }
+export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; requiredSpaceBytes?: number | null; }
 export type CompressionResultStatus = "completed" | "skipped";
 export interface CompressionResult {
   jobId: string;

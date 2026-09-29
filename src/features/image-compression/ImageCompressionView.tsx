@@ -189,6 +189,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [stage, setStage] = useState("");
   const [estimate, setEstimate] = useState<CompressionEstimate>({ inputBytes: 0, estimatedBytes: 0, savingsPercent: 0 });
   const [estimateNote, setEstimateNote] = useState("等待导入图片");
+  const [preflightSpaceBytes, setPreflightSpaceBytes] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [importErrors, setImportErrors] = useState<CompressionImportError[]>([]);
   const [failures, setFailures] = useState<string[]>([]);
@@ -605,6 +606,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setSkipReasons([]);
     cancelRequestedRef.current = false;
     setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
+    setPreflightSpaceBytes(null);
     setProgress({ current: 0, total: queue.length });
     setProgressBytes({ input: null, output: null });
     const failedNames: string[] = [];
@@ -630,6 +632,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         const nativeFile: NativeImageFile = { path: item.sourcePath ?? "", fileName: item.file.name, data: Array.from(new Uint8Array(await item.file.arrayBuffer())) };
         const request = createCompressionRequest(nativeFile, options, jobId);
         const preflight = await preflightCompression(request);
+        setPreflightSpaceBytes(typeof preflight.requiredSpaceBytes === "number" ? preflight.requiredSpaceBytes : null);
         if (preflight.overwritesExisting && !options.overwrite) {
           setResultStats((current) => ({ ...current, skipped: current.skipped + 1 }));
           setItemResults((current) => [...current, { itemId: item.id, fileName: item.file.name, status: "skipped", reason: "同名目标已存在" }]);
@@ -948,7 +951,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className="compression-summary-stat"><span>原始大小</span><strong>{formatCompressionBytes(estimate.inputBytes)}</strong></div>
         <div className="compression-summary-stat"><span>预计输出</span><strong>{formatCompressionBytes(estimate.estimatedBytes)}</strong></div>
         <div className="compression-summary-stat"><span>预计节省</span><strong className="compression-saving">{estimate.savingsPercent.toFixed(0)}%</strong></div>
-        <span className="compression-estimate-note">{estimateNote}{typeof estimate.candidateSearchMs === "number" ? ` · 候选搜索 ${estimate.candidateSearchMs} ms` : ""}</span>
+        <span className="compression-estimate-note">{estimateNote}{typeof estimate.candidateSearchMs === "number" ? ` · 候选搜索 ${estimate.candidateSearchMs} ms` : ""}{preflightSpaceBytes !== null ? ` · 临时空间预算 ${formatCompressionBytes(preflightSpaceBytes)}` : ""}</span>
       </section>
 
       <section className="compression-card compression-result-card" aria-label="压缩结果统计">

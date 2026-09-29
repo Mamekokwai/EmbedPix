@@ -352,6 +352,8 @@ pub struct CompressionPreflight {
     pub output_path: String,
     pub overwrites_existing: bool,
     pub lossless: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_space_bytes: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -401,7 +403,8 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
     let request = parse_request(request)?;
     let (width, height) = inspect_image(&request.input)?;
     let output_path = resolve_preflight_output_path(&request)?;
-    ensure_preflight_available_space(&output_path, estimate_preflight_required_space(&request))?;
+    let required_space_bytes = estimate_preflight_required_space(&request);
+    ensure_preflight_available_space(&output_path, required_space_bytes)?;
     Ok(CompressionPreflight {
         format: request.format.name().to_string(),
         width,
@@ -410,6 +413,7 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
         overwrites_existing: output_path.exists(),
         lossless: request.lossless,
         output_path: output_path.to_string_lossy().into_owned(),
+        required_space_bytes,
     })
 }
 
