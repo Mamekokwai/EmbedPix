@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_GIF_MAKER_PREFERENCES } from "../features/gif-maker/gifMakerPreferences";
 import { DEFAULT_APP_PREFERENCES } from "../platform/preferences/appPreferences";
-import { exportWorkspaceSnapshot, importWorkspaceSnapshot } from "./workspaceTransfer";
+import { exportWorkspaceSnapshot, importWorkspace, importWorkspaceSnapshot } from "./workspaceTransfer";
 
 const image = { type: "image" as const, parameters: DEFAULT_APP_PREFERENCES, outputLocation: "directory" as const, outputDirectory: "E:\\out", namingTemplate: "{name}_{index}.png", sources: [{ path: "E:\\images\\a.png", fileName: "a.png", width: 10, height: 20, sizeBytes: 100 }] };
 const gif = { type: "gif" as const, parameters: DEFAULT_GIF_MAKER_PREFERENCES, outputLocation: "directory", sources: [{ path: "E:\\images\\a.png", fileName: "a.png" }], frames: [{ index: 0, durationMs: 100, width: 10, height: 20 }] };
@@ -21,6 +21,11 @@ describe("workspace transfer", () => {
   it("reports missing source paths without discarding the workspace", () => {
     const restored = importWorkspaceSnapshot(exportWorkspaceSnapshot([{ ...image, sources: [{ ...image.sources[0], path: "missing:E:\\old.png" }] }]));
     expect(restored.workspaces).toHaveLength(1); expect(restored.issues[0]).toMatchObject({ kind: "missing-path" });
+  });
+
+  it("returns restore issues through the page compatibility helper", () => {
+    const serialized = exportWorkspaceSnapshot([{ ...image, sources: [{ ...image.sources[0], path: "missing:E:\\old.png" }] }]);
+    expect(importWorkspace(serialized, "image").issues).toMatchObject([{ kind: "missing-path", path: "missing:E:\\old.png" }]);
   });
   it("reports GIF frame metadata mismatches without discarding the workspace", () => {
     const restored = importWorkspaceSnapshot(exportWorkspaceSnapshot([{ ...gif, frames: [] }]));

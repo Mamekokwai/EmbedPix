@@ -90,9 +90,9 @@ export function exportWorkspace(bundle: { kind: "image" | "gif"; parameters: Rec
   return exportWorkspaceSnapshot([snapshot as WorkspaceSnapshot]);
 }
 
-export function importWorkspace(serialized: string, kind: "image" | "gif"): { parameters: Record<string, unknown>; sourcePaths: string[]; sourceKind?: "image" | "video"; sourceMetadata?: WorkspaceSource; frames: WorkspaceFrame[]; outputLocation: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string } {
+export function importWorkspace(serialized: string, kind: "image" | "gif"): { parameters: Record<string, unknown>; sourcePaths: string[]; sourceKind?: "image" | "video"; sourceMetadata?: WorkspaceSource; frames: WorkspaceFrame[]; outputLocation: string; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string; issues: WorkspaceRestoreIssue[] } {
   const result = importWorkspaceSnapshot(serialized);
   const workspace = result.workspaces.find((item) => item.type === kind);
   if (!workspace) throw new Error("工作区文件类型不匹配。");
-  return { parameters: workspace.parameters as unknown as Record<string, unknown>, sourcePaths: workspace.sources.map((source) => source.path), sourceKind: workspace.sources[0]?.kind, sourceMetadata: workspace.sources[0], frames: workspace.type === "gif" ? workspace.frames : [], outputLocation: workspace.outputLocation, outputDirectory: workspace.outputDirectory, outputSubdirectory: workspace.outputSubdirectory, namingTemplate: workspace.namingTemplate };
+  return { parameters: workspace.parameters as unknown as Record<string, unknown>, sourcePaths: workspace.sources.map((source) => source.path), sourceKind: workspace.sources[0]?.kind, sourceMetadata: workspace.sources[0], frames: workspace.type === "gif" ? workspace.frames : [], outputLocation: workspace.outputLocation, outputDirectory: workspace.outputDirectory, outputSubdirectory: workspace.outputSubdirectory, namingTemplate: workspace.namingTemplate, issues: result.issues };
 }

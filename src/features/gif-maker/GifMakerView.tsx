@@ -1404,6 +1404,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     if (!file) return;
     try {
       const bundle = importWorkspace(await file.text(), "gif");
+      setError(bundle.issues.length ? bundle.issues.map((issue) => issue.path ? `${issue.message}：${issue.path}` : issue.message).join("；") : null);
       const p = bundle.parameters;
       const location = bundle.outputLocation;
       if (location === "path" || location === "source" || location === "subfolder" || location === "directory") setOutputLocation(location);
