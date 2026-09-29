@@ -2962,6 +2962,7 @@ mod tests {
         let result = run_compression(&request, &test_job("delete-source-success")).unwrap();
 
         assert_eq!(result.status, "completed");
+        assert!(result.source_deleted);
         assert!(output_path.is_file());
         assert!(!source_path.exists());
         let _ = fs::remove_file(output_path);
@@ -3055,6 +3056,7 @@ mod tests {
         let skipped_delete =
             run_compression(&delete_request, &test_job("delete-source-skip-test")).unwrap();
         assert_eq!(skipped_delete.status, "skipped");
+        assert!(!skipped_delete.source_deleted);
         assert!(delete_source_path.is_file());
         assert!(!delete_output_path.exists());
         fs::remove_file(delete_source_path).unwrap();
