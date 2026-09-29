@@ -1,4 +1,4 @@
-import { COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_MAX_CANDIDATES_DEFAULT, COMPRESSION_MAX_CANDIDATES_MAX, COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionFormat, MetadataPolicy } from "./types";
 
 export const COMPRESSION_CUSTOM_PRESETS_STORAGE_KEY = "embedpix.image-compression-custom-presets.v1";
@@ -15,6 +15,7 @@ export interface CompressionPresetValues {
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
+  maxCandidates: number;
   skipIfLarger: boolean;
   lossless: boolean;
   metadataPolicy: MetadataPolicy;
@@ -95,6 +96,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     pngOptimizationLevel: integerValue(record.pngOptimizationLevel, 0, 6, "PNG 优化级别", index),
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
+    maxCandidates: record.maxCandidates === undefined ? COMPRESSION_MAX_CANDIDATES_DEFAULT : integerValue(record.maxCandidates, COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_MAX_CANDIDATES_MAX, "候选搜索次数", index),
     skipIfLarger: record.skipIfLarger === undefined ? true : booleanValue(record.skipIfLarger, "压缩后更大时跳过", index),
     lossless,
     metadataPolicy: enumValue(record.metadataPolicy, ["strip"], "元数据策略", index),
@@ -112,6 +114,7 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   if (values.webpNearLossless !== null && (!Number.isInteger(values.webpNearLossless) || values.webpNearLossless < 1 || values.webpNearLossless > 99)) throw new Error("WebP 近无损等级必须在 1 到 99 之间。");
   if (values.webpNearLossless !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 近无损等级仅适用于无损 WebP。");
   if (!/^#[0-9a-f]{6}$/iu.test(values.jpegBackground.trim())) throw new Error("JPEG 透明背景必须是 #RRGGBB 颜色。");
+  if (!Number.isInteger(values.maxCandidates) || values.maxCandidates < COMPRESSION_MAX_CANDIDATES_MIN || values.maxCandidates > COMPRESSION_MAX_CANDIDATES_MAX) throw new Error(`候选搜索次数必须在 ${COMPRESSION_MAX_CANDIDATES_MIN} 到 ${COMPRESSION_MAX_CANDIDATES_MAX} 之间。`);
   return { id: createId(), name: trimmedName, values: { ...values }, createdAt: new Date().toISOString() };
 }
 

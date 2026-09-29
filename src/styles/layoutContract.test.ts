@@ -122,7 +122,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("!replaceOriginalAvailable");
     expect(compressionView).toContain('disabled={busy || !qualityEnabled}');
     expect(compressionView).toContain('disabled={busy || !qualityEnabled || !targetSizeActive}');
-    expect(compressionView).toContain("maxCandidates: qualityEnabled && maxOutputBytes ? 8 : undefined");
+    expect(compressionView).toContain("maxCandidates: maxOutputBytes ? maxCandidates : undefined");
     expect(compressionView).toContain("selectedQuality");
     expect(compressionView).toContain("PNG 优化级别");
     expect(compressionView).toContain("pngOptimizationLevel");
@@ -134,7 +134,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("importCompressionPresetsJson");
     expect(compressionView).toContain("JPEG 使用质量滑块进行有损编码");
     expect(compressionView).toContain("当前为有损 WebP；质量滑块控制编码质量");
-    expect(compressionView).toContain("核心最多尝试 8 个 WebP 质量候选");
+    expect(compressionView).toContain("核心最多尝试 ${maxCandidates} 个 WebP 质量候选");
     expect(compressionView).toContain("WebP 无损编码");
     expect(compressionView).toContain("WebP 编码方法");
     expect(compressionView).toContain("webpMethod");

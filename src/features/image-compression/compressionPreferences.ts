@@ -1,4 +1,4 @@
-import { COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, getCompressionOutputFileNameError, getCompressionSubdirectoryError, normalizeCompressionOutputFileName, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_MAX_CANDIDATES_DEFAULT, COMPRESSION_MAX_CANDIDATES_MAX, COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, getCompressionOutputFileNameError, getCompressionSubdirectoryError, normalizeCompressionOutputFileName, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionFormat, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
 
 export interface CompressionPreferences {
@@ -10,6 +10,7 @@ export interface CompressionPreferences {
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
+  maxCandidates: number;
   skipIfLarger: boolean;
   lossless: boolean;
   preset: CompressionPreset;
@@ -36,6 +37,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
+  maxCandidates: COMPRESSION_MAX_CANDIDATES_DEFAULT,
   skipIfLarger: true,
   lossless: true,
   preset: "balanced",
@@ -137,6 +139,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
       targetSizeEnabled: record.targetSizeEnabled === true && supportsCompressionTargetSize(format, lossless),
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
+      maxCandidates: integerValue(record, "maxCandidates", COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_MAX_CANDIDATES_MAX, COMPRESSION_MAX_CANDIDATES_DEFAULT),
       skipIfLarger: typeof record.skipIfLarger === "boolean" ? record.skipIfLarger : DEFAULT_COMPRESSION_PREFERENCES.skipIfLarger,
       lossless,
       preset: enumValue(record, "preset", PRESETS, DEFAULT_COMPRESSION_PREFERENCES.preset),
@@ -179,6 +182,7 @@ export function saveCompressionPreferences(
       pngOptimizationLevel: preferences.pngOptimizationLevel,
       targetSizeEnabled: preferences.targetSizeEnabled,
       targetSizeKiB: preferences.targetSizeKiB,
+      maxCandidates: preferences.maxCandidates,
       skipIfLarger: preferences.skipIfLarger,
       lossless: preferences.lossless,
       preset: preferences.preset,

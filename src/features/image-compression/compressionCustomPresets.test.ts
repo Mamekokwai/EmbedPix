@@ -20,6 +20,7 @@ const values: CompressionPresetValues = {
   pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
+  maxCandidates: 8,
   skipIfLarger: true,
   lossless: true,
   metadataPolicy: "strip",
@@ -54,6 +55,8 @@ describe("compression custom presets", () => {
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏预设", values: { ...values, quality: 101 } }] }))).toThrow("质量无效");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏方法", values: { ...values, webpMethod: 7 } }] }))).toThrow("WebP 编码方法无效");
     expect(() => createCompressionCustomPreset("坏方法", { ...values, webpMethod: 7 })).toThrow("WebP 编码方法必须");
+    expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏候选", values: { ...values, maxCandidates: 13 } }] }))).toThrow("候选搜索次数无效");
+    expect(() => createCompressionCustomPreset("坏候选", { ...values, maxCandidates: 13 })).toThrow("候选搜索次数必须");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏近无损", values: { ...values, format: "jpg", lossless: false, webpNearLossless: 90 } }] }))).toThrow("仅适用于无损 WebP");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏背景", values: { ...values, jpegBackground: "white" } }] }))).toThrow("JPEG 透明背景无效");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏开关", values: { ...values, skipIfLarger: "yes" } }] }))).toThrow("压缩后更大时跳过无效");
@@ -67,6 +70,7 @@ describe("compression custom presets", () => {
     const imported = importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "旧预设", values: legacyValues }] }));
     expect(imported[0]?.values.webpMethod).toBe(4);
     expect(imported[0]?.values.skipIfLarger).toBe(true);
+    expect(imported[0]?.values.maxCandidates).toBe(8);
   });
 
   it("deduplicates imported names without applying or mutating existing presets", () => {

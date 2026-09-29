@@ -33,6 +33,7 @@ describe("compression preferences", () => {
       pngOptimizationLevel: 5,
       targetSizeEnabled: true,
       targetSizeKiB: "96",
+      maxCandidates: 10,
       skipIfLarger: false,
       lossless: false,
       preset: "custom" as const,
@@ -55,6 +56,7 @@ describe("compression preferences", () => {
     expect(stored.webpMethod).toBe(2);
     expect(stored.jpegBackground).toBe("#123456");
     expect(stored.skipIfLarger).toBe(false);
+    expect(stored.maxCandidates).toBe(10);
     expect(loadCompressionPreferences(storage)).toEqual(preferences);
   });
 
@@ -89,6 +91,7 @@ describe("compression preferences", () => {
         outputSubdirectory: "../escape",
       outputFileName: "../escape.webp",
       webpMethod: 99,
+        maxCandidates: 99,
         unknownFutureField: true,
       }),
     });
@@ -105,6 +108,7 @@ describe("compression preferences", () => {
       outputSubdirectory: "",
       outputFileName: "",
       webpMethod: 4,
+      maxCandidates: 12,
     });
   });
 
