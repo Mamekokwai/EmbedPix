@@ -290,15 +290,14 @@ impl CompressionSemaphore {
             available = next;
         }
         *available -= 1;
-        let permit = CompressionPermit {
-            semaphore: Arc::clone(self),
-        };
         if job.cancelled.load(Ordering::Acquire) {
             *available += 1;
             self.wake.notify_one();
             return Err(fail_message(job, "compression cancelled".to_string()));
         }
-        Ok(permit)
+        Ok(CompressionPermit {
+            semaphore: Arc::clone(self),
+        })
     }
 }
 
@@ -3415,11 +3414,12 @@ mod tests {
         let worker_job = Arc::clone(&job);
         let worker = std::thread::spawn(move || worker_semaphore.acquire_cancellable(&worker_job));
 
-        for _ in 0..1000 {
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while Instant::now() < deadline {
             if job.progress.lock().unwrap().stage == "queued" {
                 break;
             }
-            std::thread::yield_now();
+            std::thread::sleep(Duration::from_millis(1));
         }
         assert_eq!(job.progress.lock().unwrap().stage, "queued");
         assert_eq!(cancel_job(&job).unwrap().status, "cancelling");

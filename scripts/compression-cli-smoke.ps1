@@ -70,9 +70,16 @@ function Assert-PreviewCompressionContract {
   $validationBody = $body
   $runPreviewBody = ''
   if ($body -notmatch 'inspect_image|decode_image') {
-    $runPreviewMatch = [regex]::Match($source, '(?s)fn\s+run_preview\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
-    if (-not $runPreviewMatch.Success) { throw "$previewName does not expose an input-validation implementation." }
-    $runPreviewBody = $runPreviewMatch.Value
+    # The cancellation-aware preview path delegates through a small compatibility
+    # wrapper, so inspect the shared core instead of assuming the old helper name.
+    foreach ($helperName in @('run_preview_core', 'run_preview_with_cancellation', 'run_preview')) {
+      $candidate = [regex]::Match($source, "(?s)fn\s+$helperName\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)")
+      if ($candidate.Success -and $candidate.Value -match 'inspect_image|decode_image') {
+        $runPreviewBody = $candidate.Value
+        break
+      }
+    }
+    if ([string]::IsNullOrWhiteSpace($runPreviewBody)) { throw "$previewName does not expose an input-validation implementation." }
     $validationBody = "$body`n$runPreviewBody"
   }
   if ($validationBody -match 'write_exported_file|fs::write|fs::rename|remove_file|create_dir') {
