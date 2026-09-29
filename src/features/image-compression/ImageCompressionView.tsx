@@ -58,6 +58,7 @@ import {
 } from "./compressionCustomPresets";
 import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionItemResult, CompressionOptions, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
 import type { CompressionPreview } from "../../platform/compression/compressionGateway";
+import { downloadBlob } from "../../shared/downloadBlob";
 
 type CompressionStatus = "idle" | "ready" | "busy" | "success" | "error";
 
@@ -786,12 +787,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   };
 
   const downloadCustomPresets = () => {
-    const url = URL.createObjectURL(new Blob([exportCompressionPresetsJson(customPresets)], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "embedpix-compression-presets.json";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([exportCompressionPresetsJson(customPresets)], { type: "application/json" }), "embedpix-compression-presets.json");
     setCustomPresetMessage("压缩预设 JSON 已导出");
   };
 

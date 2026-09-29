@@ -87,6 +87,7 @@ import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueu
 import type { ExportPreflightResult } from "./imageConverterLogic";
 import { planBatchConversions } from "./batchConversionPlan";
 import { exportWorkspace, importWorkspace } from "../../shared/workspaceTransfer";
+import { downloadBlob } from "../../shared/downloadBlob";
 
 type ImageExportQueueProgress = ExportQueueProgress<{ file: { name: string } }>;
 
@@ -756,7 +757,7 @@ export default function ImageConverter({
 
   const saveWorkspace = () => {
     const data = exportWorkspace({ kind: "image", outputLocation, outputDirectory, outputSubdirectory, namingTemplate: fileNameTemplate, sourcePaths: loadedImages.map((image) => image.sourcePath).filter((path): path is string => Boolean(path)), parameters: { outputFormat, bitDepth, jpegQuality, byteOrder, channelOrder, rowOrder, rowAlignment, cArrayName, keepAspectRatio, backgroundColor, width, height, fileNameTemplate, autoSequence } });
-    const url = URL.createObjectURL(new Blob([data], { type: "application/json" })); const link = document.createElement("a"); link.href = url; link.download = "embedpix-workspace.json"; link.click(); URL.revokeObjectURL(url);
+    downloadBlob(new Blob([data], { type: "application/json" }), "embedpix-workspace.json");
     setStatus({ kind: "ready", text: "工作区已保存" });
   };
   const openWorkspace = async (file: File | undefined) => {

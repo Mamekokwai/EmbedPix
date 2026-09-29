@@ -11,6 +11,7 @@ import {
 } from "../../platform/preferences/appPreferences";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { exportPresetBundle, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
+import { downloadBlob } from "../../shared/downloadBlob";
 import { createImageCustomPreset, loadImageCustomPresets, saveImageCustomPresets, type ImageCustomPreset } from "../image-converter/imagePresets";
 
 interface SettingsViewProps {
@@ -110,8 +111,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
   };
 
   const downloadImagePresets = () => {
-    const url = URL.createObjectURL(new Blob([exportPresetBundle(customPresets, [])], { type: "application/json" }));
-    const link = document.createElement("a"); link.href = url; link.download = "embedpix-image-presets.json"; link.click(); URL.revokeObjectURL(url);
+    downloadBlob(new Blob([exportPresetBundle(customPresets, [])], { type: "application/json" }), "embedpix-image-presets.json");
     setPresetMessage("图片预设 JSON 已导出");
   };
   const importImagePresetFile = async (file: File | undefined) => {
