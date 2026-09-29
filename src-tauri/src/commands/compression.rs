@@ -3513,6 +3513,7 @@ mod tests {
         assert_eq!((preview.width, preview.height), (2, 2));
         assert_eq!(preview.output_bytes, preview.data.len() as u64);
         assert!(preview.lossless);
+        assert_eq!(preview.metadata_policy, "strip");
         assert!(!target.exists());
     }
 
@@ -3559,6 +3560,7 @@ mod tests {
             );
             assert!(estimate.output_bytes > 0);
             assert!(estimate.saved_bytes <= estimate.input_bytes as i64);
+            assert_eq!(estimate.metadata_policy, "strip");
         }
 
         let target_metadata = r#"{"fileName":"sample.png","outputFormat":"png","lossless":true,"maxOutputBytes":1,"maxCandidates":1}"#;
