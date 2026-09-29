@@ -721,6 +721,16 @@ fn validate_jpeg_background(value: Option<&str>, format: CompressionFormat) -> R
     Ok(())
 }
 
+fn validate_compression_mode(format: CompressionFormat, lossless: bool) -> Result<(), String> {
+    if format == CompressionFormat::Png && !lossless {
+        return Err("lossy compression is not supported for PNG; use JPEG or WebP".into());
+    }
+    if format == CompressionFormat::Jpeg && lossless {
+        return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
+    }
+    Ok(())
+}
+
 fn composite_jpeg_background(image: &image::RgbaImage, background: [u8; 3]) -> RgbImage {
     ImageBuffer::from_fn(image.width(), image.height(), |x, y| {
         let pixel = image.get_pixel(x, y);
@@ -1294,9 +1304,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     }
     validate_webp_method(metadata.webp_method, format, lossless)?;
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
-    if matches!(format, CompressionFormat::Jpeg) && lossless {
-        return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
-    }
+    validate_compression_mode(format, lossless)?;
     if metadata.metadata_policy == MetadataPolicy::Preserve {
         return Err(
             "metadataPolicy=preserve is not supported by first-stage compression; use strip".into(),
@@ -1411,9 +1419,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     }
     validate_webp_method(metadata.webp_method, format, lossless)?;
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
-    if matches!(format, CompressionFormat::Jpeg) && lossless {
-        return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
-    }
+    validate_compression_mode(format, lossless)?;
     if metadata.metadata_policy == MetadataPolicy::Preserve {
         return Err(
             "metadataPolicy=preserve is not supported by first-stage compression; use strip".into(),
@@ -2241,6 +2247,18 @@ mod tests {
         assert!(CompressionFormat::parse("bmp").is_err());
         assert!(!(1..=100).contains(&0));
         assert_eq!(MetadataPolicy::default(), MetadataPolicy::Strip);
+    }
+
+    #[test]
+    fn rejects_lossy_png_mode_for_requests_and_estimates() {
+        let metadata = r#"{"fileName":"sample.png","outputFormat":"png","lossless":false}"#;
+        let payload = raw_payload(metadata, &png_input());
+        assert!(parse_raw_payload(&payload)
+            .unwrap_err()
+            .contains("lossy compression is not supported for PNG"));
+        assert!(parse_estimate_raw_payload(&payload)
+            .unwrap_err()
+            .contains("lossy compression is not supported for PNG"));
     }
 
     #[test]
