@@ -3177,9 +3177,13 @@ mod tests {
             png_optimization_level: 2,
         };
         let selection = choose_encoded_output(&request, 2, 2).unwrap();
+        let repeated = choose_encoded_output(&request, 2, 2).unwrap();
         assert!(selection.target_met);
         assert!(selection.selected_quality.unwrap() >= 50);
         assert!(selection.candidate_search_ms.is_some());
+        assert_eq!(selection.selected_quality, repeated.selected_quality);
+        assert_eq!(selection.candidate_count, repeated.candidate_count);
+        assert_eq!(selection.bytes, repeated.bytes);
         assert!((selection.bytes.len() as u64) <= target);
     }
 
@@ -3224,9 +3228,13 @@ mod tests {
             png_optimization_level: 2,
         };
         let selection = choose_encoded_output(&request, 64, 48).unwrap();
+        let repeated = choose_encoded_output(&request, 64, 48).unwrap();
         assert!(selection.target_met);
         assert!(selection.selected_quality.unwrap() >= 50);
         assert!(selection.candidate_search_ms.is_some());
+        assert_eq!(selection.selected_quality, repeated.selected_quality);
+        assert_eq!(selection.candidate_count, repeated.candidate_count);
+        assert_eq!(selection.bytes, repeated.bytes);
         assert!((selection.bytes.len() as u64) <= target);
     }
 
