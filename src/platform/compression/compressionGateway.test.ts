@@ -133,6 +133,17 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, maxCandidates: 13 })).toThrow("maxCandidates");
   });
 
+  it("serializes and validates lossy WebP alpha quality", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, lossless: false, webpAlphaQuality: 64 });
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata.webpAlphaQuality).toBe(64);
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpAlphaQuality: -1 })).toThrow("webpAlphaQuality");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpAlphaQuality: 101 })).toThrow("webpAlphaQuality");
+    expect(() => encodeCompressionEnvelope({ ...request, webpAlphaQuality: 64 })).toThrow("仅支持有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "png", webpAlphaQuality: 64 })).toThrow("仅支持有损 WebP");
+  });
+
   it("rejects PNG optimization levels outside the native contract", () => {
     expect(() => encodeCompressionEnvelope({ ...request, pngOptimizationLevel: 7 })).toThrow("pngOptimizationLevel");
   });

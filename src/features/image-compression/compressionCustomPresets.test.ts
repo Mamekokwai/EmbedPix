@@ -15,6 +15,7 @@ const values: CompressionPresetValues = {
   format: "webp",
   quality: 82,
   webpMethod: 4,
+  webpAlphaQuality: 100,
   webpNearLossless: null,
   jpegBackground: "#ffffff",
   pngOptimizationLevel: 3,

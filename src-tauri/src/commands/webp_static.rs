@@ -71,10 +71,20 @@ pub(crate) fn encode_lossy_rgba(image: &RgbaImage, quality: u8) -> Result<Vec<u8
     Ok(bytes)
 }
 
+#[cfg(test)]
 pub(crate) fn encode_lossy_rgba_with_method(
     image: &RgbaImage,
     quality: u8,
     method: u8,
+) -> Result<Vec<u8>, String> {
+    encode_lossy_rgba_with_method_and_alpha_quality(image, quality, method, None)
+}
+
+pub(crate) fn encode_lossy_rgba_with_method_and_alpha_quality(
+    image: &RgbaImage,
+    quality: u8,
+    method: u8,
+    alpha_quality: Option<u8>,
 ) -> Result<Vec<u8>, String> {
     if !(1..=100).contains(&quality) {
         return Err("WebP quality must be between 1 and 100".into());
@@ -117,6 +127,12 @@ pub(crate) fn encode_lossy_rgba_with_method(
         return Err("libwebp failed to initialize WebP configuration".into());
     }
     config.method = c_int::from(method);
+    if let Some(alpha_quality) = alpha_quality {
+        if alpha_quality > 100 {
+            return Err("WebP alpha quality must be between 0 and 100".into());
+        }
+        config.alpha_quality = c_int::from(alpha_quality);
+    }
     if unsafe { webp::WebPValidateConfig(&config) } == 0 {
         return Err("libwebp rejected the WebP method configuration".into());
     }
@@ -339,6 +355,23 @@ mod tests {
         for (source, actual) in image.pixels().zip(decoded.pixels()) {
             assert_eq!(actual[3], source[3]);
         }
+    }
+
+    #[test]
+    fn alpha_quality_changes_transparent_webp_and_remains_decodable() {
+        let image = sample_image(true);
+        let low = encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, Some(0)).unwrap();
+        let high =
+            encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, Some(100)).unwrap();
+        assert_ne!(low, high);
+        assert_eq!(
+            image::load_from_memory(&low).unwrap().dimensions(),
+            (64, 48)
+        );
+        assert_eq!(
+            image::load_from_memory(&high).unwrap().dimensions(),
+            (64, 48)
+        );
     }
 
     #[test]

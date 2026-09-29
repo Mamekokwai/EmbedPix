@@ -5,6 +5,7 @@ export interface CompressionPreferences {
   format: CompressionFormat;
   quality: number;
   webpMethod: number;
+  webpAlphaQuality: number;
   webpNearLossless: number | null;
   jpegBackground: string;
   pngOptimizationLevel: number;
@@ -33,6 +34,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   format: "webp",
   quality: 82,
   webpMethod: COMPRESSION_WEBP_METHOD_DEFAULT,
+  webpAlphaQuality: 100,
   webpNearLossless: null,
   jpegBackground: "#ffffff",
   pngOptimizationLevel: 3,
@@ -93,6 +95,10 @@ function webpMethodValue(record: Record<string, unknown>): number {
     : DEFAULT_COMPRESSION_PREFERENCES.webpMethod;
 }
 
+function webpAlphaQualityValue(record: Record<string, unknown>): number {
+  return integerValue(record, "webpAlphaQuality", 0, 100, DEFAULT_COMPRESSION_PREFERENCES.webpAlphaQuality);
+}
+
 function webpNearLosslessValue(record: Record<string, unknown>): number | null {
   const value = record.webpNearLossless;
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 99 ? value : null;
@@ -136,6 +142,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       format,
       quality: integerValue(record, "quality", 1, 100, DEFAULT_COMPRESSION_PREFERENCES.quality),
       webpMethod: webpMethodValue(record),
+      webpAlphaQuality: webpAlphaQualityValue(record),
       webpNearLossless: format === "webp" && lossless ? webpNearLosslessValue(record) : null,
       jpegBackground: jpegBackgroundValue(record),
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
@@ -180,6 +187,7 @@ export function saveCompressionPreferences(
       format: preferences.format,
       quality: preferences.quality,
       webpMethod: preferences.webpMethod,
+      webpAlphaQuality: preferences.webpAlphaQuality,
       webpNearLossless: preferences.webpNearLossless,
       jpegBackground: preferences.jpegBackground,
       pngOptimizationLevel: preferences.pngOptimizationLevel,
