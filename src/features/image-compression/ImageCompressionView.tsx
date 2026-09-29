@@ -203,6 +203,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const activeJobIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
 
+  useEffect(() => () => {
+    const jobId = activeJobIdRef.current;
+    if (!jobId || !isTauriEnvironment()) return;
+    void cancelCompression(jobId).catch(() => undefined);
+  }, []);
+
   const busy = status === "busy";
   const sourceBusy = busy || importBusy;
   const qualityEnabled = supportsCompressionTargetSize(format, lossless);
