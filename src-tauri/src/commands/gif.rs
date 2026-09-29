@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    io::{Cursor, Write},
+    fs::File,
+    io::{Cursor, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU8, Ordering},
@@ -16,9 +17,10 @@ use base64::Engine;
 use color_quant::NeuQuant;
 use gif::{DisposalMethod, Encoder, Frame as GifFrame, Repeat};
 use image::{
+    codecs::gif::GifDecoder,
     imageops::FilterType,
     io::{Limits, Reader as ImageReader},
-    ImageFormat,
+    AnimationDecoder, ImageFormat,
 };
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
@@ -905,12 +907,54 @@ fn export_gif_blocking_with_job(
         &output_path,
         request.overwrite_existing,
         storage::MAX_OUTPUT_BYTES,
-        |file| encode_gif_with_job(file, &request, &job),
+        |file| {
+            encode_gif_with_job(&mut *file, &request, &job)?;
+            validate_encoded_gif(file, &request)
+        },
         || job_checkpoint(&job),
         move || job_begin_publish(&publish_job),
         move || job_mark_published(&completed_job, completed_path),
     )?;
     Ok(output_path.to_string_lossy().into_owned())
+}
+
+fn validate_encoded_gif(file: &mut File, request: &GifExportRequest) -> Result<(), String> {
+    storage::validate_output_size(file, storage::MAX_OUTPUT_BYTES, "输出")?;
+    file.flush()
+        .map_err(|error| format!("无法准备 GIF 验证：{error}"))?;
+    let end = file
+        .stream_position()
+        .map_err(|error| format!("无法定位 GIF 输出：{error}"))?;
+    file.seek(SeekFrom::Start(0))
+        .map_err(|error| format!("无法读取 GIF 输出：{error}"))?;
+    let mut encoded = Vec::with_capacity(end as usize);
+    file.read_to_end(&mut encoded)
+        .map_err(|error| format!("无法读取 GIF 输出：{error}"))?;
+    file.seek(SeekFrom::Start(end))
+        .map_err(|error| format!("无法恢复 GIF 输出位置：{error}"))?;
+
+    let frames = GifDecoder::new(Cursor::new(&encoded))
+        .map_err(|error| format!("GIF 解码验证失败：{error}"))?
+        .into_frames()
+        .collect_frames()
+        .map_err(|error| format!("GIF 帧解码验证失败：{error}"))?;
+    if frames.len() != request.frames.len() {
+        return Err(format!(
+            "GIF 解码验证失败：输出包含 {} 帧，预期为 {} 帧。",
+            frames.len(),
+            request.frames.len()
+        ));
+    }
+    if frames
+        .iter()
+        .any(|frame| frame.buffer().dimensions() != (request.width, request.height))
+    {
+        return Err(format!(
+            "GIF 解码验证失败：输出帧尺寸不是 {} × {}。",
+            request.width, request.height
+        ));
+    }
+    Ok(())
 }
 
 fn select_export_candidate(
