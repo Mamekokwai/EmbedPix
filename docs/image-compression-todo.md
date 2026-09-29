@@ -43,7 +43,7 @@
 - [x] 新增 `CompressionFormat`。
 - [ ] 新增 `CompressionMode`：`lossless`、`lossy`、`auto`。
 - [ ] 新增 `CompressionEngine`：`oxipng`、`image-jpeg`、`libwebp`、`auto`。
-- [~] 新增 `MetadataPolicy`：第一阶段仅落地 `strip`，`preserve` 留待后续。
+- [~] 新增 `MetadataPolicy`：第一阶段仅落地 `strip`；正式压缩与体积估算现在共用同一策略校验，`preserve` 留待后续。
 - [~] 新增 `CompressionPreset`：内置 `high-quality`、`balanced`、`small-size`、`custom` 已在前端落地，版本化跨页面协议待后续。
 - [ ] 新增统一任务状态：排队、读取、解码、规划、编码、校验、发布、完成、跳过、取消、失败。
 - [~] 新增结果字段：体积、节省、格式、目标达成、选中质量和跳过原因已落地；后端/完整参数摘要待后续。

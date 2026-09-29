@@ -162,6 +162,8 @@ struct CompressionEstimateMetadata {
     max_candidates: Option<usize>,
     #[serde(default)]
     png_optimization_level: Option<u8>,
+    #[serde(default)]
+    metadata_policy: MetadataPolicy,
 }
 
 #[derive(Debug)]
@@ -1355,6 +1357,11 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     if matches!(format, CompressionFormat::Jpeg) && lossless {
         return Err("lossless compression is not supported for JPEG; use PNG or WebP".into());
     }
+    if metadata.metadata_policy == MetadataPolicy::Preserve {
+        return Err(
+            "metadataPolicy=preserve is not supported by first-stage compression; use strip".into(),
+        );
+    }
     let input = body[end..].to_vec();
     if input.len() > MAX_INPUT_BYTES {
         return Err("input image exceeds the 32 MiB limit".into());
@@ -1383,7 +1390,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             max_output_bytes: metadata.max_output_bytes,
             max_candidates: metadata.max_candidates,
             png_optimization_level: metadata.png_optimization_level,
-            metadata_policy: MetadataPolicy::Strip,
+            metadata_policy: metadata.metadata_policy,
             job_id: None,
         },
         input,
@@ -2281,6 +2288,9 @@ mod tests {
         payload.extend_from_slice(&png_input());
 
         assert!(parse_raw_payload(&payload)
+            .unwrap_err()
+            .contains("metadataPolicy=preserve"));
+        assert!(parse_estimate_raw_payload(&payload)
             .unwrap_err()
             .contains("metadataPolicy=preserve"));
     }
