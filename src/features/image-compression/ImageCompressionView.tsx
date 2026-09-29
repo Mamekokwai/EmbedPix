@@ -862,7 +862,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             <span className="compression-drop-icon"><Upload size={22} aria-hidden="true" /></span>
             <strong>拖放图片到这里</strong>
             <span>或点击选择多个文件</span>
-            <small>支持 PNG / JPEG / WebP / BMP / GIF；输出格式为 PNG / JPEG / WebP</small>
+            <small>支持 PNG / JPEG / WebP / BMP / GIF；单张输入不超过 {COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB；输出格式为 PNG / JPEG / WebP</small>
           </div>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={sourceBusy} />
           <div className="compression-source-actions">
