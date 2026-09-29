@@ -306,7 +306,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
         const result = await estimateImageCompression(request);
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
-        setEstimate({ inputBytes: result.inputBytes, estimatedBytes: result.outputBytes, savingsPercent: result.savingsPercent, candidateSearchMs: result.candidateSearchMs, candidateCount: result.candidateCount });
+        setEstimate({ inputBytes: result.inputBytes, estimatedBytes: result.outputBytes, savingsPercent: result.savingsPercent, metadataPolicy: result.metadataPolicy, candidateSearchMs: result.candidateSearchMs, candidateCount: result.candidateCount });
         setEstimateNote(formatCompressionEstimateSource("native", result.status === "skipped" && result.skippedReason ? `输出将跳过：${result.skippedReason}` : "当前选中图片"));
       } catch (error) {
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
@@ -945,6 +945,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       </section>
 
       {preview ? <p className="compression-estimate-note">预览实际元数据策略：{preview.metadataPolicy === "strip" ? "已移除" : preview.metadataPolicy}</p> : null}
+      {estimate.metadataPolicy ? <p className="compression-estimate-note">估算实际元数据策略：{estimate.metadataPolicy === "strip" ? "已移除" : estimate.metadataPolicy}</p> : null}
       <section className="compression-card compression-summary-card" aria-live="polite">
         <div className="compression-summary-stat"><span>原始大小</span><strong>{formatCompressionBytes(estimate.inputBytes)}</strong></div>
         <div className="compression-summary-stat"><span>预计输出</span><strong>{formatCompressionBytes(estimate.estimatedBytes)}</strong></div>
