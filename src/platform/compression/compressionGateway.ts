@@ -52,6 +52,7 @@ export interface CompressionResult {
   format: string;
   lossless: boolean;
   metadataPolicy: MetadataPolicy;
+  sourceDeleted?: boolean;
   targetBytes: number | null;
   targetMet: boolean;
   selectedQuality: number | null;
