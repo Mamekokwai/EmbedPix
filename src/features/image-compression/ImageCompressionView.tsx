@@ -11,6 +11,7 @@ import {
   COMPRESSION_WEBP_METHOD_MAX,
   COMPRESSION_WEBP_METHOD_MIN,
   canReplaceCompressionOriginal,
+  canDeleteCompressionSource,
   estimateFallback,
   COMPRESSION_MAX_INPUT_BYTES,
   COMPRESSION_MAX_CANDIDATES_DEFAULT,
@@ -24,6 +25,7 @@ import {
   formatCompressionItemResultStatus,
   getCompressionItemResultMetrics,
   formatCompressionReplaceOriginalConfirmation,
+  formatCompressionDeleteSourceConfirmation,
   getCompressionTargetSizeError,
   getSuccessfulCompressionOutputPath,
   getCompressionPreset,
@@ -178,6 +180,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [overwrite, setOverwrite] = useState(initialPreferences.overwrite);
   const [autoNumbering, setAutoNumbering] = useState(initialPreferences.autoNumbering);
   const [replaceOriginal, setReplaceOriginal] = useState(initialPreferences.replaceOriginal);
+  const [deleteSource, setDeleteSource] = useState(initialPreferences.deleteSource);
   const [customPresets, setCustomPresets] = useState<CompressionCustomPreset[]>(() => loadCompressionCustomPresets());
   const [customPresetId, setCustomPresetId] = useState("");
   const [customPresetName, setCustomPresetName] = useState("");
@@ -220,6 +223,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const qualityEnabled = supportsCompressionTargetSize(format, lossless);
   const webpLossyActive = format === "webp" && !lossless;
   const replaceOriginalAvailable = canReplaceCompressionOriginal(items, isTauriEnvironment());
+  const deleteSourceAvailable = canDeleteCompressionSource(items, isTauriEnvironment());
   const outputModes = useMemo(() => normalizeCompressionOutputModes({ autoNumbering, overwrite, replaceOriginal }), [autoNumbering, overwrite, replaceOriginal]);
   const targetSizeActive = targetSizeEnabled && qualityEnabled;
   const targetSizeError = useMemo(() => getCompressionTargetSizeError(targetSizeActive, targetSizeKiB, COMPRESSION_MAX_TARGET_SIZE_KIB), [targetSizeActive, targetSizeKiB]);
@@ -241,10 +245,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     overwrite: outputModes.overwrite,
     autoNumbering: outputModes.autoNumbering,
     replaceOriginal: outputModes.replaceOriginal,
+    deleteSource: outputModes.replaceOriginal ? false : deleteSource,
     skipIfLarger,
     maxOutputBytes,
     maxCandidates: maxOutputBytes ? maxCandidates : undefined,
-  }), [format, quality, webpLossyActive, webpMethod, webpNearLossless, jpegBackground, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates]);
+  }), [deleteSource, format, quality, webpLossyActive, webpMethod, webpNearLossless, jpegBackground, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates]);
 
   const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, true), [outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
@@ -321,6 +326,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   }, [replaceOriginal, replaceOriginalAvailable]);
 
   useEffect(() => {
+    if ((replaceOriginal || !deleteSourceAvailable) && deleteSource) setDeleteSource(false);
+  }, [deleteSource, deleteSourceAvailable, replaceOriginal]);
+
+  useEffect(() => {
     saveCompressionPreferences({
       format,
       quality,
@@ -341,8 +350,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       overwrite,
       autoNumbering,
       replaceOriginal,
+      deleteSource,
     });
-  }, [autoNumbering, format, lossless, maxCandidates, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod, webpNearLossless, jpegBackground]);
+  }, [autoNumbering, deleteSource, format, lossless, maxCandidates, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod, webpNearLossless, jpegBackground]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -595,6 +605,19 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       const sourcePaths = queue.map((item) => item.sourcePath as string);
       if (!window.confirm(formatCompressionReplaceOriginalConfirmation(sourcePaths))) {
         setMessage("已取消覆盖原图，未开始压缩。");
+        setStatus("ready");
+        return;
+      }
+    }
+    if (deleteSource) {
+      if (!canDeleteCompressionSource(queue, true)) {
+        setMessage("删除源文件需要所有待处理项目都有可访问的桌面源路径。");
+        setStatus("error");
+        return;
+      }
+      const sourcePaths = queue.map((item) => item.sourcePath as string);
+      if (!window.confirm(formatCompressionDeleteSourceConfirmation(sourcePaths))) {
+        setMessage("已取消删除源文件，未开始压缩。");
         setStatus("ready");
         return;
       }
@@ -927,7 +950,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           {outputLocation === "directory" ? <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="例如 D:\\Export" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
           <label className="compression-field"><span>自定义输出文件名</span><input value={outputFileName} onChange={(event) => { setOutputFileName(event.target.value); setPreset("custom"); }} placeholder={`留空，自动使用 .${format}`} spellCheck={false} aria-invalid={Boolean(outputFileNameError)} disabled={busy || replaceOriginal} /><small className="compression-output-file-name-hint" role={outputFileNameError ? "alert" : undefined}>{replaceOriginal ? "覆盖原图模式不使用自定义文件名。" : outputFileNameError ?? `可选；扩展名会自动规范为 .${format}，自动序号仍可继续生效。`}</small></label>
           {outputLocationError ? <p className="compression-field-error" role="alert">{outputLocationError}</p> : null}
-          <label className="compression-check"><input type="checkbox" checked={outputModes.replaceOriginal && replaceOriginalAvailable} onChange={(event) => { const checked = event.target.checked; setReplaceOriginal(checked); if (checked) { setAutoNumbering(false); setOverwrite(false); } }} disabled={busy || !replaceOriginalAvailable} /><span><strong>覆盖原图并备份到 bak</strong><small>{replaceOriginalAvailable ? "启用后会先备份原图，再写入压缩结果；输出位置、自动序号和覆盖同名均不适用" : isTauriEnvironment() ? "仅全部桌面源文件队列可用，浏览器文件或混合队列会禁用" : "仅桌面应用支持覆盖原图"}</small></span></label>
+          <label className="compression-check"><input type="checkbox" checked={outputModes.replaceOriginal && replaceOriginalAvailable} onChange={(event) => { const checked = event.target.checked; setReplaceOriginal(checked); if (checked) { setDeleteSource(false); setAutoNumbering(false); setOverwrite(false); } }} disabled={busy || !replaceOriginalAvailable} /><span><strong>覆盖原图并备份到 bak</strong><small>{replaceOriginalAvailable ? "启用后会先备份原图，再写入压缩结果；输出位置、自动序号和覆盖同名均不适用" : isTauriEnvironment() ? "仅全部桌面源文件队列可用，浏览器文件或混合队列会禁用" : "仅桌面应用支持覆盖原图"}</small></span></label>
+          <label className="compression-check compression-check-danger"><input type="checkbox" checked={deleteSource && deleteSourceAvailable} onChange={(event) => setDeleteSource(event.target.checked)} disabled={busy || replaceOriginal || !deleteSourceAvailable} /><span><strong>导出成功后删除源文件</strong><small>{replaceOriginal ? "覆盖原图模式不适用删除源文件" : deleteSourceAvailable ? "仅对应输出成功并通过校验后删除；导出前需要再次确认" : isTauriEnvironment() ? "仅全部桌面源文件队列可用，浏览器文件或混合队列会禁用" : "仅桌面应用支持删除源文件"}</small></span></label>
           <label className="compression-check"><input type="checkbox" checked={outputModes.autoNumbering} onChange={(event) => { const checked = event.target.checked; setAutoNumbering(checked); if (checked) setOverwrite(false); }} disabled={busy || outputModes.replaceOriginal} /><span><strong>自动序号避免重名</strong><small>{outputModes.replaceOriginal ? "覆盖原图模式不适用自动序号" : "同名时自动使用 _1、_2 等序号；输出位置仍按上方设置"}</small></span></label>
           <label className="compression-check"><input type="checkbox" checked={outputModes.overwrite} onChange={(event) => setOverwrite(event.target.checked)} disabled={busy || outputModes.autoNumbering || outputModes.replaceOriginal} /><span><strong>允许覆盖同名文件</strong><small>{outputModes.autoNumbering ? "自动序号已启用，同名目标会改用下一个序号" : outputModes.replaceOriginal ? "覆盖原图模式不使用同名目标覆盖" : "关闭时同名目标会拒绝写入"}</small></span></label>
             </div>

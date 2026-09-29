@@ -119,6 +119,8 @@ struct CompressionMetadata {
     #[serde(default)]
     replace_original: bool,
     #[serde(default)]
+    delete_source: bool,
+    #[serde(default)]
     auto_sequence: bool,
     #[serde(default)]
     auto_rename: bool,
@@ -620,9 +622,9 @@ fn run_compression(
             manage_existing_output: true,
             overwrite_existing: request.metadata.overwrite_existing,
             overwrite_same_name: false,
-            delete_source: false,
             replace_original: request.metadata.replace_original
                 || request.metadata.output_location.as_deref() == Some("original"),
+            delete_source: request.metadata.delete_source,
         },
     )
     .map_err(|error| fail_message(job, error))?;
@@ -1329,6 +1331,12 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     if metadata.replace_original && metadata.source_path.is_none() {
         return Err("replaceOriginal requires sourcePath".into());
     }
+    if metadata.delete_source && metadata.source_path.is_none() {
+        return Err("deleteSource requires sourcePath".into());
+    }
+    if metadata.delete_source && (metadata.replace_original || output_location == "original") {
+        return Err("deleteSource cannot be combined with replaceOriginal".into());
+    }
     if (metadata.auto_sequence || metadata.auto_rename) && metadata.overwrite_existing {
         return Err("autoSequence cannot be combined with overwriteExisting".into());
     }
@@ -1458,6 +1466,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             output_subdirectory: None,
             overwrite_existing: false,
             replace_original: false,
+            delete_source: false,
             auto_sequence: false,
             auto_rename: false,
             jpeg_quality: metadata.jpeg_quality,
@@ -1987,6 +1996,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
@@ -2207,6 +2217,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(80),
@@ -2387,6 +2398,19 @@ mod tests {
     }
 
     #[test]
+    fn compression_rejects_source_deletion_without_a_desktop_source() {
+        for metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"webp","deleteSource":true}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","sourcePath":"C:/sample.png","outputLocation":"original","deleteSource":true}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","sourcePath":"C:/sample.png","replaceOriginal":true,"deleteSource":true}"#,
+        ] {
+            assert!(parse_raw_payload(&raw_payload(metadata, &png_input()))
+                .unwrap_err()
+                .contains("deleteSource"));
+        }
+    }
+
+    #[test]
     fn strip_policy_does_not_copy_jpeg_exif_into_any_supported_output() {
         let jpeg = encode_image(&png_input(), CompressionFormat::Jpeg, 82, 2).unwrap();
         let exif = b"Exif\0\0EmbedPix-test";
@@ -2455,6 +2479,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
@@ -2849,6 +2874,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
@@ -2892,6 +2918,32 @@ mod tests {
     }
 
     #[test]
+    fn successful_compression_deletes_source_only_after_publishing_output() {
+        let root = crate::commands::test_temp_dir();
+        let source_path = root.join(format!(
+            "embedpix-compression-delete-source-{}.png",
+            uuid_like_id()
+        ));
+        let output_path = root.join(format!(
+            "embedpix-compression-delete-output-{}.webp",
+            uuid_like_id()
+        ));
+        let input = png_input();
+        fs::write(&source_path, &input).unwrap();
+        let mut request = path_request(&output_path);
+        request.metadata.source_path = Some(source_path.to_string_lossy().into_owned());
+        request.metadata.delete_source = true;
+        request.metadata.job_id = Some("delete-source-success".into());
+
+        let result = run_compression(&request, &test_job("delete-source-success")).unwrap();
+
+        assert_eq!(result.status, "completed");
+        assert!(output_path.is_file());
+        assert!(!source_path.exists());
+        let _ = fs::remove_file(output_path);
+    }
+
+    #[test]
     fn skips_larger_output_without_publishing_and_reports_statistics() {
         let image = DynamicImage::ImageRgba8(ImageBuffer::from_fn(64, 64, |x, y| {
             Rgba([
@@ -2920,6 +2972,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
@@ -3312,6 +3365,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
@@ -3363,6 +3417,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
@@ -3411,6 +3466,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
@@ -3457,6 +3513,7 @@ mod tests {
                 output_subdirectory: None,
                 overwrite_existing: false,
                 replace_original: false,
+                delete_source: false,
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,

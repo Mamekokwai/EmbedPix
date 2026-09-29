@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize } from "./imageCompressionLogic";
+import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize } from "./imageCompressionLogic";
 import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
@@ -61,6 +61,14 @@ describe("image compression logic", () => {
     expect(canReplaceCompressionOriginal([{ sourcePath: "C:/images/a.png" }], false)).toBe(false);
     expect(formatCompressionReplaceOriginalConfirmation(["C:/images/a.png"])).toContain("bak");
     expect(formatCompressionReplaceOriginalConfirmation(["C:/images/a.png"])).toContain("取消确认不会开始压缩");
+  });
+
+  it("requires complete desktop source queues before enabling source deletion", () => {
+    expect(canDeleteCompressionSource([{ sourcePath: "C:/images/a.png" }], true)).toBe(true);
+    expect(canDeleteCompressionSource([{ sourcePath: "C:/images/a.png" }, { sourcePath: undefined }], true)).toBe(false);
+    expect(canDeleteCompressionSource([{ sourcePath: "C:/images/a.png" }], false)).toBe(false);
+    expect(formatCompressionDeleteSourceConfirmation(["C:/images/a.png"])).toContain("删除");
+    expect(formatCompressionDeleteSourceConfirmation(["C:/images/a.png"])).toContain("不可撤销");
   });
 
   it("labels each batch result state without implying an output for skips", () => {

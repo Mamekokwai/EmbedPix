@@ -106,7 +106,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("revealImageOutput");
     expect(compressionView).toContain("loadCompressionPreferences");
     expect(compressionView).toContain("saveCompressionPreferences");
-    expect(compressionPreferences).toContain("COMPRESSION_PREFERENCES_VERSION = 2");
+    expect(compressionPreferences).toContain("COMPRESSION_PREFERENCES_VERSION = 3");
     expect(compressionPreferences).not.toContain("outputDirectory");
     expect(compressionPreferences).not.toContain("sourcePath");
     expect(compressionView).toContain("AbortController");
@@ -119,6 +119,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("覆盖原图并备份到 bak");
     expect(compressionView).toContain("formatCompressionReplaceOriginalConfirmation");
     expect(compressionView).toContain("window.confirm");
+    expect(compressionView).toContain("formatCompressionDeleteSourceConfirmation");
+    expect(compressionView).toContain("deleteSourceAvailable");
     expect(compressionView).toContain("!replaceOriginalAvailable");
     expect(compressionView).toContain('disabled={busy || !qualityEnabled}');
     expect(compressionView).toContain('disabled={busy || !qualityEnabled || !targetSizeActive}');

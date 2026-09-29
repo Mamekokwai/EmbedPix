@@ -43,11 +43,12 @@ describe("compression preferences", () => {
       overwrite: true,
       autoNumbering: false,
       replaceOriginal: true,
+      deleteSource: true,
     };
 
     saveCompressionPreferences(preferences, storage);
     const stored = JSON.parse(storage.read(COMPRESSION_PREFERENCES_STORAGE_KEY) ?? "{}");
-    expect(stored.version).toBe(2);
+    expect(stored.version).toBe(3);
     expect(stored).not.toHaveProperty("sourcePath");
     expect(stored).not.toHaveProperty("outputPath");
     expect(stored).not.toHaveProperty("outputDirectory");
@@ -57,6 +58,7 @@ describe("compression preferences", () => {
     expect(stored.jpegBackground).toBe("#123456");
     expect(stored.skipIfLarger).toBe(false);
     expect(stored.maxCandidates).toBe(10);
+    expect(stored.deleteSource).toBe(true);
     expect(loadCompressionPreferences(storage)).toEqual(preferences);
   });
 
@@ -148,7 +150,7 @@ describe("compression preferences", () => {
     const migrated = loadCompressionPreferences(storage);
     expect(migrated).toMatchObject({ format: "webp", quality: 73, webpMethod: 4, outputFileName: "", skipIfLarger: true });
     saveCompressionPreferences(migrated, storage);
-    expect(JSON.parse(storage.read(COMPRESSION_PREFERENCES_STORAGE_KEY) ?? "{}").version).toBe(2);
+    expect(JSON.parse(storage.read(COMPRESSION_PREFERENCES_STORAGE_KEY) ?? "{}").version).toBe(3);
   });
 
   it("ignores storage failures because preferences are optional", () => {

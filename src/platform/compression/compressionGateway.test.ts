@@ -103,6 +103,16 @@ describe("compression gateway", () => {
     expect(metadata.replaceOriginal).toBe(true);
   });
 
+  it("serializes source deletion only when explicitly enabled and rejects unsafe combinations", () => {
+    const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
+    const encoded = encodeCompressionEnvelope(createCompressionRequest(file, { format: "webp", quality: 82, lossless: true, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "directory", outputDirectory: "C:/export", overwrite: false, deleteSource: true }));
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata.deleteSource).toBe(true);
+    expect(() => encodeCompressionEnvelope({ ...request, deleteSource: true, replaceOriginal: true })).toThrow("删除源文件不能与覆盖原图同时启用");
+    expect(() => encodeCompressionEnvelope({ ...request, sourcePath: undefined, outputLocation: "directory", outputDirectory: "C:/export", deleteSource: true })).toThrow("删除源文件需要源文件路径");
+  });
+
   it("serializes auto numbering and rejects conflicting output modes", () => {
     const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
     const autoRequest = createCompressionRequest(file, { format: "webp", quality: 82, lossless: true, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", overwrite: false, autoNumbering: true });

@@ -21,11 +21,12 @@ export interface CompressionPreferences {
   overwrite: boolean;
   autoNumbering: boolean;
   replaceOriginal: boolean;
+  deleteSource: boolean;
 }
 
 export const COMPRESSION_PREFERENCES_STORAGE_KEY = "embedpix.image-compression-preferences.v1";
-export const COMPRESSION_PREFERENCES_VERSION = 2;
-const LEGACY_COMPRESSION_PREFERENCES_VERSION = 1;
+export const COMPRESSION_PREFERENCES_VERSION = 3;
+const LEGACY_COMPRESSION_PREFERENCES_VERSIONS = new Set([1, 2, 3]);
 export const COMPRESSION_MAX_TARGET_SIZE_KIB = 128 * 1024;
 
 export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
@@ -48,6 +49,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   overwrite: false,
   autoNumbering: false,
   replaceOriginal: false,
+  deleteSource: false,
 };
 
 type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -127,7 +129,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
   if (!value) return fallbackPreferences();
   try {
     const record = recordFrom(JSON.parse(value));
-    if (!record || (record.version !== COMPRESSION_PREFERENCES_VERSION && record.version !== LEGACY_COMPRESSION_PREFERENCES_VERSION)) return fallbackPreferences();
+    if (!record || !LEGACY_COMPRESSION_PREFERENCES_VERSIONS.has(record.version as number)) return fallbackPreferences();
     const format = enumValue(record, "format", FORMATS, DEFAULT_COMPRESSION_PREFERENCES.format);
     const lossless = format === "png" ? true : format === "jpg" ? false : typeof record.lossless === "boolean" ? record.lossless : DEFAULT_COMPRESSION_PREFERENCES.lossless;
     return {
@@ -150,6 +152,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       overwrite: typeof record.overwrite === "boolean" ? record.overwrite : DEFAULT_COMPRESSION_PREFERENCES.overwrite,
       autoNumbering: typeof record.autoNumbering === "boolean" ? record.autoNumbering : DEFAULT_COMPRESSION_PREFERENCES.autoNumbering,
       replaceOriginal: typeof record.replaceOriginal === "boolean" ? record.replaceOriginal : DEFAULT_COMPRESSION_PREFERENCES.replaceOriginal,
+      deleteSource: typeof record.deleteSource === "boolean" ? record.deleteSource : DEFAULT_COMPRESSION_PREFERENCES.deleteSource,
     };
   } catch {
     return fallbackPreferences();
@@ -193,6 +196,7 @@ export function saveCompressionPreferences(
       overwrite: preferences.overwrite,
       autoNumbering: preferences.autoNumbering,
       replaceOriginal: preferences.replaceOriginal,
+      deleteSource: preferences.deleteSource,
     }));
   } catch {
     // Preferences are optional; a locked-down WebView must not break compression.

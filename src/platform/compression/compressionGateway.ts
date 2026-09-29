@@ -22,6 +22,7 @@ export interface CompressionEnvelopeRequest {
   overwriteExisting: boolean;
   autoSequence?: boolean;
   replaceOriginal?: boolean;
+  deleteSource?: boolean;
   jpegQuality: number;
   jpegBackground?: string;
   webpMethod?: number;
@@ -125,6 +126,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     overwriteExisting: request.overwriteExisting,
     ...(request.autoSequence ? { autoSequence: true } : {}),
     ...(request.replaceOriginal ? { replaceOriginal: true } : {}),
+    ...(request.deleteSource ? { deleteSource: true } : {}),
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
     ...(request.outputFormat === "jpg" && request.jpegBackground !== undefined ? { jpegBackground: request.jpegBackground } : {}),
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
@@ -153,6 +155,8 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
   if ((request.outputLocation === "source" || request.outputLocation === "subfolder") && !request.sourcePath) throw new Error("源文件夹输出需要源文件路径。");
   if (request.outputLocation === "subfolder" && !request.outputSubdirectory) throw new Error("源文件夹子目录不能为空。");
   if (request.outputLocation === "directory" && !request.outputDirectory) throw new Error("指定目录输出需要目录路径。");
+  if (request.deleteSource && !request.sourcePath) throw new Error("删除源文件需要源文件路径。");
+  if (request.deleteSource && request.replaceOriginal) throw new Error("删除源文件不能与覆盖原图同时启用。");
   const metadataBytes = new TextEncoder().encode(JSON.stringify(getCompressionMetadata(request)));
   const payload = new Uint8Array(8 + metadataBytes.byteLength + request.inputData.byteLength);
   payload.set(new Uint8Array([0x45, 0x47, 0x46, 0x31]));
@@ -225,6 +229,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     overwriteExisting: options.overwrite,
     autoSequence: options.autoNumbering ?? false,
     replaceOriginal: options.replaceOriginal ?? false,
+    deleteSource: options.deleteSource ?? false,
     jpegQuality: options.quality,
     jpegBackground: options.jpegBackground,
     webpMethod: options.webpMethod,
