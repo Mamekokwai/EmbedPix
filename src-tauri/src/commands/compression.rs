@@ -265,6 +265,35 @@ impl CompressionSemaphore {
             semaphore: Arc::clone(self),
         }
     }
+
+    fn acquire_cancellable(
+        self: &Arc<Self>,
+        job: &Arc<CompressionJob>,
+    ) -> Result<CompressionPermit, String> {
+        let mut available = self
+            .available
+            .lock()
+            .map_err(|_| "compression semaphore is unavailable".to_string())?;
+        while *available == 0 {
+            if job.cancelled.load(Ordering::Acquire) {
+                return Err(fail_message(job, "compression cancelled".to_string()));
+            }
+            let (next, _) = self
+                .wake
+                .wait_timeout(available, Duration::from_millis(50))
+                .map_err(|_| "compression semaphore is unavailable".to_string())?;
+            available = next;
+        }
+        *available -= 1;
+        let permit = CompressionPermit {
+            semaphore: Arc::clone(self),
+        };
+        if job.cancelled.load(Ordering::Acquire) {
+            drop(permit);
+            return Err(fail_message(job, "compression cancelled".to_string()));
+        }
+        Ok(permit)
+    }
 }
 
 impl Drop for CompressionPermit {
@@ -502,7 +531,7 @@ pub async fn compress_image(
     let encoder_slots = Arc::clone(&state.encoder_slots);
     let job_for_task = Arc::clone(&job);
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let _permit = encoder_slots.acquire();
+        let _permit = encoder_slots.acquire_cancellable(&job_for_task)?;
         run_compression(&request, &job_for_task)
     })
     .await
@@ -3290,6 +3319,26 @@ mod tests {
         started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
         drop(second);
         assert_eq!(worker.join().unwrap(), 7);
+    }
+
+    #[test]
+    fn queued_compression_slot_wait_honors_cancellation() {
+        let semaphore = Arc::new(CompressionSemaphore {
+            available: Mutex::new(0),
+            wake: Condvar::new(),
+        });
+        let job = test_job("queued-cancel");
+        let worker_semaphore = Arc::clone(&semaphore);
+        let worker_job = Arc::clone(&job);
+        let worker = std::thread::spawn(move || worker_semaphore.acquire_cancellable(&worker_job));
+
+        assert_eq!(cancel_job(&job).unwrap().status, "cancelling");
+        let result = worker.join().unwrap();
+        match result {
+            Err(error) => assert_eq!(error, "compression cancelled"),
+            Ok(_) => panic!("queued compression slot unexpectedly acquired after cancellation"),
+        }
+        assert_eq!(job.progress.lock().unwrap().status, "cancelled");
     }
 
     #[test]
