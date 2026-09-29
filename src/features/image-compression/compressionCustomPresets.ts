@@ -11,6 +11,7 @@ export interface CompressionPresetValues {
   quality: number;
   webpMethod: number;
   webpNearLossless: number | null;
+  jpegBackground: string;
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
@@ -69,6 +70,11 @@ function webpNearLosslessValue(value: unknown, index: number): number | null {
   return value;
 }
 
+function jpegBackgroundValue(value: unknown, index: number): string {
+  if (typeof value !== "string" || !/^#[0-9a-f]{6}$/iu.test(value.trim())) throw new Error(`第 ${index + 1} 个压缩预设的 JPEG 透明背景无效。`);
+  return value.trim().toLowerCase();
+}
+
 function parseValues(value: unknown, index: number): CompressionPresetValues {
   const record = recordFrom(value);
   if (!record) throw new Error(`第 ${index + 1} 个压缩预设参数格式无效。`);
@@ -79,11 +85,13 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
   if (targetSizeEnabled && !supportsCompressionTargetSize(format, lossless)) throw new Error(`第 ${index + 1} 个压缩预设的目标体积不适用于当前格式。`);
   const webpNearLossless = webpNearLosslessValue(record.webpNearLossless, index);
   if (webpNearLossless !== null && (format !== "webp" || !lossless)) throw new Error(`第 ${index + 1} 个压缩预设的 WebP 近无损等级仅适用于无损 WebP。`);
+  const jpegBackground = record.jpegBackground === undefined ? "#ffffff" : jpegBackgroundValue(record.jpegBackground, index);
   return {
     format,
     quality: integerValue(record.quality, 1, 100, "质量", index),
     webpMethod: record.webpMethod === undefined ? COMPRESSION_WEBP_METHOD_DEFAULT : integerValue(record.webpMethod, COMPRESSION_WEBP_METHOD_MIN, COMPRESSION_WEBP_METHOD_MAX, "WebP 编码方法", index),
     webpNearLossless,
+    jpegBackground,
     pngOptimizationLevel: integerValue(record.pngOptimizationLevel, 0, 6, "PNG 优化级别", index),
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
@@ -103,6 +111,7 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   if (!Number.isInteger(values.webpMethod) || values.webpMethod < COMPRESSION_WEBP_METHOD_MIN || values.webpMethod > COMPRESSION_WEBP_METHOD_MAX) throw new Error("WebP 编码方法必须在 0 到 6 之间。");
   if (values.webpNearLossless !== null && (!Number.isInteger(values.webpNearLossless) || values.webpNearLossless < 1 || values.webpNearLossless > 99)) throw new Error("WebP 近无损等级必须在 1 到 99 之间。");
   if (values.webpNearLossless !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 近无损等级仅适用于无损 WebP。");
+  if (!/^#[0-9a-f]{6}$/iu.test(values.jpegBackground.trim())) throw new Error("JPEG 透明背景必须是 #RRGGBB 颜色。");
   return { id: createId(), name: trimmedName, values: { ...values }, createdAt: new Date().toISOString() };
 }
 

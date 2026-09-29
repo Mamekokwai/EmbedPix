@@ -12,7 +12,7 @@ use std::{
 
 use image::{
     codecs::jpeg::JpegEncoder, io::Reader as ImageReader, DynamicImage, GenericImageView,
-    ImageFormat,
+    ImageBuffer, ImageFormat, Rgb, RgbImage,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -116,6 +116,8 @@ struct CompressionMetadata {
     #[serde(default)]
     jpeg_quality: Option<u8>,
     #[serde(default)]
+    jpeg_background: Option<String>,
+    #[serde(default)]
     webp_method: Option<u8>,
     #[serde(default)]
     webp_near_lossless: Option<u8>,
@@ -144,6 +146,8 @@ struct CompressionEstimateMetadata {
     output_format: String,
     #[serde(default)]
     jpeg_quality: Option<u8>,
+    #[serde(default)]
+    jpeg_background: Option<String>,
     #[serde(default)]
     webp_method: Option<u8>,
     #[serde(default)]
@@ -646,6 +650,47 @@ fn validate_webp_near_lossless(
     Ok(())
 }
 
+fn parse_jpeg_background(value: Option<&str>) -> Result<[u8; 3], String> {
+    let value = value.unwrap_or("#ffffff").trim();
+    let hex = value
+        .strip_prefix('#')
+        .ok_or_else(|| "jpegBackground must be a #RRGGBB color".to_string())?;
+    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("jpegBackground must be a #RRGGBB color".into());
+    }
+    Ok([
+        u8::from_str_radix(&hex[0..2], 16).map_err(|_| "jpegBackground is invalid")?,
+        u8::from_str_radix(&hex[2..4], 16).map_err(|_| "jpegBackground is invalid")?,
+        u8::from_str_radix(&hex[4..6], 16).map_err(|_| "jpegBackground is invalid")?,
+    ])
+}
+
+fn validate_jpeg_background(value: Option<&str>, format: CompressionFormat) -> Result<(), String> {
+    if value.is_some() && format != CompressionFormat::Jpeg {
+        return Err("jpegBackground is only supported for JPEG output".into());
+    }
+    if value.is_some() {
+        parse_jpeg_background(value)?;
+    }
+    Ok(())
+}
+
+fn composite_jpeg_background(image: &image::RgbaImage, background: [u8; 3]) -> RgbImage {
+    ImageBuffer::from_fn(image.width(), image.height(), |x, y| {
+        let pixel = image.get_pixel(x, y);
+        let alpha = u16::from(pixel[3]);
+        let inverse_alpha = 255u16 - alpha;
+        Rgb([
+            ((u16::from(pixel[0]) * alpha + u16::from(background[0]) * inverse_alpha + 127) / 255)
+                as u8,
+            ((u16::from(pixel[1]) * alpha + u16::from(background[1]) * inverse_alpha + 127) / 255)
+                as u8,
+            ((u16::from(pixel[2]) * alpha + u16::from(background[2]) * inverse_alpha + 127) / 255)
+                as u8,
+        ])
+    })
+}
+
 fn compression_statistics(input_bytes: u64, output_bytes: u64) -> (i64, f64) {
     let saved_bytes = input_bytes as i128 - output_bytes as i128;
     let savings_percent = if input_bytes == 0 {
@@ -681,6 +726,7 @@ fn choose_encoded_output(
             width,
             height,
             request.lossless,
+            request.metadata.jpeg_background.as_deref(),
             request.metadata.webp_method,
             request.metadata.webp_near_lossless,
         )?;
@@ -705,6 +751,7 @@ fn choose_encoded_output(
             width,
             height,
             request.lossless,
+            request.metadata.jpeg_background.as_deref(),
             request.metadata.webp_method,
             request.metadata.webp_near_lossless,
         )?;
@@ -746,6 +793,7 @@ fn choose_encoded_output(
             width,
             height,
             request.lossless,
+            request.metadata.jpeg_background.as_deref(),
             request.metadata.webp_method,
             request.metadata.webp_near_lossless,
         )?;
@@ -799,6 +847,7 @@ fn encode_and_verify(
     width: u32,
     height: u32,
     lossless: bool,
+    jpeg_background: Option<&str>,
     webp_method: Option<u8>,
     webp_near_lossless: Option<u8>,
 ) -> Result<Vec<u8>, String> {
@@ -808,6 +857,7 @@ fn encode_and_verify(
         quality,
         png_optimization_level,
         lossless,
+        jpeg_background,
         webp_method,
         webp_near_lossless,
     )?;
@@ -930,33 +980,38 @@ fn encode_image_with_mode(
         lossless,
         None,
         None,
+        None,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn encode_image_with_webp_method(
     input: &[u8],
     format: CompressionFormat,
     quality: u8,
     png_optimization_level: u8,
     lossless: bool,
+    jpeg_background: Option<&str>,
     webp_method: Option<u8>,
     webp_near_lossless: Option<u8>,
 ) -> Result<Vec<u8>, String> {
     let image = decode_image(input)?;
-    if format == CompressionFormat::Jpeg && image.to_rgba8().pixels().any(|pixel| pixel[3] < 255) {
-        return Err(
-            "JPEG compression requires an opaque image; composite transparency before encoding"
-                .into(),
-        );
-    }
     let mut output = LimitedWriter {
         bytes: Vec::new(),
         limit: MAX_OUTPUT_BYTES,
     };
     match format {
-        CompressionFormat::Jpeg => JpegEncoder::new_with_quality(&mut output, quality)
-            .encode_image(&image.to_rgb8())
-            .map_err(|error| format!("failed to encode jpeg: {error}"))?,
+        CompressionFormat::Jpeg => {
+            let rgba = image.to_rgba8();
+            let rgb = if rgba.pixels().any(|pixel| pixel[3] < 255) {
+                composite_jpeg_background(&rgba, parse_jpeg_background(jpeg_background)?)
+            } else {
+                image.to_rgb8()
+            };
+            JpegEncoder::new_with_quality(&mut output, quality)
+                .encode_image(&rgb)
+                .map_err(|error| format!("failed to encode jpeg: {error}"))?;
+        }
         CompressionFormat::Png => {
             image
                 .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::Png)
@@ -1102,6 +1157,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
             return Err("jpegQuality must be between 1 and 100".into());
         }
     }
+    validate_jpeg_background(metadata.jpeg_background.as_deref(), format)?;
     if let Some(target_bytes) = metadata.max_output_bytes {
         if target_bytes == 0 || target_bytes > MAX_OUTPUT_BYTES as u64 {
             return Err(format!(
@@ -1218,6 +1274,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             return Err("jpegQuality must be between 1 and 100".into());
         }
     }
+    validate_jpeg_background(metadata.jpeg_background.as_deref(), format)?;
     if let Some(target_bytes) = metadata.max_output_bytes {
         if target_bytes == 0 || target_bytes > MAX_OUTPUT_BYTES as u64 {
             return Err(format!(
@@ -1262,6 +1319,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             auto_sequence: false,
             auto_rename: false,
             jpeg_quality: metadata.jpeg_quality,
+            jpeg_background: metadata.jpeg_background,
             webp_method: metadata.webp_method,
             webp_near_lossless: metadata.webp_near_lossless,
             lossless: Some(lossless),
@@ -1790,6 +1848,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                jpeg_background: None,
                 webp_method: None,
                 webp_near_lossless: None,
                 lossless: Some(true),
@@ -1913,15 +1972,38 @@ mod tests {
     }
 
     #[test]
-    fn jpeg_rejects_transparency_instead_of_dropping_alpha() {
-        let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([10, 20, 30, 64])));
+    fn jpeg_composites_transparency_with_requested_background() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([10, 20, 30, 0])));
         let mut input = Vec::new();
         image
             .write_to(&mut Cursor::new(&mut input), ImageOutputFormat::Png)
             .unwrap();
-        assert!(encode_image(&input, CompressionFormat::Jpeg, 80, 2)
-            .unwrap_err()
-            .contains("opaque"));
+        let output = encode_image_with_webp_method(
+            &input,
+            CompressionFormat::Jpeg,
+            100,
+            2,
+            false,
+            Some("#123456"),
+            None,
+            None,
+        )
+        .unwrap();
+        let pixel = decode_image(&output).unwrap().to_rgb8().get_pixel(0, 0).0;
+        assert!((i16::from(pixel[0]) - 0x12).abs() <= 3);
+        assert!((i16::from(pixel[1]) - 0x34).abs() <= 3);
+        assert!((i16::from(pixel[2]) - 0x56).abs() <= 3);
+        assert!(encode_image_with_webp_method(
+            &input,
+            CompressionFormat::Jpeg,
+            80,
+            2,
+            false,
+            Some("#12"),
+            None,
+            None,
+        )
+        .is_err());
     }
 
     #[test]
@@ -1949,6 +2031,7 @@ mod tests {
                 false,
                 None,
                 None,
+                None,
             )
             .unwrap();
             let decoded = decode_image(&output).unwrap();
@@ -1959,7 +2042,7 @@ mod tests {
     }
 
     #[test]
-    fn jpeg_transparency_rejection_does_not_publish_output() {
+    fn jpeg_transparency_uses_background_and_publishes_output() {
         let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([10, 20, 30, 64])));
         let mut input = Vec::new();
         image
@@ -1985,6 +2068,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(80),
+                jpeg_background: Some("#123456".into()),
                 webp_method: None,
                 webp_near_lossless: None,
                 lossless: Some(false),
@@ -2017,10 +2101,18 @@ mod tests {
             terminal_at: Mutex::new(None),
         });
 
-        let error = run_compression(&request, &job).unwrap_err();
-        assert!(error.contains("opaque"));
-        assert_eq!(job.progress.lock().unwrap().status, "failed");
-        assert!(!output_path.exists());
+        let result = run_compression(&request, &job).unwrap();
+        assert_eq!(result.status, "completed");
+        assert_eq!(job.progress.lock().unwrap().status, "completed");
+        assert!(output_path.exists());
+        let decoded = image::load_from_memory(&fs::read(&output_path).unwrap())
+            .unwrap()
+            .to_rgb8();
+        let pixel = decoded.get_pixel(0, 0).0;
+        assert!((i16::from(pixel[0]) - 0x12).abs() <= 20);
+        assert!((i16::from(pixel[1]) - 0x34).abs() <= 20);
+        assert!((i16::from(pixel[2]) - 0x56).abs() <= 20);
+        let _ = fs::remove_file(output_path);
     }
 
     #[test]
@@ -2102,6 +2194,28 @@ mod tests {
     }
 
     #[test]
+    fn validates_jpeg_background_contract_for_requests_and_estimates() {
+        let metadata =
+            r##"{"fileName":"sample.png","outputFormat":"jpeg","jpegBackground":"#123456"}"##;
+        let request = parse_raw_payload(&raw_payload(metadata, &png_input())).unwrap();
+        assert_eq!(request.metadata.jpeg_background.as_deref(), Some("#123456"));
+        let estimate = parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).unwrap();
+        assert_eq!(
+            estimate.metadata.jpeg_background.as_deref(),
+            Some("#123456")
+        );
+
+        for metadata in [
+            r##"{"fileName":"sample.png","outputFormat":"jpeg","jpegBackground":"#12"}"##,
+            r##"{"fileName":"sample.png","outputFormat":"jpeg","jpegBackground":"123456"}"##,
+            r##"{"fileName":"sample.png","outputFormat":"png","jpegBackground":"#123456"}"##,
+        ] {
+            assert!(parse_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+            assert!(parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+        }
+    }
+
+    #[test]
     fn compression_rejects_metadata_preserve_contract() {
         let metadata =
             br#"{"fileName":"sample.png","outputFormat":"webp","metadataPolicy":"preserve"}"#;
@@ -2154,6 +2268,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                jpeg_background: None,
                 webp_method: None,
                 webp_near_lossless: None,
                 lossless: Some(true),
@@ -2547,6 +2662,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                jpeg_background: None,
                 webp_method: None,
                 webp_near_lossless: None,
                 lossless: Some(true),
@@ -2617,6 +2733,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                jpeg_background: None,
                 webp_method: None,
                 webp_near_lossless: None,
                 lossless: Some(true),
@@ -2973,6 +3090,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
+                jpeg_background: None,
                 webp_method: None,
                 webp_near_lossless: None,
                 lossless: Some(false),
@@ -3018,6 +3136,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
+                jpeg_background: None,
                 webp_method: Some(6),
                 webp_near_lossless: None,
                 lossless: Some(false),
@@ -3060,6 +3179,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: Some(100),
+                jpeg_background: None,
                 webp_method: None,
                 webp_near_lossless: None,
                 lossless: Some(false),
@@ -3105,6 +3225,7 @@ mod tests {
                 auto_sequence: false,
                 auto_rename: false,
                 jpeg_quality: None,
+                jpeg_background: None,
                 webp_method: None,
                 webp_near_lossless: None,
                 lossless: Some(true),
@@ -3265,9 +3386,9 @@ mod tests {
             &transparent_input,
         ))
         .unwrap();
-        assert!(run_estimate(&transparent_request)
-            .unwrap_err()
-            .contains("opaque"));
+        let transparent_estimate = run_estimate(&transparent_request).unwrap();
+        assert_eq!(transparent_estimate.format, "jpeg");
+        assert!(transparent_estimate.output_bytes > 0);
         assert!(!output_path.exists());
     }
 

@@ -6,6 +6,7 @@ export interface CompressionPreferences {
   quality: number;
   webpMethod: number;
   webpNearLossless: number | null;
+  jpegBackground: string;
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
@@ -31,6 +32,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   quality: 82,
   webpMethod: COMPRESSION_WEBP_METHOD_DEFAULT,
   webpNearLossless: null,
+  jpegBackground: "#ffffff",
   pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
@@ -92,6 +94,11 @@ function webpNearLosslessValue(record: Record<string, unknown>): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 99 ? value : null;
 }
 
+function jpegBackgroundValue(record: Record<string, unknown>): string {
+  const value = record.jpegBackground;
+  return typeof value === "string" && /^#[0-9a-f]{6}$/iu.test(value.trim()) ? value.trim().toLowerCase() : DEFAULT_COMPRESSION_PREFERENCES.jpegBackground;
+}
+
 function sizeInputValue(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   if (typeof value !== "string") return "";
@@ -126,6 +133,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       quality: integerValue(record, "quality", 1, 100, DEFAULT_COMPRESSION_PREFERENCES.quality),
       webpMethod: webpMethodValue(record),
       webpNearLossless: format === "webp" && lossless ? webpNearLosslessValue(record) : null,
+      jpegBackground: jpegBackgroundValue(record),
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
       targetSizeEnabled: record.targetSizeEnabled === true && supportsCompressionTargetSize(format, lossless),
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
@@ -167,6 +175,7 @@ export function saveCompressionPreferences(
       quality: preferences.quality,
       webpMethod: preferences.webpMethod,
       webpNearLossless: preferences.webpNearLossless,
+      jpegBackground: preferences.jpegBackground,
       pngOptimizationLevel: preferences.pngOptimizationLevel,
       targetSizeEnabled: preferences.targetSizeEnabled,
       targetSizeKiB: preferences.targetSizeKiB,

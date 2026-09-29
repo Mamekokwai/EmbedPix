@@ -23,6 +23,7 @@ export interface CompressionEnvelopeRequest {
   autoSequence?: boolean;
   replaceOriginal?: boolean;
   jpegQuality: number;
+  jpegBackground?: string;
   webpMethod?: number;
   webpNearLossless?: number;
   lossless: boolean;
@@ -88,6 +89,7 @@ export interface CompressionEstimateRequest {
   inputData: Uint8Array;
   outputFormat: Exclude<CompressionFormat, "original">;
   jpegQuality: number;
+  jpegBackground?: string;
   webpMethod?: number;
   webpNearLossless?: number;
   lossless: boolean;
@@ -112,6 +114,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.autoSequence ? { autoSequence: true } : {}),
     ...(request.replaceOriginal ? { replaceOriginal: true } : {}),
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
+    ...(request.outputFormat === "jpg" && request.jpegBackground !== undefined ? { jpegBackground: request.jpegBackground } : {}),
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
     ...(request.outputFormat === "webp" && request.lossless && request.webpNearLossless !== undefined ? { webpNearLossless: request.webpNearLossless } : {}),
     lossless: request.lossless,
@@ -129,6 +132,7 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
   if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
   if (request.webpMethod !== undefined && (request.outputFormat !== "webp" || request.lossless)) throw new Error("webpMethod 仅支持有损 WebP。");
+  if (request.jpegBackground !== undefined && (!/^#[0-9a-f]{6}$/iu.test(request.jpegBackground.trim()) || request.outputFormat !== "jpg")) throw new Error("jpegBackground 必须是 JPEG 输出使用的 #RRGGBB 颜色。");
   if (request.webpNearLossless !== undefined && (!Number.isInteger(request.webpNearLossless) || request.webpNearLossless < 1 || request.webpNearLossless > 99)) throw new Error("webpNearLossless 必须在 1 到 99 之间。");
   if (request.webpNearLossless !== undefined && (request.outputFormat !== "webp" || !request.lossless)) throw new Error("webpNearLossless 仅支持无损 WebP。");
   if (request.autoSequence && request.overwriteExisting) throw new Error("自动序号不能与覆盖同名同时启用。");
@@ -151,6 +155,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
   if (!Number.isInteger(request.jpegQuality) || request.jpegQuality < 1 || request.jpegQuality > 100) throw new Error("jpegQuality 必须在 1 到 100 之间。");
   if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
   if (request.webpMethod !== undefined && (request.outputFormat !== "webp" || request.lossless)) throw new Error("webpMethod 仅支持有损 WebP。");
+  if (request.jpegBackground !== undefined && (!/^#[0-9a-f]{6}$/iu.test(request.jpegBackground.trim()) || request.outputFormat !== "jpg")) throw new Error("jpegBackground 必须是 JPEG 输出使用的 #RRGGBB 颜色。");
   if (request.webpNearLossless !== undefined && (!Number.isInteger(request.webpNearLossless) || request.webpNearLossless < 1 || request.webpNearLossless > 99)) throw new Error("webpNearLossless 必须在 1 到 99 之间。");
   if (request.webpNearLossless !== undefined && (request.outputFormat !== "webp" || !request.lossless)) throw new Error("webpNearLossless 仅支持无损 WebP。");
   if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
@@ -160,6 +165,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     fileName: request.fileName,
     outputFormat: request.outputFormat,
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
+    ...(request.outputFormat === "jpg" && request.jpegBackground !== undefined ? { jpegBackground: request.jpegBackground } : {}),
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
     ...(request.outputFormat === "webp" && request.lossless && request.webpNearLossless !== undefined ? { webpNearLossless: request.webpNearLossless } : {}),
     lossless: request.lossless,
@@ -205,6 +211,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     autoSequence: options.autoNumbering ?? false,
     replaceOriginal: options.replaceOriginal ?? false,
     jpegQuality: options.quality,
+    jpegBackground: options.jpegBackground,
     webpMethod: options.webpMethod,
     webpNearLossless: options.webpNearLossless ?? undefined,
     lossless: options.format === "png" || (options.format === "webp" && options.lossless),

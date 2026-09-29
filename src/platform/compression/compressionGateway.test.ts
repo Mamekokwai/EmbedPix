@@ -71,6 +71,15 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "png", webpNearLossless: 90 })).toThrow("仅支持无损 WebP");
   });
 
+  it("passes the JPEG transparency background only to JPEG output", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, outputFormat: "jpg", lossless: false, jpegBackground: "#123456" });
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata.jpegBackground).toBe("#123456");
+    expect(() => encodeCompressionEnvelope({ ...request, jpegBackground: "white" })).toThrow("jpegBackground");
+    expect(() => encodeCompressionEnvelope({ ...request, jpegBackground: "#123456" })).toThrow("JPEG 输出");
+  });
+
   it("normalizes lossless mode by output format when creating requests", () => {
     const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
     const base = { quality: 64, pngOptimizationLevel: 2, metadataPolicy: "strip" as const, outputLocation: "source" as const, overwrite: false };

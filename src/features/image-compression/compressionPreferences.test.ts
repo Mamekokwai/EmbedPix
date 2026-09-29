@@ -29,6 +29,7 @@ describe("compression preferences", () => {
       format: "jpg" as const,
       quality: 68,
       webpMethod: 2,
+      jpegBackground: "#123456",
       pngOptimizationLevel: 5,
       targetSizeEnabled: true,
       targetSizeKiB: "96",
@@ -52,6 +53,7 @@ describe("compression preferences", () => {
     expect(stored).not.toHaveProperty("items");
     expect(stored.outputFileName).toBe("旅行照片.jpg");
     expect(stored.webpMethod).toBe(2);
+    expect(stored.jpegBackground).toBe("#123456");
     expect(stored.skipIfLarger).toBe(false);
     expect(loadCompressionPreferences(storage)).toEqual(preferences);
   });

@@ -247,7 +247,7 @@ pub struct CompressImageResponse {
 | 输入 | 默认输出 | 无损策略 | 有损策略 | 第一阶段 |
 |---|---|---|---|---|
 | PNG | PNG | OxiPNG 重滤波/重压缩 | 暂不默认启用颜色量化 | 必须 |
-| JPEG | JPEG | 仅允许无损重排时保留原文件，否则需重编码 | Image JPEG；后续 MozJPEG | 必须 |
+| JPEG | JPEG | JPEG 不支持无损压缩，统一按质量重编码 | Image JPEG；透明输入先按显式 `#RRGGBB` 背景（默认白色）合成，后续 MozJPEG | 必须 |
 | WebP | WebP | WebP lossless；已支持 80/90/95 近无损等级 | libwebp；有损质量 1–100、method 0–6 | 必须 |
 | BMP | PNG/WebP/JPEG | 重新编码到无损 PNG/WebP | 按用户选择输出 JPEG/WebP | 支持转换，不做 BMP 原位压缩 |
 | TIFF | TIFF/PNG/WebP | TIFF 无损重写或转换 | WebP/JPEG | 第二阶段 |
@@ -551,7 +551,7 @@ rollback_failed
 ### 12.1 算法测试
 
 - PNG 无损输出像素逐点一致。
-- JPEG 输出可以解码，尺寸一致，质量参数边界有效。
+- JPEG 输出可以解码，尺寸一致，质量参数边界有效；透明输入按指定背景合成，不能静默丢弃 Alpha。
 - WebP 有损/无损输出可以解码，Alpha 保留策略有效。
 - 透明 PNG 的完全透明像素处理符合策略。
 - 元数据保留、清理安全项、全部清理分别可验证。

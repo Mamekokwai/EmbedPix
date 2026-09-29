@@ -16,6 +16,7 @@ const values: CompressionPresetValues = {
   quality: 82,
   webpMethod: 4,
   webpNearLossless: null,
+  jpegBackground: "#ffffff",
   pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
@@ -54,6 +55,7 @@ describe("compression custom presets", () => {
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏方法", values: { ...values, webpMethod: 7 } }] }))).toThrow("WebP 编码方法无效");
     expect(() => createCompressionCustomPreset("坏方法", { ...values, webpMethod: 7 })).toThrow("WebP 编码方法必须");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏近无损", values: { ...values, format: "jpg", lossless: false, webpNearLossless: 90 } }] }))).toThrow("仅适用于无损 WebP");
+    expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏背景", values: { ...values, jpegBackground: "white" } }] }))).toThrow("JPEG 透明背景无效");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "坏开关", values: { ...values, skipIfLarger: "yes" } }] }))).toThrow("压缩后更大时跳过无效");
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "保留元数据", values: { ...values, metadataPolicy: "preserve" } }] }))).toThrow("元数据策略无效");
   });
