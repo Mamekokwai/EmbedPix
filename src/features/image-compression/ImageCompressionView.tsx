@@ -261,6 +261,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     progressBytes.input !== null ? `输入 ${formatCompressionBytes(progressBytes.input)}` : null,
     progressBytes.output !== null ? `候选/输出 ${formatCompressionBytes(progressBytes.output)}` : null,
   ].filter((entry): entry is string => Boolean(entry)).join(" · ");
+  const compressionParameterSummary = [
+    format === "webp" ? (lossless ? "WebP 无损" : "WebP 有损") : format.toUpperCase(),
+    format === "png" ? `优化级别 ${pngOptimizationLevel}` : `质量 ${quality}`,
+    webpLossyActive ? `method ${webpMethod}` : null,
+    format === "webp" && lossless && webpNearLossless !== null ? `近无损 ${webpNearLossless}` : null,
+    format === "jpg" ? `JPEG 背景 ${jpegBackground}` : null,
+    targetSizeActive && maxOutputBytes ? `目标 ≤ ${targetSizeKiB.trim()} KiB · 候选 ${maxCandidates}` : "不启用目标体积",
+    metadataPolicy === "strip" ? "移除元数据" : `元数据 ${metadataPolicy}`,
+    replaceOriginal ? "覆盖原图并备份到 bak" : outputLocation === "source" ? "输出到源文件夹" : outputLocation === "subfolder" ? `输出到子目录 ${outputSubdirectory.trim() || "（未设置）"}` : `输出到指定目录 ${outputDirectory.trim() || "（未设置）"}`,
+    outputModes.overwrite ? "允许覆盖同名" : outputModes.autoNumbering ? "自动序号" : "同名时拒绝写入",
+    deleteSource && !replaceOriginal ? "成功后删除源文件" : null,
+  ].filter((entry): entry is string => Boolean(entry));
 
   const queueCompressionDimensions = (item: CompressionItem) => {
     void Promise.resolve().then(() => readCompressionDimensions(item.file)).then((dimensions) => {
@@ -958,6 +970,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           </details>
         </aside>
       </div>
+
+      <section className="compression-parameter-summary" aria-label="导出参数摘要">
+        <strong>当前参数</strong>
+        <div>{compressionParameterSummary.map((entry, index) => <span key={`${entry}-${index}`}>{entry}</span>)}</div>
+      </section>
 
       <section className="compression-card compression-preview-card" aria-live="polite" aria-label="压缩预览">
         <div className="compression-card-heading"><div><span className="compression-card-kicker">03 / PREVIEW</span><h2>真实压缩预览</h2></div><span className="compression-count">{selectedItem?.file.name ?? "未选择图片"}</span></div>

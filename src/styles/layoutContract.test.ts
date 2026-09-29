@@ -219,6 +219,13 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('const sourceBusy = busy || importBusy;');
   });
 
+  it("keeps compression export parameters visible in a wrapping summary", () => {
+    expect(compressionView).toContain('aria-label="导出参数摘要"');
+    expect(compressionView).toContain("compressionParameterSummary");
+    expect(compressionCss).toContain(".compression-parameter-summary { display: flex;");
+    expect(compressionCss).toContain("overflow-wrap: anywhere");
+  });
+
   it("keeps batch cancellation, retry, and source-list transitions explicit", () => {
     expect(compressionView).toContain('const queue = getCompressionRetryQueue(items, failures);');
     expect(compressionView).toContain('getCompressionCancelledItemResults(queue, index)');
