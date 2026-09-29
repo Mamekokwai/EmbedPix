@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent, KeyboardEvent, MouseEvent } from "react";
 import {
   ArrowDown,
@@ -24,6 +24,7 @@ import {
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import { getFormatMetadata, GIF_OUTPUT_FORMAT_IDS } from "../../shared/formatMetadata";
 import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, planGifCompression, revealGifOutput } from "../../platform/gif/gifGateway";
+import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
 import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
@@ -1067,7 +1068,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return result;
   };
 
-  const cancelCompression = () => {
+  const cancelCompression = useCallback(async () => {
     const jobId = gifExportJobIdRef.current;
     if (!jobId) {
       compressionControllerRef.current?.abort();
@@ -1077,8 +1078,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     gifCancelRequestedRef.current = jobId;
     gifCancelFailureRef.current = null;
     setGifExportProgress((current) => current?.jobId === jobId ? { ...current, status: "cancelling" } : current);
-    void cancelGifExport(jobId)
-      .then((progress) => {
+    try {
+      const progress = await cancelGifExport(jobId);
         if (gifExportJobIdRef.current !== jobId) return;
         setGifExportProgress(progress);
         if (progress.status === "cancelled") {
@@ -1092,15 +1093,18 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           setError(progress.error ?? "取消导出失败，请稍后重试。");
           setStatus({ kind: "error", text: "GIF 导出取消失败" });
         }
-      })
-      .catch((cancelError) => {
+    } catch (cancelError) {
         if (gifExportJobIdRef.current !== jobId) return;
         gifCancelRequestedRef.current = null;
         gifCancelFailureRef.current = jobId;
         setError(getErrorMessage(cancelError));
         setStatus({ kind: "error", text: "GIF 导出取消失败" });
-      });
-  };
+    }
+  }, [gifExportProgress?.status]);
+
+  useEffect(() => registerWindowCloseHandler(async () => {
+    if (gifExportJobIdRef.current && isTauriEnvironment()) await cancelCompression();
+  }), [cancelCompression]);
 
   const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null, insertAt: number | null = null, replaceAll = false) => {
     if (lockedRef.current || !inputFiles.length) return;
@@ -2523,7 +2527,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           {shouldOfferGifErrorDetails(error) ? <button className="gif-error-details-toggle" type="button" aria-expanded={expandedError === error} aria-controls="gif-error-details" onClick={() => setExpandedError(expandedError === error ? null : error)}>{expandedError === error ? "收起详情" : "查看详情"}</button> : null}
         </div> : <p className={`gif-status gif-status-${status.kind}`} role="status">{gifExportProgress && status.kind === "exporting" ? formatGifExportProgress(gifExportProgress) : status.text}</p>}
         {sourceMode === "video" && locked ? <button className="quiet-button" type="button" onClick={cancelVideoExtraction}>取消抽帧</button> : null}
-        {compressionControllerRef.current ? <button className="quiet-button" type="button" disabled={Boolean(gifExportJobIdRef.current && gifExportProgress?.status === "cancelling")} onClick={cancelCompression}>{getGifCancelButtonLabel(Boolean(gifExportJobIdRef.current), gifExportProgress?.status === "cancelling")}</button> : null}
+        {compressionControllerRef.current ? <button className="quiet-button" type="button" disabled={Boolean(gifExportJobIdRef.current && gifExportProgress?.status === "cancelling")} onClick={() => { void cancelCompression(); }}>{getGifCancelButtonLabel(Boolean(gifExportJobIdRef.current), gifExportProgress?.status === "cancelling")}</button> : null}
         <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!singleOutputReady) { setGroup("export"); if (outputLocation === "path") void chooseOutput(); else { setError(outputLocationError ?? "请先完成输出位置设置。"); setStatus({ kind: "error", text: "输出位置不可用" }); } } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputFormat === "png-sequence" ? (singleOutputReady ? "导出 PNG 帧序列" : "选择输出目录") : outputLocation === "path" ? (outputPath ? `导出 ${outputFormat.toUpperCase()}` : "选择保存位置") : `导出 ${outputFormat.toUpperCase()}`}</button>
       </div>
     </div>

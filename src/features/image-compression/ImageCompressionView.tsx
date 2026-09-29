@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent 
 import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import "../../styles/features/image-compression.css";
 import { cancelCompression, compressImage, createCompressionRequest, estimateImageCompression, formatCompressionProgressError, formatCompressionProgressStage, getCompressionProgress, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
+import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
 import { isTauriEnvironment, revealImageOutput } from "../../platform/image/imageExportGateway";
 import type { NativeImageFile } from "../../platform/image/imageExportGateway";
 import {
@@ -577,7 +578,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   const cancelActiveCompression = async () => {
     const jobId = activeJobIdRef.current;
-    if (!jobId) return;
+    if (!jobId || cancelRequestedRef.current) return;
+    cancelRequestedRef.current = true;
     setMessage("正在取消当前压缩任务…");
     try {
       await cancelCompression(jobId);
@@ -585,6 +587,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setMessage(errorMessage(error));
     }
   };
+
+  useEffect(() => registerWindowCloseHandler(async () => {
+    if (activeJobIdRef.current && isTauriEnvironment()) await cancelActiveCompression();
+  }), []);
 
   const runCompression = async () => {
     if (busy || items.length === 0) return;

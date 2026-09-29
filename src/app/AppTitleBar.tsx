@@ -8,6 +8,7 @@ import {
   toggleCurrentWindowMaximized,
   watchCurrentWindowMaximized,
 } from "../platform/window/windowControlGateway";
+import { requestWindowClose } from "../platform/window/windowCloseCoordinator";
 
 const APP_TITLE = "EmbedPix";
 
@@ -78,7 +79,10 @@ export default function AppTitleBar() {
           type="button"
           className="app-titlebar-button app-titlebar-close"
           aria-label="关闭"
-          onClick={() => runWindowAction(closeCurrentWindow, "close current window")}
+          onClick={() => runWindowAction(async () => {
+            await requestWindowClose();
+            await closeCurrentWindow();
+          }, "close current window")}
         >
           <X size={14} strokeWidth={2} />
         </button>
