@@ -897,6 +897,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_near_lossless,
         )?;
         if let Some(job) = job {
+            update_progress_bytes(job, None, Some(bytes.len() as u64));
             checkpoint(job)?;
         }
         if smallest
