@@ -6,6 +6,7 @@ export interface CompressionPreferences {
   quality: number;
   webpMethod: number;
   webpAlphaQuality: number;
+  webpPass: number;
   webpNearLossless: number | null;
   jpegBackground: string;
   pngOptimizationLevel: number;
@@ -35,6 +36,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   quality: 82,
   webpMethod: COMPRESSION_WEBP_METHOD_DEFAULT,
   webpAlphaQuality: 100,
+  webpPass: 1,
   webpNearLossless: null,
   jpegBackground: "#ffffff",
   pngOptimizationLevel: 3,
@@ -99,6 +101,10 @@ function webpAlphaQualityValue(record: Record<string, unknown>): number {
   return integerValue(record, "webpAlphaQuality", 0, 100, DEFAULT_COMPRESSION_PREFERENCES.webpAlphaQuality);
 }
 
+function webpPassValue(record: Record<string, unknown>): number {
+  return integerValue(record, "webpPass", 1, 10, DEFAULT_COMPRESSION_PREFERENCES.webpPass);
+}
+
 function webpNearLosslessValue(record: Record<string, unknown>): number | null {
   const value = record.webpNearLossless;
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 99 ? value : null;
@@ -143,6 +149,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       quality: integerValue(record, "quality", 1, 100, DEFAULT_COMPRESSION_PREFERENCES.quality),
       webpMethod: webpMethodValue(record),
       webpAlphaQuality: webpAlphaQualityValue(record),
+      webpPass: webpPassValue(record),
       webpNearLossless: format === "webp" && lossless ? webpNearLosslessValue(record) : null,
       jpegBackground: jpegBackgroundValue(record),
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
@@ -188,6 +195,7 @@ export function saveCompressionPreferences(
       quality: preferences.quality,
       webpMethod: preferences.webpMethod,
       webpAlphaQuality: preferences.webpAlphaQuality,
+      webpPass: preferences.webpPass,
       webpNearLossless: preferences.webpNearLossless,
       jpegBackground: preferences.jpegBackground,
       pngOptimizationLevel: preferences.pngOptimizationLevel,

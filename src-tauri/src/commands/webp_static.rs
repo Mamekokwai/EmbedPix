@@ -77,7 +77,7 @@ pub(crate) fn encode_lossy_rgba_with_method(
     quality: u8,
     method: u8,
 ) -> Result<Vec<u8>, String> {
-    encode_lossy_rgba_with_method_and_alpha_quality(image, quality, method, None)
+    encode_lossy_rgba_with_method_and_alpha_quality(image, quality, method, None, None)
 }
 
 pub(crate) fn encode_lossy_rgba_with_method_and_alpha_quality(
@@ -85,6 +85,7 @@ pub(crate) fn encode_lossy_rgba_with_method_and_alpha_quality(
     quality: u8,
     method: u8,
     alpha_quality: Option<u8>,
+    pass: Option<u8>,
 ) -> Result<Vec<u8>, String> {
     if !(1..=100).contains(&quality) {
         return Err("WebP quality must be between 1 and 100".into());
@@ -127,6 +128,12 @@ pub(crate) fn encode_lossy_rgba_with_method_and_alpha_quality(
         return Err("libwebp failed to initialize WebP configuration".into());
     }
     config.method = c_int::from(method);
+    if let Some(pass) = pass {
+        if !(1..=10).contains(&pass) {
+            return Err("WebP pass must be between 1 and 10".into());
+        }
+        config.pass = c_int::from(pass);
+    }
     if let Some(alpha_quality) = alpha_quality {
         if alpha_quality > 100 {
             return Err("WebP alpha quality must be between 0 and 100".into());
@@ -360,9 +367,10 @@ mod tests {
     #[test]
     fn alpha_quality_changes_transparent_webp_and_remains_decodable() {
         let image = sample_image(true);
-        let low = encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, Some(0)).unwrap();
-        let high =
-            encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, Some(100)).unwrap();
+        let low =
+            encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, Some(0), None).unwrap();
+        let high = encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, Some(100), None)
+            .unwrap();
         assert_ne!(low, high);
         assert_eq!(
             image::load_from_memory(&low).unwrap().dimensions(),
@@ -370,6 +378,23 @@ mod tests {
         );
         assert_eq!(
             image::load_from_memory(&high).unwrap().dimensions(),
+            (64, 48)
+        );
+    }
+
+    #[test]
+    fn analysis_pass_changes_output_and_remains_decodable() {
+        let image = sample_image(true);
+        let fast =
+            encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, None, Some(1)).unwrap();
+        let thorough =
+            encode_lossy_rgba_with_method_and_alpha_quality(&image, 75, 4, None, Some(10)).unwrap();
+        assert_eq!(
+            image::load_from_memory(&fast).unwrap().dimensions(),
+            (64, 48)
+        );
+        assert_eq!(
+            image::load_from_memory(&thorough).unwrap().dimensions(),
             (64, 48)
         );
     }

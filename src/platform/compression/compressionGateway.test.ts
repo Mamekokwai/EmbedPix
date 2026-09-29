@@ -144,6 +144,16 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "png", webpAlphaQuality: 64 })).toThrow("仅支持有损 WebP");
   });
 
+  it("serializes and validates WebP analysis passes", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, lossless: false, webpPass: 10 });
+    const length = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
+    expect(metadata.webpPass).toBe(10);
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpPass: 0 })).toThrow("webpPass");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpPass: 11 })).toThrow("webpPass");
+    expect(() => encodeCompressionEnvelope({ ...request, webpPass: 2 })).toThrow("仅支持有损 WebP");
+  });
+
   it("rejects PNG optimization levels outside the native contract", () => {
     expect(() => encodeCompressionEnvelope({ ...request, pngOptimizationLevel: 7 })).toThrow("pngOptimizationLevel");
   });

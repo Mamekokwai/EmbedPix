@@ -11,6 +11,7 @@ export interface CompressionPresetValues {
   quality: number;
   webpMethod: number;
   webpAlphaQuality: number;
+  webpPass: number;
   webpNearLossless: number | null;
   jpegBackground: string;
   pngOptimizationLevel: number;
@@ -93,6 +94,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     quality: integerValue(record.quality, 1, 100, "质量", index),
     webpMethod: record.webpMethod === undefined ? COMPRESSION_WEBP_METHOD_DEFAULT : integerValue(record.webpMethod, COMPRESSION_WEBP_METHOD_MIN, COMPRESSION_WEBP_METHOD_MAX, "WebP 编码方法", index),
     webpAlphaQuality: record.webpAlphaQuality === undefined ? 100 : integerValue(record.webpAlphaQuality, 0, 100, "WebP Alpha 质量", index),
+    webpPass: record.webpPass === undefined ? 1 : integerValue(record.webpPass, 1, 10, "WebP 分析遍数", index),
     webpNearLossless,
     jpegBackground,
     pngOptimizationLevel: integerValue(record.pngOptimizationLevel, 0, 6, "PNG 优化级别", index),
@@ -114,6 +116,7 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   if (!trimmedName || trimmedName.length > MAX_PRESET_NAME_LENGTH) throw new Error("压缩预设名称不能为空且不能超过 80 个字符。");
   if (!Number.isInteger(values.webpMethod) || values.webpMethod < COMPRESSION_WEBP_METHOD_MIN || values.webpMethod > COMPRESSION_WEBP_METHOD_MAX) throw new Error("WebP 编码方法必须在 0 到 6 之间。");
   if (!Number.isInteger(values.webpAlphaQuality) || values.webpAlphaQuality < 0 || values.webpAlphaQuality > 100) throw new Error("WebP Alpha 质量必须在 0 到 100 之间。");
+  if (!Number.isInteger(values.webpPass) || values.webpPass < 1 || values.webpPass > 10) throw new Error("WebP 分析遍数必须在 1 到 10 之间。");
   if (values.webpNearLossless !== null && (!Number.isInteger(values.webpNearLossless) || values.webpNearLossless < 1 || values.webpNearLossless > 99)) throw new Error("WebP 近无损等级必须在 1 到 99 之间。");
   if (values.webpNearLossless !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 近无损等级仅适用于无损 WebP。");
   if (!/^#[0-9a-f]{6}$/iu.test(values.jpegBackground.trim())) throw new Error("JPEG 透明背景必须是 #RRGGBB 颜色。");
