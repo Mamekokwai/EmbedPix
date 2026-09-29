@@ -119,6 +119,8 @@ describe("compression gateway", () => {
     const request = createCompressionRequest(file, { format: "webp", quality: 64, lossless: false, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", overwrite: false, maxOutputBytes: 64 * 1024, maxCandidates: 8 });
     expect(request.maxOutputBytes).toBe(64 * 1024);
     expect(request.maxCandidates).toBe(8);
+    expect(() => encodeCompressionEnvelope({ ...request, maxCandidates: 0 })).toThrow("maxCandidates");
+    expect(() => encodeCompressionEnvelope({ ...request, maxCandidates: 13 })).toThrow("maxCandidates");
   });
 
   it("rejects PNG optimization levels outside the native contract", () => {
