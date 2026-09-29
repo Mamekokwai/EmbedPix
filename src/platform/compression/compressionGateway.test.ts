@@ -132,6 +132,19 @@ describe("compression gateway", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("rejects metadata preservation for publish-free estimates before IPC", () => {
+    expect(() => encodeCompressionEstimateEnvelope({
+      fileName: "icon.png",
+      inputData: new Uint8Array([1, 2, 3]),
+      outputFormat: "webp",
+      jpegQuality: 82,
+      lossless: true,
+      metadataPolicy: "preserve",
+      pngOptimizationLevel: 2,
+    })).toThrow("第一阶段原生压缩仅支持移除元数据");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("passes JPEG target-size candidates through raw metadata", () => {
     const encoded = encodeCompressionEnvelope({ ...request, maxOutputBytes: 64 * 1024, maxCandidates: 8 });
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
