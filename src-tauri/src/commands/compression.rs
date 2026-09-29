@@ -95,7 +95,7 @@ impl MetadataPolicy {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CompressionMetadata {
     #[serde(default = "default_compression_schema_version")]
@@ -177,7 +177,7 @@ struct CompressionEstimateMetadata {
     metadata_policy: MetadataPolicy,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CompressionRequest {
     metadata: CompressionMetadata,
     input: Vec<u8>,
@@ -3033,6 +3033,27 @@ mod tests {
         assert!(result.skipped_reason.is_some());
         assert!(result.saved_bytes < 0);
         assert!(!output_path.exists());
+
+        let delete_source_path = crate::commands::test_temp_dir().join(format!(
+            "embedpix-compression-delete-skip-{}.jpg",
+            uuid_like_id()
+        ));
+        let delete_output_path = crate::commands::test_temp_dir().join(format!(
+            "embedpix-compression-delete-skip-{}.png",
+            uuid_like_id()
+        ));
+        fs::write(&delete_source_path, &request.input).unwrap();
+        let mut delete_request = request.clone();
+        delete_request.metadata.output_path = Some(delete_output_path.to_string_lossy().into());
+        delete_request.metadata.source_path = Some(delete_source_path.to_string_lossy().into());
+        delete_request.metadata.delete_source = true;
+        delete_request.metadata.job_id = Some("delete-source-skip-test".into());
+        let skipped_delete =
+            run_compression(&delete_request, &test_job("delete-source-skip-test")).unwrap();
+        assert_eq!(skipped_delete.status, "skipped");
+        assert!(delete_source_path.is_file());
+        assert!(!delete_output_path.exists());
+        fs::remove_file(delete_source_path).unwrap();
 
         let source_path = crate::commands::test_temp_dir().join(format!(
             "embedpix-compression-replace-skip-{}.png",
