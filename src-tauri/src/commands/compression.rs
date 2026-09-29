@@ -2854,6 +2854,39 @@ mod tests {
     }
 
     #[test]
+    fn progress_byte_metrics_serialize_as_optional_camel_case_fields() {
+        let progress = CompressionProgress {
+            job_id: "progress-serialization".into(),
+            status: "running".into(),
+            stage: "encoding".into(),
+            output_path: None,
+            error: None,
+            code: None,
+            input_bytes: Some(4096),
+            output_bytes: Some(1536),
+        };
+        let value = serde_json::to_value(progress).unwrap();
+        assert_eq!(value.get("inputBytes"), Some(&serde_json::json!(4096)));
+        assert_eq!(value.get("outputBytes"), Some(&serde_json::json!(1536)));
+        assert!(value.get("input_bytes").is_none());
+        assert!(value.get("output_bytes").is_none());
+
+        let without_sizes = CompressionProgress {
+            job_id: "progress-serialization-empty".into(),
+            status: "queued".into(),
+            stage: "queued".into(),
+            output_path: None,
+            error: None,
+            code: None,
+            input_bytes: None,
+            output_bytes: None,
+        };
+        let value = serde_json::to_value(without_sizes).unwrap();
+        assert!(value.get("inputBytes").is_none());
+        assert!(value.get("outputBytes").is_none());
+    }
+
+    #[test]
     fn jpeg_target_search_returns_highest_quality_candidate_within_bound() {
         let input = png_input();
         let target = encode_image(&input, CompressionFormat::Jpeg, 50, 2)
