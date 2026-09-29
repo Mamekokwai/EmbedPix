@@ -173,6 +173,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [importBusy, setImportBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [progressBytes, setProgressBytes] = useState<{ input: number | null; output: number | null }>({ input: null, output: null });
   const [stage, setStage] = useState("");
   const [estimate, setEstimate] = useState<CompressionEstimate>({ inputBytes: 0, estimatedBytes: 0, savingsPercent: 0 });
   const [estimateNote, setEstimateNote] = useState("等待导入图片");
@@ -229,6 +230,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
   const previewSavedBytes = selectedItem && preview ? selectedItem.size - preview.outputBytes : 0;
   const previewSavingsPercent = selectedItem && preview && selectedItem.size > 0 ? (previewSavedBytes / selectedItem.size) * 100 : 0;
+  const progressBytesSummary = [
+    progressBytes.input !== null ? `输入 ${formatCompressionBytes(progressBytes.input)}` : null,
+    progressBytes.output !== null ? `候选/输出 ${formatCompressionBytes(progressBytes.output)}` : null,
+  ].filter((entry): entry is string => Boolean(entry)).join(" · ");
 
   const queueCompressionDimensions = (item: CompressionItem) => {
     void Promise.resolve().then(() => readCompressionDimensions(item.file)).then((dimensions) => {
@@ -495,6 +500,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       try {
         const next = await getCompressionProgress(jobId);
         setStage(next.stage);
+        setProgressBytes({ input: typeof next.inputBytes === "number" ? next.inputBytes : null, output: typeof next.outputBytes === "number" ? next.outputBytes : null });
         const progressError = formatCompressionProgressError(next);
         if (progressError) setMessage(progressError);
       } catch {
@@ -569,6 +575,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     cancelRequestedRef.current = false;
     setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setProgress({ current: 0, total: queue.length });
+    setProgressBytes({ input: null, output: null });
     const failedNames: string[] = [];
     let lastError = "";
     for (const [index, item] of queue.entries()) {
@@ -919,7 +926,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className={`compression-status compression-status-${status}`} role={status === "error" ? "alert" : "status"}>
           {status === "busy" ? <LoaderCircle size={15} className="compression-spin" aria-hidden="true" /> : status === "success" ? <CheckCircle2 size={15} aria-hidden="true" /> : status === "error" ? <AlertCircle size={15} aria-hidden="true" /> : null}
           <span>{message || (status === "busy" ? `正在处理 ${progress.current}/${progress.total}${stage ? ` · ${stage}` : ""}` : status === "success" ? "任务已完成" : "准备就绪")}</span>
-          {busy ? <span className="compression-current-file" aria-live="polite">当前文件：{currentFileName || "准备中"}{stage ? ` · 阶段：${stage}` : ""}</span> : null}
+          {busy ? <span className="compression-current-file" aria-live="polite">当前文件：{currentFileName || "准备中"}{stage ? ` · 阶段：${stage}` : ""}{progressBytesSummary ? ` · ${progressBytesSummary}` : ""}</span> : null}
           {failures.length > 0 && status === "error" ? <button type="button" className="compression-retry-button" onClick={() => { void runCompression(); }} disabled={busy}><RefreshCw size={13} aria-hidden="true" /> 重试失败项</button> : null}
           {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
         </div>

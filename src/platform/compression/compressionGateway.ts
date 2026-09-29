@@ -52,7 +52,7 @@ export interface CompressionResult {
   targetMet: boolean;
   selectedQuality: number | null;
 }
-export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; code?: string | null; }
+export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; code?: string | null; inputBytes?: number; outputBytes?: number; }
 export interface CompressionPreview {
   data: number[];
   width: number;

@@ -177,6 +177,10 @@ pub struct CompressionProgress {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_bytes: Option<u64>,
 }
 
 pub struct CompressionJobState {
@@ -426,6 +430,8 @@ pub async fn compress_image(
             output_path: None,
             error: None,
             code: None,
+            input_bytes: Some(request.input.len() as u64),
+            output_bytes: None,
         }),
         terminal_at: Mutex::new(None),
     });
@@ -503,6 +509,7 @@ fn run_compression(
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
+    update_progress_bytes(job, Some(input_bytes), Some(output_bytes));
     let skipped_reason = selection_skipped_reason.or_else(|| {
         request
             .metadata
@@ -559,6 +566,7 @@ fn run_compression(
             fail_message(job, format!("failed to inspect compressed output: {error}"))
         })?
         .len();
+    update_progress_bytes(job, None, Some(published_output_bytes));
     let result = CompressionResult {
         job_id: job
             .progress
@@ -1648,6 +1656,21 @@ fn update_progress(
     }
 }
 
+fn update_progress_bytes(
+    job: &Arc<CompressionJob>,
+    input_bytes: Option<u64>,
+    output_bytes: Option<u64>,
+) {
+    if let Ok(mut progress) = job.progress.lock() {
+        if input_bytes.is_some() {
+            progress.input_bytes = input_bytes;
+        }
+        if output_bytes.is_some() {
+            progress.output_bytes = output_bytes;
+        }
+    }
+}
+
 fn classify_error_code(stage: &str, message: &str) -> String {
     if stage == "skipped" {
         return "skipped".into();
@@ -1755,6 +1778,8 @@ mod tests {
                 output_path: None,
                 error: None,
                 code: None,
+                input_bytes: None,
+                output_bytes: None,
             }),
             terminal_at: Mutex::new(None),
         })
@@ -1943,6 +1968,8 @@ mod tests {
                 output_path: None,
                 error: None,
                 code: None,
+                input_bytes: None,
+                output_bytes: None,
             }),
             terminal_at: Mutex::new(None),
         });
@@ -2482,6 +2509,8 @@ mod tests {
                 output_path: None,
                 error: None,
                 code: None,
+                input_bytes: None,
+                output_bytes: None,
             }),
             terminal_at: Mutex::new(None),
         });
@@ -2549,6 +2578,8 @@ mod tests {
                 output_path: None,
                 error: None,
                 code: None,
+                input_bytes: None,
+                output_bytes: None,
             }),
             terminal_at: Mutex::new(None),
         });
@@ -2604,6 +2635,8 @@ mod tests {
                     output_path: None,
                     error: None,
                     code: None,
+                    input_bytes: None,
+                    output_bytes: None,
                 }),
                 terminal_at: Mutex::new(None),
             })
@@ -2650,6 +2683,8 @@ mod tests {
                     output_path: None,
                     error: None,
                     code: None,
+                    input_bytes: None,
+                    output_bytes: None,
                 }),
                 terminal_at: Mutex::new(Some(Instant::now())),
             })
@@ -2670,6 +2705,8 @@ mod tests {
                 output_path: None,
                 error: Some("test failure".into()),
                 code: Some("encode".into()),
+                input_bytes: None,
+                output_bytes: None,
             }),
             terminal_at: Mutex::new(Some(
                 Instant::now() - JOB_RETENTION - Duration::from_secs(1),
@@ -2717,6 +2754,8 @@ mod tests {
                 output_path: None,
                 error: None,
                 code: None,
+                input_bytes: None,
+                output_bytes: None,
             }),
             terminal_at: Mutex::new(None),
         });
@@ -2798,6 +2837,20 @@ mod tests {
             classify_error_code("skipped", "target_unreachable"),
             "skipped"
         );
+    }
+
+    #[test]
+    fn progress_byte_metrics_accept_candidate_and_published_sizes() {
+        let job = test_job("progress-bytes");
+        update_progress_bytes(&job, Some(4096), Some(1536));
+        let progress = job.progress.lock().unwrap().clone();
+        assert_eq!(progress.input_bytes, Some(4096));
+        assert_eq!(progress.output_bytes, Some(1536));
+
+        update_progress_bytes(&job, None, Some(1400));
+        let progress = job.progress.lock().unwrap().clone();
+        assert_eq!(progress.input_bytes, Some(4096));
+        assert_eq!(progress.output_bytes, Some(1400));
     }
 
     #[test]
@@ -3127,6 +3180,8 @@ mod tests {
                 output_path: None,
                 error: None,
                 code: None,
+                input_bytes: None,
+                output_bytes: None,
             }),
             terminal_at: Mutex::new(None),
         });

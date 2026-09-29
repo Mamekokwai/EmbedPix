@@ -199,8 +199,8 @@ describe("compression gateway", () => {
   });
 
   it("exposes native progress and cancellation commands", async () => {
-    vi.mocked(invoke).mockResolvedValue({ jobId: "compression-test", status: "running", stage: "encoding", outputPath: null, error: null, code: null });
-    await getCompressionProgress("compression-test");
+    vi.mocked(invoke).mockResolvedValue({ jobId: "compression-test", status: "running", stage: "encoding", outputPath: null, error: null, code: null, inputBytes: 4096, outputBytes: 1536 });
+    await expect(getCompressionProgress("compression-test")).resolves.toMatchObject({ inputBytes: 4096, outputBytes: 1536 });
     await cancelCompression("compression-test");
     expect(invoke).toHaveBeenNthCalledWith(1, GET_COMPRESSION_PROGRESS_COMMAND, { jobId: "compression-test" });
     expect(invoke).toHaveBeenNthCalledWith(2, CANCEL_COMPRESSION_COMMAND, { jobId: "compression-test" });
