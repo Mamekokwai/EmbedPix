@@ -294,7 +294,8 @@ impl CompressionSemaphore {
             semaphore: Arc::clone(self),
         };
         if job.cancelled.load(Ordering::Acquire) {
-            drop(permit);
+            *available += 1;
+            self.wake.notify_one();
             return Err(fail_message(job, "compression cancelled".to_string()));
         }
         Ok(permit)
@@ -3349,6 +3350,22 @@ mod tests {
     }
 
     #[test]
+    fn preview_completion_is_terminal_and_job_id_can_be_reused() {
+        let state = CompressionJobState::default();
+        let job = test_job("preview-completed");
+        state
+            .register("preview-completed".into(), Arc::clone(&job))
+            .unwrap();
+        update_progress(&job, "completed", None, None);
+
+        assert_eq!(cancel_job(&job).unwrap().status, "completed");
+        assert_eq!(cancel_job(&job).unwrap().status, "completed");
+        assert!(state
+            .register("preview-completed".into(), test_job("preview-completed"))
+            .is_ok());
+    }
+
+    #[test]
     fn compression_semaphore_releases_slots_after_encoding() {
         let semaphore = Arc::new(CompressionSemaphore {
             available: Mutex::new(2),
@@ -3412,6 +3429,22 @@ mod tests {
             Ok(_) => panic!("queued compression slot unexpectedly acquired after cancellation"),
         }
         assert_eq!(job.progress.lock().unwrap().status, "cancelled");
+    }
+
+    #[test]
+    fn cancelled_preview_slot_acquisition_returns_the_permit_for_reuse() {
+        let semaphore = Arc::new(CompressionSemaphore {
+            available: Mutex::new(1),
+            wake: Condvar::new(),
+        });
+        let job = test_job("preview-slot-cancel");
+        job.cancelled.store(true, Ordering::Release);
+
+        assert!(semaphore.acquire_cancellable(&job).is_err());
+        assert_eq!(*semaphore.available.lock().unwrap(), 1);
+        let permit = semaphore.acquire();
+        drop(permit);
+        assert_eq!(*semaphore.available.lock().unwrap(), 1);
     }
 
     #[test]
