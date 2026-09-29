@@ -86,6 +86,15 @@ enum MetadataPolicy {
     Preserve,
 }
 
+impl MetadataPolicy {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Strip => "strip",
+            Self::Preserve => "preserve",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CompressionMetadata {
@@ -335,6 +344,7 @@ pub struct CompressionResult {
     pub height: u32,
     pub format: String,
     pub lossless: bool,
+    pub metadata_policy: &'static str,
     pub target_bytes: Option<u64>,
     pub target_met: bool,
     pub selected_quality: Option<u8>,
@@ -367,6 +377,7 @@ pub struct CompressionPreview {
     pub format: String,
     pub output_bytes: u64,
     pub lossless: bool,
+    pub metadata_policy: &'static str,
     pub status: String,
     pub skipped_reason: Option<String>,
     pub target_bytes: Option<u64>,
@@ -399,6 +410,7 @@ pub struct CompressionEstimate {
     pub height: u32,
     pub format: String,
     pub lossless: bool,
+    pub metadata_policy: &'static str,
     pub status: String,
     pub skipped_reason: Option<String>,
     pub target_bytes: Option<u64>,
@@ -590,6 +602,7 @@ fn run_compression(
             height,
             format: request.format.name().into(),
             lossless: request.lossless,
+            metadata_policy: request.metadata.metadata_policy.as_str(),
             target_bytes: request.target_bytes,
             target_met,
             selected_quality,
@@ -637,6 +650,7 @@ fn run_compression(
         height,
         format: request.format.name().into(),
         lossless: request.lossless,
+        metadata_policy: request.metadata.metadata_policy.as_str(),
         target_bytes: request.target_bytes,
         target_met,
         selected_quality,
@@ -976,6 +990,7 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
         format: request.format.name().into(),
         output_bytes,
         lossless: request.lossless,
+        metadata_policy: request.metadata.metadata_policy.as_str(),
         status: if skipped_reason.is_some() {
             "skipped"
         } else {
@@ -1065,6 +1080,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         height,
         format: request.format.name().into(),
         lossless: request.lossless,
+        metadata_policy: request.metadata.metadata_policy.as_str(),
         status: if skipped_reason.is_some() {
             "skipped".into()
         } else {

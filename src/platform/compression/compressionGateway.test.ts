@@ -170,13 +170,14 @@ describe("compression gateway", () => {
       jpegQuality: 82,
       webpMethod: 6,
       lossless: false,
+      metadataPolicy: "strip",
       pngOptimizationLevel: 3,
       maxOutputBytes: 64 * 1024,
       maxCandidates: 4,
     });
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
-    expect(metadata).toMatchObject({ schemaVersion: 1, fileName: "icon.png", outputFormat: "webp", lossless: false, pngOptimizationLevel: 3, maxOutputBytes: 64 * 1024, maxCandidates: 4, webpMethod: 6 });
+    expect(metadata).toMatchObject({ schemaVersion: 1, fileName: "icon.png", outputFormat: "webp", lossless: false, pngOptimizationLevel: 3, maxOutputBytes: 64 * 1024, maxCandidates: 4, webpMethod: 6, metadataPolicy: "strip" });
     expect(metadata).not.toHaveProperty("outputPath");
     expect(metadata).not.toHaveProperty("overwriteExisting");
     expect(metadata).not.toHaveProperty("replaceOriginal");
@@ -184,7 +185,7 @@ describe("compression gateway", () => {
 
   it("uses the publish-free image estimate command", async () => {
     vi.mocked(invoke).mockResolvedValue({ inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: true, status: "completed", skippedReason: null, targetBytes: null, targetMet: false, selectedQuality: null });
-    await expect(estimateImageCompression({ fileName: "icon.png", inputData: new Uint8Array([1, 2, 3]), outputFormat: "webp", jpegQuality: 82, lossless: true, pngOptimizationLevel: 2 })).resolves.toMatchObject({ format: "webp", outputBytes: 2 });
+    await expect(estimateImageCompression({ fileName: "icon.png", inputData: new Uint8Array([1, 2, 3]), outputFormat: "webp", jpegQuality: 82, lossless: true, metadataPolicy: "strip", pngOptimizationLevel: 2 })).resolves.toMatchObject({ format: "webp", outputBytes: 2 });
     expect(invoke).toHaveBeenCalledWith(ESTIMATE_IMAGE_COMPRESSION_COMMAND, expect.any(Uint8Array));
   });
 

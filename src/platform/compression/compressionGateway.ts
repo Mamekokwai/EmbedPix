@@ -50,6 +50,7 @@ export interface CompressionResult {
   height: number;
   format: string;
   lossless: boolean;
+  metadataPolicy: MetadataPolicy;
   targetBytes: number | null;
   targetMet: boolean;
   selectedQuality: number | null;
@@ -64,6 +65,7 @@ export interface CompressionPreview {
   format: string;
   outputBytes: number;
   lossless: boolean;
+  metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;
   targetBytes: number | null;
@@ -82,6 +84,7 @@ export interface CompressionEstimate {
   height: number;
   format: string;
   lossless: boolean;
+  metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;
   targetBytes: number | null;
@@ -101,6 +104,7 @@ export interface CompressionEstimateRequest {
   webpMethod?: number;
   webpNearLossless?: number;
   lossless: boolean;
+  metadataPolicy: MetadataPolicy;
   skipIfLarger?: boolean;
   pngOptimizationLevel: number;
   maxOutputBytes?: number;
@@ -160,6 +164,7 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
 
 export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRequest): Uint8Array {
   if (!request.inputData.byteLength) throw new Error("图片数据不能为空。");
+  if (request.metadataPolicy !== "strip") throw new Error("第一阶段原生压缩仅支持移除元数据。");
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
   if (!Number.isInteger(request.jpegQuality) || request.jpegQuality < 1 || request.jpegQuality > 100) throw new Error("jpegQuality 必须在 1 到 100 之间。");
   if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
@@ -182,6 +187,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     pngOptimizationLevel: request.pngOptimizationLevel,
     ...(request.maxOutputBytes !== undefined ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates !== undefined ? { maxCandidates: request.maxCandidates } : {}),
+    metadataPolicy: "strip",
   }));
   const payload = new Uint8Array(8 + metadataBytes.byteLength + request.inputData.byteLength);
   payload.set(new Uint8Array([0x45, 0x47, 0x46, 0x31]));

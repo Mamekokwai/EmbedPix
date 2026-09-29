@@ -297,6 +297,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           webpMethod: options.webpMethod,
           webpNearLossless: options.webpNearLossless ?? undefined,
           lossless: options.format === "png" || (options.format === "webp" && options.lossless),
+          metadataPolicy: options.metadataPolicy,
           skipIfLarger: options.skipIfLarger,
           pngOptimizationLevel: options.pngOptimizationLevel,
           maxOutputBytes: options.maxOutputBytes,
