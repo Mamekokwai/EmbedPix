@@ -2359,6 +2359,40 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_input_to_webp_preserves_rgb_channels_and_dimensions() {
+        let image = DynamicImage::ImageRgb8(ImageBuffer::from_fn(8, 6, |x, y| {
+            image::Rgb([
+                24u8.saturating_add((x * 19) as u8),
+                48u8.saturating_add((y * 23) as u8),
+                96u8.saturating_add(((x + y) * 11) as u8),
+            ])
+        }));
+        let mut jpeg = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut jpeg), ImageOutputFormat::Jpeg(100))
+            .unwrap();
+        let webp = encode_image_with_webp_method(
+            &jpeg,
+            CompressionFormat::Webp,
+            90,
+            2,
+            false,
+            None,
+            Some(4),
+            None,
+            None,
+        )
+        .unwrap();
+        let decoded = decode_image(&webp).unwrap().to_rgb8();
+        assert_eq!(decoded.dimensions(), (8, 6));
+        let source = image.to_rgb8().get_pixel(3, 4).0;
+        let actual = decoded.get_pixel(3, 4).0;
+        for channel in 0..3 {
+            assert!((i16::from(source[channel]) - i16::from(actual[channel])).abs() <= 32);
+        }
+    }
+
+    #[test]
     fn jpeg_transparency_uses_background_and_publishes_output() {
         let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([10, 20, 30, 64])));
         let mut input = Vec::new();
