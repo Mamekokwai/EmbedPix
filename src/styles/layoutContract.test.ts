@@ -216,6 +216,8 @@ describe("compact layout viewport contract", () => {
     expect(appShell).toContain("<Suspense fallback=");
     expect(appShell).toContain("app-view-loading");
     expect(compressionView).toContain('if (!active || items.length === 0)');
+    expect(compressionView).toContain('if (busy) {');
+    expect(compressionView).toContain('}, [active, busy, options, selectedItem]);');
     expect(compressionView).toContain('const sourceBusy = busy || importBusy;');
   });
 

@@ -399,6 +399,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setPreviewBusy(false);
       return () => controller.abort();
     }
+    if (busy) {
+      setPreviewBusy(false);
+      setPreviewError("压缩任务进行中，暂缓生成预览。");
+      return () => controller.abort();
+    }
     if (!isTauriEnvironment()) {
       setPreviewBusy(false);
       setPreviewError("真实压缩预览需要桌面应用；当前环境只显示原图和参数估算。");
@@ -425,7 +430,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [active, options, selectedItem]);
+  }, [active, busy, options, selectedItem]);
 
   const addBrowserFiles = (files: File[], replaceItemId: string | null = null) => {
     const { accepted, unsupported, oversized } = splitCompressionImportFiles(files);
