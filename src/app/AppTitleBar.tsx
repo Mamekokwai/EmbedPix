@@ -10,6 +10,7 @@ import {
   watchCurrentWindowMaximized,
 } from "../platform/window/windowControlGateway";
 import { requestWindowClose } from "../platform/window/windowCloseCoordinator";
+import { retainWindowListener } from "../platform/window/windowListenerLifecycle";
 
 const APP_TITLE = "EmbedPix";
 
@@ -24,13 +25,18 @@ export default function AppTitleBar() {
   const closingAfterNativeRequestRef = useRef(false);
 
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
+    const lifecycle = { disposed: false };
+    let maximizedCleanup: (() => void) | undefined;
+    let closeCleanup: (() => void) | undefined;
     try {
-      void readCurrentWindowMaximized().then(setIsMaximized).catch(() => undefined);
+      void readCurrentWindowMaximized().then((maximized) => {
+        if (!lifecycle.disposed) setIsMaximized(maximized);
+      }).catch(() => undefined);
       void watchCurrentWindowMaximized(setIsMaximized).then((unlisten) => {
-        cleanup = unlisten;
+        retainWindowListener(lifecycle, (cleanup) => { maximizedCleanup = cleanup; }, unlisten);
       }).catch(() => undefined);
       void watchCurrentWindowCloseRequested((event) => {
+        if (lifecycle.disposed) return;
         if (closingAfterNativeRequestRef.current) return;
         event.preventDefault();
         closingAfterNativeRequestRef.current = true;
@@ -39,16 +45,16 @@ export default function AppTitleBar() {
           console.warn("close current window failed", error);
         });
       }).then((unlisten) => {
-        const previousCleanup = cleanup;
-        cleanup = () => {
-          previousCleanup?.();
-          unlisten();
-        };
+        retainWindowListener(lifecycle, (cleanup) => { closeCleanup = cleanup; }, unlisten);
       }).catch(() => undefined);
     } catch {
       // The browser preview does not expose Tauri window controls.
     }
-    return () => cleanup?.();
+    return () => {
+      lifecycle.disposed = true;
+      maximizedCleanup?.();
+      closeCleanup?.();
+    };
   }, []);
 
   const handleDragMouseDown = (event: MouseEvent<HTMLDivElement>) => {
