@@ -689,8 +689,11 @@ fn run_compression(
     job: &Arc<CompressionJob>,
 ) -> Result<CompressionResult, String> {
     checkpoint(job)?;
+    update_progress(job, "reading", None, None);
+    update_progress(job, "decoding", None, None);
     let (width, height) =
         inspect_image(&request.input).map_err(|error| fail_message(job, error))?;
+    update_progress(job, "planning", None, None);
     update_progress(job, "encoding", None, None);
     let EncodedSelection {
         bytes,
@@ -702,6 +705,7 @@ fn run_compression(
     } = choose_encoded_output_with_cancellation(request, width, height, Some(job))
         .map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
+    update_progress(job, "validating", None, None);
     let output_path =
         resolve_final_output_path(request).map_err(|error| fail_message(job, error))?;
     let input_bytes = request.input.len() as u64;
@@ -1179,8 +1183,14 @@ fn run_preview_core(
 ) -> Result<CompressionPreview, String> {
     if let Some(job) = job {
         checkpoint(job)?;
+        update_progress(job, "reading", None, None);
+        update_progress(job, "decoding", None, None);
     }
     let (width, height) = inspect_image(&request.input)?;
+    if let Some(job) = job {
+        update_progress(job, "planning", None, None);
+        update_progress(job, "encoding", None, None);
+    }
     let EncodedSelection {
         bytes: data,
         selected_quality,
@@ -1197,6 +1207,7 @@ fn run_preview_core(
     }
     if let Some(job) = job {
         checkpoint(job)?;
+        update_progress(job, "validating", None, None);
     }
     let verified = decode_image(&data)?;
     if verified.dimensions() != (width, height) {

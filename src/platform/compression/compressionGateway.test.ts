@@ -405,6 +405,10 @@ describe("compression gateway", () => {
 
   it("localizes known progress stages while preserving future stages", () => {
     expect(formatCompressionProgressStage("preflight")).toBe("预检");
+    expect(formatCompressionProgressStage("reading")).toBe("读取输入");
+    expect(formatCompressionProgressStage("decoding")).toBe("解码");
+    expect(formatCompressionProgressStage("planning")).toBe("规划候选");
+    expect(formatCompressionProgressStage("validating")).toBe("校验输出");
     expect(formatCompressionProgressStage("publishing")).toBe("发布输出");
     expect(formatCompressionProgressStage("future-stage")).toBe("future-stage");
   });
