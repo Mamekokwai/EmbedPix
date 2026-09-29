@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, ESTIMATE_IMAGE_COMPRESSION_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, createCompressionRequest, encodeCompressionEnvelope, encodeCompressionEstimateEnvelope, estimateImageCompression, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, preflightCompression, previewCompression } from "./compressionGateway";
+import { CANCEL_COMPRESSION_COMMAND, COMPRESS_IMAGE_COMMAND, ESTIMATE_IMAGE_COMPRESSION_COMMAND, GET_COMPRESSION_PROGRESS_COMMAND, PREFLIGHT_COMPRESSION_COMMAND, PREVIEW_COMPRESSION_COMMAND, cancelCompression, compressImage, createCompressionRequest, encodeCompressionEnvelope, encodeCompressionEstimateEnvelope, estimateImageCompression, formatCompressionProgressError, formatCompressionProgressStage, getCompressionProgress, pickCompressionDirectoryResult, preflightCompression, previewCompression } from "./compressionGateway";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -259,6 +259,12 @@ describe("compression gateway", () => {
     expect(formatCompressionProgressError({ error: "failed to encode", code: null })).toBe("failed to encode");
     expect(formatCompressionProgressError({ error: "unknown failure", code: "future_code" })).toBe("[future_code] unknown failure");
     expect(formatCompressionProgressError({ error: null, code: "encode" })).toBeNull();
+  });
+
+  it("localizes known progress stages while preserving future stages", () => {
+    expect(formatCompressionProgressStage("preflight")).toBe("预检");
+    expect(formatCompressionProgressStage("publishing")).toBe("发布输出");
+    expect(formatCompressionProgressStage("future-stage")).toBe("future-stage");
   });
 
   it("explains why preview mode cannot execute native compression", async () => {

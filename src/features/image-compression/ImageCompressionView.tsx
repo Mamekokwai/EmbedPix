@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import "../../styles/features/image-compression.css";
-import { cancelCompression, compressImage, createCompressionRequest, estimateImageCompression, formatCompressionProgressError, getCompressionProgress, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
+import { cancelCompression, compressImage, createCompressionRequest, estimateImageCompression, formatCompressionProgressError, formatCompressionProgressStage, getCompressionProgress, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
 import { isTauriEnvironment, revealImageOutput } from "../../platform/image/imageExportGateway";
 import type { NativeImageFile } from "../../platform/image/imageExportGateway";
 import {
@@ -994,8 +994,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       <footer className="compression-footer">
         <div className={`compression-status compression-status-${status}`} role={status === "error" ? "alert" : "status"}>
           {status === "busy" ? <LoaderCircle size={15} className="compression-spin" aria-hidden="true" /> : status === "success" ? <CheckCircle2 size={15} aria-hidden="true" /> : status === "error" ? <AlertCircle size={15} aria-hidden="true" /> : null}
-          <span>{message || (status === "busy" ? `正在处理 ${progress.current}/${progress.total}${stage ? ` · ${stage}` : ""}` : status === "success" ? "任务已完成" : "准备就绪")}</span>
-          {busy ? <span className="compression-current-file" aria-live="polite">当前文件：{currentFileName || "准备中"}{stage ? ` · 阶段：${stage}` : ""}{progressBytesSummary ? ` · ${progressBytesSummary}` : ""}</span> : null}
+          <span>{message || (status === "busy" ? `正在处理 ${progress.current}/${progress.total}${stage ? ` · ${formatCompressionProgressStage(stage)}` : ""}` : status === "success" ? "任务已完成" : "准备就绪")}</span>
+          {busy ? <span className="compression-current-file" aria-live="polite">当前文件：{currentFileName || "准备中"}{stage ? ` · 阶段：${formatCompressionProgressStage(stage)}` : ""}{progressBytesSummary ? ` · ${progressBytesSummary}` : ""}</span> : null}
           {failures.length > 0 && status === "error" ? <button type="button" className="compression-retry-button" onClick={() => { void runCompression(); }} disabled={busy}><RefreshCw size={13} aria-hidden="true" /> 重试失败项</button> : null}
           {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
         </div>

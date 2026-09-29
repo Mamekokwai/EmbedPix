@@ -282,6 +282,26 @@ const COMPRESSION_ERROR_LABELS: Record<string, string> = {
   skipped: "已跳过",
 };
 
+const COMPRESSION_STAGE_LABELS: Record<string, string> = {
+  cancelling: "正在取消",
+  cancelled: "已取消",
+  completed: "已完成",
+  decoding: "解码",
+  encoding: "编码",
+  failed: "失败",
+  planning: "规划候选",
+  preflight: "预检",
+  publishing: "发布输出",
+  queued: "排队等待",
+  reading: "读取输入",
+  skipped: "已跳过",
+  validating: "校验输出",
+};
+
+export function formatCompressionProgressStage(stage: string): string {
+  return COMPRESSION_STAGE_LABELS[stage] ?? stage;
+}
+
 export function formatCompressionProgressError(progress: Pick<CompressionProgress, "error" | "code">): string | null {
   if (!progress.error) return null;
   const label = progress.code ? COMPRESSION_ERROR_LABELS[progress.code] : undefined;
