@@ -223,6 +223,18 @@ impl Default for CompressionJobState {
     }
 }
 
+impl Drop for CompressionJobState {
+    fn drop(&mut self) {
+        let jobs = match self.jobs.get_mut() {
+            Ok(jobs) => jobs,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        for job in jobs.values() {
+            let _ = cancel_job(job);
+        }
+    }
+}
+
 impl CompressionSemaphore {
     fn acquire(self: &Arc<Self>) -> CompressionPermit {
         let mut available = self
@@ -2825,6 +2837,18 @@ mod tests {
         };
         state.register("duplicate-test".into(), job()).unwrap();
         assert!(state.register("duplicate-test".into(), job()).is_err());
+    }
+
+    #[test]
+    fn dropping_job_state_requests_cancellation_for_active_jobs() {
+        let state = CompressionJobState::default();
+        let job = test_job("shutdown-cancel");
+        state
+            .register("shutdown-cancel".into(), Arc::clone(&job))
+            .unwrap();
+        drop(state);
+        assert!(job.cancelled.load(Ordering::Acquire));
+        assert_eq!(job.progress.lock().unwrap().status, "cancelling");
     }
 
     #[test]

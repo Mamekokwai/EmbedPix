@@ -819,6 +819,18 @@ fn export_job_reports_progress_and_cancellation() {
 }
 
 #[test]
+fn dropping_job_state_requests_cancellation_for_active_exports() {
+    let state = GifExportJobState::default();
+    let job = state
+        .register(Some("shutdown-cancel"), "gif", 1)
+        .unwrap()
+        .unwrap();
+    drop(state);
+    assert_eq!(job.progress().status, "cancelling");
+    assert!(job_checkpoint(&Some(job)).is_err());
+}
+
+#[test]
 fn job_registry_rejects_active_ids_and_reclaims_expired_terminal_jobs() {
     let state = GifExportJobState::default();
     let job = state

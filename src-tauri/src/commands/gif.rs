@@ -103,6 +103,18 @@ impl Default for GifExportJobState {
     }
 }
 
+impl Drop for GifExportJobState {
+    fn drop(&mut self) {
+        let jobs = match self.jobs.get_mut() {
+            Ok(jobs) => jobs,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        for job in jobs.values() {
+            let _ = job.cancel();
+        }
+    }
+}
+
 impl EncodingSemaphore {
     fn new(limit: usize) -> Self {
         assert!(limit > 0);
