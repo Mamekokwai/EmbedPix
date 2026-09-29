@@ -4,6 +4,6 @@ export type CompressionOutputLocation = "source" | "subfolder" | "directory";
 export type MetadataPolicy = "preserve" | "strip";
 export interface CompressionItem { id: string; file: File; sourcePath?: string; size: number; dimensions?: { width: number; height: number }; }
 export type CompressionItemResultStatus = "completed" | "skipped" | "failed";
-export interface CompressionItemResult { itemId?: string; fileName: string; status: CompressionItemResultStatus; outputPath?: string; reason?: string; inputBytes?: number; outputBytes?: number; savedBytes?: number; savingsPercent?: number; candidateSearchMs?: number; }
+export interface CompressionItemResult { itemId?: string; fileName: string; status: CompressionItemResultStatus; outputPath?: string; reason?: string; inputBytes?: number; outputBytes?: number; savedBytes?: number; savingsPercent?: number; candidateSearchMs?: number; candidateCount?: number; }
 export interface CompressionOptions { format: CompressionFormat; quality: number; webpMethod?: number; webpNearLossless?: number | null; jpegBackground?: string; lossless: boolean; pngOptimizationLevel: number; metadataPolicy: MetadataPolicy; outputLocation: CompressionOutputLocation; outputFileName?: string; outputSubdirectory?: string; outputDirectory?: string; overwrite: boolean; autoNumbering?: boolean; replaceOriginal?: boolean; skipIfLarger?: boolean; maxOutputBytes?: number; maxCandidates?: number; }
 export interface CompressionEstimate { inputBytes: number; estimatedBytes: number; savingsPercent: number; candidateSearchMs?: number; }

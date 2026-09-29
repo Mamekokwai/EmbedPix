@@ -338,6 +338,8 @@ pub struct CompressionResult {
     pub selected_quality: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_search_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_count: Option<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -368,6 +370,8 @@ pub struct CompressionPreview {
     pub selected_quality: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_search_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_count: Option<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -388,6 +392,8 @@ pub struct CompressionEstimate {
     pub selected_quality: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_search_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_count: Option<u8>,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -529,6 +535,7 @@ fn run_compression(
         target_met,
         skipped_reason: selection_skipped_reason,
         candidate_search_ms,
+        candidate_count,
     } = choose_encoded_output(request, width, height).map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
     let output_path =
@@ -571,6 +578,7 @@ fn run_compression(
             target_met,
             selected_quality,
             candidate_search_ms,
+            candidate_count,
         });
     }
     update_progress(job, "publishing", None, None);
@@ -617,6 +625,7 @@ fn run_compression(
         target_met,
         selected_quality,
         candidate_search_ms,
+        candidate_count,
     };
     update_progress(job, "completed", Some(result.output_path.clone()), None);
     Ok(result)
@@ -731,6 +740,7 @@ struct EncodedSelection {
     target_met: bool,
     skipped_reason: Option<String>,
     candidate_search_ms: Option<u64>,
+    candidate_count: Option<u8>,
 }
 
 fn choose_encoded_output(
@@ -760,6 +770,7 @@ fn choose_encoded_output(
             target_met: false,
             skipped_reason: None,
             candidate_search_ms: None,
+            candidate_count: None,
         });
     };
 
@@ -788,6 +799,7 @@ fn choose_encoded_output(
             bytes,
             selected_quality: None,
             candidate_search_ms: None,
+            candidate_count: None,
         });
     }
 
@@ -866,6 +878,7 @@ fn choose_encoded_output(
                 .as_millis()
                 .min(u64::MAX as u128) as u64,
         ),
+        candidate_count: Some(candidates.len() as u8),
     })
 }
 
@@ -911,6 +924,7 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
         target_met,
         skipped_reason,
         candidate_search_ms,
+        candidate_count,
     } = choose_encoded_output(request, width, height)?;
     if data.len() > MAX_PREVIEW_BYTES {
         return Err(format!(
@@ -941,6 +955,7 @@ fn run_preview(request: &CompressionRequest) -> Result<CompressionPreview, Strin
         target_met,
         selected_quality,
         candidate_search_ms,
+        candidate_count,
     })
 }
 
@@ -952,6 +967,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         target_met,
         skipped_reason: selection_skipped_reason,
         candidate_search_ms,
+        candidate_count,
     } = choose_encoded_output(request, width, height)?;
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
@@ -986,6 +1002,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         target_met,
         selected_quality,
         candidate_search_ms,
+        candidate_count,
     })
 }
 
