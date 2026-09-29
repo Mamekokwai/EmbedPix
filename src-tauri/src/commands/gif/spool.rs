@@ -150,6 +150,20 @@ impl Default for GifFrameSpoolState {
     }
 }
 
+impl Drop for GifFrameSpoolState {
+    fn drop(&mut self) {
+        let entries = match self.entries.get_mut() {
+            Ok(entries) => entries,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        for (_, entry) in entries.drain() {
+            let _ = fs::remove_dir_all(&entry.directory);
+            drop(entry._lock);
+            let _ = fs::remove_file(entry.lock_path);
+        }
+    }
+}
+
 impl GifFrameSpoolState {
     #[cfg(test)]
     fn active_resource_snapshot(&self) -> (usize, usize) {
@@ -430,7 +444,7 @@ mod tests {
         state.discard(&spool_id).unwrap();
         assert_eq!(state.active_resource_snapshot(), (0, 0));
         assert!(!state.root.join(&spool_id).exists());
-        let _ = fs::remove_dir_all(state.root);
+        let _ = fs::remove_dir_all(state.root.clone());
     }
 
     #[test]
@@ -441,7 +455,7 @@ mod tests {
         assert_eq!(state.active_resource_snapshot(), (0, 0));
         state.discard(&spool_id).unwrap();
         assert_eq!(state.active_resource_snapshot(), (0, 0));
-        let _ = fs::remove_dir_all(state.root);
+        let _ = fs::remove_dir_all(state.root.clone());
     }
 
     #[test]
@@ -451,7 +465,7 @@ mod tests {
         fs::create_dir_all(&directory).unwrap();
         fs::remove_dir_all(&directory).unwrap();
         assert!(remove_dir_all_idempotent(&directory).is_ok());
-        let _ = fs::remove_dir_all(state.root);
+        let _ = fs::remove_dir_all(state.root.clone());
     }
 
     #[test]
@@ -471,7 +485,7 @@ mod tests {
         assert!(!orphan.exists());
         assert!(state.root.join(&active_id).exists());
         state.discard(&active_id).unwrap();
-        let _ = fs::remove_dir_all(state.root);
+        let _ = fs::remove_dir_all(state.root.clone());
     }
 
     #[test]
@@ -489,7 +503,7 @@ mod tests {
         assert_eq!(snapshot.skipped_active, 0);
         assert_eq!(snapshot.skipped_grace_period, 1);
         assert!(fresh.exists());
-        let _ = fs::remove_dir_all(state.root);
+        let _ = fs::remove_dir_all(state.root.clone());
     }
 
     #[test]
@@ -504,6 +518,21 @@ mod tests {
         assert_eq!(snapshot.removed, 0);
         assert_eq!(snapshot.skipped_active, 1);
         assert!(foreign.exists());
-        let _ = fs::remove_dir_all(state.root);
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn dropping_state_cleans_active_spool_directories() {
+        let state = test_state("drop-cleanup");
+        let root = state.root.clone();
+        let spool_id = state.create().unwrap();
+        let directory = root.join(&spool_id);
+        let lock_path = root.join(format!("{spool_id}.lock"));
+        assert!(directory.exists());
+        assert!(lock_path.exists());
+        drop(state);
+        assert!(!directory.exists());
+        assert!(!lock_path.exists());
+        let _ = fs::remove_dir_all(root);
     }
 }
