@@ -39,6 +39,7 @@ import {
 describe("image converter error formatting", () => {
   it("formats known native errors and preserves unknown/non-error values safely", () => {
     expect(formatImageConverterError(new Error("failed to write exported image: D:\\out\\a.bmp"))).toBe("写入导出图片失败：D:\\out\\a.bmp");
+    expect(formatImageConverterError(new Error("failed to create output directory: access denied"))).toBe("创建输出目录失败：access denied");
     expect(formatImageConverterError("failed to encode webp: unsupported pixel format")).toBe("编码 WebP 失败：unsupported pixel format");
     expect(formatImageConverterError("failed to inspect selected image: bad header")).toBe("检查所选图片失败：bad header");
     expect(formatImageConverterError("other: path/file.png")).toBe("other: path/file.png");

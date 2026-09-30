@@ -1007,7 +1007,7 @@ export default function ImageConverter({
       setOutputDirectory(selectedDirectory);
       setStatus({ kind: "ready", text: "已选择输出目录" });
     } catch (pickError) {
-      const message = pickError instanceof Error ? pickError.message : "无法选择输出目录，请重试。";
+      const message = formatImageConverterError(pickError);
       setError(message);
       setStatus({ kind: "error", text: "选择输出目录失败" });
     }
