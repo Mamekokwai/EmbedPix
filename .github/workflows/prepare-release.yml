@@ -251,11 +251,19 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           npm run check:release-signing -- -ReportPath signing-preflight-report.json
           if (-not (Test-Path -LiteralPath signing-preflight-report.json -PathType Leaf)) {
             throw 'Signing preflight report was not generated.'
           }
+          $report = Get-Content -Raw -LiteralPath signing-preflight-report.json | ConvertFrom-Json
+          if ($report.version -ne $env:RELEASE_VERSION) { throw 'Signing preflight report version mismatch.' }
+          if ($report.signingPreflight -ne 'passed' -or $report.trustedPublicKeyVerification -ne 'passed' -or $report.cleanup -ne 'passed') {
+            throw 'Signing preflight report contains a failed status.'
+          }
+          try { $reportTime = [DateTimeOffset]::Parse([string]$report.generatedAtUtc) } catch { throw 'Signing preflight report timestamp is invalid.' }
+          if ($reportTime.Offset -ne [TimeSpan]::Zero) { throw 'Signing preflight report timestamp is not UTC.' }
 
       - name: Archive signing preflight report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
