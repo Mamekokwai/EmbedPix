@@ -44,7 +44,6 @@ import {
   formatImageConverterError,
   formatMebibytes,
   getImagePreviewComparison,
-  estimateImageExportBytes,
   estimateImageExportBytesForDimensions,
   getBackgroundNote,
   getBitDepthNote,
