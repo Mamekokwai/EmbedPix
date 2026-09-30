@@ -31,7 +31,7 @@
 - [x] 本轮批处理与资产门禁收尾：累计压缩批处理进度摘要已完成；release fixture 已覆盖 x64 签名资产 `browser_download_url` 篡改拒绝。
 - [x] 本轮门禁确认：前端 32 个测试文件 / 387 个测试通过；压缩 CLI、release fixture、release config、desktop smoke 全部通过。
 - [x] 本轮可访问性收尾：累计压缩批处理进度摘要增加 `aria-live` 通知；前端当前为 32 个测试文件 / 387 个测试通过。
-- [~] `targetResize` 分阶段接入：已完成安全的 `targetResizePercent` 百分比缩放切片；默认关闭、仅允许 10–100%、禁止放大、保持宽高比，JPEG/有损 WebP 的 preview/estimate/formal/CLI 共用同一份 resize preparation，Lanczos3 缩放并复用尺寸上限。结果额外回报 `originalInputBytes`/`preparedInputBytes`，现有 `inputBytes` 明确定义为源文件体积，跳过和节省率按源文件比较；缩放准备阶段有取消检查并受单文件输入预算约束。完整的“目标体积联动自动降尺寸”仍未接入。
+- [x] `targetResize` 分阶段接入：固定 `targetResizePercent` 与 `autoResizeToTarget` 均已完成安全缩放；默认关闭、仅允许 10–100%、禁止放大、保持宽高比，JPEG/有损 WebP 的 preview/estimate/formal/CLI 共用同一份 resize preparation，Lanczos3 缩放并复用尺寸上限。结果额外回报 `originalInputBytes`/`preparedInputBytes`/`selectedResizePercent`，现有 `inputBytes` 明确定义为源文件体积，跳过和节省率按源文件比较；缩放准备阶段有取消检查并受单文件输入预算约束。
 - [x] 本轮增量：输出缩放支持自定义 10–100% 输入，不再局限于预设档位；偏好、自定义预设、参数摘要和格式切换清理均已覆盖。当前门禁为前端 32 个测试文件 / 392 项通过，Rust 277 项、CLI 4 项；构建与 compression CLI smoke 已通过。
 - [x] 自动目标体积联动缩放（2026-10-01）：Gateway/native/CLI 新增 `autoResizeToTarget`，默认关闭且只接受 JPEG/有损 WebP + `maxOutputBytes`；preview/estimate/formal/CLI 共用 `prepare_and_choose_output`，按 100/75/50/25/10% 有界尝试，质量候选预算在所有轮次合计不超过 `maxCandidates`，每轮检查取消；目标不可达统一返回 skipped，正式路径在 writer 前拒绝发布并保持目标文件不变。前端增加互斥开关、窄窗口可换行提示、偏好和自定义预设持久化；结果统一返回最终 `selectedResizePercent`，预检返回候选轮数、峰值准备输入、峰值编码候选和像素预算。当前回归：前端 32 个测试文件 / 394 项、Rust 278 项库测试、CLI 4 项。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
@@ -206,7 +206,7 @@
 ### 3.3 目标体积
 
 - [x] 支持设置最大输出体积（JPEG/WebP 有损）。
-- [~] 支持设置目标体积：JPEG/WebP 有损按最大体积约束执行有界候选搜索，精确目标和尺寸联动待后续。
+- [x] 支持设置目标体积：JPEG/WebP 有损按最大体积约束执行有界候选搜索，自动模式按候选尺寸联动，并在 preview/estimate/formal/CLI 返回目标状态和最终缩放档位。
 - [x] 先调整质量，再调整尺寸：自动目标体积规划器按 100/75/50/25/10% 顺序逐档尝试，每档质量候选预算与总候选上限共享；固定 `targetResizePercent` 仍可独立使用，二者互斥。
 - [x] 百分比缩放安全切片：`targetResizePercent` 默认关闭，范围 10–100，禁止放大，仅 JPEG/有损 WebP；Gateway/native/CLI 均做协议校验，预检/预览/估算/正式导出共享尺寸计算，前端偏好与自定义预设可保存该参数；缩放后的尺寸仍经过现有解码、尺寸、输出体积和发布保护。
 - [x] 自动目标体积联动缩放：统一规划器携带候选尺寸、质量选择、候选计数和累计搜索耗时；限制 5 个缩放档位、每轮编码预算、输入/预览上限，并在准备、编码和发布前检查取消。
