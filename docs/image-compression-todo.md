@@ -82,7 +82,7 @@
 - [x] 评估并固定 OxiPNG 版本（9.1.5）。
 - [x] 完成 OxiPNG 许可证和依赖清单审查。
 - [x] 支持优化级别 0–6 的内部映射。
-- [ ] 支持 `strip-safe`：技术评估结论是不能由当前跨格式解码→重编码链路直接实现。OxiPNG 9.1.5 虽提供 `StripChunks::Safe/All` 与 ICC 辅助 API，但当前入口先将输入解码并重新编码，源 PNG 的 ICC/辅助块已在 OxiPNG 接手前丢失；后续需限定为可验证的同格式 PNG 原始字节路径，并补 ICC 保留、EXIF/GPS/XMP/缩略图清理 fixture。
+- [ ] 支持 `strip-safe`：最小可行边界已明确为“输入 PNG→输出 PNG、无像素重采样”的 raw-byte OxiPNG 路径。OxiPNG 9.1.5 的 `StripChunks::Safe` 白名单保留 `iCCP`/`sRGB`/`cICP` 等影响显示的块，并删除 EXIF、XMP、GPS/缩略图承载块及未列入显示白名单的未知 ancillary chunks；其 chunk 解析同时校验长度/CRC，输出仍需 `image` 解码、尺寸/颜色/Alpha 校验。当前压缩入口先解码→重编码，故 ICC 已提前丢失；后续应先限定同格式 PNG，加入带 ICC、eXIf、iTXt/tEXt XMP、GPS/缩略图及未知 ancillary/坏 CRC fixture，再复用现有原子发布、取消、发布后文件大小检查，确认失败不替换目标后才开放协议。
 - [x] 支持 `strip-all`：当前编码器路径不复制输入元数据，并由 native 响应明确回报 `stripAll`。
 - [x] 第一阶段 `strip` 实际验证：带 JPEG EXIF APP1 的输入在 PNG/JPEG/WebP 输出中不会被复制。
 - [x] 支持透明像素优化开关：PNG 请求/估算支持可选 `pngOptimizeAlpha`，默认关闭；仅 PNG 接受，启用后明确提示可能改变完全透明像素的 RGB 值，输出仍执行尺寸与解码校验。
