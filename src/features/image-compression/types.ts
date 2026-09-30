@@ -1,7 +1,7 @@
 export type CompressionFormat = "jpg" | "webp" | "png";
 export type CompressionPreset = "high-quality" | "balanced" | "small-size" | "custom";
 export type CompressionOutputLocation = "source" | "subfolder" | "directory";
-export type MetadataPolicy = "preserve" | "strip";
+export type MetadataPolicy = "preserve" | "strip" | "strip-all" | "stripSafe";
 export interface CompressionItem { id: string; file: File; sourcePath?: string; size: number; dimensions?: { width: number; height: number }; }
 export type CompressionItemResultStatus = "completed" | "skipped" | "failed";
 export interface CompressionQualityMetrics { rgbMae: number; psnrDb: number | null; alphaMismatchPixels: number; }
