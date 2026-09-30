@@ -629,6 +629,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     if (!jobId || cancelRequestedRef.current) return;
     cancelRequestedRef.current = true;
     setMessage("正在取消当前压缩任务…");
+    stopCompressionProgressPolling();
     try {
       await cancelCompression(jobId);
     } catch (error) {
