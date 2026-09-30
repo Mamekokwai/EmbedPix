@@ -1342,8 +1342,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const clearFrames = () => {
-    if (lockedRef.current || pendingRef.current > 0 || status.kind === "exporting") return;
-    if (lockedRef.current) return;
+    if (lockedRef.current || status.kind === "exporting") return;
     importQueueRef.current.cancel();
     frames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
     framesRef.current = [];
