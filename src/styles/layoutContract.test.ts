@@ -36,7 +36,7 @@ describe("compact layout viewport contract", () => {
     expect(updateCss).toContain("overflow-wrap: anywhere");
   });
   it("keeps estimate target and selected-quality fields visible with native results", () => {
-    expect(compressionView).toContain("setEstimate({ ...result, estimatedBytes: result.outputBytes })");
+    expect(compressionView).toContain("setEstimate(mergeCompressionEstimateResult(result))");
     expect(compressionView).toContain("typeof estimate.targetMet === \"boolean\"");
     expect(compressionView).toContain("typeof estimate.selectedQuality === \"number\"");
   });
