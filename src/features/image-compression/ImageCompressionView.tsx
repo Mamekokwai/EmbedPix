@@ -208,7 +208,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [itemResults, setItemResults] = useState<CompressionItemResult[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [stripSafeInputVerified, setStripSafeInputVerified] = useState<boolean | null>(null);
+  const [stripSafeInputValidation, setStripSafeInputValidation] = useState<{ key: string; valid: boolean } | null>(null);
   const [preview, setPreview] = useState<CompressionPreview | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
@@ -279,15 +279,17 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const actualSavedBytes = resultStats.savedBytes;
   const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const stripSafeValidationKey = useMemo(() => `${format}\u0000${items.map((item) => item.id).join("\u0001")}`, [format, items]);
+  const stripSafeInputVerified = stripSafeInputValidation?.key === stripSafeValidationKey ? stripSafeInputValidation.valid : null;
   useEffect(() => {
     let active = true;
-    setStripSafeInputVerified(null);
+    setStripSafeInputValidation(null);
     if (items.length === 0) return () => { active = false; };
     void Promise.all(items.map(async (item) => getStripSafeInputError(new Uint8Array(await item.file.arrayBuffer()), format)))
-      .then((errors) => { if (active) setStripSafeInputVerified(errors.every((error) => error === null)); })
-      .catch(() => { if (active) setStripSafeInputVerified(false); });
+      .then((errors) => { if (active) setStripSafeInputValidation({ key: stripSafeValidationKey, valid: errors.every((error) => error === null) }); })
+      .catch(() => { if (active) setStripSafeInputValidation({ key: stripSafeValidationKey, valid: false }); });
     return () => { active = false; };
-  }, [format, items]);
+  }, [format, items, stripSafeValidationKey]);
   const stripSafeInputAvailable = stripSafeInputVerified === true;
   useEffect(() => {
     if (metadataPolicy === "stripSafe" && stripSafeInputVerified === false) setMetadataPolicy("strip");

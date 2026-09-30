@@ -45,17 +45,19 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toMatch(/\[items, options, selectedItemId\]/);
   });
   it("keeps strip-safe metadata pending until validation completes", () => {
-    expect(compressionView).toContain("useState<boolean | null>(null)");
-    expect(compressionView).toContain("setStripSafeInputVerified(null);");
+    expect(compressionView).toContain("useState<{ key: string; valid: boolean } | null>(null)");
+    expect(compressionView).toContain("setStripSafeInputValidation(null);");
+    expect(compressionView).toContain("stripSafeInputValidation?.key === stripSafeValidationKey");
     expect(compressionView).toContain("stripSafeInputVerified === true");
     expect(compressionView).toContain('metadataPolicy === "stripSafe" && stripSafeInputVerified === false');
-    expect(compressionView).toContain("if (active) setStripSafeInputVerified(errors.every((error) => error === null));");
+    expect(compressionView).toContain("setStripSafeInputValidation({ key: stripSafeValidationKey, valid: errors.every((error) => error === null) });");
   });
   it("blocks native preview and estimate while strip-safe validation is pending", () => {
     expect(compressionView).toContain('options.metadataPolicy === "stripSafe" && stripSafeInputVerified !== true');
     expect(compressionView).toContain("正在校验安全清理输入");
     expect(compressionView).toContain("校验完成后生成预览");
     expect(compressionView).toMatch(/\[active, busy, items, options, selectedItem, stripSafeInputVerified\]/);
+    expect(compressionView).toContain("const stripSafeValidationKey = useMemo");
   });
   it("normalizes both LF and CRLF source checkouts before matching contracts", () => {
     expect(".a\r\n.b\r.c\n".replace(/\r\n?/g, "\n")).toBe(".a\n.b\n.c\n");
