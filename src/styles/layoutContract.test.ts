@@ -268,7 +268,7 @@ describe("compact layout viewport contract", () => {
   it("invalidates stale image export preflight when request parameters change", () => {
     expect(converterView).toContain("setExportPreflight(null);");
     expect(converterView).toContain("setNativePreflightStatus(null);");
-    expect(converterView).toMatch(/\[bitDepth, file, height, imageTransform, keepAspectRatio, loadedImages, outputFormat, width\]/);
+    expect(converterView).toMatch(/\[autoSequence, bitDepth, deleteSource, file, fileNameTemplate, height, imageTransform, keepAspectRatio, loadedImages, outputDirectory, outputLocation, outputSubdirectory, outputFormat, overwriteSameName, width\]/);
     expect(converterView).toContain("setActualExportResult(null);");
   });
 

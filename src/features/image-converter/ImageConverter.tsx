@@ -472,7 +472,7 @@ export default function ImageConverter({
   useEffect(() => {
     setExportPreflight(null);
     setNativePreflightStatus(null);
-  }, [bitDepth, file, height, imageTransform, keepAspectRatio, loadedImages, outputFormat, width]);
+  }, [autoSequence, bitDepth, deleteSource, file, fileNameTemplate, height, imageTransform, keepAspectRatio, loadedImages, outputDirectory, outputLocation, outputSubdirectory, outputFormat, overwriteSameName, width]);
 
   useEffect(() => {
     let cancelled = false;
