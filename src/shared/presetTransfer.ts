@@ -68,6 +68,29 @@ export function importPresetBundle(serialized: string): { image: ImageCustomPres
   return { image, gif };
 }
 
+export function formatPresetTransferError(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const mappings: ReadonlyArray<readonly [string, string]> = [
+    ["preset file is not valid JSON", "预设文件不是有效的 JSON"],
+    ["unsupported preset schema or version", "不支持的预设结构或版本"],
+    ["must be an object", "必须是对象"],
+    ["contains unsupported fields", "包含不支持的字段"],
+    ["is out of range", "超出有效范围"],
+    ["image output format is invalid", "图片输出格式无效"],
+    ["image ordering values are invalid", "图片排序参数无效"],
+    ["image preset values are invalid", "图片预设参数无效"],
+    ["GIF preset values are invalid", "GIF 预设参数无效"],
+    ["preset type is invalid", "预设类型无效"],
+  ];
+  for (const [prefix, label] of mappings) {
+    const index = message.indexOf(prefix);
+    if (index < 0) continue;
+    const suffix = message.slice(index + prefix.length);
+    return `${message.slice(0, index)}${label}${suffix.startsWith(":") ? `：${suffix.slice(1).trim()}` : suffix}`;
+  }
+  return message || "预设导入失败，请重试。";
+}
+
 export function mergeImportedPresets<T extends { id: string; name: string }>(existing: readonly T[], incoming: readonly T[], strategy: DuplicatePresetStrategy): T[] {
   const result = [...existing];
   for (const item of incoming) {

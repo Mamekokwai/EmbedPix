@@ -36,7 +36,7 @@ import { canStartVideoImport, clampVideoFps, formatVideoTime, isCurrentVideoExtr
 import type { VideoCropRect } from "./videoGifLogic";
 import { extractVideoFrameBlobs } from "./videoFrameExtraction";
 import { readImageFile, type NativeImageFile } from "../../platform/image/imageExportGateway";
-import { exportPresetBundle, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
+import { exportPresetBundle, formatPresetTransferError, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
 import { exportWorkspace, formatWorkspaceTransferError, importWorkspace } from "../../shared/workspaceTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
 import { loadVideoMetadata } from "./videoMetadata";
@@ -1491,7 +1491,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const importGifPresetFile = async (file: File | undefined) => {
     if (!file) return;
     try { const incoming = importPresetBundle(await file.text()).gif; const next = mergeImportedPresets(customPresets, incoming, "skip"); setCustomPresets(next); saveGifCustomPresets(next); setCustomPresetMessage(`已导入 ${next.length - customPresets.length} 个 GIF 预设，重复名称已跳过`); }
-    catch (error) { setCustomPresetMessage(error instanceof Error ? error.message : "GIF 预设导入失败。"); }
+    catch (error) { setCustomPresetMessage(formatPresetTransferError(error)); }
   };
 
   const updateGifEncodingQuality = (value: GifEncodingQuality) => {

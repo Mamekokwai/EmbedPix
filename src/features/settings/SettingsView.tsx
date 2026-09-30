@@ -10,7 +10,7 @@ import {
   type ThemeMode,
 } from "../../platform/preferences/appPreferences";
 import ThemeSelect from "../../shared/components/ThemeSelect";
-import { exportPresetBundle, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
+import { exportPresetBundle, formatPresetTransferError, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
 import { createImageCustomPreset, loadImageCustomPresets, saveImageCustomPresets, type ImageCustomPreset } from "../image-converter/imagePresets";
 
@@ -120,7 +120,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
       const incoming = importPresetBundle(await file.text()).image;
       const next = mergeImportedPresets(customPresets, incoming, "skip"); setCustomPresets(next); saveImageCustomPresets(next);
       setPresetMessage(`已导入 ${next.length - customPresets.length} 个图片预设，重复名称已跳过`);
-    } catch (error) { setPresetMessage(error instanceof Error ? error.message : "图片预设导入失败。"); }
+    } catch (error) { setPresetMessage(formatPresetTransferError(error)); }
   };
 
   return (
