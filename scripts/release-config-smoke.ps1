@@ -39,6 +39,22 @@ if (-not $tauri.bundle.active -or -not $tauri.bundle.createUpdaterArtifacts -or 
   throw 'Tauri bundle must enable NSIS and updater artifacts.'
 }
 if (-not $tauri.plugins.updater.pubkey) { throw 'Tauri updater public key is missing.' }
+$cleanupHelperPath = 'scripts/release-signing-preflight-cleanup.ps1'
+$cleanupSmokePath = 'scripts/release-signing-preflight-cleanup-smoke.ps1'
+if (-not $package.scripts.'check:release-signing-cleanup') {
+  throw 'package.json is missing the signing cleanup smoke command.'
+}
+foreach ($path in @($cleanupHelperPath, $cleanupSmokePath)) {
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Signing cleanup contract is missing: $path" }
+}
+$cleanupHelper = Get-Content -Raw -LiteralPath $cleanupHelperPath
+foreach ($required in @('Remove-ReleaseSigningProbeDirectory', 'MaxAttempts', 'Test-Path', '拒绝清理非签名预检创建的临时目录')) {
+  if ($cleanupHelper -notmatch [regex]::Escape($required)) { throw "Signing cleanup helper is missing: $required" }
+}
+$cleanupSmoke = Get-Content -Raw -LiteralPath $cleanupSmokePath
+foreach ($required in @('Remove-ReleaseSigningProbeDirectory', '-RemoveItem', '清理残留 smoke 未报告失败')) {
+  if ($cleanupSmoke -notmatch [regex]::Escape($required)) { throw "Signing cleanup smoke is missing: $required" }
+}
 $configKey = Decode-MinisignPublicKey $tauri.plugins.updater.pubkey 'tauri.conf.json updater pubkey'
 $fileKey = Decode-MinisignPublicKey (Get-Content -Raw 'src-tauri/update-public-key.txt') 'src-tauri/update-public-key.txt'
 if ($configKey -ne $fileKey) { throw 'Tauri updater pubkey does not match src-tauri/update-public-key.txt.' }
