@@ -34,6 +34,7 @@
 - [x] `targetResize` 分阶段接入：固定 `targetResizePercent` 与 `autoResizeToTarget` 均已完成安全缩放；默认关闭、仅允许 10–100%、禁止放大、保持宽高比，JPEG/有损 WebP 的 preview/estimate/formal/CLI 共用同一份 resize preparation，Lanczos3 缩放并复用尺寸上限。结果额外回报 `originalInputBytes`/`preparedInputBytes`/`selectedResizePercent`，现有 `inputBytes` 明确定义为源文件体积，跳过和节省率按源文件比较；缩放准备阶段有取消检查并受单文件输入预算约束。
 - [x] 本轮增量：输出缩放支持自定义 10–100% 输入，不再局限于预设档位；偏好、自定义预设、参数摘要和格式切换清理均已覆盖。当前门禁为前端 32 个测试文件 / 392 项通过，Rust 277 项、CLI 4 项；构建与 compression CLI smoke 已通过。
 - [x] 自动目标体积联动缩放（2026-10-01）：Gateway/native/CLI 新增 `autoResizeToTarget`，默认关闭且只接受 JPEG/有损 WebP + `maxOutputBytes`；preview/estimate/formal/CLI 共用 `prepare_and_choose_output`，按 100/75/50/25/10% 有界尝试，质量候选预算在所有轮次合计不超过 `maxCandidates`，每轮检查取消；目标不可达统一返回 skipped，正式路径在 writer 前拒绝发布并保持目标文件不变。前端增加互斥开关、窄窗口可换行提示、偏好和自定义预设持久化；结果统一返回最终 `selectedResizePercent`，预检返回候选轮数、峰值准备输入、峰值编码候选和像素预算；CLI 烟测额外验证不可达目标不会覆盖已有同名输出。当前回归：前端 32 个测试文件 / 394 项、Rust 278 项库测试、CLI 4 项。
+- [x] 压缩诊断可访问性收尾：本地化跳过原因保留 `nativeReason` 到逐项结果与 JSON 报告，预览与逐项结果同时提供可聚焦设备可读取的辅助文本；不改变 native 写入、覆盖、取消或重试语义。完整前端测试 394 项、构建与 desktop smoke 均通过。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
 - [x] 签名预检报告安全契约（commit `8696532`）：报告字段白名单、敏感字段拒绝和 UTF-8 无 BOM 写入均由 `check:release-config` 校验并通过。
