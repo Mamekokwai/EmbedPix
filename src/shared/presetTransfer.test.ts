@@ -26,7 +26,8 @@ describe("preset transfer", () => {
 describe("preset transfer error formatting", () => {
   it("localizes stable import errors while preserving details", () => {
     expect(formatPresetTransferError(new Error("preset file is not valid JSON"))).toBe("预设文件不是有效的 JSON");
-    expect(formatPresetTransferError(new Error("JPEG quality is out of range"))).toBe("JPEG quality 超出有效范围");
+    expect(formatPresetTransferError(new Error("JPEG quality is out of range"))).toBe("JPEG 质量超出有效范围");
+    expect(formatPresetTransferError(new Error("canvasWidth is out of range"))).toBe("画布宽度超出有效范围");
     expect(formatPresetTransferError(new Error("preset entry must be an object"))).toBe("预设条目必须是对象");
   });
 
