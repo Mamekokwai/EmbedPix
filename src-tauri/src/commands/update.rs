@@ -1625,6 +1625,64 @@ mod tests {
     }
 
     #[test]
+    fn signature_commit_boundary_cleanup_keeps_existing_final_package() {
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-update-signature-boundary-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let package = root.join("package.exe");
+        let signature = root.join("package.exe.sig");
+        let part = root.join("package.exe.part");
+        let signature_part = root.join("package.exe.sig.part");
+        let etag = root.join("package.exe.etag");
+        std::fs::write(&package, b"existing-final").unwrap();
+        std::fs::write(&signature, b"existing-signature").unwrap();
+        std::fs::write(&part, b"new-partial").unwrap();
+        std::fs::write(&signature_part, b"new-signature-partial").unwrap();
+        std::fs::write(&etag, b"\"new\"").unwrap();
+
+        cleanup_download_artifacts(&package, &signature, true, false);
+
+        assert_eq!(std::fs::read(&package).unwrap(), b"existing-final");
+        assert!(!part.exists());
+        assert!(!signature_part.exists());
+        assert!(!etag.exists());
+        assert!(!signature.exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn package_commit_boundary_cleanup_removes_package_on_failed_commit_path() {
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-update-package-boundary-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let package = root.join("package.exe");
+        let signature = root.join("package.exe.sig");
+        let part = root.join("package.exe.part");
+        let signature_part = root.join("package.exe.sig.part");
+        let etag = root.join("package.exe.etag");
+        std::fs::write(&package, b"committed-package").unwrap();
+        std::fs::write(&signature, b"committed-signature").unwrap();
+        std::fs::write(&part, b"stale-partial").unwrap();
+        std::fs::write(&signature_part, b"stale-signature-partial").unwrap();
+        std::fs::write(&etag, b"\"stale\"").unwrap();
+
+        cleanup_download_artifacts(&package, &signature, true, true);
+
+        assert!(!package.exists());
+        assert!(!part.exists());
+        assert!(!signature_part.exists());
+        assert!(!etag.exists());
+        assert!(!signature.exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn verifies_minisign_signature_and_rejects_tampering() {
         let public_key = "untrusted comment: minisign public key E7620F1842B4E81F\nRWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3";
         let signature = "untrusted comment: signature from minisign secret key\nRWQf6LRCGA9i59SLOFxz6NxvASXDJeRtuZykwQepbDEGt87ig1BNpWaVWuNrm73YiIiJbq71Wi+dP9eKL8OC351vwIasSSbXxwA=\ntrusted comment: timestamp:1555779966\tfile:test\nQtKMXWyYcwdpZAlPF7tE2ENJkRd1ujvKjlj1m9RtHTBnZPa5WKU5uWRs5GoP5M/VqE81QFuMKI5k/SfNQUaOAA==";
