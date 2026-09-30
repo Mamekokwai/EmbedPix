@@ -708,6 +708,28 @@ fn verify_encoded_output(
         return Ok(());
     }
 
+    let actual_format = image::guess_format(bytes).map_err(|error| {
+        format!(
+            "encoded {} output format could not be identified: {error}",
+            output_format.name()
+        )
+    })?;
+    let expected_format = match output_format {
+        OutputFormat::Png => ImageFormat::Png,
+        OutputFormat::Webp => ImageFormat::WebP,
+        OutputFormat::Tiff => ImageFormat::Tiff,
+        OutputFormat::Ico => ImageFormat::Ico,
+        OutputFormat::Jpg => ImageFormat::Jpeg,
+        OutputFormat::Bmp => ImageFormat::Bmp,
+        OutputFormat::Rgb565 | OutputFormat::CArray => unreachable!(),
+    };
+    if actual_format != expected_format {
+        return Err(format!(
+            "encoded {} output format does not match the requested format: detected {actual_format:?}",
+            output_format.name()
+        ));
+    }
+
     let decoded = decode_input(bytes).map_err(|error| {
         format!(
             "encoded {} output failed validation: {error}",
@@ -3222,7 +3244,10 @@ mod tests {
         assert!(verify_encoded_output(&png, OutputFormat::Png, 2, 1).is_ok());
 
         let invalid = verify_encoded_output(b"not an image", OutputFormat::Png, 2, 1).unwrap_err();
-        assert!(invalid.contains("encoded png output failed validation"));
+        assert!(invalid.contains("encoded png output format could not be identified"));
+
+        let wrong_format = verify_encoded_output(&png, OutputFormat::Jpg, 2, 1).unwrap_err();
+        assert!(wrong_format.contains("encoded jpg output format does not match"));
 
         let mismatch = verify_encoded_output(&png, OutputFormat::Png, 1, 1).unwrap_err();
         assert!(mismatch.contains("dimensions do not match"));
