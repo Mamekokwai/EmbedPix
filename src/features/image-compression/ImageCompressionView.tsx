@@ -41,7 +41,6 @@ import {
   normalizeCompressionOutputModes,
   removeCompressionItem,
   isCurrentCompressionEstimate,
-  isCurrentCompressionItem,
   canWriteCompressionItemUpdate,
   removeCompressionDimensionError,
   isCompressionSourcePathError,
