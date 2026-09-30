@@ -12,6 +12,10 @@ function Set-Utf8NoBomContent([string]$Path, [string]$Value) {
   [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))
 }
 
+# Keep the source ASCII-only so Windows PowerShell 5.1 parses the static contract reliably.
+$notPublishedText = ([char]0x672A, [char]0x53D1, [char]0x5E03) -join ''
+$unreachableText = ([char]0x4E0D, [char]0x53EF, [char]0x8FBE) -join ''
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
@@ -230,7 +234,7 @@ function Assert-TargetCompressionContract([switch]$Required) {
   if ($planner -notmatch 'max_candidates' -or $planner -notmatch 'clamp\(1,\s*8\)' -or $planner -notmatch 'for index in 0\.\.budget') {
     throw 'GIF target-volume search does not expose a bounded maxCandidates budget.'
   }
-  if ($storage -notmatch 'MAX_OUTPUT_BYTES\s*:\s*u64' -or $storage -notmatch 'validate_output_size\s*\(' -or $storage -notmatch '未发布') {
+  if ($storage -notmatch 'MAX_OUTPUT_BYTES\s*:\s*u64' -or $storage -notmatch 'validate_output_size\s*\(' -or $storage -notmatch [regex]::Escape($notPublishedText)) {
     throw 'GIF output-size enforcement is missing or does not document the no-publish failure.'
   }
   if ($export -notmatch 'storage::MAX_OUTPUT_BYTES' -or $export -notmatch 'storage::write_output_with_publish') {
@@ -239,7 +243,7 @@ function Assert-TargetCompressionContract([switch]$Required) {
   if ($searchBody -match 'write_output_with_publish|write_exported_file|fs::rename|hard_link|acquire_publish|job_begin_publish') {
     throw 'GIF target-volume search or candidate selection invokes a publishing writer.'
   }
-  if ($planner -notmatch 'is_none\(\)' -or $planner -notmatch '不可达' -or $selector -notmatch 'selected\.ok_or_else') {
+  if ($planner -notmatch 'is_none\(\)' -or $planner -notmatch [regex]::Escape($unreachableText) -or $selector -notmatch 'selected\.ok_or_else') {
     throw 'GIF target_unreachable handling is missing from the planner/selector contract.'
   }
   $guardPosition = $export.IndexOf('select_export_candidate')
@@ -257,7 +261,7 @@ function Assert-TargetCompressionContract([switch]$Required) {
     maxCandidatesUpperBound = 8
     candidateSearchWriterFree = $true
     targetUnreachableNoPublish = $true
-    unreachableRepresentation = 'selected=null + reason(不可达); no target_unreachable CLI status is claimed'
+    unreachableRepresentation = "selected=null + reason($unreachableText); no target_unreachable CLI status is claimed"
   }
 }
 
