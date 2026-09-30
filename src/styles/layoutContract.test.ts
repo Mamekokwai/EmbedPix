@@ -52,6 +52,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("runCompression([result.itemId as string])");
     expect(compressionView).toContain("仅重试此项");
   });
+  it("exposes a GIF export report only after an export path exists", () => {
+    expect(gifView).toContain("createGifExportReport");
+    expect(gifView).toContain("下载 JSON 报告");
+    expect(gifView).toContain("{lastExportPath ? <div className=\"gif-output-actions\"");
+  });
   it("clears stale compression preflight space when inputs or options change", () => {
     expect(compressionView).toContain("setPreflightSpaceBytes(null);");
     expect(compressionView).toMatch(/\[items, options, selectedItemId\]/);

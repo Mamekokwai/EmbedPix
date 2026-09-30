@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, createGifExportReport, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifByteFrame } from "./gifMakerLogic";
 import { resolveGifExportCanvasSize } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
+  it("creates a parseable, path-redacted export report", () => {
+    const report = JSON.parse(createGifExportReport({ generatedAt: "2026-10-01T00:00:00.000Z", outputFormat: "gif", outputFileName: "C:\\Exports\\demo.gif", canvasWidth: 320, canvasHeight: 240, frameCount: 2, totalDurationMs: 500, parameterSummary: "GIF 动图 · 2 帧", sizeComparison: { baselineBytes: 1000, finalBytes: 700, targetBytes: 800, maxBytes: 1200, autoCompress: false }, compressionSummary: null }));
+    expect(report).toMatchObject({ schemaVersion: 1, generatedAt: "2026-10-01T00:00:00.000Z", outputFormat: "gif", outputFileName: "demo.gif", parameters: { frameCount: 2 }, sizeComparison: { finalBytes: 700 } });
+    expect(JSON.stringify(report)).not.toContain("C:\\Exports");
+  });
   it("uses measured compression dimensions until settings invalidate the measurement", () => {
     expect(resolveGifExportCanvasSize({ width: 800, height: 600 }, { width: 600, height: 450 })).toEqual({ width: 600, height: 450 });
     expect(resolveGifExportCanvasSize({ width: 800, height: 600 }, null)).toEqual({ width: 800, height: 600 });

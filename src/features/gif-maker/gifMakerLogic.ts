@@ -7,6 +7,9 @@ export interface GifContentMargins { top: number; right: number; bottom: number;
 export interface GifContentRect { x: number; y: number; width: number; height: number }
 export interface GifSizeComparison { baselineBytes: number; finalBytes: number; targetBytes?: number; maxBytes?: number }
 export interface GifSizeComparisonSummary { ratioPercent: number; changePercent: number; reduced: boolean; meetsTarget: boolean | null; withinMax: boolean | null }
+export function createGifExportReport(report: { generatedAt: string; outputFormat: string; outputFileName?: string | null; canvasWidth: number; canvasHeight: number; frameCount: number; totalDurationMs: number; parameterSummary: string; sizeComparison?: (GifSizeComparison & { autoCompress: boolean }) | null; compressionSummary?: string | null }): string {
+  return JSON.stringify({ schemaVersion: 1, generatedAt: report.generatedAt, outputFormat: report.outputFormat, outputFileName: report.outputFileName?.split(/[\\/]/u).pop() ?? null, parameters: { canvasWidth: report.canvasWidth, canvasHeight: report.canvasHeight, frameCount: report.frameCount, totalDurationMs: report.totalDurationMs, summary: report.parameterSummary }, sizeComparison: report.sizeComparison ? { baselineBytes: report.sizeComparison.baselineBytes, finalBytes: report.sizeComparison.finalBytes, targetBytes: report.sizeComparison.targetBytes ?? null, maxBytes: report.sizeComparison.maxBytes ?? null, autoCompress: report.sizeComparison.autoCompress } : null, compressionSummary: report.compressionSummary ?? null }, null, 2);
+}
 export type GifWorkloadLevel = "light" | "moderate" | "heavy";
 export interface GifWorkloadEstimate {
   totalPixels: number;

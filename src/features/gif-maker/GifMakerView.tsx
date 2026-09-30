@@ -27,7 +27,7 @@ import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSeq
 import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifExportCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, createGifExportReport, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifExportCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import { createGifCustomPreset, loadGifCustomPresets, saveGifCustomPresets, type GifCustomPreset } from "./gifCustomPresets";
@@ -2181,6 +2181,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setStatus({ kind: "error", text: "无法复制导出路径" });
     }
   };
+  const downloadExportReport = () => {
+    if (!lastExportPath) return;
+    const generatedAt = new Date().toISOString();
+    const stamp = generatedAt.replace(/[.:]/gu, "-");
+    const data = createGifExportReport({ generatedAt, outputFormat, outputFileName: lastExportPath, canvasWidth: canvasSize.width, canvasHeight: canvasSize.height, frameCount: exportFrameSummary?.frameCount ?? frames.length, totalDurationMs: exportFrameSummary?.totalDurationMs ?? timeline.selectionMs, parameterSummary: exportParameterSummary, sizeComparison, compressionSummary });
+    downloadBlob(new Blob([data], { type: "application/json" }), `embedpix-gif-report-${stamp}.json`);
+    setStatus({ kind: "ready", text: "GIF 导出 JSON 报告已下载" });
+  };
 
   const sourceHint = selectedFrame ? `${selectedFrame.width} × ${selectedFrame.height} px` : "导入后自动读取尺寸";
   const canMoveLeft = selectedIndex > 0;
@@ -2536,7 +2544,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               <div className="gif-output-row"><span title={outputDisplayPath}>{outputDisplayPath}</span>{outputLocation === "path" ? <button className="quiet-button" type="button" onClick={() => void chooseOutput()}>{outputFormat === "png-sequence" ? "选择目录" : "选择位置"}</button> : null}</div>
               <label className="gif-check-row gif-output-overwrite"><input type="checkbox" checked={overwriteExisting} onChange={(event) => setOverwriteExisting(event.target.checked)} /><span><strong>{outputFormat === "png-sequence" ? "覆盖同名帧序列" : "覆盖同名文件"}</strong><small>{outputFormat === "png-sequence" ? "关闭时自动选择不冲突的序号前缀" : "关闭时同名文件会安全拒绝写入"}</small></span></label>
             </div>
-            {lastExportPath ? <div className="gif-output-actions"><button className="quiet-button" type="button" onClick={() => void openLastExportFolder()}><FolderOpen size={14} aria-hidden="true" />打开文件夹</button><button className="quiet-button" type="button" onClick={() => void copyLastExportPath()}><Copy size={14} aria-hidden="true" />复制路径</button></div> : null}
+            {lastExportPath ? <div className="gif-output-actions"><button className="quiet-button" type="button" onClick={() => void openLastExportFolder()}><FolderOpen size={14} aria-hidden="true" />打开文件夹</button><button className="quiet-button" type="button" onClick={() => void copyLastExportPath()}><Copy size={14} aria-hidden="true" />复制路径</button><button className="quiet-button" type="button" onClick={downloadExportReport}>下载 JSON 报告</button></div> : null}
           </div>
           <div className="gif-parameter-summary" aria-label="导出参数摘要"><strong>导出参数摘要</strong><span>{exportParameterSummary}</span></div>
           {outputFormat === "gif" ? <div className={`gif-workload-summary gif-workload-${workload.level}`}>
