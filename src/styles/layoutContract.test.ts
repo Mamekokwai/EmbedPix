@@ -44,6 +44,13 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("setPreflightSpaceBytes(null);");
     expect(compressionView).toMatch(/\[items, options, selectedItemId\]/);
   });
+  it("keeps strip-safe metadata pending until validation completes", () => {
+    expect(compressionView).toContain("useState<boolean | null>(null)");
+    expect(compressionView).toContain("setStripSafeInputVerified(null);");
+    expect(compressionView).toContain("stripSafeInputVerified === true");
+    expect(compressionView).toContain('metadataPolicy === "stripSafe" && stripSafeInputVerified === false');
+    expect(compressionView).toContain("if (active) setStripSafeInputVerified(errors.every((error) => error === null));");
+  });
   it("normalizes both LF and CRLF source checkouts before matching contracts", () => {
     expect(".a\r\n.b\r.c\n".replace(/\r\n?/g, "\n")).toBe(".a\n.b\n.c\n");
   });

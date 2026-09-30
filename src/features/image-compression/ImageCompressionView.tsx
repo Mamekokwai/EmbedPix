@@ -208,7 +208,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [itemResults, setItemResults] = useState<CompressionItemResult[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [stripSafeInputVerified, setStripSafeInputVerified] = useState(false);
+  const [stripSafeInputVerified, setStripSafeInputVerified] = useState<boolean | null>(null);
   const [preview, setPreview] = useState<CompressionPreview | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
@@ -281,17 +281,17 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
   useEffect(() => {
     let active = true;
-    setStripSafeInputVerified(false);
+    setStripSafeInputVerified(null);
     if (items.length === 0) return () => { active = false; };
     void Promise.all(items.map(async (item) => getStripSafeInputError(new Uint8Array(await item.file.arrayBuffer()), format)))
       .then((errors) => { if (active) setStripSafeInputVerified(errors.every((error) => error === null)); })
       .catch(() => { if (active) setStripSafeInputVerified(false); });
     return () => { active = false; };
   }, [format, items]);
-  const stripSafeInputAvailable = stripSafeInputVerified;
+  const stripSafeInputAvailable = stripSafeInputVerified === true;
   useEffect(() => {
-    if (metadataPolicy === "stripSafe" && !stripSafeInputAvailable) setMetadataPolicy("strip");
-  }, [metadataPolicy, stripSafeInputAvailable]);
+    if (metadataPolicy === "stripSafe" && stripSafeInputVerified === false) setMetadataPolicy("strip");
+  }, [metadataPolicy, stripSafeInputVerified]);
   const previewSavedBytes = selectedItem && preview ? selectedItem.size - preview.outputBytes : 0;
   const previewSavingsPercent = selectedItem && preview && selectedItem.size > 0 ? (previewSavedBytes / selectedItem.size) * 100 : 0;
   useEffect(() => {
