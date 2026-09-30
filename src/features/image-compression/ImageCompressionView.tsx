@@ -284,13 +284,16 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const stripSafeInputVerified = getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems);
   useEffect(() => {
     let active = true;
+    if (getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems) !== null) {
+      return () => { active = false; };
+    }
     setStripSafeInputValidation(null);
     if (items.length === 0) return () => { active = false; };
     void Promise.all(items.map(async (item) => getStripSafeInputError(new Uint8Array(await item.file.arrayBuffer()), format)))
       .then((errors) => { if (active) setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: errors.every((error) => error === null) }); })
       .catch(() => { if (active) setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: false }); });
     return () => { active = false; };
-  }, [format, items, stripSafeValidationItems]);
+  }, [format, items, stripSafeInputValidation, stripSafeValidationItems]);
   const stripSafeInputAvailable = stripSafeInputVerified === true;
   useEffect(() => {
     if (metadataPolicy === "stripSafe" && stripSafeInputVerified === false) setMetadataPolicy("strip");

@@ -51,6 +51,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("stripSafeInputVerified === true");
     expect(compressionView).toContain('metadataPolicy === "stripSafe" && stripSafeInputVerified === false');
     expect(compressionView).toContain("setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: errors.every((error) => error === null) });");
+    expect(compressionView).toContain("getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems) !== null");
   });
   it("blocks native preview and estimate while strip-safe validation is pending", () => {
     expect(compressionView).toContain('options.metadataPolicy === "stripSafe" && stripSafeInputVerified !== true');
