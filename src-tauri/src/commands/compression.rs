@@ -2568,6 +2568,8 @@ fn classify_error_code(stage: CompressionStage, message: &str) -> CompressionErr
         || lower.contains("opaque")
         || lower.contains("animated gif input")
         || lower.contains("animated webp input")
+        || lower.contains("invalid webp container")
+        || lower.contains("invalid webp chunk")
     {
         return CompressionErrorCode::Decode;
     }
@@ -4468,6 +4470,9 @@ mod tests {
         for message in [
             "animated GIF input is not supported; provide a static GIF",
             "animated WebP input is not supported; provide a static WebP",
+            "invalid WebP container length",
+            "invalid WebP chunk layout",
+            "invalid WebP chunk padding",
         ] {
             assert_eq!(
                 classify_error_code(CompressionStage::Failed, message).as_str(),
