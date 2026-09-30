@@ -207,6 +207,10 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("恢复平衡默认");
     expect(compressionView).toContain("disabled={busy}");
     expect(compressionView).toContain("DEFAULT_COMPRESSION_PREFERENCES.format");
+    expect(compressionView).toContain("setWebpPass(DEFAULT_COMPRESSION_PREFERENCES.webpPass)");
+    expect(compressionView).toContain("setPngOptimizeAlpha(DEFAULT_COMPRESSION_PREFERENCES.pngOptimizeAlpha)");
+    expect(compressionView).toContain("setJpegBackground(DEFAULT_COMPRESSION_PREFERENCES.jpegBackground)");
+    expect(compressionView).toContain("setMetadataPolicy(DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy)");
     expect(compressionView).toContain("保存当前参数");
     expect(compressionView).toContain("导出 JSON");
     expect(compressionView).toContain("导入 JSON");

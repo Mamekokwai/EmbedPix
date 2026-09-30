@@ -3,6 +3,7 @@ import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METH
 import type { CompressionItem } from "./types";
 
 import { formatCompressionProgressSummary } from "./imageCompressionLogic";
+import { DEFAULT_COMPRESSION_PREFERENCES } from "./compressionPreferences";
 
 describe("image compression logic", () => {
   it("formats bounded cumulative progress without exposing paths", () => {
@@ -125,6 +126,10 @@ describe("image compression logic", () => {
     expect(getCompressionPreset("small-size")).toMatchObject({ quality: 70, pngOptimizationLevel: 6 });
     expect(getCompressionPreset("balanced").description).toContain("JPEG/WebP 有损质量 82");
     expect(getCompressionPreset("balanced").description).toContain("WebP 默认无损");
+  });
+
+  it("defines the complete balanced reset baseline", () => {
+    expect(DEFAULT_COMPRESSION_PREFERENCES).toMatchObject({ format: "webp", quality: 82, webpPass: 1, pngOptimizeAlpha: false, jpegBackground: "#ffffff", targetSizeEnabled: false, targetSizeKiB: "", maxRgbMae: "", autoResizeToTarget: false, maxInputMiB: 32, metadataPolicy: "strip" });
   });
 
   it("enables target-size control only for lossy JPEG and WebP", () => {

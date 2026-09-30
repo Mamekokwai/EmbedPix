@@ -931,9 +931,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setQuality(values.quality);
     setWebpMethod(COMPRESSION_WEBP_METHOD_DEFAULT);
     setWebpAlphaQuality(100);
+    setWebpPass(DEFAULT_COMPRESSION_PREFERENCES.webpPass);
     setWebpNearLossless(null);
     setWebpLosslessMethod(null);
-    setJpegBackground(initialPreferences.jpegBackground);
+    setJpegBackground(DEFAULT_COMPRESSION_PREFERENCES.jpegBackground);
+    setPngOptimizeAlpha(DEFAULT_COMPRESSION_PREFERENCES.pngOptimizeAlpha);
     setJpegProgressive(false);
     setJpegOptimizeHuffman(false);
     setMaxCandidates(COMPRESSION_MAX_CANDIDATES_DEFAULT);
@@ -956,6 +958,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setTargetResizePercent(DEFAULT_COMPRESSION_PREFERENCES.targetResizePercent);
     setCustomResizeActive(false);
     setMaxInputMiB(DEFAULT_COMPRESSION_PREFERENCES.maxInputMiB);
+    setMetadataPolicy(DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy);
   };
 
   const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, webpLosslessMethod, jpegBackground, jpegProgressive, jpegOptimizeHuffman, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, maxCandidates, maxRgbMae, targetResizePercent: autoResizeActive ? null : targetResizePercent, autoResizeToTarget: autoResizeActive, maxInputMiB, lossless, metadataPolicy, skipIfLarger });
