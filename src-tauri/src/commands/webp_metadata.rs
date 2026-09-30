@@ -119,13 +119,13 @@ where
             .checked_add(payload_len)
             .ok_or_else(|| "stripSafe WebP chunk size overflows".to_string())?;
         let padded_end = payload_end
-            .checked_add(payload_len & 1)
+            .checked_add(usize::from(!payload_len.is_multiple_of(2)))
             .ok_or_else(|| "stripSafe WebP chunk padding overflows".to_string())?;
         if padded_end > riff_end {
             return Err("stripSafe WebP chunk or padding is truncated".into());
         }
         let payload = &input[header_end..payload_end];
-        if payload_len % 2 != 0 && input[payload_end] != 0 {
+        if !payload_len.is_multiple_of(2) && input[payload_end] != 0 {
             return Err("stripSafe WebP odd-sized chunk has a non-zero padding byte".into());
         }
         if *fourcc == *b"ANIM" || *fourcc == *b"ANMF" {
@@ -194,7 +194,7 @@ mod tests {
     fn riff(chunks: &[(&[u8; 4], &[u8])]) -> Vec<u8> {
         let body_len = chunks
             .iter()
-            .map(|(_, data)| 8 + data.len() + data.len() % 2)
+            .map(|(_, data)| 8 + data.len() + usize::from(!data.len().is_multiple_of(2)))
             .sum::<usize>();
         let mut out = Vec::from(*b"RIFF");
         out.extend_from_slice(&(4 + body_len as u32).to_le_bytes());
@@ -203,7 +203,7 @@ mod tests {
             out.extend_from_slice(*fourcc);
             out.extend_from_slice(&(data.len() as u32).to_le_bytes());
             out.extend_from_slice(data);
-            if data.len() % 2 != 0 {
+            if !data.len().is_multiple_of(2) {
                 out.push(0);
             }
         }
