@@ -580,6 +580,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const videoMetadataControllerRef = useRef<AbortController | null>(null);
   const videoImportRequestRef = useRef(0);
   const compressionControllerRef = useRef<AbortController | null>(null);
+  const compressionPlanRequestRef = useRef(0);
   const gifExportJobIdRef = useRef<string | null>(null);
   const gifCancelRequestedRef = useRef<string | null>(null);
   const gifCancelFailureRef = useRef<string | null>(null);
@@ -676,6 +677,9 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setSizeComparison(null);
     setCompressionSummary(null);
     setExportFrameSummary(null);
+    compressionPlanRequestRef.current += 1;
+    setCompressionPlan(null);
+    setCompressionPlanError(null);
   }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, targetSizeKiB]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
@@ -1939,6 +1943,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     }
     setCompressionPlanBusy(true);
     setCompressionPlanError(null);
+    const requestId = ++compressionPlanRequestRef.current;
     try {
       const plannedFrames = await renderExportFrames(canvasSize);
       const result = await planGifCompression({
@@ -1953,10 +1958,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         targetBytes,
         maxCandidates: 8,
       });
-      setCompressionPlan(result);
+      if (compressionPlanRequestRef.current === requestId) setCompressionPlan(result);
     } catch (planError) {
-      setCompressionPlan(null);
-      setCompressionPlanError(planError instanceof Error ? planError.message : "压缩规划失败，可继续正式导出。");
+      if (compressionPlanRequestRef.current === requestId) {
+        setCompressionPlan(null);
+        setCompressionPlanError(planError instanceof Error ? planError.message : "压缩规划失败，可继续正式导出。");
+      }
     } finally {
       setCompressionPlanBusy(false);
     }
