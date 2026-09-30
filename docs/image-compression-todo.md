@@ -38,6 +38,7 @@
 - [x] 签名预检报告安全契约（commit `8696532`）：报告字段白名单、敏感字段拒绝和 UTF-8 无 BOM 写入均由 `check:release-config` 校验并通过。
 - [x] 签名预检报告原子提交（commit `30b90ad`）：`ReportPath` 使用同目录 `.part` 临时文件与 `File.Replace`/`File.Move` 提交，失败时保留旧报告并清理临时文件；`check:release-config`、`check:release-signing-cleanup`、前端 32 个测试文件 / 388 个测试及 build 均通过。
 - [x] 发布报告归档（commit `606bb37`）：`prepare-release.yml` 显式生成并按架构归档 `signing-preflight-report.json`，缺失报告会阻断发布；`release-config`、`release-fixture`、前端 32 个测试文件 / 388 个测试通过。
+- [x] 发布报告内容门禁（commit `b6a6c33`）：`prepare-release` 解析并校验签名预检报告的 version、三个 `passed` 状态和 UTC 时间戳，失败阻断发布；`release-config`、`release-fixture`、前端 32 个测试文件 / 388 个测试及 build 均通过。
 - [x] 核心格式门禁修复（commit `fc59dfa`）：图片转换正式栅格输出在发布前新增实际格式签名校验，防止请求格式与实际编码格式不一致；`export_image` 46 项 Rust 测试、build、types 与 lint 均通过。
 - [x] 压缩协议收敛（commit `de82d1f`）：formal/preview/estimate/WebP 候选共用请求格式与尺寸验证，并新增格式错配回归；压缩 Rust 87 项测试、前端 32 个测试文件 / 388 个测试及 build 均通过。
 - [x] GIF 页头响应式修复已完成（commit `6748493`）：320–620px 宽度支持标题与控件换行且控件保持可聚焦，宽屏布局不变；前端验收统计为 32 个测试文件 / 388 个测试通过。
