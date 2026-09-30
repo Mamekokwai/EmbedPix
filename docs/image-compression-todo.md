@@ -38,6 +38,8 @@
 - [x] GIF 帧编辑可访问性收尾：帧列表支持方向键、Home/End、Delete/Backspace，焦点跟随选中帧和删除后的新选中帧；锁定、抽帧 pending、导出中保持禁用，现有多选/拖拽/排序协议不变。前端全量测试 396 项、构建与 desktop smoke 通过。
 - [x] GIF 帧编辑竞态收尾：导入、视频抽帧、测量、规划和导出期间统一禁止拖拽、倒序、改序、复制、删除及时长编辑，同时保留图片导入、视频抽帧和导出取消入口；新增 busy 状态矩阵测试，前端全量测试 397 项、构建与 desktop smoke 通过。
 - [x] 发布 URL 完整匹配门禁：release asset 与 `latest.json` 的 URL 均拒绝可信 GitHub host 下错误仓库、Tag、query string 和 fragment，合法资产集合保持通过。
+- [x] GIF 短高窗口可达性收尾（commit `035285f`）：取消导入并清空按钮并入统一底部操作栏，与取消抽帧、取消测量和取消导出保持同一可见区域；窄窗口下不会被 GIF 设置卡遮挡。相关前端回归保持 397 项通过。
+- [x] 更新器重定向与缓存清理契约复核（commit `70555f3`）：可信 GitHub host 下错误 Tag、仓库、query 和 fragment 变体均被拒绝；清理 `.part`、`.sig.part`、`.etag` 时保留已提交安装包与签名。当前证据为本地单测/fixture，不冒充真实 GitHub 网络覆盖。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
 - [x] 签名预检报告安全契约（commit `8696532`）：报告字段白名单、敏感字段拒绝和 UTF-8 无 BOM 写入均由 `check:release-config` 校验并通过。
