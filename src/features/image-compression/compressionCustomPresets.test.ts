@@ -72,6 +72,14 @@ describe("compression custom presets", () => {
     expect(imported[0]?.values.metadataPolicy).toBe("stripSafe");
   });
 
+  it("round-trips a custom lossy resize percentage", () => {
+    const jpegValues: CompressionPresetValues = { ...values, format: "jpg", lossless: false, targetResizePercent: 63 };
+    const preset = createCompressionCustomPreset("JPEG 自定义尺寸", jpegValues);
+    const imported = importCompressionPresetsJson(exportCompressionPresetsJson([preset]));
+    expect(imported[0]?.values.targetResizePercent).toBe(63);
+    expect(() => createCompressionCustomPreset("无损缩放", { ...values, targetResizePercent: 63 })).toThrow("仅适用于 JPEG 或有损 WebP");
+  });
+
   it("keeps older custom presets compatible with the safe default method", () => {
     const legacyValues = { ...values };
     delete (legacyValues as Partial<typeof values>).webpMethod;

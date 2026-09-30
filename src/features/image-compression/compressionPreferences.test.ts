@@ -34,6 +34,7 @@ describe("compression preferences", () => {
       targetSizeEnabled: true,
       targetSizeKiB: "96",
       maxCandidates: 10,
+      targetResizePercent: 63,
       skipIfLarger: false,
       lossless: false,
       preset: "custom" as const,
@@ -58,6 +59,7 @@ describe("compression preferences", () => {
     expect(stored.jpegBackground).toBe("#123456");
     expect(stored.skipIfLarger).toBe(false);
     expect(stored.maxCandidates).toBe(10);
+    expect(stored.targetResizePercent).toBe(63);
     expect(stored.deleteSource).toBe(true);
     expect(loadCompressionPreferences(storage)).toEqual(preferences);
   });

@@ -108,6 +108,8 @@ interface CompressionFailureDetail {
   message: string;
 }
 
+const COMPRESSION_RESIZE_PRESETS = [75, 50, 25, 10] as const;
+
 function fileTypeForPath(path: string): string {
   const extension = path.split(".").pop()?.toLowerCase();
   return extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension ? `image/${extension}` : "application/octet-stream";
@@ -184,6 +186,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [maxCandidates, setMaxCandidates] = useState(initialPreferences.maxCandidates);
   const [maxRgbMae, setMaxRgbMae] = useState(initialPreferences.maxRgbMae);
   const [targetResizePercent, setTargetResizePercent] = useState<number | null>(initialPreferences.targetResizePercent);
+  const [customResizeActive, setCustomResizeActive] = useState(() => initialPreferences.targetResizePercent !== null && !COMPRESSION_RESIZE_PRESETS.includes(initialPreferences.targetResizePercent as typeof COMPRESSION_RESIZE_PRESETS[number]));
   const [maxInputMiB, setMaxInputMiB] = useState(initialPreferences.maxInputMiB);
   const [targetSizeEnabled, setTargetSizeEnabled] = useState(initialPreferences.targetSizeEnabled);
   const [skipIfLarger, setSkipIfLarger] = useState(initialPreferences.skipIfLarger);
@@ -258,7 +261,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const maxRgbMaeError = maxRgbMae.trim() && (!Number.isFinite(maxRgbMaeValue) || (maxRgbMaeValue as number) < 0 || (maxRgbMaeValue as number) > 255) ? "RGB MAE 阈值必须在 0 到 255 之间。" : null;
   const maxInputBytes = maxInputMiB * 1024 * 1024;
   useEffect(() => {
-    if (!qualityEnabled && targetResizePercent !== null) setTargetResizePercent(null);
+    if (!qualityEnabled && targetResizePercent !== null) {
+      setTargetResizePercent(null);
+      setCustomResizeActive(false);
+    }
   }, [qualityEnabled, targetResizePercent]);
   const outputFileNameError = useMemo(() => replaceOriginal ? null : getCompressionOutputFileNameError(outputFileName, format), [format, outputFileName, replaceOriginal]);
   const options = useMemo<CompressionOptions>(() => ({
@@ -920,6 +926,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setMaxCandidates(COMPRESSION_MAX_CANDIDATES_DEFAULT);
     setMaxRgbMae("");
     setTargetResizePercent(null);
+    setCustomResizeActive(false);
     setPngOptimizationLevel(values.pngOptimizationLevel);
     setSkipIfLarger(true);
   };
@@ -947,6 +954,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setMaxCandidates(selected.values.maxCandidates ?? COMPRESSION_MAX_CANDIDATES_DEFAULT);
     setMaxRgbMae(selected.values.maxRgbMae ?? "");
     setTargetResizePercent(selected.values.targetResizePercent ?? null);
+    setCustomResizeActive(selected.values.targetResizePercent !== null && selected.values.targetResizePercent !== undefined && !COMPRESSION_RESIZE_PRESETS.includes(selected.values.targetResizePercent as typeof COMPRESSION_RESIZE_PRESETS[number]));
     setMaxInputMiB(selected.values.maxInputMiB ?? 32);
     setSkipIfLarger(selected.values.skipIfLarger);
     setLossless(selected.values.lossless);
@@ -1107,11 +1115,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             <div className="compression-preset-actions"><button type="button" className="compression-secondary-button" onClick={downloadCustomPresets} disabled={busy}>导出 JSON</button><button type="button" className="compression-secondary-button" onClick={() => presetFileInputRef.current?.click()} disabled={busy}>导入 JSON</button><input ref={presetFileInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={(event) => { void importCustomPresets(event); }} disabled={busy} /></div>
             {customPresetMessage ? <p className="compression-preset-message" role="status">{customPresetMessage}</p> : null}
           </div>
-          <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => { const nextFormat = event.target.value as CompressionFormat; setFormat(nextFormat); setLossless(nextFormat !== "jpg"); if (nextFormat !== "jpg") setTargetSizeEnabled(false); }} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => { const nextFormat = event.target.value as CompressionFormat; setFormat(nextFormat); setLossless(nextFormat !== "jpg"); setCustomResizeActive(false); if (nextFormat !== "jpg") setTargetSizeEnabled(false); }} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label className="compression-field"><span>PNG 优化级别</span><select value={pngOptimizationLevel} onChange={(event) => { setPngOptimizationLevel(Number(event.target.value)); setPreset("custom"); }} disabled={busy || format !== "png"}>{[0, 1, 2, 3, 4, 5, 6].map((level) => <option key={level} value={level}>{level}</option>)}</select><small className="compression-field-hint">{format === "png" ? "0 最快，6 压缩更积极；默认 2" : "仅 PNG 有效，当前格式不可用"}</small></label>
           <label className="compression-check"><input type="checkbox" checked={format === "png" && pngOptimizeAlpha} onChange={(event) => { setPngOptimizeAlpha(event.target.checked); setPreset("custom"); }} disabled={busy || format !== "png"} /><span><strong>PNG 透明像素优化</strong><small>可能改变完全透明像素 RGB，像素 Alpha 不变；仅 PNG 有效。</small></span></label>
           <label className="compression-field"><span className="compression-label-row"><span>质量（JPEG/WebP 有损）</span><strong>{qualityEnabled ? quality : "—"}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => { setQuality(Number(event.target.value)); setPreset("custom"); }} disabled={busy || !qualityEnabled} /></label>
-          <label className="compression-field"><span className="compression-label-row"><span>输出尺寸缩放</span><strong>{qualityEnabled ? `${targetResizePercent ?? 100}%` : "—"}</strong></span><select value={targetResizePercent ?? ""} onChange={(event) => { const value = event.target.value; setTargetResizePercent(value === "" ? null : Number(value)); setPreset("custom"); }} disabled={busy || !qualityEnabled}><option value="">原始尺寸（100%）</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option><option value="10">10%</option></select><small className="compression-field-hint">仅 JPEG/有损 WebP 有效；保持宽高比，禁止放大；范围 {MIN_COMPRESSION_RESIZE_PERCENT}–{MAX_COMPRESSION_RESIZE_PERCENT}%。</small></label>
+          <label className="compression-field"><span className="compression-label-row"><span>输出尺寸缩放</span><strong>{qualityEnabled ? `${targetResizePercent ?? 100}%` : "—"}</strong></span><select value={customResizeActive ? "custom" : targetResizePercent ?? ""} onChange={(event) => { const value = event.target.value; if (value === "custom") { setCustomResizeActive(true); if (targetResizePercent === null || COMPRESSION_RESIZE_PRESETS.includes(targetResizePercent as typeof COMPRESSION_RESIZE_PRESETS[number])) setTargetResizePercent(50); } else { setCustomResizeActive(false); setTargetResizePercent(value === "" ? null : Number(value)); } setPreset("custom"); }} disabled={busy || !qualityEnabled}><option value="">原始尺寸（100%）</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option><option value="10">10%</option><option value="custom">自定义百分比</option></select>{customResizeActive ? <input type="number" min={MIN_COMPRESSION_RESIZE_PERCENT} max={MAX_COMPRESSION_RESIZE_PERCENT} step="1" value={targetResizePercent ?? ""} onChange={(event) => { const value = event.target.value; if (value === "") { setTargetResizePercent(null); return; } const next = Number(value); if (Number.isFinite(next)) setTargetResizePercent(Math.min(MAX_COMPRESSION_RESIZE_PERCENT, Math.max(MIN_COMPRESSION_RESIZE_PERCENT, Math.round(next)))); setPreset("custom"); }} disabled={busy || !qualityEnabled} aria-label="自定义输出尺寸缩放百分比" placeholder="10–100" /> : null}<small className="compression-field-hint">仅 JPEG/有损 WebP 有效；保持宽高比，禁止放大；范围 {MIN_COMPRESSION_RESIZE_PERCENT}–{MAX_COMPRESSION_RESIZE_PERCENT}%。</small></label>
           {format === "jpg" ? <label className="compression-field"><span>JPEG 透明背景</span><input type="color" value={jpegBackground} onChange={(event) => { setJpegBackground(event.target.value.toLowerCase()); setPreset("custom"); }} disabled={busy} aria-label="JPEG 透明背景颜色" /><small className="compression-field-hint">输入含透明像素时合成到此背景色；不再静默丢弃 Alpha，默认白色。</small></label> : null}
           {format === "jpg" ? <div className="compression-option-group" aria-label="JPEG 高级编码"><span className="compression-option-group-title">JPEG 高级编码</span><label className="compression-check"><input type="checkbox" checked={jpegProgressive} onChange={(event) => { setJpegProgressive(event.target.checked); setPreset("custom"); }} disabled={busy} /><span><strong>渐进式 JPEG</strong><small>分多次扫描显示；适合网络传输，默认关闭以保持旧版输出一致。</small></span></label><label className="compression-check"><input type="checkbox" checked={jpegOptimizeHuffman} onChange={(event) => { setJpegOptimizeHuffman(event.target.checked); setPreset("custom"); }} disabled={busy} /><span><strong>优化 Huffman 表</strong><small>按图像统计优化熵编码，通常可减小体积但会增加编码时间。</small></span></label></div> : null}
           <label className="compression-field"><span className="compression-label-row"><span>WebP 编码方法</span><strong>{webpLossyActive ? webpMethod : "—"}</strong></span><input type="range" min={COMPRESSION_WEBP_METHOD_MIN} max={COMPRESSION_WEBP_METHOD_MAX} step="1" value={webpMethod} onChange={(event) => { setWebpMethod(Number(event.target.value)); setPreset("custom"); }} disabled={busy || !webpLossyActive} /><small className="compression-field-hint compression-webp-method-hint">{webpLossyActive ? `范围 ${COMPRESSION_WEBP_METHOD_MIN}–${COMPRESSION_WEBP_METHOD_MAX}；影响编码耗时与压缩率，不代表画质。默认 ${COMPRESSION_WEBP_METHOD_DEFAULT}` : "仅 WebP 有损模式有效，当前模式已禁用"}</small></label>
