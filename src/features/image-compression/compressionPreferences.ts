@@ -19,6 +19,7 @@ export interface CompressionPreferences {
   maxCandidates: number;
   maxRgbMae: string;
   targetResizePercent: number | null;
+  autoResizeToTarget: boolean;
   maxInputMiB: number;
   skipIfLarger: boolean;
   lossless: boolean;
@@ -56,6 +57,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   maxCandidates: COMPRESSION_MAX_CANDIDATES_DEFAULT,
   maxRgbMae: "",
   targetResizePercent: null,
+  autoResizeToTarget: false,
   maxInputMiB: 32,
   skipIfLarger: true,
   lossless: true,
@@ -189,7 +191,8 @@ function parsePreferences(value: string | null): CompressionPreferences {
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
       maxCandidates: integerValue(record, "maxCandidates", COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_MAX_CANDIDATES_MAX, COMPRESSION_MAX_CANDIDATES_DEFAULT),
       maxRgbMae: typeof record.maxRgbMae === "string" && (/^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(record.maxRgbMae.trim())) && Number(record.maxRgbMae) >= 0 && Number(record.maxRgbMae) <= 255 ? record.maxRgbMae.trim() : "",
-      targetResizePercent: targetResizePercentValue(record),
+      targetResizePercent: record.autoResizeToTarget === true ? null : targetResizePercentValue(record),
+      autoResizeToTarget: record.autoResizeToTarget === true && record.targetSizeEnabled === true && supportsCompressionTargetSize(format, lossless),
       maxInputMiB: integerValue(record, "maxInputMiB", 1, 32, DEFAULT_COMPRESSION_PREFERENCES.maxInputMiB),
       skipIfLarger: typeof record.skipIfLarger === "boolean" ? record.skipIfLarger : DEFAULT_COMPRESSION_PREFERENCES.skipIfLarger,
       lossless,
@@ -243,6 +246,7 @@ export function saveCompressionPreferences(
       maxCandidates: preferences.maxCandidates,
       maxRgbMae: preferences.maxRgbMae,
       targetResizePercent: preferences.targetResizePercent,
+      autoResizeToTarget: preferences.autoResizeToTarget,
       maxInputMiB: preferences.maxInputMiB,
       skipIfLarger: preferences.skipIfLarger,
       lossless: preferences.lossless,

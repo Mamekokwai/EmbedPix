@@ -137,12 +137,12 @@ function Assert-PreviewCompressionContract {
   $body = $previewMatch.Value
   $validationBody = $body
   $runPreviewBody = ''
-  if ($body -notmatch 'inspect_image|decode_image') {
+  if ($body -notmatch 'inspect_image|decode_image|prepare_and_choose_output') {
     # The cancellation-aware preview path delegates through a small compatibility
     # wrapper, so inspect the shared core instead of assuming the old helper name.
     foreach ($helperName in @('run_preview_core', 'run_preview_with_cancellation', 'run_preview')) {
       $candidate = [regex]::Match($source, "(?s)fn\s+$helperName\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)")
-      if ($candidate.Success -and $candidate.Value -match 'inspect_image|decode_image') {
+      if ($candidate.Success -and $candidate.Value -match 'inspect_image|decode_image|prepare_and_choose_output') {
         $runPreviewBody = $candidate.Value
         break
       }
@@ -153,7 +153,7 @@ function Assert-PreviewCompressionContract {
   if ($validationBody -match 'write_exported_file|fs::write|fs::rename|remove_file|create_dir') {
     throw "$previewName contains a publishing or filesystem mutation call."
   }
-  if ($validationBody -notmatch 'inspect_image|decode_image') { throw "$previewName does not validate/decode the input image." }
+  if ($validationBody -notmatch 'inspect_image|decode_image|prepare_and_choose_output') { throw "$previewName does not validate/decode the input image." }
   foreach ($limit in @('MAX_INPUT_BYTES', 'MAX_IMAGE_DIMENSION', 'MAX_IMAGE_PIXELS', 'MAX_DECODER_ALLOC_BYTES')) {
     if ($source -notmatch [regex]::Escape($limit)) { throw "Preview size limit is missing: $limit" }
   }
@@ -244,7 +244,8 @@ function Assert-ImageTargetCompressionContract([switch]$Required) {
   if ($selection -match 'write_exported_file|fs::write|fs::rename|remove_file|create_dir') {
     throw 'Image target-volume selection invokes a publishing or filesystem mutation call.'
   }
-  $selectionPosition = $run.IndexOf('choose_encoded_output')
+  $selectionPosition = $run.IndexOf('prepare_and_choose_output')
+  if ($selectionPosition -lt 0) { $selectionPosition = $run.IndexOf('choose_encoded_output') }
   $skippedPosition = $run.IndexOf('if let Some(skipped_reason)')
   $writerPosition = $run.IndexOf('write_exported_file')
   if ($selectionPosition -lt 0 -or $skippedPosition -lt 0 -or $writerPosition -lt 0 -or $skippedPosition -gt $writerPosition) {
@@ -330,7 +331,8 @@ function Assert-MaxRgbMaeContract {
   if ($gateway -notmatch 'maxRgbMae' -or $gateway -notmatch 'Number\.isFinite') { throw 'Gateway maxRgbMae validation is missing.' }
   $runMatch = [regex]::Match($source, '(?s)fn\s+run_compression\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
   $runBody = $runMatch.Value
-  $selectionPosition = $runBody.IndexOf('choose_encoded_output_with_cancellation')
+  $selectionPosition = $runBody.IndexOf('prepare_and_choose_output')
+  if ($selectionPosition -lt 0) { $selectionPosition = $runBody.IndexOf('choose_encoded_output_with_cancellation') }
   $skippedPosition = $runBody.IndexOf('if let Some(skipped_reason)')
   $writerPosition = $runBody.IndexOf('write_exported_file')
   if ($selectionPosition -lt 0 -or $skippedPosition -lt 0 -or $writerPosition -lt 0 -or $skippedPosition -gt $writerPosition) {
@@ -369,6 +371,16 @@ function Assert-TargetResizePercentContract {
   [pscustomobject]@{ enabled = $true; range = '10..100'; defaultOff = $true; lossyJpegWebpOnly = $true; cli = $true }
 }
 
+function Assert-AutoTargetResizeContract {
+  $cli = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/bin/embedpix-cli.rs')
+  $source = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/commands/compression.rs')
+  $gateway = Get-Utf8Text (Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts')
+  foreach ($token in @('autoResizeToTarget', 'AUTO_RESIZE_PERCENT_CANDIDATES', 'prepare_and_choose_output', 'target_unreachable: automatic resize candidates', 'validateAutoResizeToTarget')) {
+    if (($cli + $source + $gateway) -notmatch [regex]::Escape($token)) { throw "automatic target resize contract is missing: $token" }
+  }
+  [pscustomobject]@{ enabled = $true; resizeCandidates = '100,75,50,25,10'; defaultOff = $true; lossyJpegWebpOnly = $true; cli = $true; noPublishOnUnreachable = $true }
+}
+
 $script:root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-compression-cli-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $script:root | Out-Null
 try {
@@ -389,6 +401,7 @@ try {
   $jpegOutput = Join-Path $script:root 'compressed-progressive.jpg'
   $jpegResizeOutput = Join-Path $script:root 'compressed-resized.jpg'
   $jpegOriginalSizeOutput = Join-Path $script:root 'compressed-original-size.jpg'
+  $jpegAutoResizeOutput = Join-Path $script:root 'compressed-auto-resize.jpg'
   $webpResizeOutput = Join-Path $script:root 'compressed-resized.webp'
 
   $imageEvent = Invoke-CliRequest $CliPath @{ id = 'image-smoke'; op = 'image'; inputPath = $pngInput; outputPath = $pngOutput; format = 'png'; width = 1; height = 1 } 'image'
@@ -419,6 +432,9 @@ try {
   $jpegOriginalSizeResult = Assert-Output $jpegOriginalSizeOutput 'jpg' 'JPEG original size'
   $jpegOriginalSizeDimensions = Get-JpegDimensions $jpegOriginalSizeOutput
   if ($jpegOriginalSizeDimensions.width -ne 32 -or $jpegOriginalSizeDimensions.height -ne 32) { throw "JPEG 100% smoke emitted $($jpegOriginalSizeDimensions.width)x$($jpegOriginalSizeDimensions.height), expected 32x32." }
+  $jpegAutoResizeResult = Invoke-CliRequest $CliPath @{ id = 'jpeg-auto-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegAutoResizeOutput; format = 'jpg'; quality = 82; maxOutputBytes = 64KB; maxCandidates = 8; autoResizeToTarget = $true; maxInputBytes = 1MB } 'JPEG automatic target resize'
+  $jpegAutoResizeOutputResult = Assert-Output $jpegAutoResizeOutput 'jpg' 'JPEG automatic target resize'
+  if ($jpegAutoResizeResult.output.targetMet -ne $true) { throw 'JPEG automatic target resize did not report targetMet=true.' }
   [void](Invoke-CliRequest $CliPath @{ id = 'webp-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $webpResizeOutput; format = 'webp'; quality = 82; targetResizePercent = 50; maxInputBytes = 1MB } 'WebP resize')
   $webpResizeResult = Assert-Output $webpResizeOutput 'webp' 'WebP resize'
   $invalidRequest = Join-Path $script:root 'invalid-compression.request.json'
@@ -431,7 +447,10 @@ try {
   foreach ($invalidResizeRequest in @(
     @{ id = 'invalid-resize-png'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-resize-png.png'); format = 'png'; targetResizePercent = 50 },
     @{ id = 'invalid-resize-lossless-webp'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-resize-lossless.webp'); format = 'webp'; lossless = $true; targetResizePercent = 50 },
-    @{ id = 'invalid-resize-range'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-resize-range.jpg'); format = 'jpg'; targetResizePercent = 9 }
+    @{ id = 'invalid-resize-range'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-resize-range.jpg'); format = 'jpg'; targetResizePercent = 9 },
+    @{ id = 'invalid-auto-resize-no-target'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-auto-resize-no-target.jpg'); format = 'jpg'; autoResizeToTarget = $true },
+    @{ id = 'invalid-auto-resize-png'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-auto-resize-png.png'); format = 'png'; autoResizeToTarget = $true; maxOutputBytes = 1024 },
+    @{ id = 'invalid-auto-resize-conflict'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-auto-resize-conflict.jpg'); format = 'jpg'; autoResizeToTarget = $true; targetResizePercent = 50; maxOutputBytes = 1024 }
   )) {
     $invalidResizeNative = Invoke-NativeJson $CliPath ($invalidResizeRequest | ConvertTo-Json -Depth 12)
     if ($invalidResizeNative.exitCode -ne 1 -or $invalidResizeNative.stderr -notmatch 'request_error') { throw "CLI resize validation smoke failed for $($invalidResizeRequest.id): $($invalidResizeNative.stderr)" }
@@ -449,12 +468,14 @@ try {
   $jpegAdvancedContract = Assert-JpegAdvancedContract
   $webpLosslessMethodContract = Assert-WebpLosslessMethodContract
   $targetResizePercentContract = Assert-TargetResizePercentContract
+  $autoTargetResizeContract = Assert-AutoTargetResizeContract
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'compress'
-    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $jpegResizeResult, $jpegOriginalSizeResult, $webpResizeResult, $gifResult)
+    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $jpegResizeResult, $jpegOriginalSizeResult, $jpegAutoResizeOutputResult, $webpResizeResult, $gifResult)
     jpegResizeDimensions = $jpegResizeDimensions
     jpegOriginalSizeDimensions = $jpegOriginalSizeDimensions
+    jpegAutoResizeTargetMet = $jpegAutoResizeResult.output.targetMet
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
@@ -465,6 +486,7 @@ try {
     jpegAdvancedContract = $jpegAdvancedContract
     webpLosslessMethodContract = $webpLosslessMethodContract
     targetResizePercentContract = $targetResizePercentContract
+    autoTargetResizeContract = $autoTargetResizeContract
   }
 
   if ($RequireCompression) {

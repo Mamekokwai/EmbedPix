@@ -221,6 +221,22 @@ describe("compression gateway", () => {
     expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).targetResizePercent).toBe(50);
   });
 
+  it("serializes and validates automatic target resizing", () => {
+    const autoRequest = { ...request, outputFormat: "jpg" as const, lossless: false, maxOutputBytes: 64 * 1024, maxCandidates: 8, autoResizeToTarget: true };
+    const encoded = encodeCompressionEnvelope(autoRequest);
+    const length = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
+    expect(metadata.autoResizeToTarget).toBe(true);
+    const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: jpegInput, outputFormat: "jpg", jpegQuality: 82, lossless: false, metadataPolicy: "strip", pngOptimizationLevel: 2, maxOutputBytes: 64 * 1024, maxCandidates: 8, autoResizeToTarget: true });
+    const estimateLength = new DataView(estimate.buffer).getUint32(4, true);
+    expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).autoResizeToTarget).toBe(true);
+    expect(createCompressionRequest({ path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] }, { format: "jpg", quality: 82, lossless: false, pngOptimizationLevel: 2, metadataPolicy: "strip", outputLocation: "source", overwrite: false, maxOutputBytes: 64 * 1024, autoResizeToTarget: true }).autoResizeToTarget).toBe(true);
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "jpg", lossless: false, autoResizeToTarget: true })).toThrow("最大输出体积");
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "png", lossless: true, maxOutputBytes: 64 * 1024, autoResizeToTarget: true })).toThrow("仅支持 JPEG 或有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "webp", lossless: true, maxOutputBytes: 64 * 1024, autoResizeToTarget: true })).toThrow("仅支持 JPEG 或有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...autoRequest, targetResizePercent: 50 })).toThrow("不能与 targetResizePercent");
+  });
+
   it("rejects PNG optimization levels outside the native contract", () => {
     expect(() => encodeCompressionEnvelope({ ...request, pngOptimizationLevel: 7 })).toThrow("pngOptimizationLevel");
   });

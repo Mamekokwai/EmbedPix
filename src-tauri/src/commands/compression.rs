@@ -45,6 +45,7 @@ const MAX_JPEG_ICC_BYTES: usize = MAX_JPEG_ICC_SEGMENTS as usize * MAX_JPEG_ICC_
 const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_MAX_CANDIDATES: usize = 8;
 const MAX_CANDIDATES: usize = 12;
+const AUTO_RESIZE_PERCENT_CANDIDATES: [u8; 5] = [100, 75, 50, 25, 10];
 const MIN_TARGET_RESIZE_PERCENT: u8 = 10;
 const MAX_TARGET_RESIZE_PERCENT: u8 = 100;
 const MAX_AUTO_RENAME_ATTEMPTS: usize = 10_000;
@@ -487,6 +488,8 @@ struct CompressionMetadata {
     #[serde(default)]
     target_resize_percent: Option<u8>,
     #[serde(default)]
+    auto_resize_to_target: bool,
+    #[serde(default)]
     max_input_bytes: Option<u64>,
     #[serde(default)]
     png_optimization_level: Option<u8>,
@@ -535,6 +538,8 @@ struct CompressionEstimateMetadata {
     max_rgb_mae: Option<f64>,
     #[serde(default)]
     target_resize_percent: Option<u8>,
+    #[serde(default)]
+    auto_resize_to_target: bool,
     #[serde(default)]
     max_input_bytes: Option<u64>,
     #[serde(default)]
@@ -1054,11 +1059,13 @@ pub fn compress_file_cli_with_jpeg_options(
         format,
         quality,
         max_input_bytes,
+        None,
         jpeg_progressive,
         jpeg_optimize_huffman,
         format.eq_ignore_ascii_case("png"),
         None,
         None,
+        false,
     )
 }
 
@@ -1069,11 +1076,13 @@ pub fn compress_file_cli_with_advanced_options(
     format: &str,
     quality: u8,
     max_input_bytes: Option<u64>,
+    max_output_bytes: Option<u64>,
     jpeg_progressive: bool,
     jpeg_optimize_huffman: bool,
     lossless: bool,
     webp_lossless_method: Option<u8>,
     target_resize_percent: Option<u8>,
+    auto_resize_to_target: bool,
 ) -> Result<CompressionResult, String> {
     let input =
         fs::read(input_path).map_err(|error| format!("failed to read input image: {error}"))?;
@@ -1088,11 +1097,13 @@ pub fn compress_file_cli_with_advanced_options(
         "lossless": lossless,
         "skipIfLarger": false,
         "maxInputBytes": max_input_bytes,
+        "maxOutputBytes": max_output_bytes,
         "metadataPolicy": "strip",
         "jpegProgressive": jpeg_progressive,
         "jpegOptimizeHuffman": jpeg_optimize_huffman,
         "webpLosslessMethod": webp_lossless_method,
         "targetResizePercent": target_resize_percent,
+        "autoResizeToTarget": auto_resize_to_target,
     });
     let metadata = serde_json::to_vec(&metadata).map_err(|error| error.to_string())?;
     let mut payload = b"EGF1".to_vec();
@@ -1228,21 +1239,21 @@ fn run_compression(
     checkpoint(job)?;
     update_progress(job, CompressionStage::Reading, None, None);
     update_progress(job, CompressionStage::Decoding, None, None);
-    let prepared_request =
-        prepare_resize_request(request, Some(job)).map_err(|error| fail_message(job, error))?;
-    let (width, height) =
-        inspect_image(&prepared_request.input).map_err(|error| fail_message(job, error))?;
-    update_progress(job, CompressionStage::Planning, None, None);
+    let PreparedEncoding {
+        request: prepared_request,
+        width,
+        height,
+        selection:
+            EncodedSelection {
+                bytes,
+                selected_quality,
+                target_met,
+                skipped_reason: selection_skipped_reason,
+                candidate_search_ms,
+                candidate_count,
+            },
+    } = prepare_and_choose_output(request, Some(job)).map_err(|error| fail_message(job, error))?;
     update_progress(job, CompressionStage::Encoding, None, None);
-    let EncodedSelection {
-        bytes,
-        selected_quality,
-        target_met,
-        skipped_reason: selection_skipped_reason,
-        candidate_search_ms,
-        candidate_count,
-    } = choose_encoded_output_with_cancellation(&prepared_request, width, height, Some(job))
-        .map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
     update_progress(job, CompressionStage::Validating, None, None);
     let output_path =
@@ -1513,6 +1524,28 @@ fn validate_target_resize_percent(
     Ok(())
 }
 
+fn validate_auto_resize_to_target(
+    enabled: bool,
+    target_bytes: Option<u64>,
+    target_resize_percent: Option<u8>,
+    format: CompressionFormat,
+    lossless: bool,
+) -> Result<(), String> {
+    if !enabled {
+        return Ok(());
+    }
+    if target_bytes.is_none() {
+        return Err("autoResizeToTarget requires maxOutputBytes".into());
+    }
+    if !matches!(format, CompressionFormat::Jpeg | CompressionFormat::Webp) || lossless {
+        return Err("autoResizeToTarget is only supported for lossy JPEG or WebP".into());
+    }
+    if target_resize_percent.is_some() {
+        return Err("autoResizeToTarget cannot be combined with targetResizePercent".into());
+    }
+    Ok(())
+}
+
 fn parse_jpeg_background(value: Option<&str>) -> Result<[u8; 3], String> {
     let value = value.unwrap_or("#ffffff").trim();
     let hex = value
@@ -1587,12 +1620,98 @@ struct EncodedSelection {
     candidate_count: Option<u8>,
 }
 
+struct PreparedEncoding {
+    request: CompressionRequest,
+    width: u32,
+    height: u32,
+    selection: EncodedSelection,
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
 fn choose_encoded_output(
     request: &CompressionRequest,
     width: u32,
     height: u32,
 ) -> Result<EncodedSelection, String> {
     choose_encoded_output_with_cancellation(request, width, height, None)
+}
+
+fn prepare_and_choose_output(
+    request: &CompressionRequest,
+    job: Option<&Arc<CompressionJob>>,
+) -> Result<PreparedEncoding, String> {
+    if !request.metadata.auto_resize_to_target {
+        let prepared_request = prepare_resize_request(request, job)?;
+        let (width, height) = inspect_image(&prepared_request.input)?;
+        let selection =
+            choose_encoded_output_with_cancellation(&prepared_request, width, height, job)?;
+        return Ok(PreparedEncoding {
+            request: prepared_request,
+            width,
+            height,
+            selection,
+        });
+    }
+
+    let max_rounds = AUTO_RESIZE_PERCENT_CANDIDATES
+        .len()
+        .min(request.max_candidates);
+    let mut remaining_candidates = request.max_candidates;
+    let mut aggregate_candidate_count = 0u8;
+    let mut aggregate_search_ms = 0u64;
+    let mut smallest: Option<PreparedEncoding> = None;
+
+    for (index, percent) in AUTO_RESIZE_PERCENT_CANDIDATES
+        .iter()
+        .copied()
+        .take(max_rounds)
+        .enumerate()
+    {
+        if let Some(job) = job {
+            checkpoint(job)?;
+            update_progress(job, CompressionStage::Planning, None, None);
+        }
+        let rounds_left = max_rounds - index;
+        let budget = (remaining_candidates / rounds_left).max(1);
+        remaining_candidates = remaining_candidates.saturating_sub(budget);
+
+        let mut round_request = request.clone();
+        round_request.metadata.target_resize_percent = Some(percent);
+        round_request.max_candidates = budget;
+        let prepared_request = prepare_resize_request(&round_request, job)?;
+        let (width, height) = inspect_image(&prepared_request.input)?;
+        let mut selection =
+            choose_encoded_output_with_cancellation(&prepared_request, width, height, job)?;
+        aggregate_candidate_count =
+            aggregate_candidate_count.saturating_add(selection.candidate_count.unwrap_or(0));
+        aggregate_search_ms =
+            aggregate_search_ms.saturating_add(selection.candidate_search_ms.unwrap_or(0));
+        selection.candidate_count = Some(aggregate_candidate_count);
+        selection.candidate_search_ms = Some(aggregate_search_ms);
+        let candidate = PreparedEncoding {
+            request: prepared_request,
+            width,
+            height,
+            selection,
+        };
+
+        if candidate.selection.target_met {
+            return Ok(candidate);
+        }
+        if smallest
+            .as_ref()
+            .is_none_or(|current| candidate.selection.bytes.len() < current.selection.bytes.len())
+        {
+            smallest = Some(candidate);
+        }
+    }
+
+    let mut smallest =
+        smallest.ok_or_else(|| "automatic resize produced no encoded candidate".to_string())?;
+    smallest.selection.skipped_reason =
+        Some("target_unreachable: automatic resize candidates did not fit maxOutputBytes".into());
+    Ok(smallest)
 }
 
 fn choose_encoded_output_with_cancellation(
@@ -1982,20 +2101,23 @@ fn run_preview_core(
         update_progress(job, CompressionStage::Reading, None, None);
         update_progress(job, CompressionStage::Decoding, None, None);
     }
-    let prepared_request = prepare_resize_request(request, job)?;
-    let (width, height) = inspect_image(&prepared_request.input)?;
+    let PreparedEncoding {
+        request: prepared_request,
+        width,
+        height,
+        selection:
+            EncodedSelection {
+                bytes: data,
+                selected_quality,
+                target_met,
+                skipped_reason,
+                candidate_search_ms,
+                candidate_count,
+            },
+    } = prepare_and_choose_output(request, job)?;
     if let Some(job) = job {
-        update_progress(job, CompressionStage::Planning, None, None);
         update_progress(job, CompressionStage::Encoding, None, None);
     }
-    let EncodedSelection {
-        bytes: data,
-        selected_quality,
-        target_met,
-        skipped_reason,
-        candidate_search_ms,
-        candidate_count,
-    } = choose_encoded_output_with_cancellation(&prepared_request, width, height, job)?;
     if data.len() > MAX_PREVIEW_BYTES {
         return Err(format!(
             "compressed preview exceeds the {} MiB limit",
@@ -2105,16 +2227,20 @@ fn quality_metrics_for_output(
 }
 
 fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, String> {
-    let prepared_request = prepare_resize_request(request, None)?;
-    let (width, height) = inspect_image(&prepared_request.input)?;
-    let EncodedSelection {
-        bytes,
-        selected_quality,
-        target_met,
-        skipped_reason: selection_skipped_reason,
-        candidate_search_ms,
-        candidate_count,
-    } = choose_encoded_output(&prepared_request, width, height)?;
+    let PreparedEncoding {
+        request: prepared_request,
+        width,
+        height,
+        selection:
+            EncodedSelection {
+                bytes,
+                selected_quality,
+                target_met,
+                skipped_reason: selection_skipped_reason,
+                candidate_search_ms,
+                candidate_count,
+            },
+    } = prepare_and_choose_output(request, None)?;
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
@@ -2565,6 +2691,13 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
     validate_webp_lossless_method(metadata.webp_lossless_method, format, lossless)?;
     validate_target_resize_percent(metadata.target_resize_percent, format, lossless)?;
+    validate_auto_resize_to_target(
+        metadata.auto_resize_to_target,
+        target_bytes,
+        metadata.target_resize_percent,
+        format,
+        lossless,
+    )?;
     validate_compression_mode(format, lossless)?;
     validate_compression_metadata_policy(metadata.metadata_policy)?;
     if metadata.replace_original && metadata.source_path.is_none() {
@@ -2701,6 +2834,13 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
     validate_webp_lossless_method(metadata.webp_lossless_method, format, lossless)?;
     validate_target_resize_percent(metadata.target_resize_percent, format, lossless)?;
+    validate_auto_resize_to_target(
+        metadata.auto_resize_to_target,
+        target_bytes,
+        metadata.target_resize_percent,
+        format,
+        lossless,
+    )?;
     validate_compression_mode(format, lossless)?;
     validate_compression_metadata_policy(metadata.metadata_policy)?;
     let input = body[end..].to_vec();
@@ -2743,6 +2883,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             max_candidates: metadata.max_candidates,
             max_rgb_mae: metadata.max_rgb_mae,
             target_resize_percent: metadata.target_resize_percent,
+            auto_resize_to_target: metadata.auto_resize_to_target,
             max_input_bytes: metadata.max_input_bytes,
             png_optimization_level: metadata.png_optimization_level,
             png_optimize_alpha: metadata.png_optimize_alpha,
@@ -3432,6 +3573,7 @@ mod tests {
                 max_candidates: None,
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -4067,6 +4209,7 @@ mod tests {
                 max_candidates: None,
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -4383,6 +4526,51 @@ mod tests {
     }
 
     #[test]
+    fn automatic_target_resize_is_shared_and_never_publishes_unreachable_output() {
+        let metadata = r#"{"fileName":"sample.png","outputFormat":"jpeg","lossless":false,"autoResizeToTarget":true,"maxOutputBytes":1,"maxCandidates":5,"skipIfLarger":false}"#;
+        let request = parse_raw_payload(&raw_payload(metadata, &luma_png_input(64, 48))).unwrap();
+        assert!(request.metadata.auto_resize_to_target);
+        assert_eq!(request.metadata.target_resize_percent, None);
+
+        let preview = run_preview(&request).unwrap();
+        assert_eq!(preview.status, "skipped");
+        assert!(!preview.target_met);
+        assert_eq!((preview.width, preview.height), (6, 5));
+        assert!(preview.candidate_count.unwrap_or(0) <= 5);
+        let estimate_request =
+            parse_estimate_raw_payload(&raw_payload(metadata, &luma_png_input(64, 48))).unwrap();
+        let estimate = run_estimate(&estimate_request).unwrap();
+        assert_eq!(estimate.status, "skipped");
+        assert_eq!((estimate.width, estimate.height), (6, 5));
+        assert!(estimate.candidate_count.unwrap_or(0) <= 5);
+
+        let output_path = crate::commands::test_temp_dir().join(format!(
+            "embedpix-auto-resize-unreachable-{}.jpg",
+            uuid_like_id()
+        ));
+        let formal_metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"jpeg\",\"lossless\":false,\"autoResizeToTarget\":true,\"maxOutputBytes\":1,\"maxCandidates\":5,\"skipIfLarger\":false,\"outputPath\":\"{}\"}}",
+            output_path.to_string_lossy().replace('\\', "/")
+        );
+        let formal_request =
+            parse_raw_payload(&raw_payload(&formal_metadata, &luma_png_input(64, 48))).unwrap();
+        let result =
+            run_compression(&formal_request, &test_job("auto-resize-unreachable")).unwrap();
+        assert_eq!(result.status, "skipped");
+        assert!(!output_path.exists());
+
+        for invalid in [
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","autoResizeToTarget":true}"#,
+            r#"{"fileName":"sample.png","outputFormat":"png","autoResizeToTarget":true,"maxOutputBytes":100}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":true,"autoResizeToTarget":true,"maxOutputBytes":100}"#,
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","autoResizeToTarget":true,"targetResizePercent":50,"maxOutputBytes":100}"#,
+        ] {
+            assert!(parse_raw_payload(&raw_payload(invalid, &png_input())).is_err());
+            assert!(parse_estimate_raw_payload(&raw_payload(invalid, &png_input())).is_err());
+        }
+    }
+
+    #[test]
     fn validates_jpeg_background_contract_for_requests_and_estimates() {
         let metadata =
             r##"{"fileName":"sample.png","outputFormat":"jpeg","jpegBackground":"#123456"}"##;
@@ -4595,6 +4783,7 @@ mod tests {
                 max_candidates: None,
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5120,6 +5309,7 @@ mod tests {
                 max_candidates: None,
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5229,6 +5419,7 @@ mod tests {
                 max_candidates: None,
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5889,6 +6080,7 @@ mod tests {
                 max_candidates: Some(MAX_CANDIDATES),
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5903,8 +6095,8 @@ mod tests {
             png_optimization_level: 2,
             png_optimize_alpha: false,
         };
-        let selection = choose_encoded_output(&request, 2, 2).unwrap();
-        let repeated = choose_encoded_output(&request, 2, 2).unwrap();
+        let selection = choose_encoded_output_with_cancellation(&request, 2, 2, None).unwrap();
+        let repeated = choose_encoded_output_with_cancellation(&request, 2, 2, None).unwrap();
         assert!(selection.target_met);
         assert!(selection.selected_quality.unwrap() >= 50);
         assert!(selection.candidate_search_ms.is_some());
@@ -5962,6 +6154,7 @@ mod tests {
                 max_candidates: Some(MAX_CANDIDATES),
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5976,8 +6169,8 @@ mod tests {
             png_optimization_level: 2,
             png_optimize_alpha: false,
         };
-        let selection = choose_encoded_output(&request, 64, 48).unwrap();
-        let repeated = choose_encoded_output(&request, 64, 48).unwrap();
+        let selection = choose_encoded_output_with_cancellation(&request, 64, 48, None).unwrap();
+        let repeated = choose_encoded_output_with_cancellation(&request, 64, 48, None).unwrap();
         assert!(selection.target_met);
         assert!(selection.selected_quality.unwrap() >= 50);
         assert!(selection.candidate_search_ms.is_some());
@@ -6021,6 +6214,7 @@ mod tests {
                 max_candidates: Some(1),
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -6035,7 +6229,7 @@ mod tests {
             png_optimization_level: 2,
             png_optimize_alpha: false,
         };
-        let selection = choose_encoded_output(&request, 64, 48).unwrap();
+        let selection = choose_encoded_output_with_cancellation(&request, 64, 48, None).unwrap();
         assert!(!selection.target_met);
         assert_eq!(selection.selected_quality, Some(100));
         assert!(selection
@@ -6149,6 +6343,7 @@ mod tests {
                 max_candidates: Some(DEFAULT_MAX_CANDIDATES),
                 max_rgb_mae: None,
                 target_resize_percent: None,
+                auto_resize_to_target: false,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -6163,7 +6358,7 @@ mod tests {
             png_optimization_level: 2,
             png_optimize_alpha: false,
         };
-        let selection = choose_encoded_output(&request, 2, 2).unwrap();
+        let selection = choose_encoded_output_with_cancellation(&request, 2, 2, None).unwrap();
         assert!(!selection.target_met);
         assert!(selection
             .skipped_reason

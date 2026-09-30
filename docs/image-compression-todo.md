@@ -33,7 +33,7 @@
 - [x] 本轮可访问性收尾：累计压缩批处理进度摘要增加 `aria-live` 通知；前端当前为 32 个测试文件 / 387 个测试通过。
 - [~] `targetResize` 分阶段接入：已完成安全的 `targetResizePercent` 百分比缩放切片；默认关闭、仅允许 10–100%、禁止放大、保持宽高比，JPEG/有损 WebP 的 preview/estimate/formal/CLI 共用同一份 resize preparation，Lanczos3 缩放并复用尺寸上限。结果额外回报 `originalInputBytes`/`preparedInputBytes`，现有 `inputBytes` 明确定义为源文件体积，跳过和节省率按源文件比较；缩放准备阶段有取消检查并受单文件输入预算约束。完整的“目标体积联动自动降尺寸”仍未接入。
 - [x] 本轮增量：输出缩放支持自定义 10–100% 输入，不再局限于预设档位；偏好、自定义预设、参数摘要和格式切换清理均已覆盖。当前门禁为前端 32 个测试文件 / 392 项通过，Rust 277 项、CLI 4 项；构建与 compression CLI smoke 已通过。
-- [~] targetResize 三方审查结论：这是新协议能力；当前输出格式/尺寸校验、schema v1、Gateway、CLI 与报告均假设源尺寸。接入前必须统一 planner，默认关闭，禁止放大并定义最小尺寸、内存/CPU/输出预算和取消边界；所有三入口必须共享 `target_unmet` 不发布语义，并补齐原始/请求/选中尺寸等报告字段门禁。
+- [x] 自动目标体积联动缩放（2026-10-01）：Gateway/native/CLI 新增 `autoResizeToTarget`，默认关闭且只接受 JPEG/有损 WebP + `maxOutputBytes`；preview/estimate/formal/CLI 共用 `prepare_and_choose_output`，按 100/75/50/25/10% 有界尝试，质量候选预算在所有轮次合计不超过 `maxCandidates`，每轮检查取消；目标不可达统一返回 skipped，正式路径在 writer 前拒绝发布并保持目标文件不变。前端增加互斥开关、窄窗口可换行提示、偏好和自定义预设持久化。当前回归：前端 32 个测试文件 / 394 项、Rust 278 项库测试、CLI 4 项。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
 - [x] 签名预检报告安全契约（commit `8696532`）：报告字段白名单、敏感字段拒绝和 UTF-8 无 BOM 写入均由 `check:release-config` 校验并通过。
@@ -207,10 +207,10 @@
 
 - [x] 支持设置最大输出体积（JPEG/WebP 有损）。
 - [~] 支持设置目标体积：JPEG/WebP 有损按最大体积约束执行有界候选搜索，精确目标和尺寸联动待后续。
-- [~] 先调整质量，再调整尺寸：当前仅完成显式百分比缩放，不改变目标体积候选搜索顺序；后续自动降尺寸仍需统一 planner、最小边/最小像素、CPU/内存预算、取消检查、原始/请求/选中尺寸报告和 `target_unmet` 发布门禁。不得把当前百分比切片描述为完整 `targetResize` 自动规划器。
+- [x] 先调整质量，再调整尺寸：自动目标体积规划器按 100/75/50/25/10% 顺序逐档尝试，每档质量候选预算与总候选上限共享；固定 `targetResizePercent` 仍可独立使用，二者互斥。
 - [x] 百分比缩放安全切片：`targetResizePercent` 默认关闭，范围 10–100，禁止放大，仅 JPEG/有损 WebP；Gateway/native/CLI 均做协议校验，预检/预览/估算/正式导出共享尺寸计算，前端偏好与自定义预设可保存该参数；缩放后的尺寸仍经过现有解码、尺寸、输出体积和发布保护。
-- [ ] 自动目标体积联动缩放：待统一 `CompressionPlanner`（候选计数、目标状态、选中尺寸/质量、取消 checkpoint）后实现。
-- [ ] 前置重构门禁（2026-09-30）：本轮复核确认 `choose_encoded_output*` 已共享候选循环；正式导出和 preview 通过同一带可选 job 的函数运行，estimate 通过无 job 包装运行。当前没有能在不改变取消边界、结果尺寸字段或 writer-free estimate 语义的独立 planner 抽取点；仅增加包装类型会制造 API 迁移噪声而不提升安全性。因此保留现状，待 `targetResize` 需要携带“候选尺寸 + 统一预算状态”时一次性抽取，禁止先做无效半重构。
+- [x] 自动目标体积联动缩放：统一规划器携带候选尺寸、质量选择、候选计数和累计搜索耗时；限制 5 个缩放档位、每轮编码预算、输入/预览上限，并在准备、编码和发布前检查取消。
+- [x] 前置重构门禁：不复制 preview/estimate/formal 的候选逻辑，使用同一 `prepare_and_choose_output` 返回准备输入、尺寸和选择结果；估算仍 writer-free，正式发布继续在 skipped 分支后才进入 writer。
 - [x] 候选结果必须实际编码后测量。
 - [x] 候选结果必须经过解码校验。
 - [x] 目标不可达时不发布结果。

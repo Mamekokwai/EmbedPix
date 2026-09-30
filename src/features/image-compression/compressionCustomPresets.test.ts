@@ -80,6 +80,16 @@ describe("compression custom presets", () => {
     expect(() => createCompressionCustomPreset("无损缩放", { ...values, targetResizePercent: 63 })).toThrow("仅适用于 JPEG 或有损 WebP");
   });
 
+  it("round-trips automatic target resizing without a fixed resize", () => {
+    const jpegValues: CompressionPresetValues = { ...values, format: "jpg", lossless: false, targetSizeEnabled: true, targetSizeKiB: "64", autoResizeToTarget: true, targetResizePercent: null };
+    const preset = createCompressionCustomPreset("JPEG 自动缩放", jpegValues);
+    const imported = importCompressionPresetsJson(exportCompressionPresetsJson([preset]));
+    expect(imported[0]?.values.autoResizeToTarget).toBe(true);
+    expect(imported[0]?.values.targetResizePercent).toBeNull();
+    expect(() => createCompressionCustomPreset("自动缩放冲突", { ...jpegValues, targetResizePercent: 50 })).toThrow("不能与固定输出缩放");
+    expect(() => createCompressionCustomPreset("自动缩放无目标", { ...jpegValues, targetSizeEnabled: false })).toThrow("需要 JPEG/有损 WebP 的目标体积");
+  });
+
   it("keeps older custom presets compatible with the safe default method", () => {
     const legacyValues = { ...values };
     delete (legacyValues as Partial<typeof values>).webpMethod;

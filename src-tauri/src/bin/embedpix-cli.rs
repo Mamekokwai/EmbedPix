@@ -167,6 +167,14 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
             "maxInputBytes 必须是 1 到 32 MiB 的无符号整数".into(),
         ))?),
     };
+    let max_output_bytes = match payload.get("maxOutputBytes") {
+        None => None,
+        Some(value) => Some(
+            value
+                .as_u64()
+                .ok_or(("request_error", "maxOutputBytes 必须是无符号整数".into()))?,
+        ),
+    };
     let jpeg_progressive = match payload.get("jpegProgressive") {
         None => false,
         Some(value) => value
@@ -211,11 +219,37 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
                 ))?,
         ),
     };
+    let auto_resize_to_target = match payload.get("autoResizeToTarget") {
+        None => false,
+        Some(value) => value
+            .as_bool()
+            .ok_or(("request_error", "autoResizeToTarget 必须是布尔值".into()))?,
+    };
     if target_resize_percent.is_some() && (!matches!(format, "jpg" | "jpeg" | "webp") || lossless) {
         return Err((
             "request_error",
             "targetResizePercent 仅支持 JPEG 或有损 WebP".into(),
         ));
+    }
+    if auto_resize_to_target {
+        if max_output_bytes.is_none() {
+            return Err((
+                "request_error",
+                "autoResizeToTarget requires maxOutputBytes".into(),
+            ));
+        }
+        if !matches!(format, "jpg" | "jpeg" | "webp") || lossless {
+            return Err((
+                "request_error",
+                "autoResizeToTarget 仅支持 JPEG 或有损 WebP".into(),
+            ));
+        }
+        if target_resize_percent.is_some() {
+            return Err((
+                "request_error",
+                "autoResizeToTarget 不能与 targetResizePercent 同时使用".into(),
+            ));
+        }
     }
     let result = compression::compress_file_cli_with_advanced_options(
         std::path::Path::new(&input_path),
@@ -223,11 +257,13 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
         format,
         quality as u8,
         max_input_bytes,
+        max_output_bytes,
         jpeg_progressive,
         jpeg_optimize_huffman,
         lossless,
         webp_lossless_method,
         target_resize_percent,
+        auto_resize_to_target,
     )
     .map_err(|error| ("compression_error", error))?;
     serde_json::to_value(result).map_err(|error| ("response_error", error.to_string()))

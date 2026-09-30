@@ -45,6 +45,7 @@ export interface CompressionEnvelopeRequest {
   maxCandidates?: number;
   maxRgbMae?: number | null;
   targetResizePercent?: number;
+  autoResizeToTarget?: boolean;
   maxInputBytes?: number;
   metadataPolicy: MetadataPolicy;
   jobId?: string;
@@ -150,6 +151,7 @@ export interface CompressionEstimateRequest {
   maxCandidates?: number;
   maxRgbMae?: number | null;
   targetResizePercent?: number;
+  autoResizeToTarget?: boolean;
   maxInputBytes?: number;
 }
 
@@ -165,9 +167,17 @@ function validateTargetResizePercent(value: number | undefined, outputFormat: Ex
   if ((outputFormat !== "jpg" && outputFormat !== "webp") || lossless) throw new Error("targetResizePercent 仅支持 JPEG 或有损 WebP。");
 }
 
+function validateAutoResizeToTarget(enabled: boolean | undefined, request: Pick<CompressionEnvelopeRequest, "outputFormat" | "lossless" | "maxOutputBytes" | "targetResizePercent">): void {
+  if (!enabled) return;
+  if (request.maxOutputBytes === undefined) throw new Error("autoResizeToTarget 需要启用最大输出体积。");
+  if ((request.outputFormat !== "jpg" && request.outputFormat !== "webp") || request.lossless) throw new Error("autoResizeToTarget 仅支持 JPEG 或有损 WebP。");
+  if (request.targetResizePercent !== undefined) throw new Error("autoResizeToTarget 不能与 targetResizePercent 同时使用。");
+}
+
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
   validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
   validateTargetResizePercent(request.targetResizePercent, request.outputFormat, request.lossless);
+  validateAutoResizeToTarget(request.autoResizeToTarget, request);
   if (request.metadataPolicy === "stripSafe") { const error = getStripSafeInputError(request.inputData, request.outputFormat); if (error) throw new Error(error); }
   else if (request.metadataPolicy !== "strip" && request.metadataPolicy !== "stripAll") throw new Error("第一阶段原生压缩仅支持移除元数据。");
   return {
@@ -200,6 +210,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.maxCandidates ? { maxCandidates: request.maxCandidates } : {}),
     ...(request.maxRgbMae !== undefined && request.maxRgbMae !== null ? { maxRgbMae: request.maxRgbMae } : {}),
     ...(request.targetResizePercent !== undefined ? { targetResizePercent: request.targetResizePercent } : {}),
+    ...(request.autoResizeToTarget ? { autoResizeToTarget: true } : {}),
     ...(request.maxInputBytes !== undefined ? { maxInputBytes: request.maxInputBytes } : {}),
     metadataPolicy: request.metadataPolicy,
     ...(request.jobId ? { jobId: request.jobId } : {}),
@@ -217,6 +228,7 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
   if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
   validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
   validateTargetResizePercent(request.targetResizePercent, request.outputFormat, request.lossless);
+  validateAutoResizeToTarget(request.autoResizeToTarget, request);
   if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
   if (request.webpMethod !== undefined && (request.outputFormat !== "webp" || request.lossless)) throw new Error("webpMethod 仅支持有损 WebP。");
   if (request.webpAlphaQuality !== undefined && (!Number.isInteger(request.webpAlphaQuality) || request.webpAlphaQuality < 0 || request.webpAlphaQuality > 100)) throw new Error("webpAlphaQuality 必须在 0 到 100 之间。");
@@ -269,6 +281,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
   if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
   validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
   validateTargetResizePercent(request.targetResizePercent, request.outputFormat, request.lossless);
+  validateAutoResizeToTarget(request.autoResizeToTarget, request);
   const metadataBytes = new TextEncoder().encode(JSON.stringify({
     schemaVersion: COMPRESSION_SCHEMA_VERSION,
     fileName: request.fileName,
@@ -290,6 +303,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     ...(request.maxCandidates !== undefined ? { maxCandidates: request.maxCandidates } : {}),
     ...(request.maxRgbMae !== undefined && request.maxRgbMae !== null ? { maxRgbMae: request.maxRgbMae } : {}),
     ...(request.targetResizePercent !== undefined ? { targetResizePercent: request.targetResizePercent } : {}),
+    ...(request.autoResizeToTarget ? { autoResizeToTarget: true } : {}),
     ...(request.maxInputBytes !== undefined ? { maxInputBytes: request.maxInputBytes } : {}),
     metadataPolicy: request.metadataPolicy,
   }));
@@ -347,6 +361,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     maxCandidates: options.maxCandidates,
     maxRgbMae: options.maxRgbMae,
     targetResizePercent: options.targetResizePercent ?? undefined,
+    autoResizeToTarget: options.autoResizeToTarget,
     maxInputBytes: options.maxInputBytes,
     metadataPolicy: options.metadataPolicy,
     jobId,
