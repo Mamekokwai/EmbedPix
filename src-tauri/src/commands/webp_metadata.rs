@@ -63,7 +63,29 @@ pub(crate) fn apply_strip_safe(output: &[u8], icc: Option<&[u8]>) -> Result<Vec<
     }
     let bytes =
         unsafe { std::slice::from_raw_parts(assembled_guard.0.bytes, assembled_guard.0.size) };
-    Ok(bytes.to_vec())
+    let assembled = bytes.to_vec();
+    validate_static_webp_output(&assembled)?;
+    Ok(assembled)
+}
+
+fn validate_static_webp_output(input: &[u8]) -> Result<(), String> {
+    let mut iccp_count = 0;
+    inspect_static_webp(input, |fourcc, payload| {
+        match fourcc {
+            b"VP8X" => {}
+            b"VP8 " | b"VP8L" => {}
+            b"ICCP" => {
+                iccp_count += 1;
+                validate_icc(payload)?;
+            }
+            _ => return Err("stripSafe WebP output contains a non-whitelisted chunk".into()),
+        }
+        Ok(())
+    })?;
+    if iccp_count > 1 {
+        return Err("stripSafe WebP output contains duplicate ICCP chunks".into());
+    }
+    Ok(())
 }
 
 fn inspect_static_webp<F>(input: &[u8], mut visit: F) -> Result<(), String>
@@ -82,6 +104,7 @@ where
     }
     let mut offset = 12usize;
     let mut image_chunks = 0usize;
+    let mut vp8x_chunks = 0usize;
     while offset < riff_end {
         let header_end = offset
             .checked_add(8)
@@ -101,8 +124,24 @@ where
         if padded_end > riff_end {
             return Err("stripSafe WebP chunk or padding is truncated".into());
         }
+        let payload = &input[header_end..payload_end];
+        if payload_len % 2 != 0 && input[payload_end] != 0 {
+            return Err("stripSafe WebP odd-sized chunk has a non-zero padding byte".into());
+        }
         if *fourcc == *b"ANIM" || *fourcc == *b"ANMF" {
             return Err("metadataPolicy=stripSafe rejects animated WebP input".into());
+        }
+        if *fourcc == *b"VP8X" {
+            vp8x_chunks += 1;
+            if vp8x_chunks > 1 {
+                return Err("stripSafe WebP input contains multiple VP8X chunks".into());
+            }
+            if payload_len < 1 {
+                return Err("stripSafe WebP VP8X chunk is truncated".into());
+            }
+            if payload[0] & 0x02 != 0 {
+                return Err("metadataPolicy=stripSafe rejects animated WebP input".into());
+            }
         }
         if *fourcc == *b"VP8 " || *fourcc == *b"VP8L" {
             image_chunks += 1;
@@ -110,7 +149,7 @@ where
                 return Err("stripSafe WebP input contains multiple image chunks".into());
             }
         }
-        visit(fourcc, &input[header_end..payload_end])?;
+        visit(fourcc, payload)?;
         offset = padded_end;
     }
     if offset != riff_end || image_chunks != 1 {
@@ -198,5 +237,25 @@ mod tests {
         let mut truncated = riff(&[(b"VP8 ", b"x")]);
         truncated.pop();
         assert!(extract_static_icc(&truncated).is_err());
+    }
+
+    #[test]
+    fn rejects_animation_bit_nonzero_padding_and_duplicate_vp8x() {
+        assert!(extract_static_icc(&riff(&[(b"VP8X", &[0x02]), (b"VP8 ", b"x"),])).is_err());
+
+        let mut bad_padding = riff(&[(b"VP8 ", b"x")]);
+        *bad_padding.last_mut().unwrap() = 1;
+        assert!(extract_static_icc(&bad_padding).is_err());
+
+        assert!(
+            extract_static_icc(&riff(&[(b"VP8X", &[0]), (b"VP8X", &[0]), (b"VP8 ", b"x"),]))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_non_whitelisted_assembled_output() {
+        let input = riff(&[(b"VP8 ", b"x"), (b"EXIF", b"private")]);
+        assert!(validate_static_webp_output(&input).is_err());
     }
 }
