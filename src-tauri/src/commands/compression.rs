@@ -240,6 +240,13 @@ fn validate_compression_metadata_policy(policy: MetadataPolicy) -> Result<(), St
     }
 }
 
+fn validate_png_optimize_alpha(enabled: bool, format: CompressionFormat) -> Result<(), String> {
+    if enabled && format != CompressionFormat::Png {
+        return Err("pngOptimizeAlpha is only supported for PNG output; it may change RGB values of fully transparent pixels".into());
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CompressionMetadata {
@@ -294,6 +301,8 @@ struct CompressionMetadata {
     #[serde(default)]
     png_optimization_level: Option<u8>,
     #[serde(default)]
+    png_optimize_alpha: bool,
+    #[serde(default)]
     metadata_policy: MetadataPolicy,
     #[serde(default)]
     job_id: Option<String>,
@@ -331,6 +340,8 @@ struct CompressionEstimateMetadata {
     #[serde(default)]
     png_optimization_level: Option<u8>,
     #[serde(default)]
+    png_optimize_alpha: bool,
+    #[serde(default)]
     metadata_policy: MetadataPolicy,
 }
 
@@ -343,6 +354,7 @@ struct CompressionRequest {
     target_bytes: Option<u64>,
     max_candidates: usize,
     png_optimization_level: u8,
+    png_optimize_alpha: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1170,6 +1182,7 @@ fn choose_encoded_output_with_cancellation(
             request.format,
             quality,
             request.png_optimization_level,
+            request.png_optimize_alpha,
             width,
             height,
             request.lossless,
@@ -1199,6 +1212,7 @@ fn choose_encoded_output_with_cancellation(
             request.format,
             quality,
             request.png_optimization_level,
+            request.png_optimize_alpha,
             width,
             height,
             request.lossless,
@@ -1249,6 +1263,7 @@ fn choose_encoded_output_with_cancellation(
             request.format,
             candidate,
             request.png_optimization_level,
+            request.png_optimize_alpha,
             width,
             height,
             request.lossless,
@@ -1316,6 +1331,7 @@ fn encode_and_verify(
     format: CompressionFormat,
     quality: u8,
     png_optimization_level: u8,
+    png_optimize_alpha: bool,
     width: u32,
     height: u32,
     lossless: bool,
@@ -1325,11 +1341,12 @@ fn encode_and_verify(
     webp_pass: Option<u8>,
     webp_near_lossless: Option<u8>,
 ) -> Result<Vec<u8>, String> {
-    let bytes = encode_image_with_webp_method(
+    let bytes = encode_image_with_webp_method_alpha(
         input,
         format,
         quality,
         png_optimization_level,
+        png_optimize_alpha,
         lossless,
         jpeg_background,
         webp_method,
@@ -1579,11 +1596,41 @@ fn encode_image_with_mode(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 fn encode_image_with_webp_method(
     input: &[u8],
     format: CompressionFormat,
     quality: u8,
     png_optimization_level: u8,
+    lossless: bool,
+    jpeg_background: Option<&str>,
+    webp_method: Option<u8>,
+    webp_alpha_quality: Option<u8>,
+    webp_pass: Option<u8>,
+    webp_near_lossless: Option<u8>,
+) -> Result<Vec<u8>, String> {
+    encode_image_with_webp_method_alpha(
+        input,
+        format,
+        quality,
+        png_optimization_level,
+        false,
+        lossless,
+        jpeg_background,
+        webp_method,
+        webp_alpha_quality,
+        webp_pass,
+        webp_near_lossless,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn encode_image_with_webp_method_alpha(
+    input: &[u8],
+    format: CompressionFormat,
+    quality: u8,
+    png_optimization_level: u8,
+    png_optimize_alpha: bool,
     lossless: bool,
     jpeg_background: Option<&str>,
     webp_method: Option<u8>,
@@ -1614,7 +1661,10 @@ fn encode_image_with_webp_method(
                 .map_err(|error| format!("failed to encode png: {error}"))?;
             let optimized = oxipng::optimize_from_memory(
                 &output.bytes,
-                &oxipng::Options::from_preset(png_optimization_level),
+                &oxipng::Options {
+                    optimize_alpha: png_optimize_alpha,
+                    ..oxipng::Options::from_preset(png_optimization_level)
+                },
             )
             .map_err(|error| format!("failed to optimize png: {error}"))?;
             output.bytes = optimized;
@@ -1796,6 +1846,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     if png_optimization_level > 6 {
         return Err("pngOptimizationLevel must be between 0 and 6".into());
     }
+    validate_png_optimize_alpha(metadata.png_optimize_alpha, format)?;
     validate_webp_method(metadata.webp_method, format, lossless)?;
     validate_webp_alpha_quality(metadata.webp_alpha_quality, format, lossless)?;
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
@@ -1842,6 +1893,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
             "input image exceeds the configured maxInputBytes limit".into()
         });
     }
+    let png_optimize_alpha = metadata.png_optimize_alpha;
     Ok(CompressionRequest {
         metadata,
         input,
@@ -1850,6 +1902,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
         target_bytes,
         max_candidates,
         png_optimization_level,
+        png_optimize_alpha,
     })
 }
 
@@ -1920,6 +1973,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     if png_optimization_level > 6 {
         return Err("pngOptimizationLevel must be between 0 and 6".into());
     }
+    validate_png_optimize_alpha(metadata.png_optimize_alpha, format)?;
     validate_webp_method(metadata.webp_method, format, lossless)?;
     validate_webp_alpha_quality(metadata.webp_alpha_quality, format, lossless)?;
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
@@ -1962,6 +2016,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             max_candidates: metadata.max_candidates,
             max_input_bytes: metadata.max_input_bytes,
             png_optimization_level: metadata.png_optimization_level,
+            png_optimize_alpha: metadata.png_optimize_alpha,
             metadata_policy: metadata.metadata_policy,
             job_id: None,
         },
@@ -1971,6 +2026,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
         target_bytes,
         max_candidates,
         png_optimization_level,
+        png_optimize_alpha: metadata.png_optimize_alpha,
     })
 }
 
@@ -2501,6 +2557,7 @@ mod tests {
                 max_candidates: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("auto-rename-test".into()),
             },
@@ -2510,6 +2567,7 @@ mod tests {
             target_bytes: None,
             max_candidates: DEFAULT_MAX_CANDIDATES,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         }
     }
 
@@ -2614,6 +2672,21 @@ mod tests {
                 "PNG optimization level {level} changed pixels"
             );
         }
+        let output = encode_image_with_webp_method_alpha(
+            &input,
+            CompressionFormat::Png,
+            80,
+            2,
+            true,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(decode_image(&output).unwrap().dimensions(), (3, 2));
     }
 
     #[test]
@@ -2675,6 +2748,7 @@ mod tests {
                 CompressionFormat::Jpeg,
                 quality,
                 2,
+                false,
                 7,
                 5,
                 false,
@@ -2766,6 +2840,7 @@ mod tests {
                 max_candidates: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("transparent-jpeg-publish-test".into()),
             },
@@ -2775,6 +2850,7 @@ mod tests {
             target_bytes: None,
             max_candidates: DEFAULT_MAX_CANDIDATES,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         };
         let job = Arc::new(CompressionJob {
             cancelled: AtomicBool::new(false),
@@ -2851,6 +2927,40 @@ mod tests {
         assert!(parse_estimate_raw_payload(&unsupported)
             .unwrap_err()
             .contains("schemaVersion"));
+    }
+
+    #[test]
+    fn png_optimize_alpha_is_png_only_and_backward_compatible() {
+        let legacy = parse_raw_payload(&raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"png"}"#,
+            &png_input(),
+        ))
+        .unwrap();
+        assert!(!legacy.png_optimize_alpha);
+
+        for metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","pngOptimizeAlpha":true}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","pngOptimizeAlpha":true}"#,
+        ] {
+            let error = parse_raw_payload(&raw_payload(metadata, &png_input())).unwrap_err();
+            assert!(error.contains("pngOptimizeAlpha is only supported for PNG"));
+            let estimate_error =
+                parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).unwrap_err();
+            assert!(estimate_error.contains("pngOptimizeAlpha is only supported for PNG"));
+        }
+
+        let enabled = parse_raw_payload(&raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"png","pngOptimizeAlpha":true}"#,
+            &png_input(),
+        ))
+        .unwrap();
+        assert!(enabled.png_optimize_alpha);
+        let estimate = parse_estimate_raw_payload(&raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"png","pngOptimizeAlpha":true}"#,
+            &png_input(),
+        ))
+        .unwrap();
+        assert!(estimate.png_optimize_alpha);
     }
 
     #[test]
@@ -3130,6 +3240,7 @@ mod tests {
                 max_candidates: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
             },
@@ -3139,6 +3250,7 @@ mod tests {
             target_bytes: None,
             max_candidates: DEFAULT_MAX_CANDIDATES,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         };
         let missing_output = resolve_output_path(&missing_request).unwrap();
         validate_preflight_output_directory(&missing_output).unwrap();
@@ -3549,6 +3661,7 @@ mod tests {
                 max_candidates: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("corrupt-input-test".into()),
             },
@@ -3558,6 +3671,7 @@ mod tests {
             target_bytes: None,
             max_candidates: DEFAULT_MAX_CANDIDATES,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         };
         let job = Arc::new(CompressionJob {
             cancelled: AtomicBool::new(false),
@@ -3651,6 +3765,7 @@ mod tests {
                 max_candidates: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: Some("skip-test".into()),
             },
@@ -3660,6 +3775,7 @@ mod tests {
             target_bytes: None,
             max_candidates: DEFAULT_MAX_CANDIDATES,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         };
         let job = Arc::new(CompressionJob {
             cancelled: AtomicBool::new(false),
@@ -4266,6 +4382,7 @@ mod tests {
                 max_candidates: Some(MAX_CANDIDATES),
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
             },
@@ -4275,6 +4392,7 @@ mod tests {
             target_bytes: Some(target),
             max_candidates: MAX_CANDIDATES,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         };
         let selection = choose_encoded_output(&request, 2, 2).unwrap();
         let repeated = choose_encoded_output(&request, 2, 2).unwrap();
@@ -4332,6 +4450,7 @@ mod tests {
                 max_candidates: Some(MAX_CANDIDATES),
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
             },
@@ -4341,6 +4460,7 @@ mod tests {
             target_bytes: Some(target),
             max_candidates: MAX_CANDIDATES,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         };
         let selection = choose_encoded_output(&request, 64, 48).unwrap();
         let repeated = choose_encoded_output(&request, 64, 48).unwrap();
@@ -4384,6 +4504,7 @@ mod tests {
                 max_candidates: Some(1),
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
             },
@@ -4393,6 +4514,7 @@ mod tests {
             target_bytes: Some(1),
             max_candidates: 1,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         };
         let selection = choose_encoded_output(&request, 64, 48).unwrap();
         assert!(!selection.target_met);
@@ -4434,6 +4556,7 @@ mod tests {
                 max_candidates: Some(DEFAULT_MAX_CANDIDATES),
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
+                png_optimize_alpha: false,
                 metadata_policy: MetadataPolicy::Strip,
                 job_id: None,
             },
@@ -4443,6 +4566,7 @@ mod tests {
             target_bytes: Some(1),
             max_candidates: DEFAULT_MAX_CANDIDATES,
             png_optimization_level: 2,
+            png_optimize_alpha: false,
         };
         let selection = choose_encoded_output(&request, 2, 2).unwrap();
         assert!(!selection.target_met);
