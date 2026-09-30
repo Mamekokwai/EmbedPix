@@ -28,6 +28,18 @@ export const OUTPUT_FORMATS: ReadonlyArray<{
 
 export const BMP_BIT_DEPTHS: ReadonlyArray<BmpBitDepth> = [1, 4, 8, 16, 24, 32];
 export const PNG_BIT_DEPTHS: ReadonlyArray<BmpBitDepth> = [24, 32];
+
+export function formatImageConverterError(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const labels: Readonly<Record<string, string>> = { "failed to decode input image": "输入图片解码失败", "failed to inspect input image": "输入图片检查失败", "failed to export image": "图片导出失败", "failed to open output directory": "打开输出目录失败" };
+  for (const [prefix, label] of Object.entries(labels)) {
+    const index = message.indexOf(prefix);
+    if (index < 0) continue;
+    const suffix = message.slice(index + prefix.length);
+    return `${message.slice(0, index)}${label}${suffix.startsWith(":") ? `：${suffix.slice(1).trim()}` : suffix}`;
+  }
+  return message || "图片转换失败，请重试。";
+}
 export const SUPPORTED_IMAGE_ACCEPT = ".png,.jpg,.jpeg,.bmp,.gif,.webp,image/png,image/jpeg,image/bmp,image/gif,image/webp";
 export const SUPPORTED_IMAGE_FORMAT_LABEL = "PNG、JPEG/JPG、BMP、GIF、WEBP";
 

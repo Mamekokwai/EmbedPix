@@ -41,6 +41,7 @@ import {
   constrainAspectDimensions,
   constrainDimensions,
   formatFileSize,
+  formatImageConverterError,
   formatMebibytes,
   getImagePreviewComparison,
   estimateImageExportBytes,
@@ -517,7 +518,7 @@ export default function ImageConverter({
         if (cancelled) return;
         setRealPreviewUrl(null);
         setRealPreview(null);
-        setRealPreviewError(previewError instanceof Error ? previewError.message : "真实编码预览失败，可直接继续正式导出。 ");
+        setRealPreviewError(formatImageConverterError(previewError));
       }
     };
     void requestPreview();
@@ -613,7 +614,7 @@ export default function ImageConverter({
       if (loadId !== loadIdRef.current) {
         return;
       }
-      const message = loadError instanceof Error ? loadError.message : "图片读取失败，请重试。";
+      const message = formatImageConverterError(loadError);
       setStatus({ kind: "error", text: "读取失败" });
       setError(message);
       return false;
@@ -654,7 +655,7 @@ export default function ImageConverter({
       await loadFiles(sources.map(createNativeFile), replaceImageId);
       return true;
     } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : "图片读取失败，请重试。";
+      const message = formatImageConverterError(loadError);
       setStatus({ kind: "error", text: "读取失败" });
       setError(message);
       replaceImageIdRef.current = null;
@@ -750,7 +751,7 @@ export default function ImageConverter({
       setStatus({ kind: skippedCount > 0 ? "error" : "ready", text: summary });
       if (skippedCount > 0) setError(`${summary}。${result.skipped.length ? result.skipped.join("；") : "已跳过列表中已有的重复图片。"}`);
     } catch (importError) {
-      setError(importError instanceof Error ? importError.message : "图片文件夹导入失败。");
+      setError(formatImageConverterError(importError));
       setStatus({ kind: "error", text: "图片文件夹导入失败" });
     }
   };
@@ -1245,7 +1246,7 @@ export default function ImageConverter({
         },
       });
     const failures = result.failed.map(({ item, error: exportError }) => {
-      const message = exportError instanceof Error ? exportError.message : "导出失败，请重试。";
+      const message = formatImageConverterError(exportError);
       return { fileName: item.file.name, message };
     });
     setFailedExportIds(result.failed.map(({ item }) => item.id));
@@ -1306,7 +1307,7 @@ export default function ImageConverter({
       await revealImageOutput(outputPath);
       setStatus({ kind: "ready", text: "已打开输出文件夹" });
     } catch (openError) {
-      setError(openError instanceof Error ? openError.message : "打开输出文件夹失败。 ");
+      setError(formatImageConverterError(openError));
       setStatus({ kind: "error", text: "打开失败" });
     }
   };

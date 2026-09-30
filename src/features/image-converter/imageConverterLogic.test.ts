@@ -12,6 +12,7 @@ import {
   constrainAspectDimensions,
   constrainDimensions,
   formatFileSize,
+  formatImageConverterError,
   formatExportSafetyConfirmation,
   getBackgroundNote,
   getBatchExportStatus,
@@ -34,6 +35,15 @@ import {
   normalizeCArrayName,
   parseDimension,
 } from "./imageConverterLogic";
+
+describe("image converter error formatting", () => {
+  it("formats known native errors and preserves unknown/non-error values safely", () => {
+    expect(formatImageConverterError(new Error("failed to decode input image: bad header"))).toBe("输入图片解码失败：bad header");
+    expect(formatImageConverterError("failed to inspect input image: ICC")).toBe("输入图片检查失败：ICC");
+    expect(formatImageConverterError("other: path/file.png")).toBe("other: path/file.png");
+    expect(formatImageConverterError(42)).toBe("图片转换失败，请重试。");
+  });
+});
 
 describe("image converter dimensions", () => {
   it("accepts only positive integer dimensions within the UI limit", () => {
