@@ -145,6 +145,17 @@ export function getCompressionTargetSizeError(enabled: boolean, value: string, m
 }
 export function getSuccessfulCompressionOutputPath(status: "completed" | "skipped", outputPath: string): string | null { const normalizedPath = outputPath.trim(); return status === "completed" && normalizedPath ? normalizedPath : null; }
 export function formatCompressionFailureDetails(details: ReadonlyArray<{ fileName: string; message: string }>): string { return details.map(({ fileName, message }) => `${fileName}：${message}`).join("\n"); }
+export function formatCompressionBatchSummary(summary: { total: number; succeeded: number; skipped: number; failed: number; processedInputBytes: number; outputBytes: number; savedBytes: number; targetMet: boolean | null; selectedQualities: ReadonlyArray<number>; itemResults: ReadonlyArray<Pick<CompressionItemResult, "fileName" | "status" | "reason">> }): string {
+  const lines = [
+    `压缩批处理：${summary.total} 项`,
+    `成功 ${summary.succeeded} · 跳过 ${summary.skipped} · 失败 ${summary.failed}`,
+    `已处理输入 ${formatCompressionBytes(summary.processedInputBytes)} · 输出 ${formatCompressionBytes(summary.outputBytes)} · 节省 ${formatCompressionBytes(summary.savedBytes)}`,
+    summary.targetMet === null ? null : `目标体积：${summary.targetMet ? "已达成" : "未达成"}`,
+    summary.selectedQualities.length ? `实际质量：${summary.selectedQualities.join(" / ")}` : null,
+    ...summary.itemResults.filter((item) => item.status !== "completed" || item.reason).map((item) => `${item.status === "failed" ? "失败" : "跳过"} ${item.fileName.split(/[\\/]/u).pop() ?? item.fileName}${item.reason ? `：${item.reason}` : ""}`),
+  ];
+  return lines.filter((line): line is string => Boolean(line)).join("\n");
+}
 export function formatCompressionItemResultStatus(status: CompressionItemResultStatus): string { return status === "completed" ? "已完成" : status === "skipped" ? "已跳过" : "失败"; }
 export interface CompressionItemResultMetrics { inputBytes: number; outputBytes?: number; savedBytes?: number; savingsPercent?: number; }
 function finiteMetric(value: number | undefined, allowNegative = false): number | undefined { return typeof value === "number" && Number.isFinite(value) && (allowNegative || value >= 0) ? value : undefined; }

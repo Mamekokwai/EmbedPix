@@ -40,6 +40,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("typeof estimate.targetMet === \"boolean\"");
     expect(compressionView).toContain("typeof estimate.selectedQuality === \"number\"");
   });
+  it("exposes a copyable compression batch summary without changing native wiring", () => {
+    expect(compressionView).toContain("formatCompressionBatchSummary");
+    expect(compressionView).toContain("复制批处理摘要");
+    expect(compressionView).toContain("disabled={resultStats.total === 0}");
+  });
   it("clears stale compression preflight space when inputs or options change", () => {
     expect(compressionView).toContain("setPreflightSpaceBytes(null);");
     expect(compressionView).toMatch(/\[items, options, selectedItemId\]/);

@@ -22,6 +22,7 @@ import {
   splitCompressionImportFiles,
   formatCompressionBytes,
   formatCompressionFailureDetails,
+  formatCompressionBatchSummary,
   formatCompressionEstimateSource,
   formatCompressionItemResultStatus,
   getCompressionItemResultMetrics,
@@ -982,6 +983,17 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setStatus("error");
     }
   };
+  const copyBatchSummary = async () => {
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择批处理摘要。 ");
+      await navigator.clipboard.writeText(formatCompressionBatchSummary({ ...resultStats, itemResults }));
+      setMessage("批处理摘要已复制");
+      setStatus("ready");
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
+  };
 
   const openOutputFolder = async (outputPath: string) => {
     try {
@@ -1116,6 +1128,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       </section>
 
       <section className="compression-card compression-result-card" aria-label="压缩结果统计">
+        <div className="compression-failure-heading"><strong>压缩结果</strong><button type="button" className="compression-secondary-button" onClick={() => { void copyBatchSummary(); }} disabled={resultStats.total === 0}>复制批处理摘要</button></div>
         <div className="compression-summary-stat"><span>成功</span><strong>{resultStats.succeeded}</strong></div>
         <div className="compression-summary-stat"><span>跳过</span><strong>{resultStats.skipped}</strong></div>
         <div className="compression-summary-stat"><span>失败</span><strong className={resultStats.failed > 0 ? "compression-failure" : undefined}>{resultStats.failed}</strong></div>
