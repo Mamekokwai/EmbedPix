@@ -380,6 +380,10 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain('gif-settings-expanded');
     expect(gifCss).toContain('.gif-maker-view.gif-settings-expanded > .gif-export-footer { position: static; }');
   });
+  it("keeps GIF header workspace actions visible on narrow windows", () => {
+    expect(gifCss).toContain(".gif-header-note { width: 100%; margin-left: 0; flex-wrap: wrap; white-space: normal; }");
+    expect(gifCss).toContain(".gif-header-note .workspace-file-button, .gif-header-note > .quiet-button { flex: 1 1 auto; }");
+  });
 
   it("does not compress narrow short GIF cards below readable content height", () => {
     expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 621px) and (max-height: 760px)");

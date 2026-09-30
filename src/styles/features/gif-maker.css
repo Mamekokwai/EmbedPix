@@ -259,6 +259,8 @@
   .gif-main-column, .gif-preview-card { min-height: 300px; }
 }
 @media (max-width: 620px) {
+  .gif-header-note { width: 100%; margin-left: 0; flex-wrap: wrap; white-space: normal; }
+  .gif-header-note .workspace-file-button, .gif-header-note > .quiet-button { flex: 1 1 auto; }
   .gif-maker-toolbar > span { display: none; }
   .gif-maker-header .page-eyebrow { display: none; }
   .gif-maker-header.page-header { padding-bottom: 5px; }
