@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $helper = Join-Path $PSScriptRoot 'release-signing-preflight-cleanup.ps1'
 . $helper
 

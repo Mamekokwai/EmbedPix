@@ -1,4 +1,4 @@
-function Remove-ReleaseSigningProbeDirectory {
+﻿function Remove-ReleaseSigningProbeDirectory {
   [CmdletBinding()]
   param(
     [Parameter(Mandatory = $true)]
