@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     fs::{self, File, OpenOptions},
     io,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Mutex,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -310,7 +310,7 @@ impl GifFrameSpoolState {
                     continue;
                 };
                 let quarantine = path.with_file_name(format!(".{name}.quarantine-{}", spool_id(0)));
-                if fs::rename(&path, &quarantine).is_err() {
+                if !quarantine_stale_lock(&path, &quarantine).is_ok_and(|moved| moved) {
                     drop(lock);
                     skipped_active += 1;
                     continue;
@@ -433,6 +433,17 @@ fn remove_dir_all_idempotent(path: &PathBuf) -> std::io::Result<()> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error),
     }
+}
+
+fn quarantine_stale_lock(path: &Path, quarantine: &Path) -> io::Result<bool> {
+    if fs::hard_link(path, quarantine).is_err() {
+        return Ok(false);
+    }
+    if let Err(error) = fs::remove_file(path) {
+        let _ = fs::remove_file(quarantine);
+        return Err(error);
+    }
+    Ok(true)
 }
 
 fn spool_id(attempt: u32) -> String {
@@ -622,6 +633,36 @@ mod tests {
             .file_name()
             .to_string_lossy()
             .contains("quarantine-")));
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn stale_lock_quarantine_does_not_overwrite_an_existing_target() {
+        let state = test_state("quarantine-collision");
+        fs::create_dir_all(&state.root).unwrap();
+        let source = state.root.join("source.lock");
+        let quarantine = state.root.join("quarantine.lock");
+        fs::write(&source, b"source").unwrap();
+        fs::write(&quarantine, b"keep").unwrap();
+
+        assert!(!quarantine_stale_lock(&source, &quarantine).unwrap());
+        assert_eq!(fs::read(&source).unwrap(), b"source");
+        assert_eq!(fs::read(&quarantine).unwrap(), b"keep");
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn cleanup_reclaims_multiple_stale_lock_files_independently() {
+        let state = test_state("multiple-stale-locks");
+        fs::create_dir_all(&state.root).unwrap();
+        let first = state.root.join("first.lock");
+        let second = state.root.join("second.lock");
+        drop(SpoolLock::create(&first).unwrap());
+        drop(SpoolLock::create(&second).unwrap());
+
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        assert!(!first.exists());
+        assert!(!second.exists());
         let _ = fs::remove_dir_all(state.root.clone());
     }
 
