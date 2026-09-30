@@ -680,6 +680,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     compressionPlanRequestRef.current += 1;
     setCompressionPlan(null);
     setCompressionPlanError(null);
+    setCompressionPlanBusy(false);
   }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, targetSizeKiB]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
