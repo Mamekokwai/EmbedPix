@@ -42,6 +42,7 @@ import {
   removeCompressionItem,
   isCurrentCompressionEstimate,
   formatCompressionReason,
+  formatCompressionError,
   canWriteCompressionItemUpdate,
   removeCompressionDimensionError,
   isCompressionSourcePathError,
@@ -396,7 +397,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           setEstimateNote(formatCompressionEstimateSource("native", result.status === "skipped" && result.skippedReason ? `输出将跳过：${formatCompressionReason(result.skippedReason)}` : "当前选中图片"));
       } catch (error) {
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
-        setEstimateNote(formatCompressionEstimateSource("fallback", `原生预估失败：${errorMessage(error)}`));
+        setEstimateNote(formatCompressionEstimateSource("fallback", `原生预估失败：${formatCompressionError(errorMessage(error))}`));
       }
     })();
     return () => controller.abort();
@@ -494,7 +495,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           setPreview(result);
         } catch (error) {
           if (requestId !== previewRequestIdRef.current || (error instanceof DOMException && error.name === "AbortError")) return;
-          setPreviewError(errorMessage(error));
+          setPreviewError(formatCompressionError(errorMessage(error)));
         } finally {
           if (requestId === previewRequestIdRef.current) setPreviewBusy(false);
         }
@@ -799,10 +800,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         }
       } catch (error) {
         stopCompressionProgressPolling();
-        let detail = errorMessage(error);
+        let detail = formatCompressionError(errorMessage(error));
         try {
           const finalProgress = await getCompressionProgress(jobId);
-          detail = formatCompressionProgressError(finalProgress) ?? detail;
+          detail = formatCompressionError(formatCompressionProgressError(finalProgress) ?? detail);
         } catch {
           // A preflight or transport failure may not leave a readable native progress record.
         }

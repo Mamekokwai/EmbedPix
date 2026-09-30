@@ -28,6 +28,19 @@ export function formatCompressionReason(reason: string | undefined): string {
   const label = labels[reason.slice(0, separator)];
   return label ? `${label}：${reason.slice(separator + 1).trim()}` : reason;
 }
+export function formatCompressionError(error: string): string {
+  const labels: Readonly<Record<string, string>> = {
+    "animated GIF input is not supported; provide a static GIF": "不支持动态 GIF 输入，请提供静态 GIF",
+    "animated WebP input is not supported; provide a static WebP": "不支持动态 WebP 输入，请提供静态 WebP",
+    "failed to decode input image": "输入图片解码失败",
+    "failed to inspect input image": "输入图片检查失败",
+  };
+  for (const [prefix, label] of Object.entries(labels)) {
+    if (error === prefix) return label;
+    if (error.startsWith(`${prefix}:`)) return `${label}：${error.slice(prefix.length + 1).trim()}`;
+  }
+  return error;
+}
 export function getCompressionTargetSizeError(enabled: boolean, value: string, maxKiB: number): string | null {
   if (!enabled) return null;
   const trimmed = value.trim();
