@@ -2557,6 +2557,8 @@ fn classify_error_code(stage: CompressionStage, message: &str) -> CompressionErr
         || lower.contains("inspect input")
         || lower.contains("dimensions")
         || lower.contains("opaque")
+        || lower.contains("animated gif input")
+        || lower.contains("animated webp input")
     {
         return CompressionErrorCode::Decode;
     }
@@ -4430,6 +4432,18 @@ mod tests {
             classify_error_code(CompressionStage::Failed, "failed to decode input image").as_str(),
             "decode"
         );
+        for message in [
+            "animated GIF input is not supported; provide a static GIF",
+            "animated WebP input is not supported; provide a static WebP",
+        ] {
+            assert_eq!(
+                classify_error_code(CompressionStage::Failed, message).as_str(),
+                "decode"
+            );
+            let job = test_job("animated-input-error-code");
+            assert_eq!(fail_message(&job, message.into()), message);
+            assert_eq!(job.progress.lock().unwrap().code.as_deref(), Some("decode"));
+        }
         assert_eq!(
             classify_error_code(CompressionStage::Failed, "failed to write output file").as_str(),
             "publish"
