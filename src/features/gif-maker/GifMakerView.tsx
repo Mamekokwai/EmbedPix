@@ -32,7 +32,7 @@ import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import { createGifCustomPreset, loadGifCustomPresets, saveGifCustomPresets, type GifCustomPreset } from "./gifCustomPresets";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
-import { clampVideoFps, formatVideoTime, isCurrentVideoExtractionRequest, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
+import { canStartVideoImport, clampVideoFps, formatVideoTime, isCurrentVideoExtractionRequest, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoCropRect } from "./videoGifLogic";
 import { extractVideoFrameBlobs } from "./videoFrameExtraction";
 import { readImageFile, type NativeImageFile } from "../../platform/image/imageExportGateway";
@@ -878,7 +878,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const importVideo = async (file: File) => {
-    if (lockedRef.current || !isVideoFile(file)) {
+    if (!canStartVideoImport(lockedRef.current, pendingRef.current)) {
+      setError("请等待当前图片导入完成后再导入视频。");
+      setStatus({ kind: "error", text: "视频导入被阻止" });
+      return;
+    }
+    if (!isVideoFile(file)) {
       setError("请选择 MP4、WebM 或 OGG 视频文件。");
       setStatus({ kind: "error", text: "视频导入失败" });
       return;

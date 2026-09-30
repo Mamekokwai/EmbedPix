@@ -7,6 +7,10 @@ export function isCurrentVideoExtractionRequest(currentRequestId: number, reques
   return currentRequestId === requestId;
 }
 
+export function canStartVideoImport(locked: boolean, pendingImports: number): boolean {
+  return !locked && pendingImports <= 0;
+}
+
 export interface VideoCropRect {
   x: number;
   y: number;
