@@ -6,6 +6,32 @@ export const WORKSPACE_SCHEMA = "embedpix.workspace" as const;
 export const WORKSPACE_VERSION = 1 as const;
 const MAX_JSON_BYTES = 1 * 1024 * 1024;
 
+export function formatWorkspaceTransferError(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const mappings: ReadonlyArray<[string, string]> = [
+    ["workspace snapshot is not valid JSON", "工作区快照不是有效 JSON"],
+    ["workspace snapshot exceeds 1 MiB", "工作区快照超过 1 MiB 限制"],
+    ["unsupported workspace schema or version", "工作区 schema 或版本不受支持"],
+    ["workspace type is invalid", "工作区类型无效"],
+    ["workspace snapshot must be an object", "工作区快照必须是对象"],
+    ["workspace contains unsupported fields", "工作区包含不支持的字段"],
+    ["sources must be an array", "sources 必须是数组"],
+    ["frames must be an array", "frames 必须是数组"],
+    ["fileName is invalid", "fileName 无效"],
+    ["is unsafe", "不安全"],
+    ["is out of range", "超出有效范围"],
+    ["must be an object", "必须是对象"],
+    ["contains unsupported fields", "包含不支持的字段"],
+    ["path may no longer exist", "路径可能已不存在"],
+    ["GIF frame metadata count", "GIF 帧元数据数量"],
+  ];
+  for (const [prefix, label] of mappings) {
+    const index = message.indexOf(prefix);
+    if (index >= 0) return `${message.slice(0, index)}${label}${message.slice(index + prefix.length)}`;
+  }
+  return message || "工作区导入失败，请检查文件后重试。";
+}
+
 export interface WorkspaceSource { path: string; fileName: string; kind?: "image" | "video"; width?: number; height?: number; sizeBytes?: number; durationMs?: number; fps?: number; }
 export interface WorkspaceFrame { index: number; durationMs: number; width?: number; height?: number; sizeBytes?: number; }
 export interface ImageWorkspaceSnapshot { type: "image"; parameters: ImageConverterDefaults; outputLocation: OutputLocation; outputDirectory?: string; outputSubdirectory?: string; namingTemplate?: string; sources: WorkspaceSource[]; }

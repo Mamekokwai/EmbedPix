@@ -87,7 +87,7 @@ import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueu
 import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueue";
 import type { ExportPreflightResult } from "./imageConverterLogic";
 import { formatBatchConversionPlanError, planBatchConversions } from "./batchConversionPlan";
-import { exportWorkspace, importWorkspace } from "../../shared/workspaceTransfer";
+import { exportWorkspace, formatWorkspaceTransferError, importWorkspace } from "../../shared/workspaceTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
 
 type ImageExportQueueProgress = ExportQueueProgress<{ file: { name: string } }>;
@@ -765,7 +765,7 @@ export default function ImageConverter({
     if (!file) return;
     try {
       const bundle = importWorkspace(await file.text(), "image"); const p = bundle.parameters;
-      setError(bundle.issues.length ? bundle.issues.map((issue) => issue.path ? `${issue.message}：${issue.path}` : issue.message).join("；") : null);
+      setError(bundle.issues.length ? bundle.issues.map((issue) => issue.path ? `${formatWorkspaceTransferError(issue.message)}：${issue.path}` : formatWorkspaceTransferError(issue.message)).join("；") : null);
       if (bundle.outputLocation === "source" || bundle.outputLocation === "subfolder" || bundle.outputLocation === "directory" || bundle.outputLocation === "original") setOutputLocation(bundle.outputLocation); if (typeof bundle.outputDirectory === "string") setOutputDirectory(bundle.outputDirectory); if (typeof bundle.outputSubdirectory === "string") setOutputSubdirectory(bundle.outputSubdirectory); if (typeof bundle.namingTemplate === "string") setFileNameTemplate(bundle.namingTemplate);
       if (typeof p.defaultOutputFormat === "string") setOutputFormat(p.defaultOutputFormat as OutputFormat); if (typeof p.defaultBitDepth === "number") setBitDepth(p.defaultBitDepth as BmpBitDepth); if (typeof p.defaultJpegQuality === "number") setJpegQuality(p.defaultJpegQuality); if (p.defaultByteOrder === "little" || p.defaultByteOrder === "big") setByteOrder(p.defaultByteOrder); if (p.defaultChannelOrder === "rgb" || p.defaultChannelOrder === "bgr") setChannelOrder(p.defaultChannelOrder); if (p.defaultRowOrder === "top-down" || p.defaultRowOrder === "bottom-up") setRowOrder(p.defaultRowOrder); if (p.defaultRowAlignment === 1 || p.defaultRowAlignment === 2 || p.defaultRowAlignment === 4) setRowAlignment(p.defaultRowAlignment); if (typeof p.defaultCArrayName === "string") setCArrayName(p.defaultCArrayName); if (typeof p.keepAspectRatio === "boolean") setKeepAspectRatio(p.keepAspectRatio); if (typeof p.defaultBackgroundColor === "string") setBackgroundColor(p.defaultBackgroundColor);
       if (isTauriEnvironment() && bundle.sourcePaths.length) {
@@ -774,7 +774,7 @@ export default function ImageConverter({
         else { setError(`无法恢复源图片：${bundle.sourcePaths.join("、")}`); setStatus({ kind: "error", text: "部分源图片恢复失败，已保留当前列表" }); }
       } else if (bundle.sourcePaths.length) { setStatus({ kind: "ready", text: "参数已恢复，源图片请重新选择" }); setError("浏览器不会自动读取工作区源文件，请重新选择图片。 "); }
       else setStatus({ kind: "ready", text: "工作区参数已恢复" });
-    } catch (error) { setError(error instanceof Error ? error.message : "工作区打开失败。"); setStatus({ kind: "error", text: "工作区打开失败" }); }
+    } catch (error) { setError(formatWorkspaceTransferError(error)); setStatus({ kind: "error", text: "工作区打开失败" }); }
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {

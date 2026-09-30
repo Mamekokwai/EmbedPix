@@ -37,7 +37,7 @@ import type { VideoCropRect } from "./videoGifLogic";
 import { extractVideoFrameBlobs } from "./videoFrameExtraction";
 import { readImageFile, type NativeImageFile } from "../../platform/image/imageExportGateway";
 import { exportPresetBundle, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
-import { exportWorkspace, importWorkspace } from "../../shared/workspaceTransfer";
+import { exportWorkspace, formatWorkspaceTransferError, importWorkspace } from "../../shared/workspaceTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
 import { loadVideoMetadata } from "./videoMetadata";
 import "../../styles/features/gif-maker.css";
@@ -1426,7 +1426,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     if (!file) return;
     try {
       const bundle = importWorkspace(await file.text(), "gif");
-      setError(bundle.issues.length ? bundle.issues.map((issue) => issue.path ? `${issue.message}：${issue.path}` : issue.message).join("；") : null);
+      setError(bundle.issues.length ? bundle.issues.map((issue) => issue.path ? `${formatWorkspaceTransferError(issue.message)}：${issue.path}` : formatWorkspaceTransferError(issue.message)).join("；") : null);
       const p = bundle.parameters;
       const location = bundle.outputLocation;
       if (location === "path" || location === "source" || location === "subfolder" || location === "directory") setOutputLocation(location);
@@ -1483,7 +1483,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       }
       setStatus({ kind: "ready", text: importedCount ? `已恢复 ${importedCount} 张图片` : bundle.sourcePaths.length ? "工作区参数已恢复，请重新选择源文件" : "工作区参数已恢复" });
     } catch (error) {
-      setError(error instanceof Error ? error.message : "工作区打开失败。");
+      setError(formatWorkspaceTransferError(error));
       setStatus({ kind: "error", text: error instanceof Error && /视频|video|读取|read/i.test(error.message) ? "请重新导入视频或图片源" : "工作区打开失败" });
     }
   };

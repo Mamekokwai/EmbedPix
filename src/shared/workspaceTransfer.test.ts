@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_GIF_MAKER_PREFERENCES } from "../features/gif-maker/gifMakerPreferences";
 import { DEFAULT_APP_PREFERENCES } from "../platform/preferences/appPreferences";
-import { exportWorkspaceSnapshot, importWorkspace, importWorkspaceSnapshot } from "./workspaceTransfer";
+import { exportWorkspaceSnapshot, formatWorkspaceTransferError, importWorkspace, importWorkspaceSnapshot } from "./workspaceTransfer";
 
 const image = { type: "image" as const, parameters: DEFAULT_APP_PREFERENCES, outputLocation: "directory" as const, outputDirectory: "E:\\out", namingTemplate: "{name}_{index}.png", sources: [{ path: "E:\\images\\a.png", fileName: "a.png", width: 10, height: 20, sizeBytes: 100 }] };
 const gif = { type: "gif" as const, parameters: DEFAULT_GIF_MAKER_PREFERENCES, outputLocation: "directory", sources: [{ path: "E:\\images\\a.png", fileName: "a.png" }], frames: [{ index: 0, durationMs: 100, width: 10, height: 20 }] };
 
 describe("workspace transfer", () => {
+  it("formats stable restore errors while preserving details", () => {
+    expect(formatWorkspaceTransferError(new Error("workspace snapshot is not valid JSON"))).toBe("工作区快照不是有效 JSON");
+    expect(formatWorkspaceTransferError("source path is unsafe: E:\\..\\secret.png")).toBe("source path 不安全: E:\\..\\secret.png");
+    expect(formatWorkspaceTransferError("future workspace failure")).toBe("future workspace failure");
+  });
   it("round trips image and GIF metadata without binary data", () => {
     const json = exportWorkspaceSnapshot([image, gif]);
     expect(json).not.toContain("Blob"); expect(json).not.toContain("data:");
