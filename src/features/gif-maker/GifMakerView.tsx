@@ -2211,6 +2211,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       : outputLocation === "subfolder"
         ? (sourcePath ? `源文件夹 / ${outputSubdirectory.trim() || "未填写子文件夹"}` : "等待可用源文件路径")
         : (outputDirectory.trim() || "尚未填写自定义目录");
+  const exportProgressTotal = Math.max(gifExportProgress?.totalFrames ?? 0, 1);
+  const exportProgressCurrent = Math.min(Math.max(gifExportProgress?.completedFrames ?? 0, 0), exportProgressTotal);
+  const exportProgressText = gifExportProgress && gifExportProgress.totalFrames > 0
+    ? `${exportProgressCurrent}/${gifExportProgress.totalFrames} 帧`
+    : "等待开始";
 
   const selectSourceMode = (mode: GifSourceMode) => {
     if (mode !== sourceMode) {
@@ -2566,7 +2571,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         {error ? <div className={`gif-error-message${expandedError === error ? " gif-error-message-expanded" : ""}`} role="alert">
           <span className="gif-error-message-text" id="gif-error-details">{error}</span>
           {shouldOfferGifErrorDetails(error) ? <button className="gif-error-details-toggle" type="button" aria-expanded={expandedError === error} aria-controls="gif-error-details" onClick={() => setExpandedError(expandedError === error ? null : error)}>{expandedError === error ? "收起详情" : "查看详情"}</button> : null}
-        </div> : <p className={`gif-status gif-status-${status.kind}`} role="status">{gifExportProgress && status.kind === "exporting" ? formatGifExportProgress(gifExportProgress) : status.text}</p>}
+        </div> : <p
+          className={`gif-status gif-status-${status.kind}`}
+          role={gifExportProgress && status.kind === "exporting" ? "progressbar" : "status"}
+          aria-valuemin={gifExportProgress && status.kind === "exporting" ? 0 : undefined}
+          aria-valuemax={gifExportProgress && status.kind === "exporting" ? exportProgressTotal : undefined}
+          aria-valuenow={gifExportProgress && status.kind === "exporting" ? exportProgressCurrent : undefined}
+          aria-valuetext={gifExportProgress && status.kind === "exporting" ? exportProgressText : undefined}
+        >{gifExportProgress && status.kind === "exporting" ? formatGifExportProgress(gifExportProgress) : status.text}</p>}
         {sourceMode === "video" && locked ? <button className="quiet-button" type="button" onClick={cancelVideoExtraction}>取消抽帧</button> : null}
         {compressionControllerRef.current ? <button className="quiet-button" type="button" disabled={Boolean(gifExportJobIdRef.current && gifExportProgress?.status === "cancelling")} onClick={() => { void cancelCompression(); }}>{getGifCancelButtonLabel(Boolean(gifExportJobIdRef.current), gifExportProgress?.status === "cancelling")}</button> : null}
         <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!singleOutputReady) { setGroup("export"); if (outputLocation === "path") void chooseOutput(); else { setError(outputLocationError ?? "请先完成输出位置设置。"); setStatus({ kind: "error", text: "输出位置不可用" }); } } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputFormat === "png-sequence" ? (singleOutputReady ? "导出 PNG 帧序列" : "选择输出目录") : outputLocation === "path" ? (outputPath ? `导出 ${outputFormat.toUpperCase()}` : "选择保存位置") : `导出 ${outputFormat.toUpperCase()}`}</button>

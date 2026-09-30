@@ -117,6 +117,9 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".workspace-transfer-actions > * { flex: 1 1 0;");
     expect(gifView).toContain("gif-status-${status.kind}");
     expect(gifView).toContain("formatGifExportProgress");
+    expect(gifView).toContain('role={gifExportProgress && status.kind === "exporting" ? "progressbar" : "status"}');
+    expect(gifView).toContain("aria-valuenow={gifExportProgress && status.kind === \"exporting\" ? exportProgressCurrent : undefined}");
+    expect(gifView).toContain("const exportProgressCurrent = Math.min(Math.max");
     expect(gifView).toContain("setSourceMode(\"video\")");
     expect(gifView).toContain("选择视频");
     expect(converterView).toContain("export-progress-panel");
