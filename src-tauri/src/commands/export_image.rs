@@ -618,6 +618,7 @@ pub async fn export_image(request: Request<'_>) -> Result<ExportImageResult, Str
         tauri::async_runtime::spawn_blocking(move || convert_image(&conversion_request))
             .await
             .map_err(|error| format!("image conversion task failed: {error}"))??;
+    verify_encoded_output(&bytes, output_format, width, height)?;
     let output_path = choose_output_path(&request, &source_file_name, output_format)?;
     let path_for_write = output_path.clone();
     let source_path = request.source_path.clone();
@@ -697,11 +698,39 @@ fn enforce_preview_limit(data: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+fn verify_encoded_output(
+    bytes: &[u8],
+    output_format: OutputFormat,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    if matches!(output_format, OutputFormat::Rgb565 | OutputFormat::CArray) {
+        return Ok(());
+    }
+
+    let decoded = decode_input(bytes).map_err(|error| {
+        format!(
+            "encoded {} output failed validation: {error}",
+            output_format.name()
+        )
+    })?;
+    if decoded.dimensions() != (width, height) {
+        return Err(format!(
+            "encoded {} output dimensions do not match the requested {}x{} size",
+            output_format.name(),
+            width,
+            height
+        ));
+    }
+    Ok(())
+}
+
 pub fn export_image_cli(payload: &[u8]) -> Result<ExportImageResult, String> {
     let request = parse_raw_payload(payload)?;
     let source_file_name = request.source_file_name.clone();
     let output_format = request.output_format;
     let (bytes, actual_bit_depth) = convert_image(&request)?;
+    verify_encoded_output(&bytes, output_format, request.width, request.height)?;
     let output_path = choose_output_path(&request, &source_file_name, output_format)?;
     write_exported_file(
         &output_path,
@@ -3185,6 +3214,21 @@ mod tests {
         assert_eq!(&jpg[..3], &[0xFF, 0xD8, 0xFF]);
         assert_eq!(decode_input(&png).unwrap().dimensions(), (2, 1));
         assert_eq!(decode_input(&jpg).unwrap().dimensions(), (2, 1));
+    }
+
+    #[test]
+    fn formal_raster_outputs_are_redecoded_before_publish() {
+        let (png, _) = encode_png(sample_image(), 24, Rgba([255, 255, 255, 255])).unwrap();
+        assert!(verify_encoded_output(&png, OutputFormat::Png, 2, 1).is_ok());
+
+        let invalid = verify_encoded_output(b"not an image", OutputFormat::Png, 2, 1).unwrap_err();
+        assert!(invalid.contains("encoded png output failed validation"));
+
+        let mismatch = verify_encoded_output(&png, OutputFormat::Png, 1, 1).unwrap_err();
+        assert!(mismatch.contains("dimensions do not match"));
+
+        assert!(verify_encoded_output(b"raw bytes", OutputFormat::Rgb565, 2, 1).is_ok());
+        assert!(verify_encoded_output(b"raw bytes", OutputFormat::CArray, 2, 1).is_ok());
     }
 
     #[test]
