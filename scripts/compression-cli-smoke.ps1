@@ -436,8 +436,11 @@ try {
   $jpegAutoResizeResult = Invoke-CliRequest $CliPath @{ id = 'jpeg-auto-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegAutoResizeOutput; format = 'jpg'; quality = 82; maxOutputBytes = 64KB; maxCandidates = 8; autoResizeToTarget = $true; maxInputBytes = 1MB } 'JPEG automatic target resize'
   $jpegAutoResizeOutputResult = Assert-Output $jpegAutoResizeOutput 'jpg' 'JPEG automatic target resize'
   if ($jpegAutoResizeResult.output.targetMet -ne $true) { throw 'JPEG automatic target resize did not report targetMet=true.' }
+  [IO.File]::WriteAllBytes($jpegAutoUnreachableOutput, [Text.Encoding]::UTF8.GetBytes('existing-output-sentinel'))
+  $jpegAutoUnreachableHashBefore = (Get-FileHash -LiteralPath $jpegAutoUnreachableOutput -Algorithm SHA256).Hash
   $jpegAutoUnreachableResult = Invoke-CliRequest $CliPath @{ id = 'jpeg-auto-unreachable-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegAutoUnreachableOutput; format = 'jpg'; quality = 82; maxOutputBytes = 1; maxCandidates = 5; autoResizeToTarget = $true; maxInputBytes = 1MB } 'JPEG automatic unreachable target'
-  if ($jpegAutoUnreachableResult.output.status -ne 'skipped' -or (Test-Path -LiteralPath $jpegAutoUnreachableOutput)) { throw 'JPEG automatic unreachable target published an output.' }
+  $jpegAutoUnreachableHashAfter = (Get-FileHash -LiteralPath $jpegAutoUnreachableOutput -Algorithm SHA256).Hash
+  if ($jpegAutoUnreachableResult.output.status -ne 'skipped' -or $jpegAutoUnreachableResult.output.targetMet -ne $false -or $jpegAutoUnreachableResult.output.skippedReason -notmatch 'target_unreachable' -or $jpegAutoUnreachableHashBefore -ne $jpegAutoUnreachableHashAfter) { throw 'JPEG automatic unreachable target changed an existing output or returned an unexpected result.' }
   [void](Invoke-CliRequest $CliPath @{ id = 'webp-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $webpResizeOutput; format = 'webp'; quality = 82; targetResizePercent = 50; maxInputBytes = 1MB } 'WebP resize')
   $webpResizeResult = Assert-Output $webpResizeOutput 'webp' 'WebP resize'
   $invalidRequest = Join-Path $script:root 'invalid-compression.request.json'
@@ -480,6 +483,7 @@ try {
     jpegOriginalSizeDimensions = $jpegOriginalSizeDimensions
     jpegAutoResizeTargetMet = $jpegAutoResizeResult.output.targetMet
     jpegAutoResizeUnreachableSkipped = $jpegAutoUnreachableResult.output.status -eq 'skipped'
+    jpegAutoResizeUnreachablePreservedExisting = $jpegAutoUnreachableHashBefore -eq $jpegAutoUnreachableHashAfter
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
