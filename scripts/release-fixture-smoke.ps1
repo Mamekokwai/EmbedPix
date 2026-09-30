@@ -126,6 +126,12 @@ try {
   Expect-Rejection 'manifest notes/version mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
+  $wrongVersionManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+  $wrongVersionManifest.version = '0.0.0'
+  Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($wrongVersionManifest | ConvertTo-Json -Depth 6)
+  Expect-Rejection 'manifest version mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
+
   $wrongSignatureManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
   $wrongSignatureManifest.platforms.'windows-x86_64'.signature = 'not-a-valid-signature'
   Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($wrongSignatureManifest | ConvertTo-Json -Depth 6)
