@@ -6,7 +6,7 @@
 >
 > 状态约定：`[ ]` 未开始，`[~]` 进行中，`[x]` 已完成，`[!]` 阻塞或需要决策。
 
-## 当前执行状态（2026-09-30）
+## 当前执行状态（2026-10-01）
 
 - 第一阶段闭环已交付：PNG/JPEG/WebP 单图批处理、桌面原生压缩命令、预检、进度、取消、失败重试、临时文件与原子发布、覆盖保护、响应式工作台；新增活动 `jobId` 冲突保护、最多 2 个并发编码 slot 和最多 8 个活动任务，避免取消/进度串任务及内存峰值失控。原生压缩预览现在也注册独立任务，支持排队取消、编码检查点、终态记录和槽位回收；每次预览使用唯一内部 native ID，并对原生注册尚未完成的极短窗口做有界取消重试。GIF spool 现在锁先于目录创建，启动清理仅在确认未被其他实例持有时回收过期目录或无目录 stale lock，并使用不覆盖的 quarantine 保护创建崩溃窗口。GIF/压缩工作台已懒加载，主入口约 342 kB、gzip 约 104 kB，切页后通过隐藏保活保留状态。
 - 交互与诊断增强：格式感知的高质量/平衡/小体积/自定义预设已落地；JPEG 渐进式与优化 Huffman 选项已接入并默认关闭；进度响应增加兼容性的可选错误码；发布链路增加本地 manifest/PE 边界 fixture。
@@ -33,7 +33,7 @@
 - [x] 本轮可访问性收尾：累计压缩批处理进度摘要增加 `aria-live` 通知；前端当前为 32 个测试文件 / 387 个测试通过。
 - [x] `targetResize` 分阶段接入：固定 `targetResizePercent` 与 `autoResizeToTarget` 均已完成安全缩放；默认关闭、仅允许 10–100%、禁止放大、保持宽高比，JPEG/有损 WebP 的 preview/estimate/formal/CLI 共用同一份 resize preparation，Lanczos3 缩放并复用尺寸上限。结果额外回报 `originalInputBytes`/`preparedInputBytes`/`selectedResizePercent`，现有 `inputBytes` 明确定义为源文件体积，跳过和节省率按源文件比较；缩放准备阶段有取消检查并受单文件输入预算约束。
 - [x] 本轮增量：输出缩放支持自定义 10–100% 输入，不再局限于预设档位；偏好、自定义预设、参数摘要和格式切换清理均已覆盖。当前门禁为前端 32 个测试文件 / 392 项通过，Rust 277 项、CLI 4 项；构建与 compression CLI smoke 已通过。
-- [x] 自动目标体积联动缩放（2026-10-01）：Gateway/native/CLI 新增 `autoResizeToTarget`，默认关闭且只接受 JPEG/有损 WebP + `maxOutputBytes`；preview/estimate/formal/CLI 共用 `prepare_and_choose_output`，按 100/75/50/25/10% 有界尝试，质量候选预算在所有轮次合计不超过 `maxCandidates`，每轮检查取消；目标不可达统一返回 skipped，正式路径在 writer 前拒绝发布并保持目标文件不变。前端增加互斥开关、窄窗口可换行提示、偏好和自定义预设持久化；结果统一返回最终 `selectedResizePercent`，预检返回候选轮数、峰值准备输入、峰值编码候选和像素预算。当前回归：前端 32 个测试文件 / 394 项、Rust 278 项库测试、CLI 4 项。
+- [x] 自动目标体积联动缩放（2026-10-01）：Gateway/native/CLI 新增 `autoResizeToTarget`，默认关闭且只接受 JPEG/有损 WebP + `maxOutputBytes`；preview/estimate/formal/CLI 共用 `prepare_and_choose_output`，按 100/75/50/25/10% 有界尝试，质量候选预算在所有轮次合计不超过 `maxCandidates`，每轮检查取消；目标不可达统一返回 skipped，正式路径在 writer 前拒绝发布并保持目标文件不变。前端增加互斥开关、窄窗口可换行提示、偏好和自定义预设持久化；结果统一返回最终 `selectedResizePercent`，预检返回候选轮数、峰值准备输入、峰值编码候选和像素预算；CLI 烟测额外验证不可达目标不会覆盖已有同名输出。当前回归：前端 32 个测试文件 / 394 项、Rust 278 项库测试、CLI 4 项。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
 - [x] 签名预检报告安全契约（commit `8696532`）：报告字段白名单、敏感字段拒绝和 UTF-8 无 BOM 写入均由 `check:release-config` 校验并通过。
