@@ -26,6 +26,7 @@ describe("image compression logic", () => {
     expect(formatCompressionError("animated WebP input is not supported; provide a static WebP")).toBe("不支持动态 WebP 输入，请提供静态 WebP");
     expect(formatCompressionError("failed to decode input image: bad header")).toBe("输入图片解码失败：bad header");
     expect(formatCompressionError("future error")).toBe("future error");
+    expect(formatCompressionError("解码（decode）：failed to decode input image: bad header")).toBe("解码（decode）：输入图片解码失败：bad header");
   });
   it("cancels a progress polling tick immediately", async () => {
     vi.useFakeTimers();

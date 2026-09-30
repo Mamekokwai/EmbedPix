@@ -36,8 +36,11 @@ export function formatCompressionError(error: string): string {
     "failed to inspect input image": "输入图片检查失败",
   };
   for (const [prefix, label] of Object.entries(labels)) {
-    if (error === prefix) return label;
-    if (error.startsWith(`${prefix}:`)) return `${label}：${error.slice(prefix.length + 1).trim()}`;
+    const index = error.indexOf(prefix);
+    if (index < 0) continue;
+    const before = error.slice(0, index);
+    const suffix = error.slice(index + prefix.length);
+    if (!suffix || suffix.startsWith(":")) return `${before}${label}${suffix ? `：${suffix.slice(1).trim()}` : ""}`;
   }
   return error;
 }
