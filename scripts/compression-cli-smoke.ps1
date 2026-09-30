@@ -256,6 +256,24 @@ function Assert-TargetCompressionContract([switch]$Required) {
   }
 }
 
+function Assert-MaxRgbMaeContract {
+  $source = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'src-tauri/src/commands/compression.rs')
+  $gateway = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts')
+  foreach ($token in @('max_rgb_mae: Option<f64>', 'validate_max_rgb_mae', 'is_finite()', '0.0..=255.0', 'choose_webp_output_with_rgb_mae', 'quality_threshold_unmet')) {
+    if ($source -notmatch [regex]::Escape($token)) { throw "maxRgbMae contract is missing: $token" }
+  }
+  if ($gateway -notmatch 'maxRgbMae' -or $gateway -notmatch 'Number\.isFinite') { throw 'Gateway maxRgbMae validation is missing.' }
+  $runMatch = [regex]::Match($source, '(?s)fn\s+run_compression\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
+  $runBody = $runMatch.Value
+  $selectionPosition = $runBody.IndexOf('choose_encoded_output_with_cancellation')
+  $skippedPosition = $runBody.IndexOf('if let Some(skipped_reason)')
+  $writerPosition = $runBody.IndexOf('write_exported_file')
+  if ($selectionPosition -lt 0 -or $skippedPosition -lt 0 -or $writerPosition -lt 0 -or $skippedPosition -gt $writerPosition) {
+    throw 'maxRgbMae formal path does not prove skipped results are rejected before publishing.'
+  }
+  [pscustomobject]@{ enabled = $true; defaultOff = $true; finiteRange = '0..255'; formalSkippedBeforePublish = $true }
+}
+
 $script:root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-compression-cli-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $script:root | Out-Null
 try {
@@ -295,6 +313,7 @@ try {
   $pngOptimizationContract = Assert-PngOptimizationContract -Required:$RequireOxiPng
   $imageTargetContract = Assert-ImageTargetCompressionContract -Required:$RequireCompression
   $targetContract = Assert-TargetCompressionContract -Required:$RequireCompression
+  $maxRgbMaeContract = Assert-MaxRgbMaeContract
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'compress'
@@ -305,6 +324,7 @@ try {
     pngOptimizationContract = $pngOptimizationContract
     imageTargetCompressionContract = $imageTargetContract
     targetCompressionContract = $targetContract
+    maxRgbMaeContract = $maxRgbMaeContract
   }
 
   if ($RequireCompression) {
