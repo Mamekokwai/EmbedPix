@@ -9,8 +9,8 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
 $manifest = Get-Content -Raw 'src-tauri/Cargo.toml'
-if ($manifest -notmatch 'libwebp-sys2\s*=\s*\{\s*version\s*=\s*"=0\.2\.0"\s*,\s*features\s*=\s*\["static"\]\s*\}') {
-  throw 'libwebp-sys2 must remain pinned to 0.2.0 with the static feature.'
+if ($manifest -notmatch 'libwebp-sys2\s*=\s*\{\s*version\s*=\s*"=0\.2\.0"\s*,\s*features\s*=\s*\[\s*"static"\s*,\s*"mux"\s*\]\s*\}') {
+  throw 'libwebp-sys2 must remain pinned to 0.2.0 with exactly the audited static and mux features.'
 }
 if ($manifest -notmatch 'webp-animation\s*=\s*\{[^}]*features\s*=\s*\["static"\]') {
   throw 'webp-animation must retain its static feature.'
@@ -51,8 +51,8 @@ if (-not $animationPackage -or $animationPackage.license -ne 'MIT OR Apache-2.0'
 }
 
 $tree = cargo tree --manifest-path src-tauri/Cargo.toml --locked -e features -i libwebp-sys2@0.2.0 | Out-String
-if ($LASTEXITCODE -ne 0 -or $tree -notmatch 'libwebp-sys2 feature "static"' -or $tree -notmatch 'webp-animation') {
-  throw 'The locked feature tree does not prove the static libwebp path is active.'
+if ($LASTEXITCODE -ne 0 -or $tree -notmatch 'libwebp-sys2 feature "static"' -or $tree -notmatch 'libwebp-sys2 feature "mux"' -or $tree -notmatch 'webp-animation') {
+  throw 'The locked feature tree does not prove the audited static+mux libwebp path is active.'
 }
 
 $sizeReport = [ordered]@{}
@@ -72,5 +72,6 @@ foreach ($entry in @(
   webpAnimationLicense = $animationPackage.license
   noticeAudit = $true
   staticFeatureTree = $true
+  muxFeatureTree = $true
   artifactSizes = [pscustomobject]$sizeReport
 } | ConvertTo-Json -Depth 4
