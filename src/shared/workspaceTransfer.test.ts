@@ -10,6 +10,10 @@ describe("workspace transfer", () => {
   it("formats stable restore errors while preserving details", () => {
     expect(formatWorkspaceTransferError(new Error("workspace snapshot is not valid JSON"))).toBe("工作区快照不是有效 JSON");
     expect(formatWorkspaceTransferError("source path is unsafe: E:\\..\\secret.png")).toBe("source path 不安全: E:\\..\\secret.png");
+    expect(formatWorkspaceTransferError("namingTemplate is unsafe")).toBe("namingTemplate 不安全");
+    expect(formatWorkspaceTransferError("source kind is invalid")).toBe("source kind 无效");
+    expect(formatWorkspaceTransferError("source fps is out of range")).toBe("source fps 超出有效范围");
+    expect(formatWorkspaceTransferError("GIF frame metadata count (3) does not match source count (2)")).toBe("GIF 帧元数据数量（3）与源数量（2）不匹配");
     expect(formatWorkspaceTransferError("future workspace failure")).toBe("future workspace failure");
   });
   it("round trips image and GIF metadata without binary data", () => {

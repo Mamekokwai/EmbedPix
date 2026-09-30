@@ -18,17 +18,22 @@ export function formatWorkspaceTransferError(error: unknown): string {
     ["sources must be an array", "sources 必须是数组"],
     ["frames must be an array", "frames 必须是数组"],
     ["fileName is invalid", "fileName 无效"],
+    ["source kind is invalid", "source kind 无效"],
+    ["outputLocation is invalid", "outputLocation 无效"],
+    ["namingTemplate is unsafe", "namingTemplate 不安全"],
+    ["source fps is out of range", "source fps 超出有效范围"],
     ["is unsafe", "不安全"],
     ["is out of range", "超出有效范围"],
     ["must be an object", "必须是对象"],
     ["contains unsupported fields", "包含不支持的字段"],
     ["path may no longer exist", "路径可能已不存在"],
-    ["GIF frame metadata count", "GIF 帧元数据数量"],
   ];
   for (const [prefix, label] of mappings) {
     const index = message.indexOf(prefix);
     if (index >= 0) return `${message.slice(0, index)}${label}${message.slice(index + prefix.length)}`;
   }
+  const frameMismatch = /^GIF frame metadata count \((\d+)\) does not match source count \((\d+)\)$/u.exec(message);
+  if (frameMismatch) return `GIF 帧元数据数量（${frameMismatch[1]}）与源数量（${frameMismatch[2]}）不匹配`;
   return message || "工作区导入失败，请检查文件后重试。";
 }
 
