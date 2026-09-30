@@ -2804,6 +2804,39 @@ mod tests {
     }
 
     #[test]
+    fn png_strip_safe_bad_crc_does_not_replace_existing_target() {
+        let directory = crate::commands::test_temp_dir().join(format!(
+            "embedpix-strip-safe-crc-publish-{}",
+            uuid_like_id()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let output = directory.join("existing.png");
+        let original = b"existing target bytes";
+        fs::write(&output, original).unwrap();
+
+        let mut request = path_request(&output);
+        request.metadata.output_format = "png".into();
+        request.metadata.file_name = "existing.png".into();
+        request.metadata.lossless = Some(true);
+        request.metadata.overwrite_existing = true;
+        request.metadata.metadata_policy = MetadataPolicy::StripSafe;
+        request.input = {
+            let mut input = png_with_metadata_chunks();
+            let crc = input.len() - 8;
+            input[crc] ^= 1;
+            input
+        };
+        request.format = CompressionFormat::Png;
+        request.lossless = true;
+
+        let error = run_compression(&request, &test_job("strip-safe-crc-publish")).unwrap_err();
+        assert!(error.contains("strip-safe optimize png") || error.contains("decode"));
+        assert_eq!(fs::read(&output).unwrap(), original);
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn png_strip_safe_preserves_rgba_pixels_and_alpha() {
         let image = DynamicImage::ImageRgba8(ImageBuffer::from_fn(3, 2, |x, y| {
             Rgba([
