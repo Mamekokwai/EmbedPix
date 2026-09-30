@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifByteFrame } from "./gifMakerLogic";
+import { resolveGifExportCanvasSize } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
+  it("uses measured compression dimensions for the pending export summary", () => {
+    expect(resolveGifExportCanvasSize({ width: 800, height: 600 }, { width: 600, height: 450 })).toEqual({ width: 600, height: 450 });
+    expect(resolveGifExportCanvasSize({ width: 800, height: 600 }, null)).toEqual({ width: 800, height: 600 });
+  });
   it("only treats the newest compression plan request as current", () => {
     expect(isCurrentCompressionPlanRequest(4, 4)).toBe(true);
     expect(isCurrentCompressionPlanRequest(5, 4)).toBe(false);

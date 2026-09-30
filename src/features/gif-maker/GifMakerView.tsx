@@ -27,7 +27,7 @@ import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSeq
 import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifExportCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import { createGifCustomPreset, loadGifCustomPresets, saveGifCustomPresets, type GifCustomPreset } from "./gifCustomPresets";
@@ -531,6 +531,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [mergeIdenticalFrames, setMergeIdenticalFrames] = useState(savedPreferences.mergeIdenticalFrames);
   const [overwriteExisting, setOverwriteExisting] = useState(savedPreferences.overwriteExisting);
   const [measuredSizeBytes, setMeasuredSizeBytes] = useState<number | null>(null);
+  const [measuredCanvasSize, setMeasuredCanvasSize] = useState<GifCanvasSize | null>(null);
   const [sizeComparison, setSizeComparison] = useState<GifSizeComparisonState | null>(null);
   const [compressionSummary, setCompressionSummary] = useState<string | null>(null);
   const [compressionPlan, setCompressionPlan] = useState<Awaited<ReturnType<typeof planGifCompression>> | null>(null);
@@ -607,6 +608,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setOutputFormat(format);
     clearOutputSelection();
     setMeasuredSizeBytes(null);
+    setMeasuredCanvasSize(null);
     setFileName((current) => {
       const stem = current.trim().replace(/\.[^.]+$/u, "");
       if (format === "png-sequence") return stem || "embedpix-animation";
@@ -739,7 +741,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const frameSummary = mergeEnabled
       ? exportFrameSummary ? `${frameCount} 帧（已合并）` : `${frames.length} 帧（导出时合并）`
       : `${frameCount} 帧`;
-    const details = [`${canvasSize.width} × ${canvasSize.height} px`, frameSummary, `总时长 ${formatGifTimelineTime(totalDurationMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`, `${fit} · ${alignment}`, `边距 ${margins} px`, overwriteExisting ? "覆盖同名" : outputFormat === "png-sequence" ? "自动序号" : "拒绝同名"];
+    const exportCanvasSize = resolveGifExportCanvasSize(canvasSize, measuredCanvasSize);
+    const details = [`${exportCanvasSize.width} × ${exportCanvasSize.height} px`, frameSummary, `总时长 ${formatGifTimelineTime(totalDurationMs)}`, `基准 ${fpsFromFrameDuration(globalDuration)} FPS`, `${fit} · ${alignment}`, `边距 ${margins} px`, overwriteExisting ? "覆盖同名" : outputFormat === "png-sequence" ? "自动序号" : "拒绝同名"];
     if (outputFormat === "gif") {
       const dither = ditherMode === "none" ? "无抖动" : ditherMode === "atkinson" ? "Atkinson" : "Floyd-Steinberg";
       const quality = encodingQuality === "high" ? "高质量编码" : encodingQuality === "balanced" ? "平衡编码" : "快速编码";
@@ -759,7 +762,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       if (maxSizeKiB.trim()) details.push(`上限 ≤ ${maxSizeKiB.trim()} KiB`);
     }
     return `${format} · ${details.join(" · ")}`;
-  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, exportFrameSummary, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, overwriteExisting, targetSizeKiB, timeline.selectionMs]);
+  }, [autoCompress, canvasSize, colorCount, contentAlignment, contentMargins, ditherMode, encodingQuality, exportFrameSummary, fitMode, frames.length, globalDuration, loopCount, loopMode, maxSizeKiB, measuredCanvasSize, mergeIdenticalFrames, outputFormat, overwriteExisting, targetSizeKiB, timeline.selectionMs]);
   const compressionComparisonSummary = useMemo(() => {
     if (!sizeComparison) return null;
     const summary = compareGifSizes(sizeComparison);
@@ -1899,7 +1902,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     return selected;
   };
 
-  const applySizeMeasurement = (result: Pick<GifCompressionResult, "bytes" | "baselineBytes" | "frames">) => {
+  const applySizeMeasurement = (result: Pick<GifCompressionResult, "bytes" | "baselineBytes" | "frames" | "width" | "height">) => {
+    setMeasuredCanvasSize({ width: result.width, height: result.height });
     setExportFrameSummary({
       frameCount: result.frames.length,
       totalDurationMs: result.frames.reduce((total, frame) => total + frame.durationMs, 0),

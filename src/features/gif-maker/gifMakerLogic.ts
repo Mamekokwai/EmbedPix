@@ -1,4 +1,5 @@
 export interface GifCanvasSize { width: number; height: number }
+export function resolveGifExportCanvasSize(canvasSize: GifCanvasSize, measuredSize?: GifCanvasSize | null): GifCanvasSize { return measuredSize ?? canvasSize; }
 export type GifCanvasPreset = "source" | "75" | "50" | "custom";
 export type GifContentFit = "contain" | "cover" | "stretch";
 export type GifContentAlignment = "center" | "top" | "bottom";
