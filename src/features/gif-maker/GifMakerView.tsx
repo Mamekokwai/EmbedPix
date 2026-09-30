@@ -1311,6 +1311,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setSelectedIndex(nextIndex);
     setSelectedFrameIndices(nextSelection);
     selectionAnchorRef.current = nextIndex;
+    requestAnimationFrame(() => { const nextFrame = next[nextIndex]; if (nextFrame) frameButtonRefs.current[nextFrame.id]?.focus(); });
     setStatus({ kind: "ready", text: `已移除 ${selectedFrameIndices.size} 帧` });
   };
 
