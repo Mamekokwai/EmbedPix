@@ -63,6 +63,7 @@ import {
 import type { CompressionEstimate, CompressionFormat, CompressionItem, CompressionItemResult, CompressionOptions, CompressionOutputLocation, CompressionPreset, MetadataPolicy } from "./types";
 import type { CompressionPreview } from "../../platform/compression/compressionGateway";
 import { downloadBlob } from "../../shared/downloadBlob";
+import { getStripSafeInputError } from "./stripSafeInput";
 
 type CompressionStatus = "idle" | "ready" | "busy" | "success" | "error";
 
@@ -220,6 +221,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [itemResults, setItemResults] = useState<CompressionItemResult[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [stripSafeWebpVerified, setStripSafeWebpVerified] = useState(false);
   const [preview, setPreview] = useState<CompressionPreview | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
@@ -284,6 +286,28 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const actualSavedBytes = resultStats.savedBytes;
   const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const stripSafeExtensionMatch = items.length > 0 && items.every((item) => {
+    const extension = item.file.name.split(".").pop()?.toLowerCase();
+    if (format === "png") return extension === "png" || item.file.type === "image/png";
+    if (format === "jpg") return extension === "jpg" || extension === "jpeg" || item.file.type === "image/jpeg";
+    return extension === "webp" && (item.file.type === "image/webp" || item.file.type === "");
+  });
+  useEffect(() => {
+    let active = true;
+    setStripSafeWebpVerified(false);
+    if (format !== "webp" || !stripSafeExtensionMatch) {
+      setStripSafeWebpVerified(format !== "webp" && stripSafeExtensionMatch);
+      return () => { active = false; };
+    }
+    void Promise.all(items.map(async (item) => getStripSafeInputError(new Uint8Array(await item.file.arrayBuffer()), "webp")))
+      .then((errors) => { if (active) setStripSafeWebpVerified(errors.every((error) => error === null)); })
+      .catch(() => { if (active) setStripSafeWebpVerified(false); });
+    return () => { active = false; };
+  }, [format, items, stripSafeExtensionMatch]);
+  const stripSafeInputAvailable = stripSafeExtensionMatch && (format !== "webp" || stripSafeWebpVerified);
+  useEffect(() => {
+    if (metadataPolicy === "stripSafe" && !stripSafeInputAvailable) setMetadataPolicy("strip");
+  }, [metadataPolicy, stripSafeInputAvailable]);
   const previewSavedBytes = selectedItem && preview ? selectedItem.size - preview.outputBytes : 0;
   const previewSavingsPercent = selectedItem && preview && selectedItem.size > 0 ? (previewSavedBytes / selectedItem.size) * 100 : 0;
   const progressBytesSummary = [
@@ -1034,7 +1058,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <details className="compression-advanced-settings">
             <summary><strong>高级输出选项</strong><span>元数据、路径与覆盖策略</span></summary>
             <div className="compression-advanced-settings-body">
-          <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（兼容模式）</option><option value="stripAll">全部清理元数据</option><option value="stripSafe">{format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理</option><option value="preserve" disabled>保留元数据（当前不可用：核心拒绝）</option></select><small className="compression-field-hint">{metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"}：保留结构合法且有界的 ICC payload（不保证内部色彩语义），移除 EXIF/GPS/XMP/注释；输入格式或配置无法验证时会失败。` : "兼容模式保留原有清理范围；全部清理会移除可识别的元数据。保留元数据请求会被核心拒绝。"}</small></label>
+          <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（兼容模式）</option><option value="stripAll">全部清理元数据</option><option value="stripSafe" disabled={!stripSafeInputAvailable}>{format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理</option><option value="preserve" disabled>保留元数据（当前不可用：核心拒绝）</option></select><small className="compression-field-hint">{metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"}：保留结构合法且有界的 ICC payload（不保证内部色彩语义），移除 EXIF/GPS/XMP/注释；输入格式或配置无法验证时会失败。` : "兼容模式保留原有清理范围；全部清理会移除可识别的元数据。"}</small></label>
           <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy || replaceOriginal}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>
           {outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
           {outputLocation === "directory" ? <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="例如 D:\\Export" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}

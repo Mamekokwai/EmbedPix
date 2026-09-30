@@ -150,7 +150,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionPreferences).toContain("webpPass");
     expect(compressionPreferences).toContain("skipIfLarger");
     expect(compressionView).toContain("保留元数据（当前不可用：核心拒绝）");
-    expect(compressionView).toContain("保留元数据请求会被核心拒绝");
+    expect(compressionView).toContain("全部清理会移除可识别的元数据");
     expect(compressionView).toContain("全部清理元数据");
     expect(compressionView).toContain('format === "webp" ? "WebP" : "PNG"');
     expect(compressionView).toContain("保留结构合法且有界的 ICC payload");

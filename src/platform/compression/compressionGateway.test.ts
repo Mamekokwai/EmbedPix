@@ -20,6 +20,10 @@ const request = {
   jobId: "compression-test",
 };
 
+const pngInput = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const jpegInput = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+const staticWebpInput = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x0c, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20, 0x00, 0x00, 0x00, 0x00]);
+
 describe("compression gateway", () => {
   const setTauriEnvironment = (enabled: boolean) => {
     Object.defineProperty(globalThis, "window", { configurable: true, value: enabled ? { __TAURI_INTERNALS__: {} } : {} });
@@ -204,7 +208,7 @@ describe("compression gateway", () => {
     const length = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
     expect(metadata.metadataPolicy).toBe("stripAll");
-    expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "stripSafe" })).not.toThrow();
+    expect(() => encodeCompressionEnvelope({ ...request, inputData: staticWebpInput, metadataPolicy: "stripSafe" })).not.toThrow();
   });
 
   it("serializes PNG alpha optimization only for PNG output", () => {
@@ -219,17 +223,17 @@ describe("compression gateway", () => {
   });
 
   it("allows PNG, JPEG, and WebP stripSafe metadata cleanup", () => {
-    const encoded = encodeCompressionEnvelope({ ...request, outputFormat: "png", metadataPolicy: "stripSafe" });
+    const encoded = encodeCompressionEnvelope({ ...request, inputData: pngInput, outputFormat: "png", metadataPolicy: "stripSafe" });
     const length = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
     expect(metadata.metadataPolicy).toBe("stripSafe");
-    const webp = encodeCompressionEnvelope({ ...request, outputFormat: "webp", metadataPolicy: "stripSafe" });
+    const webp = encodeCompressionEnvelope({ ...request, inputData: staticWebpInput, outputFormat: "webp", metadataPolicy: "stripSafe" });
     const webpLength = new DataView(webp.buffer).getUint32(4, true);
     expect(JSON.parse(new TextDecoder().decode(webp.slice(8, 8 + webpLength))).metadataPolicy).toBe("stripSafe");
-    const jpeg = encodeCompressionEnvelope({ ...request, outputFormat: "jpg", metadataPolicy: "stripSafe" });
+    const jpeg = encodeCompressionEnvelope({ ...request, inputData: jpegInput, outputFormat: "jpg", metadataPolicy: "stripSafe" });
     const jpegLength = new DataView(jpeg.buffer).getUint32(4, true);
     expect(JSON.parse(new TextDecoder().decode(jpeg.slice(8, 8 + jpegLength))).metadataPolicy).toBe("stripSafe");
-    const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "png", jpegQuality: 82, lossless: true, metadataPolicy: "stripSafe", pngOptimizationLevel: 2 });
+    const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: pngInput, outputFormat: "png", jpegQuality: 82, lossless: true, metadataPolicy: "stripSafe", pngOptimizationLevel: 2 });
     const estimateLength = new DataView(estimate.buffer).getUint32(4, true);
     expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).metadataPolicy).toBe("stripSafe");
   });
