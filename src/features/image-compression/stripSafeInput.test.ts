@@ -18,4 +18,9 @@ describe("stripSafe input validation", () => {
     expect(getStripSafeInputError(new Uint8Array([1, 2, 3]), "webp")).toContain("匹配");
     expect(getStripSafeInputError(webp("VP8 ", "VP8L"), "webp")).toContain("只能包含一个");
   });
+
+  it("disables a mixed-format queue for safe cleanup", () => {
+    const queue = [webp("VP8 "), new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])];
+    expect(queue.every((input) => getStripSafeInputError(input, "webp") === null)).toBe(false);
+  });
 });
