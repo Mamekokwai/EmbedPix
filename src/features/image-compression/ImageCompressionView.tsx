@@ -42,6 +42,7 @@ import {
   removeCompressionItem,
   isCurrentCompressionEstimate,
   isCurrentCompressionItem,
+  removeCompressionDimensionError,
   isCompressionSourcePathError,
   supportsCompressionTargetSize,
   waitForCompressionProgressTick,
@@ -846,6 +847,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     if (!removedItem) return;
     const nextItems = removeCompressionItem(items, id);
     setItems(nextItems);
+    setImportErrors((current) => removeCompressionDimensionError(current, id));
     setFailures([]);
     setFailureDetails([]);
     setItemResults([]);

@@ -18,6 +18,7 @@ export function getCompressionPreset(preset: Exclude<CompressionPreset, "custom"
 }
 export function supportsCompressionTargetSize(format: CompressionFormat, lossless: boolean): boolean { return format === "jpg" || (format === "webp" && !lossless); }
 export function isCurrentCompressionItem(itemIds: ReadonlyArray<string>, itemId: string): boolean { return itemIds.includes(itemId); }
+export function removeCompressionDimensionError<T extends { id: string }>(errors: ReadonlyArray<T>, itemId: string): T[] { return errors.filter((error) => error.id !== `dimensions-${itemId}`); }
 export function getCompressionTargetSizeError(enabled: boolean, value: string, maxKiB: number): string | null {
   if (!enabled) return null;
   const trimmed = value.trim();
