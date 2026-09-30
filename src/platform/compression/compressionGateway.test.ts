@@ -204,7 +204,7 @@ describe("compression gateway", () => {
     const length = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
     expect(metadata.metadataPolicy).toBe("stripAll");
-    expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "stripSafe" })).toThrow("仅支持 PNG");
+    expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "stripSafe" })).toThrow("有效的 PNG→PNG 或 JPEG→JPEG");
   });
 
   it("serializes PNG alpha optimization only for PNG output", () => {
@@ -218,12 +218,15 @@ describe("compression gateway", () => {
     expect(readMetadata(estimate).pngOptimizeAlpha).toBe(true);
   });
 
-  it("allows PNG stripSafe metadata cleanup but rejects it for other formats", () => {
+  it("allows PNG and JPEG stripSafe metadata cleanup but rejects other formats", () => {
     const encoded = encodeCompressionEnvelope({ ...request, outputFormat: "png", metadataPolicy: "stripSafe" });
     const length = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
     expect(metadata.metadataPolicy).toBe("stripSafe");
-    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "webp", metadataPolicy: "stripSafe" })).toThrow("仅支持 PNG");
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "webp", metadataPolicy: "stripSafe" })).toThrow("有效的 PNG→PNG 或 JPEG→JPEG");
+    const jpeg = encodeCompressionEnvelope({ ...request, outputFormat: "jpg", metadataPolicy: "stripSafe" });
+    const jpegLength = new DataView(jpeg.buffer).getUint32(4, true);
+    expect(JSON.parse(new TextDecoder().decode(jpeg.slice(8, 8 + jpegLength))).metadataPolicy).toBe("stripSafe");
     const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "png", jpegQuality: 82, lossless: true, metadataPolicy: "stripSafe", pngOptimizationLevel: 2 });
     const estimateLength = new DataView(estimate.buffer).getUint32(4, true);
     expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).metadataPolicy).toBe("stripSafe");

@@ -37,6 +37,9 @@ const MAX_IMAGE_DIMENSION: u32 = 8_192;
 const MAX_IMAGE_PIXELS: u64 = 16_777_216;
 const MAX_DECODER_ALLOC_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_METADATA_BYTES: usize = 64 * 1024;
+const MAX_JPEG_ICC_SEGMENTS: u8 = 16;
+const MAX_JPEG_ICC_CHUNK_BYTES: usize = 65_519;
+const MAX_JPEG_ICC_BYTES: usize = MAX_JPEG_ICC_SEGMENTS as usize * MAX_JPEG_ICC_CHUNK_BYTES;
 const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_MAX_CANDIDATES: usize = 8;
 const MAX_CANDIDATES: usize = 12;
@@ -249,14 +252,157 @@ fn validate_png_strip_safe(
     format: CompressionFormat,
     input: &[u8],
 ) -> Result<(), String> {
-    if policy == MetadataPolicy::StripSafe
-        && (format != CompressionFormat::Png || !input.starts_with(b"\x89PNG\r\n\x1a\n"))
-    {
+    let supported = match format {
+        CompressionFormat::Png => input.starts_with(b"\x89PNG\r\n\x1a\n"),
+        CompressionFormat::Jpeg => input.starts_with(&[0xff, 0xd8]),
+        CompressionFormat::Webp => false,
+    };
+    if policy == MetadataPolicy::StripSafe && !supported {
         return Err(
-            "metadataPolicy=stripSafe is only supported for PNG input to PNG output".into(),
+            "metadataPolicy=stripSafe is only supported for PNG or JPEG input to the same output format".into(),
         );
     }
     Ok(())
+}
+
+fn extract_jpeg_icc_profile(input: &[u8]) -> Result<Option<Vec<u8>>, String> {
+    if input.len() < 4 || input[..2] != [0xff, 0xd8] {
+        return Err("stripSafe JPEG input is missing a valid SOI marker".into());
+    }
+    let mut offset = 2usize;
+    let mut icc_parts: Option<(u8, Vec<Option<Vec<u8>>>)> = None;
+    let mut saw_eoi = false;
+    while offset < input.len() {
+        if input[offset] != 0xff {
+            return Err("stripSafe JPEG input has an invalid marker prefix".into());
+        }
+        while offset < input.len() && input[offset] == 0xff {
+            offset += 1;
+        }
+        let marker = *input
+            .get(offset)
+            .ok_or_else(|| "stripSafe JPEG input ends inside a marker".to_string())?;
+        offset += 1;
+        if marker == 0xd9 {
+            if offset != input.len() {
+                return Err("stripSafe JPEG input has trailing bytes after EOI".into());
+            }
+            saw_eoi = true;
+            break;
+        }
+        if marker == 0xda {
+            let length = jpeg_segment_end(input, offset)?;
+            offset = length;
+            loop {
+                let byte = *input
+                    .get(offset)
+                    .ok_or_else(|| "stripSafe JPEG input truncates scan data".to_string())?;
+                offset += 1;
+                if byte != 0xff {
+                    continue;
+                }
+                while input.get(offset) == Some(&0xff) {
+                    offset += 1;
+                }
+                let scan_marker = *input
+                    .get(offset)
+                    .ok_or_else(|| "stripSafe JPEG input truncates scan marker".to_string())?;
+                if scan_marker == 0x00 || (0xd0..=0xd7).contains(&scan_marker) {
+                    offset += 1;
+                    continue;
+                }
+                offset -= 1;
+                break;
+            }
+            continue;
+        }
+        if marker == 0x00 || marker == 0xd8 || (0xd0..=0xd7).contains(&marker) {
+            return Err("stripSafe JPEG input has an invalid standalone marker".into());
+        }
+        let segment_start = offset;
+        let segment_end = jpeg_segment_end(input, offset)?;
+        let payload = &input[segment_start + 2..segment_end];
+        if marker == 0xe2 && payload.starts_with(b"ICC_PROFILE\0") {
+            if payload.len() < 14 {
+                return Err("stripSafe JPEG ICC profile segment is truncated".into());
+            }
+            let sequence = payload[12];
+            let count = payload[13];
+            if count == 0 || count > MAX_JPEG_ICC_SEGMENTS || sequence == 0 || sequence > count {
+                return Err("stripSafe JPEG ICC profile sequence is invalid".into());
+            }
+            let (expected_count, parts) =
+                icc_parts.get_or_insert_with(|| (count, vec![None; count as usize]));
+            if *expected_count != count || parts[sequence as usize - 1].is_some() {
+                return Err(
+                    "stripSafe JPEG ICC profile has duplicate or inconsistent segments".into(),
+                );
+            }
+            parts[sequence as usize - 1] = Some(payload[14..].to_vec());
+        }
+        offset = segment_end;
+    }
+    if !saw_eoi {
+        return Err("stripSafe JPEG input is missing an EOI marker".into());
+    }
+    let Some((_, parts)) = icc_parts else {
+        return Ok(None);
+    };
+    let mut profile = Vec::new();
+    for part in parts {
+        profile.extend(part.ok_or_else(|| "stripSafe JPEG ICC profile is incomplete".to_string())?);
+        if profile.len() > MAX_JPEG_ICC_BYTES {
+            return Err("stripSafe JPEG ICC profile is too large".into());
+        }
+    }
+    if profile.is_empty() {
+        return Err("stripSafe JPEG ICC profile is empty".into());
+    }
+    Ok(Some(profile))
+}
+
+fn jpeg_segment_end(input: &[u8], offset: usize) -> Result<usize, String> {
+    let length = u16::from_be_bytes(
+        input
+            .get(offset..offset + 2)
+            .ok_or_else(|| "stripSafe JPEG input truncates a segment length".to_string())?
+            .try_into()
+            .expect("segment length is exactly two bytes"),
+    ) as usize;
+    if length < 2 {
+        return Err("stripSafe JPEG input has an invalid segment length".into());
+    }
+    offset
+        .checked_add(length)
+        .filter(|end| *end <= input.len())
+        .ok_or_else(|| "stripSafe JPEG input truncates a segment".to_string())
+}
+
+fn inject_jpeg_icc_profile(output: &[u8], profile: &[u8]) -> Result<Vec<u8>, String> {
+    if output.len() < 2 || output[..2] != [0xff, 0xd8] {
+        return Err("stripSafe JPEG output is missing a valid SOI marker".into());
+    }
+    if profile.len() > MAX_JPEG_ICC_BYTES {
+        return Err("stripSafe JPEG ICC profile is too large".into());
+    }
+    let chunks = profile.chunks(MAX_JPEG_ICC_CHUNK_BYTES).collect::<Vec<_>>();
+    if chunks.len() > MAX_JPEG_ICC_SEGMENTS as usize {
+        return Err("stripSafe JPEG ICC profile requires too many segments".into());
+    }
+    let mut result = Vec::with_capacity(output.len() + profile.len() + chunks.len() * 16);
+    result.extend_from_slice(&output[..2]);
+    for (index, chunk) in chunks.iter().enumerate() {
+        let length = u16::try_from(2 + 14 + chunk.len())
+            .map_err(|_| "stripSafe JPEG ICC profile segment is too large".to_string())?;
+        result.extend_from_slice(&[0xff, 0xe2]);
+        result.extend_from_slice(&length.to_be_bytes());
+        result.extend_from_slice(b"ICC_PROFILE\0");
+        result.push((index + 1) as u8);
+        result.push(chunks.len() as u8);
+        result.extend_from_slice(chunk);
+    }
+    result.extend_from_slice(&output[2..]);
+    Ok(result)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1657,6 +1803,12 @@ fn encode_image_with_webp_method_alpha(
     webp_near_lossless: Option<u8>,
     metadata_policy: MetadataPolicy,
 ) -> Result<Vec<u8>, String> {
+    let jpeg_icc_profile =
+        if format == CompressionFormat::Jpeg && metadata_policy == MetadataPolicy::StripSafe {
+            extract_jpeg_icc_profile(input)?
+        } else {
+            None
+        };
     let image = decode_image(input)?;
     let mut output = LimitedWriter {
         bytes: Vec::new(),
@@ -1673,6 +1825,9 @@ fn encode_image_with_webp_method_alpha(
             JpegEncoder::new_with_quality(&mut output, quality)
                 .encode_image(&rgb)
                 .map_err(|error| format!("failed to encode jpeg: {error}"))?;
+            if let Some(profile) = jpeg_icc_profile {
+                output.bytes = inject_jpeg_icc_profile(&output.bytes, &profile)?;
+            }
         }
         CompressionFormat::Png => {
             if metadata_policy == MetadataPolicy::StripSafe {
@@ -2693,6 +2848,35 @@ mod tests {
         bytes
     }
 
+    fn jpeg_segment(marker: u8, payload: &[u8]) -> Vec<u8> {
+        let length = u16::try_from(payload.len() + 2).unwrap();
+        let mut segment = vec![0xff, marker];
+        segment.extend_from_slice(&length.to_be_bytes());
+        segment.extend_from_slice(payload);
+        segment
+    }
+
+    fn jpeg_with_metadata_segments() -> (Vec<u8>, Vec<u8>) {
+        let source = jpeg_input();
+        let profile = b"EmbedPix ICC profile with two segments".to_vec();
+        let split = 17;
+        let mut input = source[..2].to_vec();
+        input.extend_from_slice(&jpeg_segment(0xe1, b"Exif\0\0GPSLatitude=secret"));
+        input.extend_from_slice(&jpeg_segment(
+            0xe1,
+            b"http://ns.adobe.com/xap/1.0/\0<xmp:CreatorTool>secret</xmp:CreatorTool>",
+        ));
+        input.extend_from_slice(&jpeg_segment(0xfe, b"private comment"));
+        for (index, chunk) in profile.chunks(split).enumerate() {
+            let mut payload = b"ICC_PROFILE\0".to_vec();
+            payload.extend_from_slice(&[index as u8 + 1, 3]);
+            payload.extend_from_slice(chunk);
+            input.extend_from_slice(&jpeg_segment(0xe2, &payload));
+        }
+        input.extend_from_slice(&source[2..]);
+        (input, profile)
+    }
+
     fn jpeg_sof_markers(bytes: &[u8]) -> Vec<u8> {
         assert_eq!(&bytes[..2], &[0xff, 0xd8]);
         let mut markers = Vec::new();
@@ -3137,6 +3321,58 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_strip_safe_reassembles_icc_and_removes_private_metadata() {
+        let (input, profile) = jpeg_with_metadata_segments();
+        let output = encode_and_verify(
+            &input,
+            CompressionFormat::Jpeg,
+            100,
+            2,
+            false,
+            2,
+            2,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            MetadataPolicy::StripSafe,
+        )
+        .unwrap();
+        assert_eq!(&output[..3], &[0xff, 0xd8, 0xff]);
+        assert_eq!(decode_image(&output).unwrap().dimensions(), (2, 2));
+        assert_eq!(extract_jpeg_icc_profile(&output).unwrap(), Some(profile));
+        assert!(!output.windows(5).any(|bytes| bytes == b"Exif\0"));
+        assert!(!output.windows(4).any(|bytes| bytes == b"xmp:"));
+        assert!(!output.windows(15).any(|bytes| bytes == b"private comment"));
+    }
+
+    #[test]
+    fn jpeg_strip_safe_rejects_truncated_metadata_markers() {
+        let (mut input, _) = jpeg_with_metadata_segments();
+        input[4..6].copy_from_slice(&[0, 1]);
+        let error = encode_and_verify(
+            &input,
+            CompressionFormat::Jpeg,
+            82,
+            2,
+            false,
+            2,
+            2,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            MetadataPolicy::StripSafe,
+        )
+        .unwrap_err();
+        assert!(error.contains("stripSafe JPEG") || error.contains("segment length"));
+    }
+
+    #[test]
     fn jpeg_input_to_webp_preserves_rgb_channels_and_dimensions() {
         let image = DynamicImage::ImageRgb8(ImageBuffer::from_fn(8, 6, |x, y| {
             image::Rgb([
@@ -3482,10 +3718,10 @@ mod tests {
         let payload = raw_payload(metadata, &png_input());
         assert!(parse_raw_payload(&payload)
             .unwrap_err()
-            .contains("only supported for PNG input to PNG output"));
+            .contains("only supported for PNG or JPEG input to the same output format"));
         assert!(parse_estimate_raw_payload(&payload)
             .unwrap_err()
-            .contains("only supported for PNG input to PNG output"));
+            .contains("only supported for PNG or JPEG input to the same output format"));
 
         let png_safe = raw_payload(
             r#"{"fileName":"sample.png","outputFormat":"png","metadataPolicy":"stripSafe"}"#,
