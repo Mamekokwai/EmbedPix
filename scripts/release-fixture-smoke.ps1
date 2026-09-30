@@ -110,6 +110,12 @@ try {
   Expect-Rejection 'untrusted asset download URL' { Assert-ReleaseAssetUrls -Release $release -Repository $repository -Tag $tag }
   $release.assets[0].browser_download_url = $originalDownloadUrl
 
+  $signatureAsset = $release.assets | Where-Object { $_.name -eq "EmbedPix_${version}_x64-setup.exe.sig" }
+  $originalSignatureDownloadUrl = $signatureAsset.browser_download_url
+  $signatureAsset.browser_download_url = 'https://example.com/not-EmbedPix.sig'
+  Expect-Rejection 'untrusted signature asset download URL' { Assert-ReleaseAssetUrls -Release $release -Repository $repository -Tag $tag }
+  $signatureAsset.browser_download_url = $originalSignatureDownloadUrl
+
   $originalAssets = $release.assets
   $release.assets = @($originalAssets | Where-Object { $_.name -ne "EmbedPix_${version}_x64-setup.exe.sig" })
   Expect-Rejection 'missing installer signature asset' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
