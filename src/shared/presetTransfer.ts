@@ -73,6 +73,8 @@ export function formatPresetTransferError(error: unknown): string {
   const mappings: ReadonlyArray<readonly [string, string]> = [
     ["preset file is not valid JSON", "预设文件不是有效的 JSON"],
     ["unsupported preset schema or version", "不支持的预设结构或版本"],
+    ["preset entry must be an object", "预设条目必须是对象"],
+    ["preset must be an object", "预设必须是对象"],
     ["must be an object", "必须是对象"],
     ["contains unsupported fields", "包含不支持的字段"],
     ["is out of range", "超出有效范围"],
