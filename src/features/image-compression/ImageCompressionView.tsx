@@ -255,6 +255,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const targetSizeActive = targetSizeEnabled && qualityEnabled;
   const targetSizeError = useMemo(() => getCompressionTargetSizeError(targetSizeActive, targetSizeKiB, COMPRESSION_MAX_TARGET_SIZE_KIB), [targetSizeActive, targetSizeKiB]);
   const maxOutputBytes = targetSizeActive && !targetSizeError && targetSizeKiB.trim() ? Math.round(Number(targetSizeKiB) * 1024) : undefined;
+  useEffect(() => {
+    if (!(targetSizeActive && format === "webp" && !lossless) && maxRgbMae !== "") setMaxRgbMae("");
+  }, [format, lossless, maxRgbMae, targetSizeActive]);
   const maxRgbMaeValue = maxRgbMae.trim() ? Number(maxRgbMae) : undefined;
   const maxRgbMaeError = maxRgbMae.trim() && (!Number.isFinite(maxRgbMaeValue) || (maxRgbMaeValue as number) < 0 || (maxRgbMaeValue as number) > 255) ? "RGB MAE 阈值必须在 0 到 255 之间。" : null;
   const maxInputBytes = maxInputMiB * 1024 * 1024;
