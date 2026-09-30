@@ -43,5 +43,5 @@
   }
 
   $detail = if ($null -ne $lastError) { $lastError.Message } else { '删除后目录仍然存在。' }
-  throw "无法清理签名预检临时目录；已重试 $MaxAttempts 次：$detail"
+  throw "无法清理签名预检临时目录 $fullPath；已重试 $MaxAttempts 次：$detail"
 }

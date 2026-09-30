@@ -24,7 +24,7 @@ try {
 } catch {
   $failure = $_.Exception
 }
-if ($null -eq $failure -or $failure.Message -notmatch '无法清理签名预检临时目录') {
+if ($null -eq $failure -or $failure.Message -notmatch '无法清理签名预检临时目录' -or $failure.Message -notmatch [regex]::Escape($failurePath)) {
   throw '清理残留 smoke 未报告失败。'
 }
 if (-not (Test-Path -LiteralPath $failurePath)) {
