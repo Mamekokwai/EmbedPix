@@ -10,6 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use gif::DecodeOptions;
 use image::{
     codecs::jpeg::JpegEncoder, io::Reader as ImageReader, DynamicImage, GenericImageView,
     ImageBuffer, ImageFormat, Rgb, RgbImage,
@@ -1777,6 +1778,7 @@ fn decode_image(input: &[u8]) -> Result<DynamicImage, String> {
             MAX_INPUT_BYTES / (1024 * 1024)
         ));
     }
+    reject_animation_input(input)?;
     let reader = ImageReader::new(Cursor::new(input))
         .with_guessed_format()
         .map_err(|error| format!("failed to inspect input image: {error}"))?;
@@ -1803,6 +1805,51 @@ fn decode_image(input: &[u8]) -> Result<DynamicImage, String> {
         .decode()
         .map_err(|error| format!("failed to decode input image: {error}"))?;
     Ok(normalize_jpeg_orientation(input, image))
+}
+
+fn reject_animation_input(input: &[u8]) -> Result<(), String> {
+    if input.starts_with(b"GIF87a") || input.starts_with(b"GIF89a") {
+        let mut options = DecodeOptions::new();
+        options.skip_frame_decoding(true);
+        let mut decoder = options
+            .read_info(Cursor::new(input))
+            .map_err(|error| format!("failed to inspect GIF input: {error}"))?;
+        let mut frames = 0;
+        while decoder
+            .read_next_frame()
+            .map_err(|error| format!("failed to inspect GIF input: {error}"))?
+            .is_some()
+        {
+            frames += 1;
+            if frames > 1 {
+                return Err("animated GIF input is not supported; provide a static GIF".into());
+            }
+        }
+        return Ok(());
+    }
+    if input.get(..4) == Some(b"RIFF") && input.get(8..12) == Some(b"WEBP") {
+        let mut offset = 12usize;
+        while offset + 8 <= input.len() {
+            let name = &input[offset..offset + 4];
+            let length =
+                u32::from_le_bytes(input[offset + 4..offset + 8].try_into().unwrap()) as usize;
+            let end = offset
+                .checked_add(8)
+                .and_then(|value| value.checked_add(length))
+                .ok_or_else(|| "invalid WebP chunk length".to_string())?;
+            if end > input.len() {
+                return Err("invalid WebP chunk length".into());
+            }
+            if name == b"ANIM" || name == b"ANMF" {
+                return Err("animated WebP input is not supported; provide a static WebP".into());
+            }
+            offset = end + (length & 1);
+        }
+        if offset != input.len() {
+            return Err("invalid WebP chunk layout".into());
+        }
+    }
+    Ok(())
 }
 
 fn parse_request(request: Request<'_>) -> Result<CompressionRequest, String> {
@@ -2585,6 +2632,23 @@ mod tests {
         png_with_metadata_chunks_from(&png_input())
     }
 
+    fn animated_gif_input() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = gif::Encoder::new(&mut bytes, 1, 1, &[]).unwrap();
+            encoder.set_repeat(gif::Repeat::Infinite).unwrap();
+            for color in [[255, 0, 0], [0, 255, 0]] {
+                let mut frame = gif::Frame::default();
+                frame.width = 1;
+                frame.height = 1;
+                frame.buffer = vec![0].into();
+                frame.palette = Some(vec![color[0], color[1], color[2]]);
+                encoder.write_frame(&frame).unwrap();
+            }
+        }
+        bytes
+    }
+
     fn raw_payload(metadata: &str, input: &[u8]) -> Vec<u8> {
         let mut payload = Vec::from(*b"EGF1");
         payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
@@ -2691,6 +2755,19 @@ mod tests {
         }
         assert!(decode_image(b"bad").is_err());
         assert!(decode_image(&[]).is_err());
+    }
+
+    #[test]
+    fn rejects_animated_gif_and_webp_inputs_before_compression() {
+        let gif_error = decode_image(&animated_gif_input()).unwrap_err();
+        assert!(gif_error.contains("animated GIF input is not supported"));
+
+        let mut webp = b"RIFF\x12\0\0\0WEBP".to_vec();
+        webp.extend_from_slice(b"ANIM");
+        webp.extend_from_slice(&6u32.to_le_bytes());
+        webp.extend_from_slice(&[0; 6]);
+        let webp_error = decode_image(&webp).unwrap_err();
+        assert!(webp_error.contains("animated WebP input is not supported"));
     }
 
     #[test]
