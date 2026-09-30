@@ -35,6 +35,7 @@
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
 - [x] 签名预检报告安全契约（commit `8696532`）：报告字段白名单、敏感字段拒绝和 UTF-8 无 BOM 写入均由 `check:release-config` 校验并通过。
+- [x] 核心格式门禁修复（commit `fc59dfa`）：图片转换正式栅格输出在发布前新增实际格式签名校验，防止请求格式与实际编码格式不一致；`export_image` 46 项 Rust 测试、build、types 与 lint 均通过。
 - [x] GIF 页头响应式修复已完成（commit `6748493`）：320–620px 宽度支持标题与控件换行且控件保持可聚焦，宽屏布局不变；前端验收统计为 32 个测试文件 / 388 个测试通过。
 - [x] 本轮门禁复核：桌面 smoke、compression CLI smoke、release dependency smoke、GIF benchmark 8/8、GIF quality benchmark 3/3 均通过；前端统计保持 32 个测试文件 / 388 个测试通过。
 - [~] 发布资产状态保持谨慎：未安装/未签名的真实 x64 或 ARM64 发布资产不标记为完成，仍需对应签名资产与安装/启动验收。
