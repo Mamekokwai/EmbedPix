@@ -527,6 +527,8 @@ pub struct CompressionResult {
     pub candidate_search_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_count: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality_metrics: Option<CompressionQualityMetrics>,
 }
 
 #[derive(Debug, Serialize)]
@@ -601,6 +603,8 @@ pub struct CompressionEstimate {
     pub candidate_search_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_count: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality_metrics: Option<CompressionQualityMetrics>,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -847,6 +851,12 @@ fn run_compression(
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
+    let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
+        quality_metrics_for_output(request, &decode_image(&bytes)?, Some(job))?
+    } else {
+        None
+    };
+    checkpoint(job).map_err(|error| fail_message(job, error))?;
     update_progress_bytes(job, Some(input_bytes), Some(output_bytes));
     let skipped_reason = selection_skipped_reason.or_else(|| {
         request
@@ -892,6 +902,7 @@ fn run_compression(
             selected_quality,
             candidate_search_ms,
             candidate_count,
+            quality_metrics,
         });
     }
     update_progress(job, CompressionStage::Publishing, None, None);
@@ -943,6 +954,7 @@ fn run_compression(
         selected_quality,
         candidate_search_ms,
         candidate_count,
+        quality_metrics,
     };
     update_progress(
         job,
@@ -1363,15 +1375,7 @@ fn run_preview_core(
     if verified.dimensions() != (width, height) {
         return Err("compressed preview dimensions do not match the source image".into());
     }
-    let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
-        if let Some(job) = job {
-            checkpoint(job)?;
-        }
-        let source = decode_image(&request.input)?;
-        Some(calculate_quality_metrics(&source, &verified)?)
-    } else {
-        None
-    };
+    let quality_metrics = quality_metrics_for_output(request, &verified, job)?;
     let output_bytes = data.len() as u64;
     if let Some(job) = job {
         update_progress_bytes(job, None, Some(output_bytes));
@@ -1442,6 +1446,21 @@ fn calculate_quality_metrics(
     })
 }
 
+fn quality_metrics_for_output(
+    request: &CompressionRequest,
+    output: &DynamicImage,
+    job: Option<&Arc<CompressionJob>>,
+) -> Result<Option<CompressionQualityMetrics>, String> {
+    if request.format != CompressionFormat::Webp || request.lossless {
+        return Ok(None);
+    }
+    if let Some(job) = job {
+        checkpoint(job)?;
+    }
+    let source = decode_image(&request.input)?;
+    Ok(Some(calculate_quality_metrics(&source, output)?))
+}
+
 fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, String> {
     let (width, height) = inspect_image(&request.input)?;
     let EncodedSelection {
@@ -1455,6 +1474,11 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
+    let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
+        quality_metrics_for_output(request, &decode_image(&bytes)?, None)?
+    } else {
+        None
+    };
     let skipped_reason = selection_skipped_reason.or_else(|| {
         request
             .metadata
@@ -1489,6 +1513,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         selected_quality,
         candidate_search_ms,
         candidate_count,
+        quality_metrics,
     })
 }
 
@@ -4355,6 +4380,16 @@ mod tests {
             assert!(estimate.output_bytes > 0);
             assert!(estimate.saved_bytes <= estimate.input_bytes as i64);
             assert_eq!(estimate.metadata_policy, "strip");
+            if format == "webp" {
+                let metrics = estimate
+                    .quality_metrics
+                    .as_ref()
+                    .expect("lossy WebP estimate metrics");
+                assert!(metrics.rgb_mae >= 0.0);
+                assert!(metrics.psnr_db.is_some());
+            } else {
+                assert!(estimate.quality_metrics.is_none());
+            }
         }
 
         let target_metadata = r#"{"fileName":"sample.png","outputFormat":"png","lossless":true,"maxOutputBytes":1,"maxCandidates":1}"#;

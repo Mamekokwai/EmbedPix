@@ -59,6 +59,7 @@ export interface CompressionResult {
   compressionMode?: "lossless" | "lossy";
   compressionEngine?: "oxipng" | "image-jpeg" | "libwebp";
   metadataPolicy: MetadataPolicy;
+  qualityMetrics?: CompressionQualityMetrics;
   sourceDeleted?: boolean;
   targetBytes: number | null;
   targetMet: boolean;
@@ -105,6 +106,7 @@ export interface CompressionEstimate {
   selectedQuality: number | null;
   candidateSearchMs?: number;
   candidateCount?: number;
+  qualityMetrics?: CompressionQualityMetrics;
 }
 export interface CompressionQualityMetrics { rgbMae: number; psnrDb: number | null; alphaMismatchPixels: number; }
 
