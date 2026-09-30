@@ -32,6 +32,7 @@ export interface BatchConversionPlan {
 export function formatBatchConversionPlanError(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
   const mappings: ReadonlyArray<[string, string]> = [
+    ["template contains empty or control characters", "模板包含空内容或控制字符"],
     ["contains empty or control characters", "包含空内容或控制字符"],
     ["cannot contain path separators or traversal", "不能包含路径分隔符或目录穿越"],
     ["cannot contain path separators", "不能包含路径分隔符"],
