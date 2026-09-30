@@ -136,6 +136,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('role="progressbar"');
     expect(compressionView).toContain("aria-valuetext={progress.total > 0");
     expect(compressionView).toContain("formatCompressionProgressSummary");
+    expect(compressionView).toContain('className="compression-estimate-note" aria-live="polite"');
     expect(compressionView).toContain("isCompressionSourcePathError");
     expect(compressionView).toContain("桌面源文件不可访问，未导出");
     expect(compressionView).toContain("源文件夹子目录");
