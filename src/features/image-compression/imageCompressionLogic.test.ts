@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, estimateFallback, filterCompressionFiles, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, isCurrentCompressionItem, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionDimensionError, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize, waitForCompressionProgressTick } from "./imageCompressionLogic";
+import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, canWriteCompressionItemUpdate, estimateFallback, filterCompressionFiles, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, isCurrentCompressionItem, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionDimensionError, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize, waitForCompressionProgressTick } from "./imageCompressionLogic";
 import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
@@ -8,6 +8,11 @@ describe("image compression logic", () => {
     expect(isCurrentCompressionItem([first], first)).toBe(true);
     expect(isCurrentCompressionItem([{ id: "a", file: {} }], first)).toBe(false);
     expect(isCurrentCompressionItem([{ id: "b", file: first.file }], first)).toBe(false);
+  });
+  it("blocks item updates after unmount", () => {
+    const item = { id: "a", file: {} };
+    expect(canWriteCompressionItemUpdate(true, [item], item)).toBe(true);
+    expect(canWriteCompressionItemUpdate(false, [item], item)).toBe(false);
   });
   it("removes only the selected item's dimension error", () => {
     expect(removeCompressionDimensionError([{ id: "dimensions-a" }, { id: "dimensions-b" }, { id: "unsupported" }], "a")).toEqual([{ id: "dimensions-b" }, { id: "unsupported" }]);
