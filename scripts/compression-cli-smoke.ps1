@@ -12,9 +12,39 @@ function Set-Utf8NoBomContent([string]$Path, [string]$Value) {
   [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))
 }
 
+function Get-Utf8Text([string]$Path) {
+  [IO.File]::ReadAllText($Path, [Text.UTF8Encoding]::new($false))
+}
+
 # Keep the source ASCII-only so Windows PowerShell 5.1 parses the static contract reliably.
 $notPublishedText = ([char]0x672A, [char]0x53D1, [char]0x5E03) -join ''
 $unreachableText = ([char]0x4E0D, [char]0x53EF, [char]0x8FBE) -join ''
+
+function Invoke-NativeJson([string]$Path, [string]$InputText) {
+  $inputPath = Join-Path $script:root ("native-input-" + [guid]::NewGuid() + '.json')
+  $payload = if ($InputText.EndsWith("`n")) { $InputText } else { "$InputText`n" }
+  [IO.File]::WriteAllBytes($inputPath, [Text.UTF8Encoding]::new($false).GetBytes($payload))
+  $startInfo = New-Object Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $env:ComSpec
+  $startInfo.Arguments = '/d /s /c ""' + $Path + '" < "' + $inputPath + '""'
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.RedirectStandardInput = $true
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  $process = New-Object Diagnostics.Process
+  $process.StartInfo = $startInfo
+  try {
+    if (-not $process.Start()) { throw "Could not start native process: $Path" }
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    return [pscustomobject]@{ stdout = $stdout; stderr = $stderr; exitCode = $process.ExitCode }
+  } finally {
+    $process.Dispose()
+    Remove-Item -LiteralPath $inputPath -Force -ErrorAction SilentlyContinue
+  }
+}
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
@@ -25,8 +55,10 @@ function Invoke-CliRequest([string]$Path, [hashtable]$Request, [string]$Label) {
   $stderrPath = Join-Path $script:root "$Label.stderr.log"
   Set-Utf8NoBomContent $requestPath ($Request | ConvertTo-Json -Depth 12)
   $inputText = Get-Content -Raw -LiteralPath $requestPath
-  $stdout = $inputText | & $Path 2> $stderrPath | Out-String
-  $exitCode = $LASTEXITCODE
+  $native = Invoke-NativeJson $Path $inputText
+  $stdout = $native.stdout
+  $native.stderr | Set-Content -LiteralPath $stderrPath -NoNewline
+  $exitCode = $native.exitCode
   $events = @($stdout -split "\r?\n" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json })
   $success = $events | Where-Object { $_.type -eq 'success' } | Select-Object -Last 1
   if ($exitCode -ne 0 -or -not $success) {
@@ -60,8 +92,8 @@ function Assert-NativeCompressionContract([switch]$Required) {
   $gatewayPath = Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts'
   if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { throw "Native compression source is missing: $sourcePath" }
   if (-not (Test-Path -LiteralPath $gatewayPath -PathType Leaf)) { throw "Compression gateway source is missing: $gatewayPath" }
-  $source = Get-Content -Raw -LiteralPath $sourcePath
-  $gateway = Get-Content -Raw -LiteralPath $gatewayPath
+  $source = Get-Utf8Text $sourcePath
+  $gateway = Get-Utf8Text $gatewayPath
 $requiredTokens = @('pub async fn preflight_compression', 'pub async fn preview_compression', 'pub async fn estimate_image_compression', 'pub async fn compress_image', 'pub fn cancel_compression', 'fn resolve_output_path', 'output_location', 'output_directory', 'output_subdirectory', 'replace_original', 'write_exported_file', 'COMPRESS_IMAGE_COMMAND', 'PREVIEW_COMPRESSION_COMMAND', 'ESTIMATE_IMAGE_COMPRESSION_COMMAND')
   $missing = @($requiredTokens | Where-Object { $source -notmatch [regex]::Escape($_) -and $gateway -notmatch [regex]::Escape($_) })
   if ($missing.Count -gt 0) { throw "Native compression contract is missing: $($missing -join ', ')" }
@@ -73,7 +105,7 @@ $requiredTokens = @('pub async fn preflight_compression', 'pub async fn preview_
 
 function Assert-PreviewCompressionContract {
   $sourcePath = Join-Path $repoRoot 'src-tauri/src/commands/compression.rs'
-  $source = Get-Content -Raw -LiteralPath $sourcePath
+  $source = Get-Utf8Text $sourcePath
   $previewName = 'preview_compression'
   if ($source -notmatch '(?m)(?:pub async fn|pub fn)\s+preview_compression\b') { throw 'The independent preview_compression Tauri command is missing.' }
   $previewMatch = [regex]::Match($source, "(?s)(?:pub async fn|pub fn)\s+$previewName\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)")
@@ -109,10 +141,10 @@ function Assert-PngOptimizationContract([switch]$Required) {
   $gatewayPath = Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts'
   $manifestPath = Join-Path $repoRoot 'src-tauri/Cargo.toml'
   $lockPath = Join-Path $repoRoot 'src-tauri/Cargo.lock'
-  $source = Get-Content -Raw -LiteralPath $sourcePath
-  $gateway = Get-Content -Raw -LiteralPath $gatewayPath
-  $manifest = Get-Content -Raw -LiteralPath $manifestPath
-  $lock = Get-Content -Raw -LiteralPath $lockPath
+  $source = Get-Utf8Text $sourcePath
+  $gateway = Get-Utf8Text $gatewayPath
+  $manifest = Get-Utf8Text $manifestPath
+  $lock = Get-Utf8Text $lockPath
   $levelToken = $source -match 'png_optimization_level|pngOptimizationLevel' -or $gateway -match 'png_optimization_level|pngOptimizationLevel'
   $hasPinnedDependency = $manifest -match '(?m)^\s*oxipng\s*=' -and $lock -match '(?m)^name = "oxipng"'
   $hasExactPin = $manifest -match '(?m)oxipng\s*=\s*\{[^}\r\n]*version\s*=\s*"=9\.1\.5"'
@@ -156,8 +188,8 @@ function Assert-PngOptimizationContract([switch]$Required) {
 function Assert-ImageTargetCompressionContract([switch]$Required) {
   $sourcePath = Join-Path $repoRoot 'src-tauri/src/commands/compression.rs'
   $gatewayPath = Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts'
-  $source = Get-Content -Raw -LiteralPath $sourcePath
-  $gateway = Get-Content -Raw -LiteralPath $gatewayPath
+  $source = Get-Utf8Text $sourcePath
+  $gateway = Get-Utf8Text $gatewayPath
   $selectionMatch = [regex]::Match($source, '(?s)fn\s+choose_encoded_output\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
   $runMatch = [regex]::Match($source, '(?s)fn\s+run_compression\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
   if (-not $selectionMatch.Success -or -not $runMatch.Success) { throw 'Could not locate image target-volume selection or publish functions.' }
@@ -218,9 +250,9 @@ function Assert-TargetCompressionContract([switch]$Required) {
       return [pscustomobject]@{ checked = $false; cliTargetSearchOperation = $false }
     }
   }
-  $gif = Get-Content -Raw -LiteralPath $gifPath
-  $storage = Get-Content -Raw -LiteralPath $storagePath
-  $tests = Get-Content -Raw -LiteralPath $testsPath
+  $gif = Get-Utf8Text $gifPath
+  $storage = Get-Utf8Text $storagePath
+  $tests = Get-Utf8Text $testsPath
   $plannerMatch = [regex]::Match($gif, '(?s)fn\s+plan_gif_compression_blocking\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
   $selectorMatch = [regex]::Match($gif, '(?s)fn\s+select_export_candidate\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
   $exportMatch = [regex]::Match($gif, '(?s)fn\s+export_gif_blocking_with_job\b.*?(?=\r?\n(?:pub |fn |impl |#\[)|\z)')
@@ -266,8 +298,8 @@ function Assert-TargetCompressionContract([switch]$Required) {
 }
 
 function Assert-MaxRgbMaeContract {
-  $source = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'src-tauri/src/commands/compression.rs')
-  $gateway = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts')
+  $source = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/commands/compression.rs')
+  $gateway = Get-Utf8Text (Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts')
   foreach ($token in @('max_rgb_mae: Option<f64>', 'validate_max_rgb_mae', 'is_finite()', '0.0..=255.0', 'choose_webp_output_with_rgb_mae', 'quality_threshold_unmet')) {
     if ($source -notmatch [regex]::Escape($token)) { throw "maxRgbMae contract is missing: $token" }
   }
@@ -310,8 +342,9 @@ try {
   $invalidRequest = Join-Path $script:root 'invalid-compression.request.json'
   $invalidStderr = Join-Path $script:root 'invalid-compression.stderr.log'
   Set-Utf8NoBomContent $invalidRequest (@{ id = 'invalid-compression'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'must-not-exist.webp'); quality = '82' } | ConvertTo-Json)
-  Get-Content -Raw -LiteralPath $invalidRequest | & $CliPath 2> $invalidStderr | Out-Null
-  $invalidExitCode = $LASTEXITCODE
+  $invalidNative = Invoke-NativeJson $CliPath (Get-Content -Raw -LiteralPath $invalidRequest)
+  $invalidNative.stderr | Set-Content -LiteralPath $invalidStderr -NoNewline
+  $invalidExitCode = $invalidNative.exitCode
   if ($invalidExitCode -ne 1 -or (Get-Content -Raw -LiteralPath $invalidStderr) -notmatch 'request_error') { throw "CLI strict validation smoke failed (exit=$invalidExitCode): $(Get-Content -Raw -LiteralPath $invalidStderr)" }
 
   $gifEvent = Invoke-CliRequest $CliPath @{ id = 'gif-smoke'; op = 'gif'; outputPath = $gifOutput; width = 32; height = 32; loopMode = 'infinite'; loopCount = 0; frames = @(@{ path = $pngInput; durationMs = 100 }, @{ path = $pngInput; durationMs = 100 }) } 'gif'

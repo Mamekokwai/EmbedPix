@@ -41,7 +41,7 @@ pwsh -NoProfile -File scripts/compression-cli-smoke.ps1 -RequireCompression
 
 现有 CLI smoke 仍检查真实支持的 image/GIF 输出：签名、SHA256 和二次解码；它不会伪造压缩或目标搜索 CLI op。原生压缩与目标搜索通过静态 Rust/gateway 契约检查，后续可再增加桌面 Tauri IPC fixture，检查 `skipIfLarger`、`target_unreachable` 的实际结果、输出位置、取消、失败清理和源文件不变。
 
-提交 `43c3b34` 起，`release-fixture-smoke.ps1` 与 `compression-cli-smoke.ps1` 的 JSON/报告写入改用显式 `UTF8Encoding($false)`，保持 UTF-8 无 BOM 字节并兼容 Windows PowerShell 5.1。`compression-cli-smoke.ps1` 仍要求使用 `pwsh` 执行严格门禁：脚本既有静态契约检查包含中文正则/字符串，在 Windows PowerShell 5.1 下存在解析兼容限制；该限制不改变发布产物或验签逻辑。
+提交 `43c3b34` 起，`release-fixture-smoke.ps1` 与 `compression-cli-smoke.ps1` 的 JSON/报告写入改用显式 `UTF8Encoding($false)`，保持 UTF-8 无 BOM 字节并兼容 Windows PowerShell 5.1。提交 `3424d2d` 起，压缩 smoke 的中文静态契约匹配改用 ASCII-only code-point 构造；随后使用 `ProcessStartInfo` 和 UTF-8 临时输入文件绕过 PS5 原生 stdin 编码转换，并显式按 UTF-8 读取源码。当前 `compression-cli-smoke.ps1 -RequireCompression` 已可在 Windows PowerShell 5.1 与 `pwsh` 完整执行。
 
 脚本的静态检查会在发布前失败于以下情况：预检函数调用 `write_exported_file` 或文件写入/重命名/删除 API；未调用输入解码校验；缺少输入字节、图像尺寸、像素数、decoder allocation 限制；目标搜索没有 `maxCandidates` 上限；候选阶段调用发布 writer；输出没有统一体积上限；或不可达目标没有在 publish writer 之前被拒绝。当前检查的是原生 Rust/Tauri 路径，不增加不存在的 CLI op。
 
