@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatUpdateCheckTime, resolveUpdateProgress, resolveUpdateStatusLabel } from "./UpdateView";
+import { formatReleaseOpenError, formatUpdateCheckTime, resolveUpdateProgress, resolveUpdateStatusLabel } from "./UpdateView";
 import { makeOfflineState } from "../../app/hooks/useUpdateCheck";
 
 describe("update progress model", () => {
+  it("keeps only actionable Chinese release-page errors", () => {
+    expect(formatReleaseOpenError(new Error("浏览器阻止了弹窗，请允许后重试。"))).toBe("浏览器阻止了弹窗，请允许后重试。");
+    expect(formatReleaseOpenError(new Error("Popup blocked by browser"))).toBe("无法打开发布页，请检查浏览器弹窗权限。");
+  });
   it("formats a determinate download with bytes and percentage", () => {
     expect(resolveUpdateProgress("downloading", 512, 1024)).toEqual({
       percent: 50,

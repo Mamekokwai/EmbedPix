@@ -67,6 +67,11 @@ export function formatUpdateCheckTime(value: Date | null): string {
   return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+export function formatReleaseOpenError(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return /[\u3400-\u9fff]/u.test(message) ? message : "无法打开发布页，请检查浏览器弹窗权限。";
+}
+
 function formatBytes(value: number | null | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -216,7 +221,7 @@ export default function UpdateView({
       await onOpenReleasePage();
       setReleaseOpenError(null);
     } catch (error) {
-      setReleaseOpenError(error instanceof Error ? error.message : "无法打开发布页，请稍后重试。");
+      setReleaseOpenError(formatReleaseOpenError(error));
     }
   };
 
