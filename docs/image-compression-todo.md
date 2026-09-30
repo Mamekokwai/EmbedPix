@@ -32,6 +32,7 @@
 - [x] 本轮门禁确认：前端 32 个测试文件 / 387 个测试通过；压缩 CLI、release fixture、release config、desktop smoke 全部通过。
 - [x] 本轮可访问性收尾：累计压缩批处理进度摘要增加 `aria-live` 通知；前端当前为 32 个测试文件 / 387 个测试通过。
 - [~] `targetResize` 审查结论：因缺少统一 planner、稳定协议与产品定义，当前不接入；默认旧路径保持不变。
+- [~] targetResize 三方审查结论：这是新协议能力；当前输出格式/尺寸校验、schema v1、Gateway、CLI 与报告均假设源尺寸。接入前必须统一 planner，默认关闭，禁止放大并定义最小尺寸、内存/CPU/输出预算和取消边界；所有三入口必须共享 `target_unmet` 不发布语义，并补齐原始/请求/选中尺寸等报告字段门禁。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
 - [x] 签名预检报告安全契约（commit `8696532`）：报告字段白名单、敏感字段拒绝和 UTF-8 无 BOM 写入均由 `check:release-config` 校验并通过。
