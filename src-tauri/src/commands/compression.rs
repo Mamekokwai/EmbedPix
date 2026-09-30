@@ -2418,7 +2418,10 @@ fn classify_error_code(stage: CompressionStage, message: &str) -> CompressionErr
         return CompressionErrorCode::Cancelled;
     }
     let lower = message.to_ascii_lowercase();
-    if lower.contains("metadatapolicy=preserve") {
+    if lower.contains("metadatapolicy=preserve")
+        || lower.contains("metadatapolicy=stripsafe")
+        || lower.contains("metadatapolicy=stripall")
+    {
         return CompressionErrorCode::MetadataPolicyUnsupported;
     }
     if lower.contains("decode")
@@ -4027,6 +4030,26 @@ mod tests {
             )
             .as_str(),
             "metadata_policy_unsupported"
+        );
+        for policy in ["stripSafe", "stripAll"] {
+            assert_eq!(
+                classify_error_code(
+                    CompressionStage::Failed,
+                    &format!("metadataPolicy={policy} is not supported")
+                )
+                .as_str(),
+                "metadata_policy_unsupported"
+            );
+        }
+        let job = test_job("metadata-policy-error-code");
+        let error = fail_message(
+            &job,
+            "metadataPolicy=stripSafe is not supported: safe ICC/EXIF/XMP copying requires a reviewed metadata copier".into(),
+        );
+        assert!(error.contains("metadataPolicy=stripSafe"));
+        assert_eq!(
+            job.progress.lock().unwrap().code.as_deref(),
+            Some("metadata_policy_unsupported")
         );
         assert_eq!(
             classify_error_code(CompressionStage::Skipped, "target_unreachable").as_str(),
