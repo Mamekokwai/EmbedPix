@@ -22,6 +22,7 @@
 - [x] 门禁统计修正：当前前端为 32 个测试文件 / 382 个测试通过；本轮 release fixture 使用固定 UTC 输入，重复执行的 manifest/asset summary 结果一致。
 - [x] 本轮收尾：支持“仅重试此项”；release fixture 已覆盖 `release-provenance.json` 的 `workflow_ref` 与 `release_commit` 篡改拒绝。
 - [x] 前端门禁统计更新：32 个测试文件 / 383 个测试通过。
+- [x] 本轮报告与发布门禁收尾：GIF/视频 GIF 导出结果支持 JSON 报告；SHA256SUMS 哈希篡改与重复条目拒绝用例已完成；前端当前为 32 个测试文件 / 385 个测试通过。
 - 本轮新增 `compressionGateway` 四入口 envelope 矩阵回归：覆盖 PNG/JPEG/静态 WebP、格式专属字段不泄漏，以及非法组合在 IPC 前拒绝。
 - 本轮完成预检临时空间预算状态修复：参数、输入或选中项变化时清除旧预算，任务完成后保留最近一次有效预算。
 - 本轮新增 updater 签名提交/安装包提交边界清理回归：验证临时 `.part`、签名临时文件和 `.etag` 清理，以及既有/已提交缓存的保留或失败清理语义；真实异步 rename 间隙尚未通过 hook 注入验证，未扩大覆盖声明。
@@ -350,6 +351,7 @@
 - [x] 本地 release fixture 能拒绝平台数、URL、时间、大小和 PE 边界错误。
 - [x] release fixture 幂等校验：有效 `pub_date` 固定为 UTC 输入，重复执行契约校验产生一致的 manifest/asset summary。
 - [x] 发布门禁收尾：provenance `workflow_ref`/`release_commit` 篡改拒绝与固定 fixture 重复执行一致性均已验证。
+- [x] 发布资产完整性门禁：provenance 与 SHA256SUMS 篡改/重复条目拒绝、固定 fixture 幂等性均已验证。
 - [x] 发布说明版本匹配：`docs/release-notes-v0.7.0.md` 标题与当前版本一致，并由 `check:release-config` 校验。
 - [ ] 安装包无控制台窗口。
 
