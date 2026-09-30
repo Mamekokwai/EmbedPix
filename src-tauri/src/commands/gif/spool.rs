@@ -288,6 +288,26 @@ impl GifFrameSpoolState {
                 let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                     continue;
                 };
+                if is_quarantine_name(name) {
+                    let recently_created = fs::metadata(&path)
+                        .and_then(|metadata| metadata.modified())
+                        .ok()
+                        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                        .is_some_and(|age| age < grace_period);
+                    if recently_created {
+                        skipped_grace_period += 1;
+                        continue;
+                    }
+                    let Some(lock) = SpoolLock::try_open(&path)
+                        .map_err(|error| format!("无法检查 GIF 临时帧隔离锁：{error}"))?
+                    else {
+                        skipped_active += 1;
+                        continue;
+                    };
+                    let _ = fs::remove_file(&path);
+                    drop(lock);
+                    continue;
+                }
                 let Some(id) = name.strip_suffix(".lock") else {
                     continue;
                 };
@@ -444,6 +464,16 @@ fn quarantine_stale_lock(path: &Path, quarantine: &Path) -> io::Result<bool> {
         return Err(error);
     }
     Ok(true)
+}
+
+fn is_quarantine_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('.') else {
+        return false;
+    };
+    let Some((lock_name, nonce)) = rest.split_once(".quarantine-") else {
+        return false;
+    };
+    lock_name.ends_with(".lock") && !lock_name.is_empty() && !nonce.is_empty()
 }
 
 fn spool_id(attempt: u32) -> String {
@@ -663,6 +693,39 @@ mod tests {
         state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
         assert!(!first.exists());
         assert!(!second.exists());
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn cleanup_reclaims_stale_quarantine_files_without_touching_similar_files() {
+        let state = test_state("stale-quarantine");
+        fs::create_dir_all(&state.root).unwrap();
+        let quarantine = state.root.join(".orphan.lock.quarantine-stale");
+        let similar_missing_nonce = state.root.join(".orphan.lock.quarantine-");
+        let similar_wrong_lock = state.root.join(".orphan.quarantine-stale");
+        fs::write(&quarantine, b"stale").unwrap();
+        fs::write(&similar_missing_nonce, b"keep").unwrap();
+        fs::write(&similar_wrong_lock, b"keep").unwrap();
+
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        assert!(!quarantine.exists());
+        assert!(similar_missing_nonce.exists());
+        assert!(similar_wrong_lock.exists());
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn cleanup_skips_an_active_quarantine_file() {
+        let state = test_state("active-quarantine");
+        fs::create_dir_all(&state.root).unwrap();
+        let quarantine = state.root.join(".orphan.lock.quarantine-active");
+        let lock = SpoolLock::create(&quarantine).unwrap();
+
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        assert!(quarantine.exists());
+
+        drop(lock);
+        let _ = fs::remove_file(quarantine);
         let _ = fs::remove_dir_all(state.root.clone());
     }
 
