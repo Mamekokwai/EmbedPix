@@ -89,6 +89,28 @@ function Assert-Output([string]$Path, [string]$Format, [string]$Label) {
   [pscustomobject]@{ label = $Label; format = $Format; path = $Path; bytes = $file.Length; sha256 = $hash; signature = $signature }
 }
 
+function Get-JpegDimensions([string]$Path) {
+  $bytes = [IO.File]::ReadAllBytes($Path)
+  $index = 2
+  while ($index -lt $bytes.Length - 1) {
+    if ($bytes[$index] -ne 0xff) { $index++; continue }
+    while ($index -lt $bytes.Length -and $bytes[$index] -eq 0xff) { $index++ }
+    if ($index -ge $bytes.Length) { break }
+    $marker = $bytes[$index]
+    $index++
+    if ($marker -eq 0xd8 -or $marker -eq 0xd9 -or ($marker -ge 0xd0 -and $marker -le 0xd7)) { continue }
+    if ($index + 1 -ge $bytes.Length) { break }
+    $segmentLength = ($bytes[$index] * 256) + $bytes[$index + 1]
+    if ($marker -in @(0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf)) {
+      if ($index + 7 -ge $bytes.Length) { break }
+      return [pscustomobject]@{ width = ($bytes[$index + 5] * 256) + $bytes[$index + 6]; height = ($bytes[$index + 3] * 256) + $bytes[$index + 4] }
+    }
+    if ($segmentLength -lt 2) { break }
+    $index += $segmentLength
+  }
+  throw "Could not inspect JPEG dimensions: $Path"
+}
+
 function Assert-NativeCompressionContract([switch]$Required) {
   $sourcePath = Join-Path $repoRoot 'src-tauri/src/commands/compression.rs'
   $gatewayPath = Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts'
@@ -366,6 +388,8 @@ try {
   $losslessMethodBestOutput = Join-Path $script:root 'compressed-lossless-method-6.webp'
   $jpegOutput = Join-Path $script:root 'compressed-progressive.jpg'
   $jpegResizeOutput = Join-Path $script:root 'compressed-resized.jpg'
+  $jpegOriginalSizeOutput = Join-Path $script:root 'compressed-original-size.jpg'
+  $webpResizeOutput = Join-Path $script:root 'compressed-resized.webp'
 
   $imageEvent = Invoke-CliRequest $CliPath @{ id = 'image-smoke'; op = 'image'; inputPath = $pngInput; outputPath = $pngOutput; format = 'png'; width = 1; height = 1 } 'image'
   $imageResult = Assert-Output $pngOutput 'png' 'image'
@@ -389,6 +413,14 @@ try {
   if (-not $hasSof2) { throw 'JPEG advanced compression did not emit a progressive SOF2 marker.' }
   [void](Invoke-CliRequest $CliPath @{ id = 'jpeg-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegResizeOutput; format = 'jpg'; quality = 82; targetResizePercent = 50; maxInputBytes = 1MB } 'JPEG resize')
   $jpegResizeResult = Assert-Output $jpegResizeOutput 'jpg' 'JPEG resize'
+  $jpegResizeDimensions = Get-JpegDimensions $jpegResizeOutput
+  if ($jpegResizeDimensions.width -ne 16 -or $jpegResizeDimensions.height -ne 16) { throw "JPEG resize smoke emitted $($jpegResizeDimensions.width)x$($jpegResizeDimensions.height), expected 16x16." }
+  [void](Invoke-CliRequest $CliPath @{ id = 'jpeg-original-size-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegOriginalSizeOutput; format = 'jpg'; quality = 82; targetResizePercent = 100; maxInputBytes = 1MB } 'JPEG original size')
+  $jpegOriginalSizeResult = Assert-Output $jpegOriginalSizeOutput 'jpg' 'JPEG original size'
+  $jpegOriginalSizeDimensions = Get-JpegDimensions $jpegOriginalSizeOutput
+  if ($jpegOriginalSizeDimensions.width -ne 32 -or $jpegOriginalSizeDimensions.height -ne 32) { throw "JPEG 100% smoke emitted $($jpegOriginalSizeDimensions.width)x$($jpegOriginalSizeDimensions.height), expected 32x32." }
+  [void](Invoke-CliRequest $CliPath @{ id = 'webp-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $webpResizeOutput; format = 'webp'; quality = 82; targetResizePercent = 50; maxInputBytes = 1MB } 'WebP resize')
+  $webpResizeResult = Assert-Output $webpResizeOutput 'webp' 'WebP resize'
   $invalidRequest = Join-Path $script:root 'invalid-compression.request.json'
   $invalidStderr = Join-Path $script:root 'invalid-compression.stderr.log'
   Set-Utf8NoBomContent $invalidRequest (@{ id = 'invalid-compression'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'must-not-exist.webp'); quality = '82' } | ConvertTo-Json)
@@ -396,6 +428,14 @@ try {
   $invalidNative.stderr | Set-Content -LiteralPath $invalidStderr -NoNewline
   $invalidExitCode = $invalidNative.exitCode
   if ($invalidExitCode -ne 1 -or (Get-Content -Raw -LiteralPath $invalidStderr) -notmatch 'request_error') { throw "CLI strict validation smoke failed (exit=$invalidExitCode): $(Get-Content -Raw -LiteralPath $invalidStderr)" }
+  foreach ($invalidResizeRequest in @(
+    @{ id = 'invalid-resize-png'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-resize-png.png'); format = 'png'; targetResizePercent = 50 },
+    @{ id = 'invalid-resize-lossless-webp'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-resize-lossless.webp'); format = 'webp'; lossless = $true; targetResizePercent = 50 },
+    @{ id = 'invalid-resize-range'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'invalid-resize-range.jpg'); format = 'jpg'; targetResizePercent = 9 }
+  )) {
+    $invalidResizeNative = Invoke-NativeJson $CliPath ($invalidResizeRequest | ConvertTo-Json -Depth 12)
+    if ($invalidResizeNative.exitCode -ne 1 -or $invalidResizeNative.stderr -notmatch 'request_error') { throw "CLI resize validation smoke failed for $($invalidResizeRequest.id): $($invalidResizeNative.stderr)" }
+  }
 
   $gifEvent = Invoke-CliRequest $CliPath @{ id = 'gif-smoke'; op = 'gif'; outputPath = $gifOutput; width = 32; height = 32; loopMode = 'infinite'; loopCount = 0; frames = @(@{ path = $pngInput; durationMs = 100 }, @{ path = $pngInput; durationMs = 100 }) } 'gif'
   $gifResult = Assert-Output $gifOutput 'gif' 'GIF'
@@ -412,7 +452,9 @@ try {
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'compress'
-    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $jpegResizeResult, $gifResult)
+    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $jpegResizeResult, $jpegOriginalSizeResult, $webpResizeResult, $gifResult)
+    jpegResizeDimensions = $jpegResizeDimensions
+    jpegOriginalSizeDimensions = $jpegOriginalSizeDimensions
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract

@@ -767,6 +767,10 @@ pub struct CompressionResult {
     pub status: String,
     pub skipped_reason: Option<String>,
     pub input_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_input_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prepared_input_bytes: Option<u64>,
     pub output_bytes: u64,
     pub saved_bytes: i64,
     pub savings_percent: f64,
@@ -821,6 +825,10 @@ pub struct CompressionPreview {
     pub metadata_policy: &'static str,
     pub status: String,
     pub skipped_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_input_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prepared_input_bytes: Option<u64>,
     pub target_bytes: Option<u64>,
     pub target_met: bool,
     pub selected_quality: Option<u8>,
@@ -846,6 +854,10 @@ pub struct CompressionQualityMetrics {
 #[serde(rename_all = "camelCase")]
 pub struct CompressionEstimate {
     pub input_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_input_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prepared_input_bytes: Option<u64>,
     pub output_bytes: u64,
     pub saved_bytes: i64,
     pub savings_percent: f64,
@@ -1161,11 +1173,20 @@ fn resized_dimensions(width: u32, height: u32, percent: Option<u8>) -> (u32, u32
         .unwrap_or((width, height))
 }
 
-fn prepare_resize_request(request: &CompressionRequest) -> Result<CompressionRequest, String> {
+fn prepare_resize_request(
+    request: &CompressionRequest,
+    job: Option<&Arc<CompressionJob>>,
+) -> Result<CompressionRequest, String> {
     let Some(percent) = request.metadata.target_resize_percent else {
         return Ok(request.clone());
     };
+    if let Some(job) = job {
+        checkpoint(job)?;
+    }
     let image = decode_image(&request.input)?;
+    if let Some(job) = job {
+        checkpoint(job)?;
+    }
     let (source_width, source_height) = image.dimensions();
     let target_width = resize_dimension(source_width, percent);
     let target_height = resize_dimension(source_height, percent);
@@ -1173,10 +1194,28 @@ fn prepare_resize_request(request: &CompressionRequest) -> Result<CompressionReq
         return Ok(request.clone());
     }
     let resized = image.resize_exact(target_width, target_height, FilterType::Lanczos3);
+    if let Some(job) = job {
+        checkpoint(job)?;
+    }
     let mut encoded = Vec::new();
     resized
         .write_to(&mut Cursor::new(&mut encoded), ImageFormat::Png)
         .map_err(|error| format!("failed to prepare resized compression input: {error}"))?;
+    let prepared_limit = request
+        .metadata
+        .max_input_bytes
+        .map(|limit| limit as usize)
+        .unwrap_or(MAX_INPUT_BYTES)
+        .min(MAX_INPUT_BYTES);
+    if encoded.len() > prepared_limit {
+        return Err(format!(
+            "resized compression input exceeds the {} MiB input limit",
+            prepared_limit / (1024 * 1024)
+        ));
+    }
+    if let Some(job) = job {
+        checkpoint(job)?;
+    }
     let mut prepared = request.clone();
     prepared.input = encoded;
     Ok(prepared)
@@ -1190,7 +1229,7 @@ fn run_compression(
     update_progress(job, CompressionStage::Reading, None, None);
     update_progress(job, CompressionStage::Decoding, None, None);
     let prepared_request =
-        prepare_resize_request(request).map_err(|error| fail_message(job, error))?;
+        prepare_resize_request(request, Some(job)).map_err(|error| fail_message(job, error))?;
     let (width, height) =
         inspect_image(&prepared_request.input).map_err(|error| fail_message(job, error))?;
     update_progress(job, CompressionStage::Planning, None, None);
@@ -1248,6 +1287,8 @@ fn run_compression(
             status: "skipped".to_string(),
             skipped_reason: Some(skipped_reason),
             input_bytes,
+            original_input_bytes: Some(input_bytes),
+            prepared_input_bytes: Some(prepared_request.input.len() as u64),
             output_bytes,
             saved_bytes,
             savings_percent,
@@ -1301,6 +1342,8 @@ fn run_compression(
         status: "completed".to_string(),
         skipped_reason: None,
         input_bytes,
+        original_input_bytes: Some(input_bytes),
+        prepared_input_bytes: Some(prepared_request.input.len() as u64),
         output_bytes: published_output_bytes,
         saved_bytes,
         savings_percent,
@@ -1939,7 +1982,7 @@ fn run_preview_core(
         update_progress(job, CompressionStage::Reading, None, None);
         update_progress(job, CompressionStage::Decoding, None, None);
     }
-    let prepared_request = prepare_resize_request(request)?;
+    let prepared_request = prepare_resize_request(request, job)?;
     let (width, height) = inspect_image(&prepared_request.input)?;
     if let Some(job) = job {
         update_progress(job, CompressionStage::Planning, None, None);
@@ -1986,6 +2029,8 @@ fn run_preview_core(
         }
         .into(),
         skipped_reason,
+        original_input_bytes: Some(request.input.len() as u64),
+        prepared_input_bytes: Some(prepared_request.input.len() as u64),
         target_bytes: request.target_bytes,
         target_met,
         selected_quality,
@@ -2060,7 +2105,7 @@ fn quality_metrics_for_output(
 }
 
 fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, String> {
-    let prepared_request = prepare_resize_request(request)?;
+    let prepared_request = prepare_resize_request(request, None)?;
     let (width, height) = inspect_image(&prepared_request.input)?;
     let EncodedSelection {
         bytes,
@@ -2092,6 +2137,8 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
     });
     Ok(CompressionEstimate {
         input_bytes,
+        original_input_bytes: Some(input_bytes),
+        prepared_input_bytes: Some(prepared_request.input.len() as u64),
         output_bytes,
         saved_bytes,
         savings_percent,
@@ -4303,6 +4350,26 @@ mod tests {
         assert_eq!((preview.width, preview.height), (1, 1));
         let estimate = run_estimate(&estimate_request).unwrap();
         assert_eq!((estimate.width, estimate.height), (1, 1));
+        assert_eq!(
+            estimate.original_input_bytes,
+            Some(png_input().len() as u64)
+        );
+        assert!(estimate.prepared_input_bytes.unwrap() > 0);
+
+        let output_path = crate::commands::test_temp_dir()
+            .join(format!("embedpix-target-resize-{}.jpg", uuid_like_id()));
+        let formal_metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"jpeg\",\"lossless\":false,\"targetResizePercent\":50,\"skipIfLarger\":false,\"outputPath\":\"{}\"}}",
+            output_path.to_string_lossy().replace('\\', "/")
+        );
+        let formal_request =
+            parse_raw_payload(&raw_payload(&formal_metadata, &png_input())).unwrap();
+        let result = run_compression(&formal_request, &test_job("target-resize-formal")).unwrap();
+        assert_eq!(result.original_input_bytes, Some(png_input().len() as u64));
+        assert!(result.prepared_input_bytes.unwrap() > 0);
+        assert_eq!((result.width, result.height), (1, 1));
+        assert!(output_path.exists());
+        fs::remove_file(output_path).unwrap();
 
         for metadata in [
             r#"{"fileName":"sample.png","outputFormat":"jpeg","targetResizePercent":9}"#,
@@ -5764,6 +5831,8 @@ mod tests {
             metadata_policy: "strip",
             status: "completed".into(),
             skipped_reason: None,
+            original_input_bytes: None,
+            prepared_input_bytes: None,
             target_bytes: None,
             target_met: false,
             selected_quality: Some(82),

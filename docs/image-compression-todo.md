@@ -31,7 +31,7 @@
 - [x] 本轮批处理与资产门禁收尾：累计压缩批处理进度摘要已完成；release fixture 已覆盖 x64 签名资产 `browser_download_url` 篡改拒绝。
 - [x] 本轮门禁确认：前端 32 个测试文件 / 387 个测试通过；压缩 CLI、release fixture、release config、desktop smoke 全部通过。
 - [x] 本轮可访问性收尾：累计压缩批处理进度摘要增加 `aria-live` 通知；前端当前为 32 个测试文件 / 387 个测试通过。
-- [~] `targetResize` 分阶段接入：已完成安全的 `targetResizePercent` 百分比缩放切片；默认关闭、仅允许 10–100%、禁止放大、保持宽高比，JPEG/有损 WebP 的 preview/estimate/formal/CLI 共用同一份 resize preparation，Lanczos3 缩放并复用尺寸上限。完整的“目标体积联动自动降尺寸”仍未接入。
+- [~] `targetResize` 分阶段接入：已完成安全的 `targetResizePercent` 百分比缩放切片；默认关闭、仅允许 10–100%、禁止放大、保持宽高比，JPEG/有损 WebP 的 preview/estimate/formal/CLI 共用同一份 resize preparation，Lanczos3 缩放并复用尺寸上限。结果额外回报 `originalInputBytes`/`preparedInputBytes`，现有 `inputBytes` 明确定义为源文件体积，跳过和节省率按源文件比较；缩放准备阶段有取消检查并受单文件输入预算约束。完整的“目标体积联动自动降尺寸”仍未接入。
 - [~] targetResize 三方审查结论：这是新协议能力；当前输出格式/尺寸校验、schema v1、Gateway、CLI 与报告均假设源尺寸。接入前必须统一 planner，默认关闭，禁止放大并定义最小尺寸、内存/CPU/输出预算和取消边界；所有三入口必须共享 `target_unmet` 不发布语义，并补齐原始/请求/选中尺寸等报告字段门禁。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。

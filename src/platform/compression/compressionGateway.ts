@@ -58,6 +58,8 @@ export interface CompressionResult {
   status: CompressionResultStatus;
   skippedReason: string | null;
   inputBytes: number;
+  originalInputBytes?: number;
+  preparedInputBytes?: number;
   outputBytes: number;
   savedBytes: number;
   savingsPercent: number;
@@ -90,6 +92,8 @@ export interface CompressionPreview {
   metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;
+  originalInputBytes?: number;
+  preparedInputBytes?: number;
   targetBytes: number | null;
   targetMet: boolean;
   selectedQuality: number | null;
@@ -100,6 +104,8 @@ export interface CompressionPreview {
 }
 export interface CompressionEstimate {
   inputBytes: number;
+  originalInputBytes?: number;
+  preparedInputBytes?: number;
   outputBytes: number;
   savedBytes: number;
   savingsPercent: number;
