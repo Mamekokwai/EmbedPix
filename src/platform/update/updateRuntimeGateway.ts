@@ -96,6 +96,10 @@ export async function downloadUpdate(
   });
 }
 
+export async function cancelUpdateDownload(): Promise<void> {
+  await invoke("cancel_update_download");
+}
+
 export async function installUpdate(
   packagePath: string,
   expectedSha256: string,

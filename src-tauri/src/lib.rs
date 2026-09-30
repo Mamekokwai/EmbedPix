@@ -7,6 +7,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(commands::update::UpdateProgressState::default())
+        .manage(commands::update::UpdateCancellationState::default())
         .manage(commands::update::UpdateHealthState::default())
         .manage(commands::gif::GifExportJobState::default())
         .manage(commands::gif::GifFrameSpoolState::default())
@@ -44,6 +45,7 @@ pub fn run() {
             commands::update::check_update,
             commands::update::get_update_download_progress,
             commands::update::download_update,
+            commands::update::cancel_update_download,
             commands::update::install_update
         ])
         .setup(|app| {

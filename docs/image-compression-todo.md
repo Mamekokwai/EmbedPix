@@ -28,7 +28,7 @@
 - [x] 所有图片处理默认本地完成，不上传图片。
 - [x] 压缩输出统一使用临时文件、解码校验和原子发布。
 - [x] 默认不覆盖、不删除源文件，压缩后更大时默认跳过。
-- [x] 取消、失败、切页不会留下不可清理的临时文件；GIF spool、更新下载临时文件和 Blob URL 均有清理/回收测试；`pending-install.json.part` 已在启动清理中按固定路径安全回收，并有 marker 保留/清除与文件/目录异常测试。更新器当前没有独立的用户取消下载命令，因此仅验证了中断/断网/HTTP错误/校验失败清理与重试恢复边界，未虚构取消态协议。
+- [x] 取消、失败、切页不会留下不可清理的临时文件；GIF spool、更新下载临时文件和 Blob URL 均有清理/回收测试；`pending-install.json.part` 已在启动清理中按固定路径安全回收，并有 marker 保留/清除与文件/目录异常测试。更新器已提供独立用户取消下载命令：取消覆盖签名读取、安装包 chunk、重试和原子提交前边界，统一清理本次 `.part`、`.etag`、签名临时文件，保留已有合法最终缓存；进度进入 `cancelled` 终态且 UI 可直接重新下载。
 - [x] 构建产物清理安全门禁：Windows/Linux 都拒绝 repoRoot 到目标之间任意 parent symlink/junction/reparse point；Windows 缺失目标安全 Skip，dry-run 与实际删除共用同一检查。已验证 Windows `check-cleanup`、Linux `check-cleanup`、`npm test`（340）、`cargo test`（253 + 4 CLI）、`check:release-config` 和 `check:release-signing-cleanup`。
 - [x] 全仓解码入口安全审查：普通图片、`preserve`、压缩、GIF 序列、WebP/APNG 动画均具备尺寸、像素、`max_alloc`、帧数/累计资源预算与发布前回读校验；损坏或截断输入不会发布。已复核 export_image 44、GIF 35、animation 8、sequence 12 相关测试通过。
 - [x] 输出位置、覆盖、`bak` 与删除源文件沿用现有安全策略；删除源文件仅允许桌面源文件队列，成功发布并校验后执行，失败或跳过保留源文件。

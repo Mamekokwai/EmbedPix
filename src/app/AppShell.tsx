@@ -47,8 +47,10 @@ function toUpdateViewProps(state: UpdateCheckState) {
         ? "downloading" as const
         : state.status === "downloaded"
           ? "downloaded" as const
-          : state.status === "installing"
-            ? "installing" as const
+      : state.status === "installing"
+        ? "installing" as const
+      : state.status === "cancelled"
+        ? "cancelled" as const
       : state.status === "error"
         ? "error" as const
         : info?.updateAvailable
@@ -81,6 +83,7 @@ export default function AppShell() {
     state: updateState,
     runCheck: checkForUpdates,
     runDownload: downloadUpdate,
+    runCancelDownload: cancelDownload,
     runInstall: installUpdate,
     openReleasePage,
   } = useUpdateCheck();
@@ -204,6 +207,7 @@ export default function AppShell() {
               {...toUpdateViewProps(updateState)}
               onCheckForUpdates={async () => { await checkForUpdates(); }}
               onDownloadUpdate={async () => { await downloadUpdate(); }}
+              onCancelDownload={async () => { await cancelDownload(); }}
               onInstallUpdate={async () => { await installUpdate(); }}
               onOpenReleasePage={() => openReleasePage(updateState.info?.releaseUrl)}
             />

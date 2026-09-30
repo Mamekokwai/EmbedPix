@@ -8,6 +8,7 @@ import {
 } from "../../platform/update/updateGateway";
 import {
   checkUpdate,
+  cancelUpdateDownload,
   downloadUpdate,
   installUpdate,
   onUpdateDownloadProgress,
@@ -23,6 +24,7 @@ export type UpdateCheckState =
   | { status: "checking"; currentVersion: string; info: null; error: null; errorStage: null; downloadPath: null; downloadedBytes: null; totalBytes: null }
   | { status: "complete"; currentVersion: string; info: UpdateInfo; error: null; errorStage: null; downloadPath: null; downloadedBytes: null; totalBytes: null }
   | { status: "downloading"; currentVersion: string; info: UpdateInfo; error: null; errorStage: null; downloadPath: null; downloadedBytes: number; totalBytes: number | null }
+  | { status: "cancelled"; currentVersion: string; info: UpdateInfo; error: null; errorStage: null; downloadPath: null; downloadedBytes: number; totalBytes: number | null }
   | { status: "downloaded"; currentVersion: string; info: UpdateInfo; error: null; errorStage: null; downloadPath: string; downloadedBytes: number; totalBytes: number | null }
   | { status: "installing"; currentVersion: string; info: UpdateInfo; error: null; errorStage: null; downloadPath: string; downloadedBytes: number | null; totalBytes: number | null }
   | { status: "error"; currentVersion: string; info: UpdateInfo | null; error: string; errorStage: UpdateErrorStage; downloadPath: string | null; downloadedBytes: number | null; totalBytes: number | null };
@@ -126,6 +128,12 @@ export function useUpdateCheck() {
         downloadedBytes: progress.downloadedBytes,
         totalBytes: progress.totalBytes,
       } as UpdateCheckState;
+      if (progress.status === "cancelled") {
+        next.status = "cancelled";
+        next.downloadPath = null;
+        next.error = null;
+        next.errorStage = null;
+      }
       stateRef.current = next;
       setState(next);
     })
@@ -140,6 +148,13 @@ export function useUpdateCheck() {
       cancelled = true;
       cleanup?.();
     };
+  }, []);
+
+  const runCancelDownload = useCallback(async () => {
+    if (stateRef.current.status !== "downloading") return stateRef.current;
+    if (!isTauriRuntime()) return stateRef.current;
+    await cancelUpdateDownload();
+    return stateRef.current;
   }, []);
 
   const runCheck = useCallback(async (options: { silent?: boolean } = {}) => {
@@ -239,7 +254,7 @@ export function useUpdateCheck() {
 
   const runDownload = useCallback(async () => {
     const current = stateRef.current;
-    const canRetry = current.status === "error" && current.errorStage === "download";
+    const canRetry = (current.status === "error" && current.errorStage === "download") || current.status === "cancelled";
     if ((!canRetry && current.status !== "complete") || !current.info?.updateAvailable) return current;
     if (!current.info.assetDownloadUrl || !current.info.assetSha256) {
       const failed: UpdateCheckState = { status: "error", currentVersion: current.currentVersion, info: current.info, error: "当前平台没有可用的受信任自动安装包，请打开发布页手动下载并安装。", errorStage: "download", downloadPath: null, downloadedBytes: null, totalBytes: current.info.assetSizeBytes };
@@ -313,5 +328,5 @@ export function useUpdateCheck() {
     await openReleasePageInBrowser(releaseUrl);
   }, []);
 
-  return { state, runCheck, runDownload, runInstall, openReleasePage: runOpenReleasePage };
+  return { state, runCheck, runDownload, runCancelDownload, runInstall, openReleasePage: runOpenReleasePage };
 }

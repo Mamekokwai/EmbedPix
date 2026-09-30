@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import {
   downloadUpdate,
+  cancelUpdateDownload,
   getUpdateDownloadProgress,
   installUpdate,
   parseUpdateCheckResult,
@@ -60,6 +61,11 @@ describe("update runtime DTO", () => {
 });
 
 describe("update runtime commands", () => {
+  it("calls the dedicated cancellation command", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
+    await cancelUpdateDownload();
+    expect(invoke).toHaveBeenCalledWith("cancel_update_download");
+  });
   it("passes the backend download contract in camelCase", async () => {
     vi.mocked(invoke).mockResolvedValueOnce({ path: "cached.exe", sizeBytes: 4096 });
 

@@ -3,7 +3,10 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering as AtomicOrdering},
+    Arc, Mutex,
+};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
@@ -165,6 +168,9 @@ struct ProgressSnapshot {
 #[derive(Debug)]
 pub struct UpdateProgressState(Mutex<ProgressSnapshot>);
 
+#[derive(Debug, Default)]
+pub struct UpdateCancellationState(Arc<AtomicBool>);
+
 impl Default for UpdateProgressState {
     fn default() -> Self {
         Self(Mutex::new(ProgressSnapshot {
@@ -234,8 +240,12 @@ async fn download_package_with_resume(
     _version: &str,
     expected_size: Option<u64>,
     mut report_progress: impl FnMut(u64, Option<u64>),
+    cancellation: Arc<AtomicBool>,
 ) -> Result<(u64, Option<u64>), String> {
     for attempt in 0..MAX_DOWNLOAD_ATTEMPTS {
+        if cancellation.load(AtomicOrdering::Acquire) {
+            return Err("更新下载已取消。".to_string());
+        }
         let mut offset = tokio::fs::metadata(part_path)
             .await
             .map(|metadata| metadata.len())
@@ -258,7 +268,10 @@ async fn download_package_with_resume(
                 offset = 0;
             }
         }
-        let response = match request.send().await {
+        let response = match tokio::select! {
+            _ = wait_for_update_cancellation(cancellation.as_ref()) => return Err("更新下载已取消。".to_string()),
+            result = request.send() => result,
+        } {
             Ok(response) => response,
             Err(_error) if attempt + 1 < MAX_DOWNLOAD_ATTEMPTS => continue,
             Err(error) => return Err(format!("无法下载更新：{error}")),
@@ -309,11 +322,12 @@ async fn download_package_with_resume(
         report_progress(downloaded, total_bytes);
         let mut response = response;
         let write_result = async {
-            while let Some(chunk) = response
-                .chunk()
-                .await
-                .map_err(|error| format!("更新下载中断：{error}"))?
+            while let Some(chunk) = tokio::select! {
+                _ = wait_for_update_cancellation(cancellation.as_ref()) => return Err("更新下载已取消。".to_string()),
+                result = response.chunk() => result.map_err(|error| format!("更新下载中断：{error}"))?,
+            }
             {
+                if cancellation.load(AtomicOrdering::Acquire) { return Err("更新下载已取消。".to_string()); }
                 downloaded = downloaded
                     .checked_add(chunk.len() as u64)
                     .ok_or_else(|| "更新安装包大小无效。".to_string())?;
@@ -493,6 +507,7 @@ pub fn get_update_download_progress(
 pub async fn download_update(
     app: AppHandle,
     state: State<'_, UpdateProgressState>,
+    cancellation: State<'_, UpdateCancellationState>,
     asset_url: String,
     expected_sha256: String,
     version: String,
@@ -528,6 +543,7 @@ pub async fn download_update(
     }
     let expected_size = Some(trusted_asset.size);
     let signature_url = signature_url_for_asset(&validated_url)?;
+    cancellation.0.store(false, AtomicOrdering::Release);
     begin_download(&state)?;
 
     let result = download_update_inner(
@@ -538,6 +554,7 @@ pub async fn download_update(
         expected_digest,
         &version,
         expected_size,
+        cancellation.0.clone(),
     )
     .await;
     match result {
@@ -550,13 +567,40 @@ pub async fn download_update(
                 downloaded.size_bytes,
                 Some(downloaded.size_bytes),
             );
+            cancellation.0.store(false, AtomicOrdering::Release);
             Ok(downloaded)
         }
         Err(error) => {
-            finish_download(&app, &state, "error", Some(error.clone()), 0, expected_size);
+            let cancelled = error == "更新下载已取消。";
+            finish_download(
+                &app,
+                &state,
+                if cancelled { "cancelled" } else { "error" },
+                (!cancelled).then_some(error.clone()),
+                0,
+                expected_size,
+            );
+            cancellation.0.store(false, AtomicOrdering::Release);
             Err(error)
         }
     }
+}
+
+#[tauri::command]
+pub fn cancel_update_download(
+    state: State<'_, UpdateProgressState>,
+    cancellation: State<'_, UpdateCancellationState>,
+) -> Result<(), String> {
+    let active = state
+        .0
+        .lock()
+        .map_err(|_| "更新进度状态不可用。".to_string())?
+        .active;
+    if !active {
+        return Err("当前没有正在进行的更新下载。".to_string());
+    }
+    cancellation.0.store(true, AtomicOrdering::Release);
+    Ok(())
 }
 
 async fn download_update_inner(
@@ -567,6 +611,7 @@ async fn download_update_inner(
     expected_digest: Vec<u8>,
     version: &str,
     expected_size: Option<u64>,
+    cancellation: Arc<AtomicBool>,
 ) -> Result<DownloadedUpdate, String> {
     let cache_dir = update_cache_dir(app)?;
     path_security::validate_output_directory(&cache_dir)
@@ -585,6 +630,7 @@ async fn download_update_inner(
     let mut package_committed = false;
 
     let result = async {
+        if cancellation.load(AtomicOrdering::Acquire) { return Err("更新下载已取消。".to_string()); }
         let client = reqwest::Client::builder()
             .user_agent(format!("EmbedPix/{version}"))
             .timeout(Duration::from_secs(120))
@@ -614,11 +660,12 @@ async fn download_update_inner(
                 signature_response.status()
             ));
         }
-        let signature_text = signature_response
-            .text()
-            .await
-            .map_err(|error| format!("无法读取更新签名：{error}"))?;
+        let signature_text = tokio::select! {
+            _ = wait_for_update_cancellation(cancellation.as_ref()) => return Err("更新下载已取消。".to_string()),
+            result = signature_response.text() => result.map_err(|error| format!("无法读取更新签名：{error}"))?,
+        };
         let _ = decode_signature_text(&signature_text)?;
+        if cancellation.load(AtomicOrdering::Acquire) { return Err("更新下载已取消。".to_string()); }
 
         let etag_path = PathBuf::from(format!("{}.etag", path.to_string_lossy()));
         let (downloaded_bytes, total_bytes) = download_package_with_resume(
@@ -629,6 +676,7 @@ async fn download_update_inner(
             version,
             expected_size,
             |downloaded, total| set_progress(app, state, "downloading", downloaded, total, None),
+            cancellation.clone(),
         )
         .await?;
         if expected_size.is_some_and(|size| size != downloaded_bytes)
@@ -644,6 +692,7 @@ async fn download_update_inner(
             return Err("更新安装包校验失败，请重新检查更新。".to_string());
         }
         verify_update_signature(&package_bytes, &signature_text)?;
+        if cancellation.load(AtomicOrdering::Acquire) { return Err("更新下载已取消。".to_string()); }
 
         let mut signature_file = tokio::fs::OpenOptions::new()
             .write(true)
@@ -660,10 +709,12 @@ async fn download_update_inner(
             .await
             .map_err(|error| format!("无法同步更新签名：{error}"))?;
         drop(signature_file);
+        if cancellation.load(AtomicOrdering::Acquire) { return Err("更新下载已取消。".to_string()); }
         tokio::fs::rename(&signature_part_path, &signature_path)
             .await
             .map_err(|error| format!("无法原子提交更新签名：{error}"))?;
         signature_committed = true;
+        if cancellation.load(AtomicOrdering::Acquire) { return Err("更新下载已取消。".to_string()); }
         tokio::fs::rename(&part_path, &path)
             .await
             .map_err(|error| format!("无法原子提交更新安装包：{error}"))?;
@@ -685,6 +736,12 @@ async fn download_update_inner(
         );
     }
     result
+}
+
+async fn wait_for_update_cancellation(cancellation: &AtomicBool) {
+    while !cancellation.load(AtomicOrdering::Acquire) {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 #[tauri::command]
@@ -1323,6 +1380,7 @@ mod tests {
     };
     use base64::Engine;
     use sha2::Digest;
+    use std::sync::{atomic::AtomicBool, Arc};
 
     #[test]
     fn reports_pending_install_only_when_marker_version_differs() {
@@ -1459,6 +1517,7 @@ mod tests {
             "0.4.1",
             Some(4),
             |_downloaded, _total| {},
+            Arc::new(AtomicBool::new(false)),
         ));
         assert_eq!(result.unwrap().0, 4);
         assert_eq!(std::fs::read(&part).unwrap(), b"test");
@@ -1506,6 +1565,7 @@ mod tests {
             "0.4.1",
             Some(4),
             |_downloaded, _total| {},
+            Arc::new(AtomicBool::new(false)),
         ));
         let incomplete = match result {
             Err(_) => true,
@@ -1523,6 +1583,44 @@ mod tests {
         assert!(!signature.exists());
         assert!(!package.exists());
         server.join().unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cancellation_stops_before_network_and_keeps_existing_final_cache() {
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-update-cancel-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let package = root.join("package.exe");
+        let signature = root.join("package.exe.sig");
+        let part = root.join("package.exe.part");
+        let etag = root.join("package.exe.etag");
+        std::fs::write(&package, b"valid cached package").unwrap();
+        std::fs::write(&signature, b"valid cached signature").unwrap();
+        std::fs::write(&part, b"cancelled partial").unwrap();
+        std::fs::write(&etag, b"\"cancelled\"").unwrap();
+        let cancellation = Arc::new(AtomicBool::new(true));
+        let url = reqwest::Url::parse("http://127.0.0.1:1/never-reached").unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let result = runtime.block_on(download_package_with_resume(
+            &reqwest::Client::new(),
+            &url,
+            &part,
+            &etag,
+            "0.4.1",
+            Some(4),
+            |_downloaded, _total| {},
+            cancellation,
+        ));
+        assert_eq!(result.unwrap_err(), "更新下载已取消。");
+        cleanup_download_artifacts(&package, &signature, false, false);
+        assert!(package.exists());
+        assert!(signature.exists());
+        assert!(!part.exists());
+        assert!(!etag.exists());
         std::fs::remove_dir_all(root).unwrap();
     }
 

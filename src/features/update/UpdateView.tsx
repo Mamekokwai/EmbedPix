@@ -16,6 +16,7 @@ export type UpdateStatus =
   | "up-to-date"
   | "available"
   | "downloading"
+  | "cancelled"
   | "downloaded"
   | "installing"
   | "error";
@@ -36,6 +37,7 @@ export interface UpdateViewProps {
   installHealthMessage?: string;
   onCheckForUpdates: () => void | Promise<void>;
   onDownloadUpdate: () => void | Promise<void>;
+  onCancelDownload: () => void | Promise<void>;
   onInstallUpdate: () => void | Promise<void>;
   onOpenReleasePage: () => void | Promise<void>;
   embedded?: boolean;
@@ -53,6 +55,7 @@ const STATUS_META: Record<UpdateStatus, StatusMeta> = {
   "up-to-date": { label: "已是最新版本", className: "update-status-success" },
   available: { label: "发现新版本", className: "update-status-available" },
   downloading: { label: "正在下载更新…", className: "update-status-available" },
+  cancelled: { label: "已取消下载", className: "update-status-idle" },
   downloaded: { label: "更新包已下载", className: "update-status-success" },
   installing: { label: "正在安装更新…", className: "update-status-available" },
   error: { label: "更新失败", className: "update-status-error" },
@@ -175,6 +178,7 @@ export default function UpdateView({
   totalBytes,
   onCheckForUpdates,
   onDownloadUpdate,
+  onCancelDownload,
   onInstallUpdate,
   onOpenReleasePage,
   embedded = false,
@@ -198,6 +202,10 @@ export default function UpdateView({
   const handlePrimaryAction = () => {
     if (busy) return;
     if (status === "available" && assetAvailable) {
+      void onDownloadUpdate();
+      return;
+    }
+    if (status === "cancelled" && assetAvailable) {
       void onDownloadUpdate();
       return;
     }
@@ -233,6 +241,8 @@ export default function UpdateView({
       ? "处理中…"
       : status === "available" && assetAvailable
         ? "立即下载"
+        : status === "cancelled" && assetAvailable
+          ? "重新下载"
         : status === "downloaded"
           ? "关闭并安装"
           : status === "error" && errorStage === "install"
@@ -275,6 +285,7 @@ export default function UpdateView({
                 {actionLabel}
               </button>
             ) : null}
+            {status === "downloading" ? <button className="quiet-button update-check-button" type="button" onClick={() => void onCancelDownload()}>取消下载</button> : null}
           </div>
 
           <div className="update-version-grid" aria-label="版本信息">

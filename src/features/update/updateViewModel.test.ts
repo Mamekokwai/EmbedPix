@@ -39,6 +39,11 @@ describe("update progress model", () => {
       indeterminate: true,
     });
   });
+
+  it("keeps cancelled downloads free of progress UI", () => {
+    expect(resolveUpdateProgress("cancelled", 512, 1024)).toBeNull();
+    expect(resolveUpdateStatusLabel("cancelled")).toBe("已取消下载");
+  });
 });
 
 describe("offline update state", () => {
@@ -65,8 +70,9 @@ describe("compact update status", () => {
       resolveUpdateStatusLabel("up-to-date"),
       resolveUpdateStatusLabel("available"),
       resolveUpdateStatusLabel("downloading"),
+      resolveUpdateStatusLabel("cancelled"),
       resolveUpdateStatusLabel("error", "install"),
-    ]).toEqual(["尚未检查更新", "正在检查更新…", "已是最新版本", "发现新版本", "正在下载更新…", "更新失败"]);
+    ]).toEqual(["尚未检查更新", "正在检查更新…", "已是最新版本", "发现新版本", "正在下载更新…", "已取消下载", "更新失败"]);
   });
 
   it("formats the last check time without leaking a placeholder date", () => {
