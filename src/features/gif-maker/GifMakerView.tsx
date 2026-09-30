@@ -27,7 +27,7 @@ import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSeq
 import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import { createGifCustomPreset, loadGifCustomPresets, saveGifCustomPresets, type GifCustomPreset } from "./gifCustomPresets";
@@ -1958,14 +1958,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         targetBytes,
         maxCandidates: 8,
       });
-      if (compressionPlanRequestRef.current === requestId) setCompressionPlan(result);
+      if (isCurrentCompressionPlanRequest(compressionPlanRequestRef.current, requestId)) setCompressionPlan(result);
     } catch (planError) {
-      if (compressionPlanRequestRef.current === requestId) {
+      if (isCurrentCompressionPlanRequest(compressionPlanRequestRef.current, requestId)) {
         setCompressionPlan(null);
         setCompressionPlanError(planError instanceof Error ? planError.message : "压缩规划失败，可继续正式导出。");
       }
     } finally {
-      setCompressionPlanBusy(false);
+      if (isCurrentCompressionPlanRequest(compressionPlanRequestRef.current, requestId)) setCompressionPlanBusy(false);
     }
   };
 

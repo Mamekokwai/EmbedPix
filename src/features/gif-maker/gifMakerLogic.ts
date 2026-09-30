@@ -67,6 +67,10 @@ export function applyGifFrameDuration<T extends { durationMs: number }>(frames: 
   return frames.map((frame, index) => indices === undefined || indices.has(index) ? { ...frame, durationMs: nextDuration } : frame);
 }
 
+export function isCurrentCompressionPlanRequest(currentRequestId: number, requestId: number): boolean {
+  return currentRequestId === requestId;
+}
+
 export function clampGifPlaybackSpeed(value: number): GifPlaybackSpeed {
   if (!Number.isFinite(value)) return 1;
   return GIF_PLAYBACK_SPEEDS.reduce((closest, speed) => Math.abs(speed - value) < Math.abs(closest - value) ? speed : closest, 1 as GifPlaybackSpeed);
