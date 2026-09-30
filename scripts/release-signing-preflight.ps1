@@ -15,9 +15,16 @@ $configSmoke = Join-Path $PSScriptRoot 'release-config-smoke.ps1'
 if (-not (Test-Path -LiteralPath $configSmoke -PathType Leaf)) {
   throw "发布配置 smoke 脚本不存在：$configSmoke"
 }
+$cleanupHelper = Join-Path $PSScriptRoot 'release-signing-preflight-cleanup.ps1'
+if (-not (Test-Path -LiteralPath $cleanupHelper -PathType Leaf)) {
+  throw "签名预检清理 helper 不存在：$cleanupHelper"
+}
+. $cleanupHelper
 
 Push-Location $root
 $probeDirectory = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-signing-preflight-" + [guid]::NewGuid().ToString('N'))
+$failure = $null
+$cleanupFailure = $null
 try {
   & $configSmoke | Out-Host
   if (-not $?) {
@@ -54,12 +61,26 @@ try {
   if ($LASTEXITCODE -ne 0) {
     throw '签名私钥对应的公钥与 EmbedPix 受信更新公钥不匹配。'
   }
+} catch {
+  $failure = $_.Exception
 }
 finally {
-  if (Test-Path -LiteralPath $probeDirectory) {
-    Remove-Item -LiteralPath $probeDirectory -Recurse -Force -ErrorAction SilentlyContinue
+  try {
+    Remove-ReleaseSigningProbeDirectory -Path $probeDirectory
+  } catch {
+    $cleanupFailure = $_.Exception
   }
   Pop-Location
+}
+
+if ($null -ne $failure) {
+  if ($null -ne $cleanupFailure) {
+    throw "签名预检失败：$($failure.Message)；清理失败：$($cleanupFailure.Message)"
+  }
+  throw $failure
+}
+if ($null -ne $cleanupFailure) {
+  throw $cleanupFailure
 }
 
 Write-Host '签名预检通过：私钥可用且与受信更新公钥匹配，发布配置有效。'
