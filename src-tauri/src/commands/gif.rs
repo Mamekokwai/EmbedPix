@@ -224,7 +224,7 @@ impl GifExportJob {
     fn report(&self, stage: &str, completed_frames: usize) {
         if let Ok(mut progress) = self.progress.lock() {
             progress.stage = stage.to_string();
-            progress.completed_frames = completed_frames;
+            progress.completed_frames = completed_frames.min(progress.total_frames);
         }
     }
 

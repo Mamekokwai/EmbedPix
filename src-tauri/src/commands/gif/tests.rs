@@ -809,6 +809,9 @@ fn export_job_reports_progress_and_cancellation() {
     assert_eq!(progress.status, "running");
     assert_eq!(progress.total_frames, 3);
 
+    job_report(&Some(job.clone()), "encoding", 99);
+    assert_eq!(job.progress().completed_frames, 3);
+
     job_report(&Some(job.clone()), "encoding", 1);
     assert_eq!(job.progress().stage, "encoding");
     assert_eq!(job.progress().completed_frames, 1);
