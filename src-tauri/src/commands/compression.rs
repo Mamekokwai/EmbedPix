@@ -1828,8 +1828,12 @@ fn reject_animation_input(input: &[u8]) -> Result<(), String> {
         return Ok(());
     }
     if input.get(..4) == Some(b"RIFF") && input.get(8..12) == Some(b"WEBP") {
+        let declared_size = u32::from_le_bytes(input[4..8].try_into().unwrap()) as usize;
+        if declared_size.checked_add(8) != Some(input.len()) {
+            return Err("invalid WebP container length".into());
+        }
         let mut offset = 12usize;
-        while offset + 8 <= input.len() {
+        while offset.checked_add(8).is_some_and(|end| end <= input.len()) {
             let name = &input[offset..offset + 4];
             let length =
                 u32::from_le_bytes(input[offset + 4..offset + 8].try_into().unwrap()) as usize;
@@ -1843,7 +1847,12 @@ fn reject_animation_input(input: &[u8]) -> Result<(), String> {
             if name == b"ANIM" || name == b"ANMF" {
                 return Err("animated WebP input is not supported; provide a static WebP".into());
             }
-            offset = end + (length & 1);
+            offset = end
+                .checked_add(length & 1)
+                .ok_or_else(|| "invalid WebP chunk padding".to_string())?;
+            if offset > input.len() {
+                return Err("invalid WebP chunk padding".into());
+            }
         }
         if offset != input.len() {
             return Err("invalid WebP chunk layout".into());
@@ -2766,12 +2775,36 @@ mod tests {
         let gif_error = decode_image(&animated_gif_input()).unwrap_err();
         assert!(gif_error.contains("animated GIF input is not supported"));
 
-        let mut webp = b"RIFF\x12\0\0\0WEBP".to_vec();
-        webp.extend_from_slice(b"ANIM");
-        webp.extend_from_slice(&6u32.to_le_bytes());
-        webp.extend_from_slice(&[0; 6]);
-        let webp_error = decode_image(&webp).unwrap_err();
-        assert!(webp_error.contains("animated WebP input is not supported"));
+        for marker in [b"ANIM", b"ANMF"] {
+            let mut webp = b"RIFF\0\0\0\0WEBP".to_vec();
+            webp.extend_from_slice(marker);
+            webp.extend_from_slice(&6u32.to_le_bytes());
+            webp.extend_from_slice(&[0; 6]);
+            let size = (webp.len() - 8) as u32;
+            webp[4..8].copy_from_slice(&size.to_le_bytes());
+            let webp_error = decode_image(&webp).unwrap_err();
+            assert!(webp_error.contains("animated WebP input is not supported"));
+        }
+
+        let mut truncated_chunk = b"RIFF\0\0\0\0WEBPTEST".to_vec();
+        let truncated_size = (truncated_chunk.len() - 8) as u32;
+        truncated_chunk[4..8].copy_from_slice(&truncated_size.to_le_bytes());
+        assert!(reject_animation_input(&truncated_chunk).is_err());
+
+        let mut oversized_chunk = b"RIFF\0\0\0\0WEBPTEST\x10\0\0\0\0".to_vec();
+        let oversized_size = (oversized_chunk.len() - 8) as u32;
+        oversized_chunk[4..8].copy_from_slice(&oversized_size.to_le_bytes());
+        assert!(reject_animation_input(&oversized_chunk).is_err());
+
+        let mut odd_with_padding = b"RIFF\0\0\0\0WEBPTEST\x01\0\0\0x\0".to_vec();
+        let odd_with_padding_size = (odd_with_padding.len() - 8) as u32;
+        odd_with_padding[4..8].copy_from_slice(&odd_with_padding_size.to_le_bytes());
+        assert!(reject_animation_input(&odd_with_padding).is_ok());
+
+        let mut odd_without_padding = b"RIFF\0\0\0\0WEBPTEST\x01\0\0\0x".to_vec();
+        let odd_without_padding_size = (odd_without_padding.len() - 8) as u32;
+        odd_without_padding[4..8].copy_from_slice(&odd_without_padding_size.to_le_bytes());
+        assert!(reject_animation_input(&odd_without_padding).is_err());
     }
 
     #[test]
