@@ -23,6 +23,8 @@
 - [x] 本轮收尾：支持“仅重试此项”；release fixture 已覆盖 `release-provenance.json` 的 `workflow_ref` 与 `release_commit` 篡改拒绝。
 - [x] 前端门禁统计更新：32 个测试文件 / 383 个测试通过。
 - [x] 本轮报告与发布门禁收尾：GIF/视频 GIF 导出结果支持 JSON 报告；SHA256SUMS 哈希篡改与重复条目拒绝用例已完成；前端当前为 32 个测试文件 / 385 个测试通过。
+- [x] 本轮新增完成项：图片转换栅格正式输出在发布前执行解码/尺寸回读校验；GIF 输入变化会清除陈旧导出操作；release fixture 会拒绝 manifest version 漂移。
+- [x] 门禁统计更新：前端 32 个测试文件 / 386 个测试通过；Rust 270 个库测试 + 4 个 CLI 测试通过；desktop smoke 图片导出测试已增至 46 项。
 - 本轮新增 `compressionGateway` 四入口 envelope 矩阵回归：覆盖 PNG/JPEG/静态 WebP、格式专属字段不泄漏，以及非法组合在 IPC 前拒绝。
 - 本轮完成预检临时空间预算状态修复：参数、输入或选中项变化时清除旧预算，任务完成后保留最近一次有效预算。
 - 本轮新增 updater 签名提交/安装包提交边界清理回归：验证临时 `.part`、签名临时文件和 `.etag` 清理，以及既有/已提交缓存的保留或失败清理语义；真实异步 rename 间隙尚未通过 hook 注入验证，未扩大覆盖声明。
