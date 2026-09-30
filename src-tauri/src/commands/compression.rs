@@ -4132,6 +4132,38 @@ mod tests {
     }
 
     #[test]
+    fn webp_quality_metrics_serialize_as_camel_case_in_preview_payload() {
+        let preview = CompressionPreview {
+            data: Vec::new(),
+            width: 2,
+            height: 2,
+            format: "webp".into(),
+            output_bytes: 12,
+            lossless: false,
+            compression_mode: "lossy",
+            compression_engine: "libwebp",
+            metadata_policy: "strip",
+            status: "completed".into(),
+            skipped_reason: None,
+            target_bytes: None,
+            target_met: false,
+            selected_quality: Some(82),
+            candidate_search_ms: None,
+            candidate_count: None,
+            quality_metrics: Some(CompressionQualityMetrics {
+                rgb_mae: 1.25,
+                psnr_db: Some(42.5),
+                alpha_mismatch_pixels: 3,
+            }),
+        };
+        let value = serde_json::to_value(preview).unwrap();
+        assert_eq!(value["qualityMetrics"]["rgbMae"], 1.25);
+        assert_eq!(value["qualityMetrics"]["psnrDb"], 42.5);
+        assert_eq!(value["qualityMetrics"]["alphaMismatchPixels"], 3);
+        assert!(value["qualityMetrics"].get("rgb_mae").is_none());
+    }
+
+    #[test]
     fn jpeg_target_search_returns_highest_quality_candidate_within_bound() {
         let input = png_input();
         let target = encode_image(&input, CompressionFormat::Jpeg, 50, 2)
