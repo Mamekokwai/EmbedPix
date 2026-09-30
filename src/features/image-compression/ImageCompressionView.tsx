@@ -764,7 +764,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         if (cancelRequestedRef.current) {
           setItemResults((current) => [...current, ...getCompressionCancelledItemResults(queue, index)]);
           setResultStats((current) => ({ ...current, skipped: current.skipped + queue.length - index - 1 }));
-          setMessage("已取消当前任务，其余文件未处理。");
+          setMessage("已取消当前任务；其余文件未处理，可点击“重试失败项”继续。");
           setProgress({ current: queue.length, total: queue.length });
           break;
         }
@@ -777,7 +777,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     if (finalState.status === "error") {
       setFailures(failedItemIds);
       setStage(finalState.stage);
-      setMessage(cancelRequestedRef.current ? "已取消当前任务，其余文件未处理。" : `部分任务完成，请查看统计。${lastError ? ` ${lastError}` : ""}`);
+      setMessage(cancelRequestedRef.current ? "已取消当前任务；其余文件未处理，可点击“重试失败项”继续。" : `部分任务完成，请查看统计。${lastError ? ` ${lastError}` : ""}`);
       setStatus("error");
     } else {
       setStatus("success");
