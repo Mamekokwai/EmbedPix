@@ -45,6 +45,7 @@ import {
   formatMebibytes,
   getImagePreviewComparison,
   estimateImageExportBytes,
+  estimateImageExportBytesForDimensions,
   getBackgroundNote,
   getBitDepthNote,
   getBitDepths,
@@ -1122,7 +1123,13 @@ export default function ImageConverter({
     });
     setNativePreflightStatus(null);
     setActualExportResult(null);
-    const estimatedBytes = estimateImageExportBytes(requestedImages, width, height, outputFormat, getEffectiveBitDepth(outputFormat, bitDepth));
+    const estimatedBytes = estimateImageExportBytesForDimensions(requestedImages.map((image) => {
+      const targetSourceDimensions = getTransformedSourceDimensions(image.dimensions, imageTransform);
+      const targetDimensions = keepAspectRatio
+        ? constrainAspectDimensions("width", width, targetSourceDimensions)
+        : { width, height };
+      return { file: image.file, width: targetDimensions.width, height: targetDimensions.height };
+    }), outputFormat, getEffectiveBitDepth(outputFormat, bitDepth));
     const preflight = getExportPreflight(safetyPlan);
     setExportPreflight(preflight);
     if (preflight.expectedFailures > 0) {

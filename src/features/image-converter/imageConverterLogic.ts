@@ -113,6 +113,35 @@ export function estimateImageExportBytes(
   return Number.isSafeInteger(estimate) ? estimate : undefined;
 }
 
+export function estimateImageExportBytesForDimensions(
+  images: ReadonlyArray<{ file: { size: number }; width: number; height: number }>,
+  outputFormat: OutputFormat,
+  bitDepth: BmpBitDepth,
+): number | undefined {
+  if (!images.length) return undefined;
+  const effectiveBitDepth = getEffectiveBitDepth(outputFormat, bitDepth);
+  let encodedBytes = 0;
+  for (const image of images) {
+    if (!Number.isSafeInteger(image.width) || !Number.isSafeInteger(image.height) || image.width < 1 || image.height < 1) return undefined;
+    const pixels = image.width * image.height;
+    if (!Number.isSafeInteger(pixels)) return undefined;
+    switch (outputFormat) {
+      case "bmp": encodedBytes += Math.ceil(pixels * effectiveBitDepth / 8) + 1024; break;
+      case "png": encodedBytes += pixels * (effectiveBitDepth === 32 ? 4 : 3) + 65_536; break;
+      case "jpg": encodedBytes += pixels * 3 + 131_072; break;
+      case "webp": encodedBytes += pixels * (effectiveBitDepth === 32 ? 4 : 3) + 65_536; break;
+      case "tiff": encodedBytes += pixels * (effectiveBitDepth === 32 ? 4 : 3) + 65_536; break;
+      case "ico": encodedBytes += 4 * pixels * 4 + 65_536; break;
+      case "rgb565": encodedBytes += pixels * 2 + 64; break;
+      case "c-array": encodedBytes += pixels * 2 + pixels * 4 + 4096; break;
+      default: return undefined;
+    }
+  }
+  const inputBytes = images.reduce((total, image) => total + (Number.isFinite(image.file.size) && image.file.size > 0 ? image.file.size : 0), 0);
+  const estimate = encodedBytes + inputBytes;
+  return Number.isSafeInteger(estimate) ? estimate : undefined;
+}
+
 export interface ImagePreviewComparison {
   dimensions: string;
   format: string;

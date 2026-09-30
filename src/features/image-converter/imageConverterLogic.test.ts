@@ -29,6 +29,7 @@ import {
   getImageTransformError,
   getImagePreviewComparison,
   estimateImageExportBytes,
+  estimateImageExportBytesForDimensions,
   getTransformedSourceDimensions,
   isImageFile,
   normalizeDimension,
@@ -96,6 +97,7 @@ describe("image converter output rules", () => {
     expect(estimateImageExportBytes(images, 10, 10, "rgb565", 16)).toBe(300 + 2 * (200 + 64));
     expect(estimateImageExportBytes(images, 10, 10, "png", 32)).toBe(300 + 2 * (400 + 65_536));
     expect(estimateImageExportBytes([], 10, 10, "bmp", 24)).toBeUndefined();
+    expect(estimateImageExportBytesForDimensions([{ file: { size: 100 }, width: 10, height: 10 }, { file: { size: 200 }, width: 20, height: 10 }], "png", 32)).toBe(132_572);
   });
 
   it("describes the output preview using the same format, bit depth and background parameters", () => {
