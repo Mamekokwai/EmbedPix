@@ -333,6 +333,9 @@ describe("compact layout viewport contract", () => {
   it("does not reintroduce a horizontal scrolling frame list", () => {
     expect(gifCss).not.toMatch(/\.gif-frame-list \{[^}]*overflow-x: auto;/s);
     expect(gifCss).toMatch(/\.gif-frame-list \{[^}]*overflow-x: hidden; overflow-y: auto;/s);
+    expect(gifCss).toContain(".gif-frame-meta small { min-width: 0; overflow: hidden;");
+    expect(gifCss).toContain(".gif-busy-cancel { width: 100%; margin-top: 4px; }");
+    expect(gifView).toContain('className="quiet-button gif-busy-cancel"');
   });
 
   it("keeps one target, limit, and compression control per output-format branch", () => {
