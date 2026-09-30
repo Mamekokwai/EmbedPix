@@ -2342,7 +2342,8 @@ mod tests {
 
     #[test]
     fn preserve_rejects_oversized_source_before_output_conversion() {
-        let (mut input_data, _) = encode_png(sample_image(), 32, Rgba([255, 255, 255, 255])).unwrap();
+        let (mut input_data, _) =
+            encode_png(sample_image(), 32, Rgba([255, 255, 255, 255])).unwrap();
         // Keep the fixture tiny while exercising the decoder's dimension guard.
         input_data[16..20].copy_from_slice(&(MAX_IMAGE_DIMENSION + 1).to_be_bytes());
         let mut request = preview_request(OutputFormat::Png, 32);
@@ -2361,8 +2362,7 @@ mod tests {
 
         let mut allocation_limited = request.clone();
         allocation_limited.input_data[16..20].copy_from_slice(&MAX_IMAGE_DIMENSION.to_be_bytes());
-        allocation_limited.input_data[20..24]
-            .copy_from_slice(&MAX_IMAGE_DIMENSION.to_be_bytes());
+        allocation_limited.input_data[20..24].copy_from_slice(&MAX_IMAGE_DIMENSION.to_be_bytes());
         let allocation_error = convert_image(&allocation_limited).unwrap_err();
         assert!(allocation_error.contains("could not decode"));
         assert_eq!(fs::read(&output).unwrap(), b"sentinel");
