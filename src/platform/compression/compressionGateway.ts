@@ -56,6 +56,8 @@ export interface CompressionResult {
   height: number;
   format: string;
   lossless: boolean;
+  compressionMode?: "lossless" | "lossy";
+  compressionEngine?: "oxipng" | "image-jpeg" | "libwebp";
   metadataPolicy: MetadataPolicy;
   sourceDeleted?: boolean;
   targetBytes: number | null;
@@ -72,6 +74,8 @@ export interface CompressionPreview {
   format: string;
   outputBytes: number;
   lossless: boolean;
+  compressionMode?: "lossless" | "lossy";
+  compressionEngine?: "oxipng" | "image-jpeg" | "libwebp";
   metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;
@@ -91,6 +95,8 @@ export interface CompressionEstimate {
   height: number;
   format: string;
   lossless: boolean;
+  compressionMode?: "lossless" | "lossy";
+  compressionEngine?: "oxipng" | "image-jpeg" | "libwebp";
   metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;

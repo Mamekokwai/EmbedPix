@@ -122,6 +122,19 @@ function getCompressionInputFormat(file: File): string {
   return file.type.startsWith("image/") ? file.type.slice(6).toUpperCase() : "图片";
 }
 
+function compressionModeLabel(mode?: "lossless" | "lossy"): string | null {
+  if (mode === "lossless") return "无损";
+  if (mode === "lossy") return "有损";
+  return null;
+}
+
+function compressionEngineLabel(engine?: "oxipng" | "image-jpeg" | "libwebp"): string | null {
+  if (engine === "oxipng") return "OxiPNG";
+  if (engine === "image-jpeg") return "image JPEG";
+  if (engine === "libwebp") return "libwebp";
+  return null;
+}
+
 function readCompressionDimensions(file: File): Promise<{ width: number; height: number }> {
   if (typeof createImageBitmap === "function") {
     return createImageBitmap(file).then((bitmap) => {
@@ -276,6 +289,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     webpLossyActive ? `Alpha 质量 ${webpAlphaQuality}` : null,
     webpLossyActive ? `分析遍数 ${webpPass}` : null,
     format === "webp" && lossless && webpNearLossless !== null ? `近无损 ${webpNearLossless}` : null,
+    `后端 ${format === "png" ? "OxiPNG" : format === "jpg" ? "image JPEG" : "libwebp"}`,
     format === "jpg" ? `JPEG 背景 ${jpegBackground}` : null,
     targetSizeActive && maxOutputBytes ? `目标 ≤ ${targetSizeKiB.trim()} KiB · 候选 ${maxCandidates}` : "不启用目标体积",
     `单文件输入 ≤ ${maxInputMiB} MiB`,
@@ -337,7 +351,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
         const result = await estimateImageCompression(request);
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
-        setEstimate({ inputBytes: result.inputBytes, estimatedBytes: result.outputBytes, savingsPercent: result.savingsPercent, metadataPolicy: result.metadataPolicy, candidateSearchMs: result.candidateSearchMs, candidateCount: result.candidateCount });
+        setEstimate({ inputBytes: result.inputBytes, estimatedBytes: result.outputBytes, savingsPercent: result.savingsPercent, metadataPolicy: result.metadataPolicy, compressionMode: result.compressionMode, compressionEngine: result.compressionEngine, candidateSearchMs: result.candidateSearchMs, candidateCount: result.candidateCount });
         setEstimateNote(formatCompressionEstimateSource("native", result.status === "skipped" && result.skippedReason ? `输出将跳过：${result.skippedReason}` : "当前选中图片"));
       } catch (error) {
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
@@ -1019,8 +1033,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         {preview ? <div className="compression-preview-stats"><span>尺寸 {preview.width} × {preview.height}</span><span>输出 {formatCompressionBytes(preview.outputBytes)}</span><span className={previewSavedBytes >= 0 ? "compression-saving" : "compression-failure"}>{previewSavedBytes >= 0 ? `节省 ${formatCompressionBytes(previewSavedBytes)} · ${previewSavingsPercent.toFixed(0)}%` : `增加 ${formatCompressionBytes(Math.abs(previewSavedBytes))}`}</span>{maxOutputBytes ? <span className={preview.targetMet ? "compression-saving" : "compression-failure"}>目标 {preview.targetMet ? "已达成" : "未达成"}</span> : null}{typeof preview.selectedQuality === "number" ? <span>选中质量 {preview.selectedQuality}</span> : null}{typeof preview.candidateCount === "number" ? <span>尝试候选 {preview.candidateCount}</span> : null}{typeof preview.candidateSearchMs === "number" ? <span>候选搜索 {preview.candidateSearchMs} ms</span> : null}{preview.qualityMetrics ? <span title="基于解码后的输入和输出逐像素计算，仅供相对比较，不等同主观画质">RGB MAE {preview.qualityMetrics.rgbMae.toFixed(2)} · PSNR {preview.qualityMetrics.psnrDb === null ? "无误差" : `${preview.qualityMetrics.psnrDb.toFixed(1)} dB`} · Alpha 差异 {preview.qualityMetrics.alphaMismatchPixels} 像素</span> : null}{preview.status === "skipped" ? <span className="compression-failure">预览跳过：{preview.skippedReason || "未发布输出"}</span> : null}</div> : null}
       </section>
 
-      {preview ? <p className="compression-estimate-note">预览实际元数据策略：{preview.metadataPolicy === "strip" ? "已移除" : preview.metadataPolicy}</p> : null}
-      {estimate.metadataPolicy ? <p className="compression-estimate-note">估算实际元数据策略：{estimate.metadataPolicy === "strip" ? "已移除" : estimate.metadataPolicy}</p> : null}
+      {preview ? <p className="compression-estimate-note">预览实际元数据策略：{preview.metadataPolicy === "strip" ? "已移除" : preview.metadataPolicy}{compressionModeLabel(preview.compressionMode) ? ` · 模式 ${compressionModeLabel(preview.compressionMode)}` : ""}{compressionEngineLabel(preview.compressionEngine) ? ` · 后端 ${compressionEngineLabel(preview.compressionEngine)}` : ""}</p> : null}
+      {estimate.metadataPolicy ? <p className="compression-estimate-note">估算实际元数据策略：{estimate.metadataPolicy === "strip" ? "已移除" : estimate.metadataPolicy}{compressionModeLabel(estimate.compressionMode) ? ` · 模式 ${compressionModeLabel(estimate.compressionMode)}` : ""}{compressionEngineLabel(estimate.compressionEngine) ? ` · 后端 ${compressionEngineLabel(estimate.compressionEngine)}` : ""}</p> : null}
       <section className="compression-card compression-summary-card" aria-live="polite">
         <div className="compression-summary-stat"><span>原始大小</span><strong>{formatCompressionBytes(estimate.inputBytes)}</strong></div>
         <div className="compression-summary-stat"><span>预计输出</span><strong>{formatCompressionBytes(estimate.estimatedBytes)}</strong></div>

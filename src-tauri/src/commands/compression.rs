@@ -154,6 +154,54 @@ impl CompressionFormat {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompressionMode {
+    Lossless,
+    Lossy,
+}
+
+impl CompressionMode {
+    fn from_lossless(lossless: bool) -> Self {
+        if lossless {
+            Self::Lossless
+        } else {
+            Self::Lossy
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Lossless => "lossless",
+            Self::Lossy => "lossy",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompressionEngine {
+    OxiPng,
+    ImageJpeg,
+    LibWebp,
+}
+
+impl CompressionEngine {
+    fn for_format(format: CompressionFormat) -> Self {
+        match format {
+            CompressionFormat::Png => Self::OxiPng,
+            CompressionFormat::Jpeg => Self::ImageJpeg,
+            CompressionFormat::Webp => Self::LibWebp,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::OxiPng => "oxipng",
+            Self::ImageJpeg => "image-jpeg",
+            Self::LibWebp => "libwebp",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 enum MetadataPolicy {
@@ -468,6 +516,8 @@ pub struct CompressionResult {
     pub height: u32,
     pub format: String,
     pub lossless: bool,
+    pub compression_mode: &'static str,
+    pub compression_engine: &'static str,
     pub metadata_policy: &'static str,
     pub source_deleted: bool,
     pub target_bytes: Option<u64>,
@@ -502,6 +552,8 @@ pub struct CompressionPreview {
     pub format: String,
     pub output_bytes: u64,
     pub lossless: bool,
+    pub compression_mode: &'static str,
+    pub compression_engine: &'static str,
     pub metadata_policy: &'static str,
     pub status: String,
     pub skipped_reason: Option<String>,
@@ -535,6 +587,8 @@ pub struct CompressionEstimate {
     pub height: u32,
     pub format: String,
     pub lossless: bool,
+    pub compression_mode: &'static str,
+    pub compression_engine: &'static str,
     pub metadata_policy: &'static str,
     pub status: String,
     pub skipped_reason: Option<String>,
@@ -825,6 +879,8 @@ fn run_compression(
             height,
             format: request.format.name().into(),
             lossless: request.lossless,
+            compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
+            compression_engine: CompressionEngine::for_format(request.format).as_str(),
             metadata_policy: request.metadata.metadata_policy.as_str(),
             source_deleted: false,
             target_bytes: request.target_bytes,
@@ -874,6 +930,8 @@ fn run_compression(
         height,
         format: request.format.name().into(),
         lossless: request.lossless,
+        compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
+        compression_engine: CompressionEngine::for_format(request.format).as_str(),
         metadata_policy: request.metadata.metadata_policy.as_str(),
         source_deleted: request.metadata.delete_source,
         target_bytes: request.target_bytes,
@@ -1321,6 +1379,8 @@ fn run_preview_core(
         format: request.format.name().into(),
         output_bytes,
         lossless: request.lossless,
+        compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
+        compression_engine: CompressionEngine::for_format(request.format).as_str(),
         metadata_policy: request.metadata.metadata_policy.as_str(),
         status: if skipped_reason.is_some() {
             "skipped"
@@ -1411,6 +1471,8 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         height,
         format: request.format.name().into(),
         lossless: request.lossless,
+        compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
+        compression_engine: CompressionEngine::for_format(request.format).as_str(),
         metadata_policy: request.metadata.metadata_policy.as_str(),
         status: if skipped_reason.is_some() {
             "skipped".into()
@@ -3880,6 +3942,24 @@ mod tests {
         assert_eq!(
             classify_error_code(CompressionStage::Skipped, "target_unreachable").as_str(),
             "skipped"
+        );
+    }
+
+    #[test]
+    fn compression_reports_the_selected_mode_and_backend() {
+        assert_eq!(CompressionMode::from_lossless(true).as_str(), "lossless");
+        assert_eq!(CompressionMode::from_lossless(false).as_str(), "lossy");
+        assert_eq!(
+            CompressionEngine::for_format(CompressionFormat::Png).as_str(),
+            "oxipng"
+        );
+        assert_eq!(
+            CompressionEngine::for_format(CompressionFormat::Jpeg).as_str(),
+            "image-jpeg"
+        );
+        assert_eq!(
+            CompressionEngine::for_format(CompressionFormat::Webp).as_str(),
+            "libwebp"
         );
     }
 
