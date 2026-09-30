@@ -309,8 +309,14 @@ impl GifFrameSpoolState {
                     skipped_active += 1;
                     continue;
                 };
+                let quarantine = path.with_file_name(format!(".{name}.quarantine-{}", spool_id(0)));
+                if fs::rename(&path, &quarantine).is_err() {
+                    drop(lock);
+                    skipped_active += 1;
+                    continue;
+                }
                 drop(lock);
-                let _ = fs::remove_file(&path);
+                let _ = fs::remove_file(quarantine);
                 continue;
             }
             if !path.is_dir() {
@@ -611,6 +617,11 @@ mod tests {
         state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
         assert!(!lock_path.exists());
         assert!(unrelated.exists());
+        assert!(fs::read_dir(&state.root).unwrap().all(|entry| !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("quarantine-")));
         let _ = fs::remove_dir_all(state.root.clone());
     }
 
