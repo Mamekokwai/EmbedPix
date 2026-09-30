@@ -2342,7 +2342,6 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <Upload size={16} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片序列"}
           </button>
           <span>{sourceMode === "video" ? "支持 MP4 / WebM / OGG · 最多提取 200 帧" : "多选 / 拖放追加 · 最多 200 帧，32 MiB / 帧，总计 128 MiB"}</span>
-          {pendingImports > 0 ? <button className="quiet-button" type="button" onClick={clearFrames}>取消导入并清空</button> : null}
           <input ref={fileInputRef} className="gif-hidden-input" type="file" accept={sourceMode === "video" ? VIDEO_ACCEPT : IMAGE_ACCEPT} multiple={sourceMode === "image"} onChange={handleInputChange} />
         </div>
 
@@ -2605,6 +2604,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         </section>
         </>
       </fieldset>
+      {pendingImports > 0 ? <button className="quiet-button gif-busy-cancel" type="button" onClick={clearFrames}>取消导入并清空</button> : null}
       <div className="gif-export-footer">
         {error ? <div className={`gif-error-message${expandedError === error ? " gif-error-message-expanded" : ""}`} role="alert">
           <span className="gif-error-message-text" id="gif-error-details">{error}</span>
