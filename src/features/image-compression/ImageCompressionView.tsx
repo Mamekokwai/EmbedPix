@@ -294,6 +294,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   }, [metadataPolicy, stripSafeInputAvailable]);
   const previewSavedBytes = selectedItem && preview ? selectedItem.size - preview.outputBytes : 0;
   const previewSavingsPercent = selectedItem && preview && selectedItem.size > 0 ? (previewSavedBytes / selectedItem.size) * 100 : 0;
+  useEffect(() => {
+    setPreflightSpaceBytes(null);
+  }, [items, options, selectedItemId]);
   const progressBytesSummary = [
     progressBytes.input !== null ? `输入 ${formatCompressionBytes(progressBytes.input)}` : null,
     progressBytes.output !== null ? `候选/输出 ${formatCompressionBytes(progressBytes.output)}` : null,

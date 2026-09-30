@@ -40,6 +40,10 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("typeof estimate.targetMet === \"boolean\"");
     expect(compressionView).toContain("typeof estimate.selectedQuality === \"number\"");
   });
+  it("clears stale compression preflight space when inputs or options change", () => {
+    expect(compressionView).toContain("setPreflightSpaceBytes(null);");
+    expect(compressionView).toMatch(/\[items, options, selectedItemId\]/);
+  });
   it("normalizes both LF and CRLF source checkouts before matching contracts", () => {
     expect(".a\r\n.b\r.c\n".replace(/\r\n?/g, "\n")).toBe(".a\n.b\n.c\n");
   });
