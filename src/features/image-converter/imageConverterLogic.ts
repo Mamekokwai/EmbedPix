@@ -31,7 +31,24 @@ export const PNG_BIT_DEPTHS: ReadonlyArray<BmpBitDepth> = [24, 32];
 
 export function formatImageConverterError(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
-  const labels: Readonly<Record<string, string>> = { "failed to decode input image": "输入图片解码失败", "failed to inspect input image": "输入图片检查失败", "failed to export image": "图片导出失败", "failed to open output directory": "打开输出目录失败" };
+  const labels: Readonly<Record<string, string>> = {
+    "failed to inspect selected image": "检查所选图片失败",
+    "failed to read selected image": "读取所选图片失败",
+    "image conversion task failed": "图片转换任务失败",
+    "failed to write exported image": "写入导出图片失败",
+    "failed to inspect published output": "检查已发布输出失败",
+    "failed to inspect input image format": "检查输入图片格式失败",
+    "failed to read input image dimensions": "读取输入图片尺寸失败",
+    "failed to decode input image": "输入图片解码失败",
+    "failed to encode png": "编码 PNG 失败",
+    "failed to encode jpg": "编码 JPEG 失败",
+    "failed to encode webp": "编码 WebP 失败",
+    "failed to encode tiff": "编码 TIFF 失败",
+    "failed to encode ico": "编码 ICO 失败",
+    "failed to create output directory": "创建输出目录失败",
+    "failed to delete source image": "删除源图片失败",
+    "failed to move existing output": "移动已有输出失败",
+  };
   for (const [prefix, label] of Object.entries(labels)) {
     const index = message.indexOf(prefix);
     if (index < 0) continue;
