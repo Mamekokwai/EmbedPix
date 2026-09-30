@@ -36,6 +36,9 @@ function Assert-NoReparsePoints {
         $current = $parent.FullName.TrimEnd('\')
     }
 
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
     $rootItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
     $items = @($rootItem)
     if ($rootItem.PSIsContainer) {
