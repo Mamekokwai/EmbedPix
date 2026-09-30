@@ -40,6 +40,7 @@
 - [x] 发布 URL 完整匹配门禁：release asset 与 `latest.json` 的 URL 均拒绝可信 GitHub host 下错误仓库、Tag、query string 和 fragment，合法资产集合保持通过。
 - [x] GIF 短高窗口可达性收尾（commit `035285f`）：取消导入并清空按钮并入统一底部操作栏，与取消抽帧、取消测量和取消导出保持同一可见区域；窄窗口下不会被 GIF 设置卡遮挡。相关前端回归保持 397 项通过。
 - [x] 紧凑视口布局契约（commit `ccefcdd`）：静态测试固定覆盖 320×480、360×500、700×1100，并守护 GIF 短高 sticky footer/取消操作、横向溢出隔离以及压缩参数单列与长文本换行规则；前端回归增至 398 项。
+- [x] 压缩参数快速恢复（commit `7223ac4`）：压缩参数卡新增“恢复平衡默认”，完整恢复格式、质量、WebP 分析遍数、PNG 透明像素优化、JPEG 背景、目标体积、自动缩放、输入上限和元数据策略；不清空队列，也不改变输出位置、文件名或覆盖/删除策略。前端回归增至 399 项。
 - [x] 更新器重定向与缓存清理契约复核（commit `70555f3`）：可信 GitHub host 下错误 Tag、仓库、query 和 fragment 变体均被拒绝；清理 `.part`、`.sig.part`、`.etag` 时保留已提交安装包与签名。当前证据为本地单测/fixture，不冒充真实 GitHub 网络覆盖。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
