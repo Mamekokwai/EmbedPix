@@ -2604,7 +2604,6 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         </section>
         </>
       </fieldset>
-      {pendingImports > 0 ? <button className="quiet-button gif-busy-cancel" type="button" onClick={clearFrames}>取消导入并清空</button> : null}
       <div className="gif-export-footer">
         {error ? <div className={`gif-error-message${expandedError === error ? " gif-error-message-expanded" : ""}`} role="alert">
           <span className="gif-error-message-text" id="gif-error-details">{error}</span>
@@ -2617,6 +2616,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           aria-valuenow={gifExportProgress && status.kind === "exporting" ? exportProgressCurrent : undefined}
           aria-valuetext={gifExportProgress && status.kind === "exporting" ? exportProgressText : undefined}
         >{gifExportProgress && status.kind === "exporting" ? formatGifExportProgress(gifExportProgress) : status.text}</p>}
+        {pendingImports > 0 ? <button className="quiet-button gif-busy-cancel" type="button" onClick={clearFrames}>取消导入并清空</button> : null}
         {sourceMode === "video" && locked ? <button className="quiet-button" type="button" onClick={cancelVideoExtraction}>取消抽帧</button> : null}
         {compressionControllerRef.current ? <button className="quiet-button" type="button" disabled={Boolean(gifExportJobIdRef.current && gifExportProgress?.status === "cancelling")} onClick={() => { void cancelCompression(); }}>{getGifCancelButtonLabel(Boolean(gifExportJobIdRef.current), gifExportProgress?.status === "cancelling")}</button> : null}
         <button className="export-button gif-export-button" type="button" disabled={!frames.length || locked || pendingImports > 0} onClick={() => { if (!singleOutputReady) { setGroup("export"); if (outputLocation === "path") void chooseOutput(); else { setError(outputLocationError ?? "请先完成输出位置设置。"); setStatus({ kind: "error", text: "输出位置不可用" }); } } else { void exportAnimation(); } }}><Film size={17} aria-hidden="true" />{status.kind === "exporting" ? "处理中…" : outputFormat === "png-sequence" ? (singleOutputReady ? "导出 PNG 帧序列" : "选择输出目录") : outputLocation === "path" ? (outputPath ? `导出 ${outputFormat.toUpperCase()}` : "选择保存位置") : `导出 ${outputFormat.toUpperCase()}`}</button>
