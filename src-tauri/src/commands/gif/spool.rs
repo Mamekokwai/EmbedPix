@@ -48,6 +48,7 @@ impl SpoolLock {
     fn create(path: &PathBuf) -> io::Result<Self> {
         let file = OpenOptions::new()
             .create(true)
+            .create_new(true)
             .truncate(false)
             .read(true)
             .write(true)
@@ -184,36 +185,47 @@ impl GifFrameSpoolState {
         self.cleanup_orphaned_directories(ORPHAN_GRACE_PERIOD)?;
         for attempt in 0..8 {
             let id = spool_id(attempt);
-            let directory = self.root.join(&id);
-            if directory.exists() {
-                continue;
+            match self.create_entry(&id)? {
+                Some(id) => return Ok(id),
+                None => continue,
             }
-            fs::create_dir(&directory)
-                .map_err(|error| format!("无法创建 GIF 临时帧目录：{error}"))?;
-            let lock_path = self.root.join(format!("{id}.lock"));
-            let lock = match SpoolLock::create(&lock_path) {
-                Ok(lock) => lock,
-                Err(error) => {
-                    let _ = fs::remove_dir_all(&directory);
-                    return Err(format!("无法锁定 GIF 临时帧目录：{error}"));
-                }
-            };
-            self.entries
-                .lock()
-                .map_err(|_| "GIF 临时帧状态已损坏。".to_string())?
-                .insert(
-                    id.clone(),
-                    SpoolEntry {
-                        directory,
-                        lock_path,
-                        _lock: lock,
-                        next_index: 0,
-                        total_bytes: 0,
-                    },
-                );
-            return Ok(id);
         }
         Err("无法生成唯一 GIF 临时帧 ID。".to_string())
+    }
+
+    fn create_entry(&self, id: &str) -> Result<Option<String>, String> {
+        let directory = self.root.join(id);
+        let lock_path = self.root.join(format!("{id}.lock"));
+        let lock = match SpoolLock::create(&lock_path) {
+            Ok(lock) => lock,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => return Ok(None),
+            Err(error) => return Err(format!("无法锁定 GIF 临时帧目录：{error}")),
+        };
+        if let Err(error) = fs::create_dir(&directory) {
+            drop(lock);
+            let _ = fs::remove_file(&lock_path);
+            return Err(format!("无法创建 GIF 临时帧目录：{error}"));
+        }
+        let mut entries = match self.entries.lock() {
+            Ok(entries) => entries,
+            Err(_) => {
+                let _ = fs::remove_dir_all(&directory);
+                drop(lock);
+                let _ = fs::remove_file(&lock_path);
+                return Err("GIF 临时帧状态已损坏。".to_string());
+            }
+        };
+        entries.insert(
+            id.to_string(),
+            SpoolEntry {
+                directory,
+                lock_path,
+                _lock: lock,
+                next_index: 0,
+                total_bytes: 0,
+            },
+        );
+        Ok(Some(id.to_string()))
     }
 
     pub(super) fn write_frame(&self, id: &str, encoded: &str) -> Result<(), String> {
@@ -518,6 +530,42 @@ mod tests {
         assert_eq!(snapshot.removed, 0);
         assert_eq!(snapshot.skipped_active, 1);
         assert!(foreign.exists());
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn cleanup_handles_directory_created_after_lock_without_removing_active_spool() {
+        let state = test_state("creation-window");
+        fs::create_dir_all(&state.root).unwrap();
+        let id = "creation-window";
+        let lock_path = state.root.join(format!("{id}.lock"));
+        let lock = SpoolLock::create(&lock_path).unwrap();
+        let directory = state.root.join(id);
+        fs::create_dir(&directory).unwrap();
+
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        assert!(directory.exists());
+        assert_eq!(state.latest_cleanup_snapshot().unwrap().skipped_active, 1);
+
+        drop(lock);
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        assert!(!directory.exists());
+        assert!(!lock_path.exists());
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn failed_directory_creation_removes_precreated_lock() {
+        let state = test_state("creation-failure");
+        fs::create_dir_all(&state.root).unwrap();
+        let id = "creation-failure";
+        let directory = state.root.join(id);
+        fs::write(&directory, b"not a directory").unwrap();
+        let error = state.create_entry(id).unwrap_err();
+
+        assert!(error.contains("无法创建 GIF 临时帧目录"));
+        assert!(!state.root.join(format!("{id}.lock")).exists());
+        assert!(directory.exists());
         let _ = fs::remove_dir_all(state.root.clone());
     }
 
