@@ -112,7 +112,7 @@
 - [x] 支持 Alpha 质量：有损 WebP 提供 0–100 控制，默认 100；前端、preview、estimate、正式压缩和目标候选搜索共用同一校验与编码参数，并覆盖透明度回读。
 - [x] 支持编码 method 0–6；默认 4，正式压缩、预览、估算和候选搜索保持一致。
 - [x] 支持分析遍数 `pass` 1–10；默认 1，仅有损 WebP 可用，正式压缩、预览、估算和候选搜索保持一致；该参数表示分析遍数，不等同于画质质量。
-- [~] 支持编码 effort/near-lossless：无损 WebP 已提供 1–99 近无损等级并由现有 libwebp FFI 编码，独立 effort 控制仍待后续。
+- [~] 支持编码 effort/near-lossless：无损 WebP 已提供 1–99 近无损等级并由现有 libwebp FFI 编码；本轮评估确认 `libwebp-sys2` 0.2.0 的 `WebPConfig` 没有独立 effort 字段：`method` 是唯一质量/速度档位（0–6），`quality` 仅在 lossless 模式下兼作压缩 effort（0–100），有损模式下仍是画质质量；因此新增独立 effort 会重复或重定义底层语义，当前不实现。若后续产品需要，应先明确按编码模式分离的协议含义、默认值、候选搜索与资源预算。
 - [ ] 支持元数据保留/清理策略：当前封装只调用像素编码 API；依赖中的 libwebp 0.2.0 虽暴露 `WebPMuxSetChunk` 及 ICCP/EXIF/XMP chunk，但仍需实现并测试格式化提取、缩略图/GPS 清理和 mux 生命周期，不能仅靠现有编码结果声明 `stripSafe`。
 - [x] 保持透明度和透明边缘正确。
 - [x] 验证输出可解码、尺寸正确、Alpha 正确。
