@@ -353,6 +353,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           metadataPolicy: options.metadataPolicy,
           skipIfLarger: options.skipIfLarger,
           pngOptimizationLevel: options.pngOptimizationLevel,
+          pngOptimizeAlpha: options.format === "png" ? options.pngOptimizeAlpha : undefined,
           maxOutputBytes: options.maxOutputBytes,
           maxCandidates: options.maxCandidates,
           maxInputBytes: options.maxInputBytes,
