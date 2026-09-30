@@ -41,6 +41,7 @@ import {
   normalizeCompressionOutputModes,
   removeCompressionItem,
   isCurrentCompressionEstimate,
+  isCurrentCompressionItem,
   isCompressionSourcePathError,
   supportsCompressionTargetSize,
   waitForCompressionProgressTick,
@@ -176,6 +177,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const estimateRequestIdRef = useRef(0);
   const [initialPreferences] = useState(() => loadCompressionPreferences());
   const [items, setItems] = useState<CompressionItem[]>([]);
+  const itemsRef = useRef<CompressionItem[]>([]);
+  itemsRef.current = items;
   const [format, setFormat] = useState<CompressionFormat>(initialPreferences.format);
   const [quality, setQuality] = useState(initialPreferences.quality);
   const [webpMethod, setWebpMethod] = useState(initialPreferences.webpMethod ?? COMPRESSION_WEBP_METHOD_DEFAULT);
@@ -333,9 +336,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   const queueCompressionDimensions = (item: CompressionItem) => {
     void Promise.resolve().then(() => readCompressionDimensions(item.file)).then((dimensions) => {
-      setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, dimensions } : candidate));
+      if (isCurrentCompressionItem(itemsRef.current.map((candidate) => candidate.id), item.id)) {
+        setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, dimensions } : candidate));
+      }
     }).catch((error) => {
-      setImportErrors((current) => [...current, { id: `dimensions-${item.id}`, fileName: item.file.name, message: errorMessage(error) }]);
+      if (isCurrentCompressionItem(itemsRef.current.map((candidate) => candidate.id), item.id)) setImportErrors((current) => [...current, { id: `dimensions-${item.id}`, fileName: item.file.name, message: errorMessage(error) }]);
     });
   };
 
