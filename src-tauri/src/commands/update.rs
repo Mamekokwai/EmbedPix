@@ -92,13 +92,26 @@ fn pending_install_marker_path(app: &AppHandle) -> Result<PathBuf, String> {
         .join(PENDING_INSTALL_MARKER))
 }
 
+fn pending_install_marker_part_path(path: &Path) -> PathBuf {
+    path.with_file_name(format!("{PENDING_INSTALL_MARKER}.part"))
+}
+
+fn cleanup_pending_install_marker_part(path: &Path) {
+    let _ = fs::remove_file(pending_install_marker_part_path(path));
+}
+
+fn clear_pending_install_marker_paths(path: &Path) {
+    let _ = fs::remove_file(path);
+    cleanup_pending_install_marker_part(path);
+}
+
 fn write_pending_install_marker(app: &AppHandle, version: &str) -> Result<(), String> {
     let path = pending_install_marker_path(app)?;
     let parent = path
         .parent()
         .ok_or_else(|| "更新诊断目录无效。".to_string())?;
     fs::create_dir_all(parent).map_err(|error| format!("无法创建更新诊断目录：{error}"))?;
-    let temporary = PathBuf::from(format!("{}.part", path.to_string_lossy()));
+    let temporary = pending_install_marker_part_path(&path);
     let marker = PendingInstallMarker {
         pending_version: version.to_string(),
         requested_at: SystemTime::now()
@@ -108,13 +121,14 @@ fn write_pending_install_marker(app: &AppHandle, version: &str) -> Result<(), St
     };
     let bytes =
         serde_json::to_vec(&marker).map_err(|error| format!("无法记录更新诊断：{error}"))?;
+    cleanup_pending_install_marker_part(&path);
     fs::write(&temporary, bytes).map_err(|error| format!("无法写入更新诊断：{error}"))?;
     fs::rename(&temporary, &path).map_err(|error| format!("无法提交更新诊断：{error}"))
 }
 
 fn clear_pending_install_marker(app: &AppHandle) {
     if let Ok(path) = pending_install_marker_path(app) {
-        let _ = fs::remove_file(path);
+        clear_pending_install_marker_paths(&path);
     }
 }
 
@@ -122,6 +136,7 @@ pub fn mark_app_started(app: &AppHandle, state: State<'_, UpdateHealthState>) {
     let Ok(path) = pending_install_marker_path(app) else {
         return;
     };
+    cleanup_pending_install_marker_part(&path);
     let Ok(contents) = fs::read_to_string(&path) else {
         return;
     };
@@ -1297,12 +1312,14 @@ fn parse_sha256(value: &str) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        cleanup_download_artifacts, compare_versions, download_package_with_resume,
+        cleanup_download_artifacts, cleanup_pending_install_marker_part,
+        clear_pending_install_marker_paths, compare_versions, download_package_with_resume,
         is_trusted_release_page_url, normalize_version, open_verified_package_file, parse_sha256,
-        pending_install_diagnostic, select_trusted_asset_for_target, should_append_partial,
-        signature_url_for_asset, validate_asset_url, validate_cached_package_path,
-        validate_update_cache_dir, verify_cached_package_signature, verify_signature,
-        PendingInstallMarker, ReleaseAsset, UpdateTarget, MAX_DOWNLOAD_ATTEMPTS,
+        pending_install_diagnostic, pending_install_marker_part_path,
+        select_trusted_asset_for_target, should_append_partial, signature_url_for_asset,
+        validate_asset_url, validate_cached_package_path, validate_update_cache_dir,
+        verify_cached_package_signature, verify_signature, PendingInstallMarker, ReleaseAsset,
+        UpdateTarget, MAX_DOWNLOAD_ATTEMPTS,
     };
     use base64::Engine;
     use sha2::Digest;
@@ -1325,6 +1342,66 @@ mod tests {
             }
         )
         .is_none());
+    }
+
+    #[test]
+    fn cleans_pending_marker_part_without_removing_final_marker() {
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-pending-marker-part-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let marker = root.join(super::PENDING_INSTALL_MARKER);
+        let part = pending_install_marker_part_path(&marker);
+        std::fs::write(&marker, b"final").unwrap();
+        std::fs::write(&part, b"partial").unwrap();
+
+        cleanup_pending_install_marker_part(&marker);
+
+        assert_eq!(std::fs::read(&marker).unwrap(), b"final");
+        assert!(!part.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn clearing_pending_marker_removes_final_and_part_files() {
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-pending-marker-clear-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let marker = root.join(super::PENDING_INSTALL_MARKER);
+        let part = pending_install_marker_part_path(&marker);
+        std::fs::write(&marker, b"final").unwrap();
+        std::fs::write(&part, b"partial").unwrap();
+
+        clear_pending_install_marker_paths(&marker);
+
+        assert!(!marker.exists());
+        assert!(!part.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn pending_marker_cleanup_does_not_remove_directories() {
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-pending-marker-directory-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let marker = root.join(super::PENDING_INSTALL_MARKER);
+        let part = pending_install_marker_part_path(&marker);
+        std::fs::create_dir(&marker).unwrap();
+        std::fs::create_dir(&part).unwrap();
+
+        clear_pending_install_marker_paths(&marker);
+
+        assert!(marker.is_dir());
+        assert!(part.is_dir());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
