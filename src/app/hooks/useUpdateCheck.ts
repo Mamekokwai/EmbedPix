@@ -36,18 +36,19 @@ export function isNetworkAvailable(): boolean {
   return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
-function errorText(error: unknown, stage: UpdateErrorStage): string {
+export function formatUpdateError(error: unknown, stage: UpdateErrorStage): string {
   console.error(`[update] ${stage} operation failed`, error);
   const detail = error instanceof Error
     ? error.message.trim()
     : typeof error === "string"
       ? error.trim()
       : "";
+  const userDetail = /[\u3400-\u9fff]/u.test(detail) ? detail : "";
   if (stage === "check") {
-    return detail || "无法检查更新，请稍后重试。";
+    return userDetail || "无法检查更新，请稍后重试。";
   }
-  if (stage === "download") return detail ? `更新下载安装包失败：${detail}` : "更新下载安装包失败，请重试。";
-  return detail ? `启动更新安装程序失败：${detail}` : "启动更新安装程序失败，请重试。";
+  if (stage === "download") return userDetail ? `更新下载安装包失败：${userDetail}` : "更新下载安装包失败，请重试。";
+  return userDetail ? `启动更新安装程序失败：${userDetail}` : "启动更新安装程序失败，请重试。";
 }
 
 function makeIdleState(): UpdateCheckState {
@@ -174,7 +175,7 @@ export function useUpdateCheck() {
       const offline = isOfflineCheckError(error);
       const failed: UpdateCheckState = offline
         ? makeOfflineState(current.currentVersion)
-        : { status: "error", currentVersion: current.currentVersion, info: null, error: errorText(error, "check"), errorStage: "check", downloadPath: null, downloadedBytes: null, totalBytes: null };
+        : { status: "error", currentVersion: current.currentVersion, info: null, error: formatUpdateError(error, "check"), errorStage: "check", downloadPath: null, downloadedBytes: null, totalBytes: null };
       stateRef.current = failed;
       setState(failed);
       if (options.silent) return failed;
@@ -261,7 +262,7 @@ export function useUpdateCheck() {
       setState(downloaded);
       return downloaded;
     } catch (error) {
-      const failed: UpdateCheckState = { ...downloading, status: "error", error: errorText(error, "download"), errorStage: "download", downloadPath: null };
+      const failed: UpdateCheckState = { ...downloading, status: "error", error: formatUpdateError(error, "download"), errorStage: "download", downloadPath: null };
       stateRef.current = failed;
       setState(failed);
       return failed;
@@ -301,7 +302,7 @@ export function useUpdateCheck() {
       );
       return installing;
     } catch (error) {
-      const failed: UpdateCheckState = { ...installing, status: "error", error: errorText(error, "install"), errorStage: "install" };
+      const failed: UpdateCheckState = { ...installing, status: "error", error: formatUpdateError(error, "install"), errorStage: "install" };
       stateRef.current = failed;
       setState(failed);
       return failed;
