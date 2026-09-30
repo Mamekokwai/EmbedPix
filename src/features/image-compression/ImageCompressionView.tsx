@@ -37,6 +37,7 @@ import {
   getCompressionRetryQueue,
   getCompressionSourcePathError,
   getCurrentStripSafeValidation,
+  isCurrentStripSafeValidation,
   mergeCompressionItems,
   mergeCompressionEstimateResult,
   normalizeCompressionOutputFileName,
@@ -209,7 +210,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [itemResults, setItemResults] = useState<CompressionItemResult[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [stripSafeInputValidation, setStripSafeInputValidation] = useState<{ format: CompressionFormat; items: Array<Pick<CompressionItem, "id" | "file">>; valid: boolean } | null>(null);
+  const [stripSafeInputValidation, setStripSafeInputValidation] = useState<{ format: CompressionFormat; items: Array<Pick<CompressionItem, "id" | "file">>; valid: boolean | null } | null>(null);
   const [preview, setPreview] = useState<CompressionPreview | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
@@ -284,10 +285,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const stripSafeInputVerified = getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems);
   useEffect(() => {
     let active = true;
-    if (getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems) !== null) {
+    if (isCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems)) {
       return () => { active = false; };
     }
-    setStripSafeInputValidation(null);
+    setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: null });
     if (items.length === 0) return () => { active = false; };
     void Promise.all(items.map(async (item) => getStripSafeInputError(new Uint8Array(await item.file.arrayBuffer()), format)))
       .then((errors) => { if (active) setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: errors.every((error) => error === null) }); })

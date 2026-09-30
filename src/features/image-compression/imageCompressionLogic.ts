@@ -44,10 +44,12 @@ export function getCompressionPreset(preset: Exclude<CompressionPreset, "custom"
   return COMPRESSION_PRESETS.find((option) => option.value === preset) ?? COMPRESSION_PRESETS[1];
 }
 export function supportsCompressionTargetSize(format: CompressionFormat, lossless: boolean): boolean { return format === "jpg" || (format === "webp" && !lossless); }
-export interface StripSafeValidationSnapshot { format: CompressionFormat; items: ReadonlyArray<Pick<CompressionItem, "id" | "file">>; valid: boolean; }
+export interface StripSafeValidationSnapshot { format: CompressionFormat; items: ReadonlyArray<Pick<CompressionItem, "id" | "file">>; valid: boolean | null; }
+export function isCurrentStripSafeValidation(snapshot: StripSafeValidationSnapshot | null, format: CompressionFormat, items: ReadonlyArray<Pick<CompressionItem, "id" | "file">>): boolean {
+  return Boolean(snapshot && snapshot.format === format && snapshot.items.length === items.length && snapshot.items.every((item, index) => item.id === items[index]?.id && item.file === items[index]?.file));
+}
 export function getCurrentStripSafeValidation(snapshot: StripSafeValidationSnapshot | null, format: CompressionFormat, items: ReadonlyArray<Pick<CompressionItem, "id" | "file">>): boolean | null {
-  if (!snapshot || snapshot.format !== format || snapshot.items.length !== items.length) return null;
-  return snapshot.items.every((item, index) => item.id === items[index]?.id && item.file === items[index]?.file) ? snapshot.valid : null;
+  return isCurrentStripSafeValidation(snapshot, format, items) ? snapshot?.valid ?? null : null;
 }
 export function isCurrentCompressionItem<T extends { id: string; file: unknown }>(items: ReadonlyArray<T>, item: Pick<T, "id" | "file">): boolean { return items.some((candidate) => candidate.id === item.id && candidate.file === item.file); }
 export function canWriteCompressionItemUpdate<T extends { id: string; file: unknown }>(mounted: boolean, items: ReadonlyArray<T>, item: Pick<T, "id" | "file">): boolean { return mounted && isCurrentCompressionItem(items, item); }

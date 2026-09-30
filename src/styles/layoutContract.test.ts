@@ -45,13 +45,13 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toMatch(/\[items, options, selectedItemId\]/);
   });
   it("keeps strip-safe metadata pending until validation completes", () => {
-    expect(compressionView).toContain("useState<{ format: CompressionFormat; items: Array<Pick<CompressionItem, \"id\" | \"file\">>; valid: boolean } | null>(null)");
-    expect(compressionView).toContain("setStripSafeInputValidation(null);");
+    expect(compressionView).toContain("useState<{ format: CompressionFormat; items: Array<Pick<CompressionItem, \"id\" | \"file\">>; valid: boolean | null } | null>(null)");
+    expect(compressionView).toContain("setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: null });");
     expect(compressionView).toContain("getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems)");
     expect(compressionView).toContain("stripSafeInputVerified === true");
     expect(compressionView).toContain('metadataPolicy === "stripSafe" && stripSafeInputVerified === false');
     expect(compressionView).toContain("setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: errors.every((error) => error === null) });");
-    expect(compressionView).toContain("getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems) !== null");
+    expect(compressionView).toContain("isCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems)");
   });
   it("blocks native preview and estimate while strip-safe validation is pending", () => {
     expect(compressionView).toContain('options.metadataPolicy === "stripSafe" && stripSafeInputVerified !== true');
