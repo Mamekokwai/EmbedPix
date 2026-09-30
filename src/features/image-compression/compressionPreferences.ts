@@ -7,6 +7,7 @@ export interface CompressionPreferences {
   webpMethod: number;
   webpAlphaQuality: number;
   webpPass: number;
+  pngOptimizeAlpha: boolean;
   webpNearLossless: number | null;
   jpegBackground: string;
   pngOptimizationLevel: number;
@@ -38,6 +39,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   webpMethod: COMPRESSION_WEBP_METHOD_DEFAULT,
   webpAlphaQuality: 100,
   webpPass: 1,
+  pngOptimizeAlpha: false,
   webpNearLossless: null,
   jpegBackground: "#ffffff",
   pngOptimizationLevel: 3,
@@ -152,6 +154,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       webpMethod: webpMethodValue(record),
       webpAlphaQuality: webpAlphaQualityValue(record),
       webpPass: webpPassValue(record),
+      pngOptimizeAlpha: record.pngOptimizeAlpha === true,
       webpNearLossless: format === "webp" && lossless ? webpNearLosslessValue(record) : null,
       jpegBackground: jpegBackgroundValue(record),
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
@@ -199,6 +202,7 @@ export function saveCompressionPreferences(
       webpMethod: preferences.webpMethod,
       webpAlphaQuality: preferences.webpAlphaQuality,
       webpPass: preferences.webpPass,
+      pngOptimizeAlpha: preferences.pngOptimizeAlpha,
       webpNearLossless: preferences.webpNearLossless,
       jpegBackground: preferences.jpegBackground,
       pngOptimizationLevel: preferences.pngOptimizationLevel,

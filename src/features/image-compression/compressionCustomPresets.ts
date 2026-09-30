@@ -12,6 +12,7 @@ export interface CompressionPresetValues {
   webpMethod: number;
   webpAlphaQuality: number;
   webpPass: number;
+  pngOptimizeAlpha?: boolean;
   webpNearLossless: number | null;
   jpegBackground: string;
   pngOptimizationLevel: number;
@@ -96,6 +97,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     webpMethod: record.webpMethod === undefined ? COMPRESSION_WEBP_METHOD_DEFAULT : integerValue(record.webpMethod, COMPRESSION_WEBP_METHOD_MIN, COMPRESSION_WEBP_METHOD_MAX, "WebP 编码方法", index),
     webpAlphaQuality: record.webpAlphaQuality === undefined ? 100 : integerValue(record.webpAlphaQuality, 0, 100, "WebP Alpha 质量", index),
     webpPass: record.webpPass === undefined ? 1 : integerValue(record.webpPass, 1, 10, "WebP 分析遍数", index),
+    pngOptimizeAlpha: record.pngOptimizeAlpha === true,
     webpNearLossless,
     jpegBackground,
     pngOptimizationLevel: integerValue(record.pngOptimizationLevel, 0, 6, "PNG 优化级别", index),

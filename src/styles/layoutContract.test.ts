@@ -127,6 +127,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("maxCandidates: maxOutputBytes ? maxCandidates : undefined");
     expect(compressionView).toContain("selectedQuality");
     expect(compressionView).toContain("PNG 优化级别");
+    expect(compressionView).toContain("PNG 透明像素优化");
+    expect(compressionView).toContain("pngOptimizeAlpha");
     expect(compressionView).toContain("pngOptimizationLevel");
     expect(compressionView).toContain("内置预设");
     expect(compressionView).toContain("保存当前参数");

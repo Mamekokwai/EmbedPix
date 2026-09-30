@@ -31,6 +31,7 @@ export interface CompressionEnvelopeRequest {
   webpAlphaQuality?: number;
   webpPass?: number;
   webpNearLossless?: number;
+  pngOptimizeAlpha?: boolean;
   lossless: boolean;
   skipIfLarger?: boolean;
   pngOptimizationLevel: number;
@@ -120,6 +121,7 @@ export interface CompressionEstimateRequest {
   webpAlphaQuality?: number;
   webpPass?: number;
   webpNearLossless?: number;
+  pngOptimizeAlpha?: boolean;
   lossless: boolean;
   metadataPolicy: MetadataPolicy;
   skipIfLarger?: boolean;
@@ -147,6 +149,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
     ...(request.outputFormat === "jpg" && request.jpegBackground !== undefined ? { jpegBackground: request.jpegBackground } : {}),
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
+    ...(request.outputFormat === "png" ? { pngOptimizeAlpha: request.pngOptimizeAlpha === true } : {}),
     ...(request.outputFormat === "webp" && !request.lossless && request.webpAlphaQuality !== undefined ? { webpAlphaQuality: request.webpAlphaQuality } : {}),
     ...(request.outputFormat === "webp" && !request.lossless && request.webpPass !== undefined ? { webpPass: request.webpPass } : {}),
     ...(request.outputFormat === "webp" && request.lossless && request.webpNearLossless !== undefined ? { webpNearLossless: request.webpNearLossless } : {}),
@@ -221,6 +224,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
     ...(request.outputFormat === "jpg" && request.jpegBackground !== undefined ? { jpegBackground: request.jpegBackground } : {}),
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
+    ...(request.outputFormat === "png" ? { pngOptimizeAlpha: request.pngOptimizeAlpha === true } : {}),
     ...(request.outputFormat === "webp" && !request.lossless && request.webpAlphaQuality !== undefined ? { webpAlphaQuality: request.webpAlphaQuality } : {}),
     ...(request.outputFormat === "webp" && !request.lossless && request.webpPass !== undefined ? { webpPass: request.webpPass } : {}),
     ...(request.outputFormat === "webp" && request.lossless && request.webpNearLossless !== undefined ? { webpNearLossless: request.webpNearLossless } : {}),
@@ -274,6 +278,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     webpMethod: options.webpMethod,
     webpAlphaQuality: options.webpAlphaQuality,
     webpPass: options.webpPass,
+    pngOptimizeAlpha: options.format === "png" ? options.pngOptimizeAlpha : undefined,
     webpNearLossless: options.webpNearLossless ?? undefined,
     lossless: options.format === "png" || (options.format === "webp" && options.lossless),
     skipIfLarger: options.skipIfLarger ?? true,

@@ -179,6 +179,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [webpMethod, setWebpMethod] = useState(initialPreferences.webpMethod ?? COMPRESSION_WEBP_METHOD_DEFAULT);
   const [webpAlphaQuality, setWebpAlphaQuality] = useState(initialPreferences.webpAlphaQuality ?? 100);
   const [webpPass, setWebpPass] = useState(initialPreferences.webpPass ?? 1);
+  const [pngOptimizeAlpha, setPngOptimizeAlpha] = useState(initialPreferences.pngOptimizeAlpha ?? false);
   const [webpNearLossless, setWebpNearLossless] = useState<number | null>(initialPreferences.webpNearLossless);
   const [jpegBackground, setJpegBackground] = useState(initialPreferences.jpegBackground);
   const [pngOptimizationLevel, setPngOptimizationLevel] = useState(initialPreferences.pngOptimizationLevel);
@@ -253,6 +254,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     webpMethod: webpLossyActive ? webpMethod : undefined,
     webpAlphaQuality: webpLossyActive ? webpAlphaQuality : undefined,
     webpPass: webpLossyActive ? webpPass : undefined,
+    pngOptimizeAlpha: format === "png" ? pngOptimizeAlpha : undefined,
     webpNearLossless: format === "webp" && lossless ? webpNearLossless : null,
     jpegBackground,
     lossless,
@@ -270,7 +272,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     maxOutputBytes,
     maxCandidates: maxOutputBytes ? maxCandidates : undefined,
     maxInputBytes,
-  }), [deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates, maxInputBytes]);
+  }), [deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, jpegBackground, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates, maxInputBytes]);
 
   const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, true), [outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
@@ -285,6 +287,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const compressionParameterSummary = [
     format === "webp" ? (lossless ? "WebP 无损" : "WebP 有损") : format.toUpperCase(),
     format === "png" ? `优化级别 ${pngOptimizationLevel}` : `质量 ${quality}`,
+    format === "png" && pngOptimizeAlpha ? "Alpha 像素优化" : null,
     webpLossyActive ? `method ${webpMethod}` : null,
     webpLossyActive ? `Alpha 质量 ${webpAlphaQuality}` : null,
     webpLossyActive ? `分析遍数 ${webpPass}` : null,
@@ -376,6 +379,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       webpMethod,
       webpAlphaQuality,
       webpPass,
+      pngOptimizeAlpha,
       webpNearLossless,
       jpegBackground,
       pngOptimizationLevel,
@@ -395,7 +399,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       replaceOriginal,
       deleteSource,
     });
-  }, [autoNumbering, deleteSource, format, lossless, maxCandidates, maxInputMiB, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground]);
+  }, [autoNumbering, deleteSource, format, lossless, maxCandidates, maxInputMiB, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, pngOptimizeAlpha, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -826,7 +830,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setSkipIfLarger(true);
   };
 
-  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, maxCandidates, maxInputMiB, lossless, metadataPolicy, skipIfLarger });
+  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, jpegBackground, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, maxCandidates, maxInputMiB, lossless, metadataPolicy, skipIfLarger });
 
   const applyCustomPreset = (id: string) => {
     setCustomPresetId(id);
@@ -837,6 +841,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setWebpMethod(selected.values.webpMethod ?? COMPRESSION_WEBP_METHOD_DEFAULT);
     setWebpAlphaQuality(selected.values.webpAlphaQuality ?? 100);
     setWebpPass(selected.values.webpPass ?? 1);
+    setPngOptimizeAlpha(selected.values.pngOptimizeAlpha ?? false);
     setWebpNearLossless(selected.values.webpNearLossless ?? null);
     setJpegBackground(selected.values.jpegBackground ?? "#ffffff");
     setPngOptimizationLevel(selected.values.pngOptimizationLevel);
@@ -988,6 +993,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           </div>
           <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => { const nextFormat = event.target.value as CompressionFormat; setFormat(nextFormat); setLossless(nextFormat !== "jpg"); if (nextFormat !== "jpg") setTargetSizeEnabled(false); }} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label className="compression-field"><span>PNG 优化级别</span><select value={pngOptimizationLevel} onChange={(event) => { setPngOptimizationLevel(Number(event.target.value)); setPreset("custom"); }} disabled={busy || format !== "png"}>{[0, 1, 2, 3, 4, 5, 6].map((level) => <option key={level} value={level}>{level}</option>)}</select><small className="compression-field-hint">{format === "png" ? "0 最快，6 压缩更积极；默认 2" : "仅 PNG 有效，当前格式不可用"}</small></label>
+          <label className="compression-check"><input type="checkbox" checked={format === "png" && pngOptimizeAlpha} onChange={(event) => { setPngOptimizeAlpha(event.target.checked); setPreset("custom"); }} disabled={busy || format !== "png"} /><span><strong>PNG 透明像素优化</strong><small>可能改变完全透明像素 RGB，像素 Alpha 不变；仅 PNG 有效。</small></span></label>
           <label className="compression-field"><span className="compression-label-row"><span>质量（JPEG/WebP 有损）</span><strong>{qualityEnabled ? quality : "—"}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => { setQuality(Number(event.target.value)); setPreset("custom"); }} disabled={busy || !qualityEnabled} /></label>
           {format === "jpg" ? <label className="compression-field"><span>JPEG 透明背景</span><input type="color" value={jpegBackground} onChange={(event) => { setJpegBackground(event.target.value.toLowerCase()); setPreset("custom"); }} disabled={busy} aria-label="JPEG 透明背景颜色" /><small className="compression-field-hint">输入含透明像素时合成到此背景色；不再静默丢弃 Alpha，默认白色。</small></label> : null}
           <label className="compression-field"><span className="compression-label-row"><span>WebP 编码方法</span><strong>{webpLossyActive ? webpMethod : "—"}</strong></span><input type="range" min={COMPRESSION_WEBP_METHOD_MIN} max={COMPRESSION_WEBP_METHOD_MAX} step="1" value={webpMethod} onChange={(event) => { setWebpMethod(Number(event.target.value)); setPreset("custom"); }} disabled={busy || !webpLossyActive} /><small className="compression-field-hint compression-webp-method-hint">{webpLossyActive ? `范围 ${COMPRESSION_WEBP_METHOD_MIN}–${COMPRESSION_WEBP_METHOD_MAX}；影响编码耗时与压缩率，不代表画质。默认 ${COMPRESSION_WEBP_METHOD_DEFAULT}` : "仅 WebP 有损模式有效，当前模式已禁用"}</small></label>

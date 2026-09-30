@@ -207,6 +207,17 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "stripSafe" })).toThrow("仅支持移除元数据");
   });
 
+  it("serializes PNG alpha optimization only for PNG output", () => {
+    const readMetadata = (encoded: Uint8Array) => {
+      const length = new DataView(encoded.buffer).getUint32(4, true);
+      return JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
+    };
+    expect(readMetadata(encodeCompressionEnvelope({ ...request, outputFormat: "png", pngOptimizeAlpha: true })).pngOptimizeAlpha).toBe(true);
+    expect(readMetadata(encodeCompressionEnvelope({ ...request, outputFormat: "webp", pngOptimizeAlpha: true }))).not.toHaveProperty("pngOptimizeAlpha");
+    const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "png", jpegQuality: 82, lossless: true, metadataPolicy: "strip", pngOptimizationLevel: 2, pngOptimizeAlpha: true });
+    expect(readMetadata(estimate).pngOptimizeAlpha).toBe(true);
+  });
+
   it("rejects metadata preservation for publish-free estimates before IPC", () => {
     expect(() => encodeCompressionEstimateEnvelope({
       fileName: "icon.png",
