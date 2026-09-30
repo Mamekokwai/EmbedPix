@@ -372,7 +372,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
         const result = await estimateImageCompression(request);
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
-        setEstimate({ inputBytes: result.inputBytes, estimatedBytes: result.outputBytes, savingsPercent: result.savingsPercent, metadataPolicy: result.metadataPolicy, compressionMode: result.compressionMode, compressionEngine: result.compressionEngine, maxRgbMae: result.maxRgbMae, qualityMetrics: result.qualityMetrics, candidateSearchMs: result.candidateSearchMs, candidateCount: result.candidateCount });
+        setEstimate({ ...result, estimatedBytes: result.outputBytes });
           setEstimateNote(formatCompressionEstimateSource("native", result.status === "skipped" && result.skippedReason ? `输出将跳过：${formatCompressionReason(result.skippedReason)}` : "当前选中图片"));
       } catch (error) {
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
@@ -1092,7 +1092,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className="compression-summary-stat"><span>原始大小</span><strong>{formatCompressionBytes(estimate.inputBytes)}</strong></div>
         <div className="compression-summary-stat"><span>预计输出</span><strong>{formatCompressionBytes(estimate.estimatedBytes)}</strong></div>
         <div className="compression-summary-stat"><span>预计节省</span><strong className="compression-saving">{estimate.savingsPercent.toFixed(0)}%</strong></div>
-        <span className="compression-estimate-note">{estimateNote}{typeof estimate.candidateCount === "number" ? ` · 尝试候选 ${estimate.candidateCount}` : ""}{typeof estimate.candidateSearchMs === "number" ? ` · 候选搜索 ${estimate.candidateSearchMs} ms` : ""}{estimate.qualityMetrics ? ` · MAE ${estimate.qualityMetrics.rgbMae.toFixed(2)} · PSNR ${estimate.qualityMetrics.psnrDb === null ? "无误差" : `${estimate.qualityMetrics.psnrDb.toFixed(1)} dB`} · Alpha 差异 ${estimate.qualityMetrics.alphaMismatchPixels} 像素` : ""}{preflightSpaceBytes !== null ? ` · 临时空间预算 ${formatCompressionBytes(preflightSpaceBytes)}` : ""}</span>
+        <span className="compression-estimate-note">{estimateNote}{maxOutputBytes && typeof estimate.targetMet === "boolean" ? ` · 目标 ${estimate.targetMet ? "已达成" : "未达成"}` : ""}{typeof estimate.selectedQuality === "number" ? ` · 选中质量 ${estimate.selectedQuality}` : ""}{typeof estimate.candidateCount === "number" ? ` · 尝试候选 ${estimate.candidateCount}` : ""}{typeof estimate.candidateSearchMs === "number" ? ` · 候选搜索 ${estimate.candidateSearchMs} ms` : ""}{estimate.qualityMetrics ? ` · MAE ${estimate.qualityMetrics.rgbMae.toFixed(2)} · PSNR ${estimate.qualityMetrics.psnrDb === null ? "无误差" : `${estimate.qualityMetrics.psnrDb.toFixed(1)} dB`} · Alpha 差异 ${estimate.qualityMetrics.alphaMismatchPixels} 像素` : ""}{preflightSpaceBytes !== null ? ` · 临时空间预算 ${formatCompressionBytes(preflightSpaceBytes)}` : ""}</span>
       </section>
 
       <section className="compression-card compression-result-card" aria-label="压缩结果统计">

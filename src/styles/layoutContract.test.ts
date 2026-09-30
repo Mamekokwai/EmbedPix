@@ -35,6 +35,11 @@ describe("compact layout viewport contract", () => {
     expect(updateCss).toContain(".update-error-message");
     expect(updateCss).toContain("overflow-wrap: anywhere");
   });
+  it("keeps estimate target and selected-quality fields visible with native results", () => {
+    expect(compressionView).toContain("setEstimate({ ...result, estimatedBytes: result.outputBytes })");
+    expect(compressionView).toContain("typeof estimate.targetMet === \"boolean\"");
+    expect(compressionView).toContain("typeof estimate.selectedQuality === \"number\"");
+  });
   it("normalizes both LF and CRLF source checkouts before matching contracts", () => {
     expect(".a\r\n.b\r.c\n".replace(/\r\n?/g, "\n")).toBe(".a\n.b\n.c\n");
   });
