@@ -61,11 +61,9 @@ export function formatCompressionReason(reason: string | undefined): string {
   if (separator < 0) return reason;
   const key = reason.slice(0, separator);
   const detail = reason.slice(separator + 1).trim();
+  if (key === "target_unreachable" && detail.startsWith("automatic resize candidates")) return "无法满足目标体积：已尝试最小缩放档位";
   const label = labels[key];
-  const localizedDetail = key === "target_unreachable" && detail.startsWith("automatic resize candidates")
-    ? "自动缩放到最小档位仍未达到目标体积"
-    : detail;
-  return label ? `${label}：${localizedDetail}` : reason;
+  return label ? `${label}：${detail}` : reason;
 }
 export function formatCompressionError(error: string): string {
   const labels: Readonly<Record<string, string>> = {
