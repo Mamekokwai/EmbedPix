@@ -52,6 +52,9 @@ describe("image compression logic", () => {
     expect(formatCompressionError("jpegQuality must be between 1 and 100")).toBe("JPEG 质量必须在 1 and 100");
     expect(formatCompressionError("lossy compression is not supported for PNG; use JPEG or WebP")).toBe("PNG 不支持有损压缩; use JPEG or WebP");
     expect(formatCompressionError("compression request has invalid magic; expected EGF1")).toBe("压缩请求标识无效; expected EGF1");
+    expect(formatCompressionError("compressed output exceeds the 128 MiB limit")).toBe("压缩输出超过 128 MiB 限制");
+    expect(formatCompressionError("invalid WebP chunk padding")).toBe("WebP 区块填充无效");
+    expect(formatCompressionError("replaceOriginal requires sourcePath")).toBe("覆盖原图需要 sourcePath");
     expect(formatCompressionError("animated WebP input is not supported; provide a static WebP")).toBe("不支持动态 WebP 输入，请提供静态 WebP");
     expect(formatCompressionError("failed to decode input image: bad header")).toBe("输入图片解码失败：bad header");
     expect(formatCompressionError("future error")).toBe("future error");
