@@ -229,8 +229,7 @@ fn validate_compression_metadata_policy(policy: MetadataPolicy) -> Result<(), St
     match policy {
         MetadataPolicy::Strip => Ok(()),
         MetadataPolicy::Preserve => Err(
-            "metadataPolicy=preserve is not supported by first-stage compression; use strip"
-                .into(),
+            "metadataPolicy=preserve is not supported by first-stage compression; use strip".into(),
         ),
         MetadataPolicy::StripSafe => Ok(()),
         MetadataPolicy::StripAll => Ok(()),
@@ -244,11 +243,17 @@ fn validate_png_optimize_alpha(enabled: bool, format: CompressionFormat) -> Resu
     Ok(())
 }
 
-fn validate_png_strip_safe(policy: MetadataPolicy, format: CompressionFormat, input: &[u8]) -> Result<(), String> {
+fn validate_png_strip_safe(
+    policy: MetadataPolicy,
+    format: CompressionFormat,
+    input: &[u8],
+) -> Result<(), String> {
     if policy == MetadataPolicy::StripSafe
         && (format != CompressionFormat::Png || !input.starts_with(b"\x89PNG\r\n\x1a\n"))
     {
-        return Err("metadataPolicy=stripSafe is only supported for PNG input to PNG output".into());
+        return Err(
+            "metadataPolicy=stripSafe is only supported for PNG input to PNG output".into(),
+        );
     }
     Ok(())
 }
@@ -1680,15 +1685,15 @@ fn encode_image_with_webp_method_alpha(
                     .map_err(|error| format!("failed to encode png: {error}"))?;
             }
             if metadata_policy != MetadataPolicy::StripSafe {
-            let optimized = oxipng::optimize_from_memory(
-                &output.bytes,
-                &oxipng::Options {
-                    optimize_alpha: png_optimize_alpha,
-                    ..oxipng::Options::from_preset(png_optimization_level)
-                },
-            )
-            .map_err(|error| format!("failed to optimize png: {error}"))?;
-            output.bytes = optimized;
+                let optimized = oxipng::optimize_from_memory(
+                    &output.bytes,
+                    &oxipng::Options {
+                        optimize_alpha: png_optimize_alpha,
+                        ..oxipng::Options::from_preset(png_optimization_level)
+                    },
+                )
+                .map_err(|error| format!("failed to optimize png: {error}"))?;
+                output.bytes = optimized;
             }
         }
         CompressionFormat::Webp if lossless => {
@@ -3228,8 +3233,20 @@ mod tests {
             r#"{"fileName":"sample.png","outputFormat":"png","metadataPolicy":"stripSafe"}"#,
             &png_input(),
         );
-        assert_eq!(parse_raw_payload(&png_safe).unwrap().metadata.metadata_policy, MetadataPolicy::StripSafe);
-        assert_eq!(parse_estimate_raw_payload(&png_safe).unwrap().metadata.metadata_policy, MetadataPolicy::StripSafe);
+        assert_eq!(
+            parse_raw_payload(&png_safe)
+                .unwrap()
+                .metadata
+                .metadata_policy,
+            MetadataPolicy::StripSafe
+        );
+        assert_eq!(
+            parse_estimate_raw_payload(&png_safe)
+                .unwrap()
+                .metadata
+                .metadata_policy,
+            MetadataPolicy::StripSafe
+        );
 
         let estimate_payload = raw_payload(
             r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"skipIfLarger":false,"metadataPolicy":"strip-all"}"#,
