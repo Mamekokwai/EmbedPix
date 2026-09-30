@@ -29,6 +29,25 @@ export interface BatchConversionPlan {
   duplicateTargets: string[];
 }
 
+export function formatBatchConversionPlanError(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const mappings: ReadonlyArray<[string, string]> = [
+    ["contains empty or control characters", "包含空内容或控制字符"],
+    ["cannot contain path separators or traversal", "不能包含路径分隔符或目录穿越"],
+    ["cannot contain path separators", "不能包含路径分隔符"],
+    ["generated file name uses a reserved device name", "生成的文件名使用了系统保留设备名"],
+    ["unsupported template token", "模板包含不支持的占位符"],
+    ["outputDirectory is required", "指定目录输出需要填写输出目录"],
+    ["duplicate target path", "目标路径重复"],
+    ["has invalid dimensions", "尺寸无效"],
+  ];
+  for (const [prefix, label] of mappings) {
+    const index = message.indexOf(prefix);
+    if (index >= 0) return `${message.slice(0, index)}${label}${message.slice(index + prefix.length)}`;
+  }
+  return message || "批量转换规划失败，请检查参数后重试。";
+}
+
 const TOKEN_PATTERN = /\{(name|ext|width|height|index)\}/gu;
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f]/u;
 const RESERVED_DEVICE_PATTERN = /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/iu;

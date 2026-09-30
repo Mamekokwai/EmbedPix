@@ -86,7 +86,7 @@ import ThemeSelect from "../../shared/components/ThemeSelect";
 import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
 import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueue";
 import type { ExportPreflightResult } from "./imageConverterLogic";
-import { planBatchConversions } from "./batchConversionPlan";
+import { formatBatchConversionPlanError, planBatchConversions } from "./batchConversionPlan";
 import { exportWorkspace, importWorkspace } from "../../shared/workspaceTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
 
@@ -1107,7 +1107,7 @@ export default function ImageConverter({
     try {
       requestedPlan = planBatchConversions(requestedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory, autoSequence });
     } catch (planError) {
-      setError(planError instanceof Error ? planError.message : "文件名模板无效。");
+      setError(formatBatchConversionPlanError(planError));
       setStatus({ kind: "error", text: "请检查文件名模板" });
       return;
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planBatchConversions } from "./batchConversionPlan";
+import { formatBatchConversionPlanError, planBatchConversions } from "./batchConversionPlan";
 
 const items = [
   { name: "board.png", width: 320, height: 240 },
@@ -7,6 +7,12 @@ const items = [
 ];
 
 describe("batch conversion plan", () => {
+  it("formats stable planning errors and preserves unknown details", () => {
+    expect(formatBatchConversionPlanError(new Error("template contains empty or control characters"))).toBe("模板包含空内容或控制字符");
+    expect(formatBatchConversionPlanError("generated file name uses a reserved device name: CON.png")).toBe("生成的文件名使用了系统保留设备名: CON.png");
+    expect(formatBatchConversionPlanError("duplicate target path: E:\\out\\a.png")).toBe("目标路径重复: E:\\out\\a.png");
+    expect(formatBatchConversionPlanError("future planning error")).toBe("future planning error");
+  });
   it("renders safe name, format, dimensions and index tokens", () => {
     const plan = planBatchConversions(items, { template: "{index}_{name}_{width}x{height}.{ext}", outputFormat: "rgb565", outputLocation: "directory", outputDirectory: "E:\\out" });
     expect(plan.targetPaths).toEqual(["E:\\out\\1_board_320x240.bin", "E:\\out\\2_sensor_640x480.bin"]);
