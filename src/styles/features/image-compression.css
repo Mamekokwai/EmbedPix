@@ -110,6 +110,7 @@
 .compression-preview-placeholder { max-width: 80%; color: var(--qp-text-tertiary); font-size: 11px; text-align: center; overflow-wrap: anywhere; }
 .compression-preview-stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
 .compression-field { display: grid; gap: 7px; color: var(--qp-text-secondary); font-size: 12px; }
+.compression-balanced-reset { justify-self: start; }
 .compression-field select, .compression-field input:not([type="range"]) { width: 100%; min-height: 34px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-primary); font: inherit; font-size: 12px; padding: 0 10px; }
 .compression-field input:not([type="range"]):focus, .compression-field select:focus { border-color: var(--qp-accent-default); }
 .compression-label-row { justify-content: space-between; }

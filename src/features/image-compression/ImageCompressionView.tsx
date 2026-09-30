@@ -59,6 +59,7 @@ import {
 } from "./imageCompressionLogic";
 import {
   COMPRESSION_MAX_TARGET_SIZE_KIB,
+  DEFAULT_COMPRESSION_PREFERENCES,
   loadCompressionPreferences,
   saveCompressionPreferences,
 } from "./compressionPreferences";
@@ -943,6 +944,20 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setSkipIfLarger(true);
   };
 
+  const restoreBalancedDefaults = () => {
+    if (busy) return;
+    applyPreset("balanced");
+    setFormat(DEFAULT_COMPRESSION_PREFERENCES.format);
+    setLossless(DEFAULT_COMPRESSION_PREFERENCES.lossless);
+    setTargetSizeEnabled(DEFAULT_COMPRESSION_PREFERENCES.targetSizeEnabled);
+    setTargetSizeKiB(DEFAULT_COMPRESSION_PREFERENCES.targetSizeKiB);
+    setMaxRgbMae(DEFAULT_COMPRESSION_PREFERENCES.maxRgbMae);
+    setAutoResizeToTarget(DEFAULT_COMPRESSION_PREFERENCES.autoResizeToTarget);
+    setTargetResizePercent(DEFAULT_COMPRESSION_PREFERENCES.targetResizePercent);
+    setCustomResizeActive(false);
+    setMaxInputMiB(DEFAULT_COMPRESSION_PREFERENCES.maxInputMiB);
+  };
+
   const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, webpLosslessMethod, jpegBackground, jpegProgressive, jpegOptimizeHuffman, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, maxCandidates, maxRgbMae, targetResizePercent: autoResizeActive ? null : targetResizePercent, autoResizeToTarget: autoResizeActive, maxInputMiB, lossless, metadataPolicy, skipIfLarger });
 
   const applyCustomPreset = (id: string) => {
@@ -1121,7 +1136,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
         <aside className="compression-card compression-settings-card">
           <div className="compression-card-heading"><div><span className="compression-card-kicker">02 / OPTIONS</span><h2>压缩参数</h2></div></div>
-          <label className="compression-field"><span>内置预设</span><select value={preset} onChange={(event) => applyPreset(event.target.value as CompressionPreset)} disabled={busy}><option value="custom">自定义</option>{COMPRESSION_PRESETS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><small className="compression-field-hint">{preset === "custom" ? "手动参数；JPEG/WebP 有损质量、PNG 优化和 WebP 无损语义分别生效" : getCompressionPreset(preset).description}</small></label>
+          <label className="compression-field"><span>内置预设</span><select value={preset} onChange={(event) => applyPreset(event.target.value as CompressionPreset)} disabled={busy}><option value="custom">自定义</option>{COMPRESSION_PRESETS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><small className="compression-field-hint">{preset === "custom" ? "手动参数；JPEG/WebP 有损质量、PNG 优化和 WebP 无损语义分别生效" : getCompressionPreset(preset).description}</small></label><button type="button" className="compression-secondary-button compression-balanced-reset" onClick={restoreBalancedDefaults} disabled={busy}>恢复平衡默认</button>
           <div className="compression-custom-presets" aria-label="自定义压缩预设">
             <label className="compression-field"><span>自定义预设</span><select value={customPresetId} onChange={(event) => applyCustomPreset(event.target.value)} disabled={busy}><option value="">选择已保存预设</option>{customPresets.map((customPreset) => <option key={customPreset.id} value={customPreset.id}>{customPreset.name}</option>)}</select></label>
             <div className="compression-preset-save-row"><input className="compression-preset-name" value={customPresetName} placeholder="预设名称" aria-label="压缩预设名称" onChange={(event) => setCustomPresetName(event.target.value)} disabled={busy} /><button type="button" className="compression-secondary-button" disabled={busy || !customPresetName.trim()} onClick={saveCurrentAsCustomPreset}>保存当前参数</button></div>

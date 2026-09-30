@@ -204,11 +204,15 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("pngOptimizeAlpha");
     expect(compressionView).toContain("pngOptimizationLevel");
     expect(compressionView).toContain("内置预设");
+    expect(compressionView).toContain("恢复平衡默认");
+    expect(compressionView).toContain("disabled={busy}");
+    expect(compressionView).toContain("DEFAULT_COMPRESSION_PREFERENCES.format");
     expect(compressionView).toContain("保存当前参数");
     expect(compressionView).toContain("导出 JSON");
     expect(compressionView).toContain("导入 JSON");
     expect(compressionView).toContain("loadCompressionCustomPresets");
     expect(compressionView).toContain("importCompressionPresetsJson");
+    expect(compressionCss).toContain(".compression-balanced-reset { justify-self: start; }");
     expect(compressionView).toContain("JPEG 使用质量滑块进行有损编码");
     expect(compressionView).toContain("当前为有损 WebP；质量滑块控制编码质量");
     expect(compressionView).toContain("核心最多尝试 ${maxCandidates} 个 WebP 质量候选");
