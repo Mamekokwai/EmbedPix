@@ -343,6 +343,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setEstimateNote(formatCompressionEstimateSource("fallback", "压缩任务进行中"));
       return () => controller.abort();
     }
+    if (options.metadataPolicy === "stripSafe" && stripSafeInputVerified !== true) {
+      setEstimateNote(formatCompressionEstimateSource("fallback", stripSafeInputVerified === null ? "正在校验安全清理输入" : "安全清理校验失败，正在切换兼容模式"));
+      return () => controller.abort();
+    }
     if (!selectedItem?.sourcePath) {
       setEstimateNote(formatCompressionEstimateSource("fallback", "浏览器文件不支持原生精确预估"));
       return () => controller.abort();
@@ -384,7 +388,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       }
     })();
     return () => controller.abort();
-  }, [active, busy, items, options, selectedItem]);
+  }, [active, busy, items, options, selectedItem, stripSafeInputVerified]);
 
   useEffect(() => {
     if (replaceOriginal && !replaceOriginalAvailable) setReplaceOriginal(false);
@@ -462,6 +466,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setPreviewError("压缩任务进行中，暂缓生成预览。");
       return () => controller.abort();
     }
+    if (options.metadataPolicy === "stripSafe" && stripSafeInputVerified !== true) {
+      setPreviewBusy(false);
+      setPreviewError(stripSafeInputVerified === null ? "正在校验安全清理输入，校验完成后生成预览。" : "安全清理校验失败，正在切换兼容模式。");
+      return () => controller.abort();
+    }
     if (!isTauriEnvironment()) {
       setPreviewBusy(false);
       setPreviewError("真实压缩预览需要桌面应用；当前环境只显示原图和参数估算。");
@@ -488,7 +497,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [active, busy, options, selectedItem]);
+  }, [active, busy, options, selectedItem, stripSafeInputVerified]);
 
   const addBrowserFiles = (files: File[], replaceItemId: string | null = null) => {
     const { accepted, unsupported, oversized } = splitCompressionImportFiles(files, maxInputBytes);
