@@ -642,7 +642,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             output: typeof next.outputBytes === "number" ? next.outputBytes : current.output,
           }));
           const progressError = formatCompressionProgressError(next);
-          if (progressError) setMessage(progressError);
+          if (progressError) setMessage(formatCompressionError(progressError));
         } catch {
           return;
         }
