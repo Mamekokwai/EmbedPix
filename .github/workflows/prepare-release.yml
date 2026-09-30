@@ -234,6 +234,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
+      - name: Run signing cleanup smoke
+        run: npm run check:release-signing-cleanup
+
       - name: Require updater signing key
         shell: pwsh
         env:
