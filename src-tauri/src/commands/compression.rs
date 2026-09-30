@@ -2564,6 +2564,7 @@ fn classify_error_code(stage: CompressionStage, message: &str) -> CompressionErr
     }
     if lower.contains("decode")
         || lower.contains("inspect input")
+        || lower.contains("inspect gif input")
         || lower.contains("dimensions")
         || lower.contains("opaque")
         || lower.contains("animated gif input")
@@ -4468,6 +4469,18 @@ mod tests {
             "decode"
         );
         for message in [
+            "failed to inspect input image: unknown format",
+            "failed to read image dimensions: invalid PNG signature",
+            "failed to decode input image: invalid JPEG data",
+            "failed to inspect GIF input: unexpected end of file",
+            "input image dimensions exceed the compression limit",
+        ] {
+            assert_eq!(
+                classify_error_code(CompressionStage::Failed, message).as_str(),
+                "decode"
+            );
+        }
+        for message in [
             "animated GIF input is not supported; provide a static GIF",
             "animated WebP input is not supported; provide a static WebP",
             "invalid WebP container length",
@@ -4488,6 +4501,14 @@ mod tests {
         );
         assert_eq!(
             classify_error_code(CompressionStage::Failed, "failed to optimize png").as_str(),
+            "encode"
+        );
+        assert_eq!(
+            classify_error_code(
+                CompressionStage::Failed,
+                "failed to inspect compressed output"
+            )
+            .as_str(),
             "encode"
         );
         assert_eq!(
