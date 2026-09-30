@@ -211,6 +211,12 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
                 ))?,
         ),
     };
+    if target_resize_percent.is_some() && (!matches!(format, "jpg" | "jpeg" | "webp") || lossless) {
+        return Err((
+            "request_error",
+            "targetResizePercent 仅支持 JPEG 或有损 WebP".into(),
+        ));
+    }
     let result = compression::compress_file_cli_with_advanced_options(
         std::path::Path::new(&input_path),
         std::path::Path::new(&output_path),
@@ -423,6 +429,18 @@ mod tests {
             payload[field] = value;
             assert_eq!(execute_compression(payload).unwrap_err().0, "request_error");
         }
+        assert_eq!(
+            execute_compression(json!({ "inputPath": "input.png", "outputPath": "output.png", "format": "png", "targetResizePercent": 50 }))
+                .unwrap_err()
+                .0,
+            "request_error"
+        );
+        assert_eq!(
+            execute_compression(json!({ "inputPath": "input.png", "outputPath": "output.webp", "format": "webp", "lossless": true, "targetResizePercent": 50 }))
+                .unwrap_err()
+                .0,
+            "request_error"
+        );
         assert_eq!(execute_compression(json!({ "inputPath": "missing.png", "outputPath": "output.webp", "format": "webp", "quality": 82 })).unwrap_err().0, "compression_error");
     }
 }
