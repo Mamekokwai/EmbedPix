@@ -191,33 +191,36 @@ pub(crate) fn encode_near_lossless_rgba(
     if method > 6 {
         return Err("WebP method must be between 0 and 6".into());
     }
+    encode_lossless_variant(image, method, Some(near_lossless))
+}
 
+pub(crate) fn encode_lossless_rgba_with_method(
+    image: &RgbaImage,
+    method: u8,
+) -> Result<Vec<u8>, String> {
+    if method > 6 {
+        return Err("WebP method must be between 0 and 6".into());
+    }
+    encode_lossless_variant(image, method, None)
+}
+
+fn encode_lossless_variant(
+    image: &RgbaImage,
+    method: u8,
+    near_lossless: Option<u8>,
+) -> Result<Vec<u8>, String> {
     let width = i32::try_from(image.width()).map_err(|_| "WebP width is too large")?;
     let height = i32::try_from(image.height()).map_err(|_| "WebP height is too large")?;
     let pixels = image.as_raw();
-    let opaque = pixels.chunks_exact(4).all(|pixel| pixel[3] == 255);
-    let rgb_pixels = opaque.then(|| {
-        pixels
-            .chunks_exact(4)
-            .flat_map(|pixel| [pixel[0], pixel[1], pixel[2]])
-            .collect::<Vec<_>>()
-    });
-    let (input, stride) = if let Some(rgb_pixels) = rgb_pixels.as_deref() {
-        (
-            rgb_pixels.as_ptr(),
-            width
-                .checked_mul(3)
-                .ok_or_else(|| "WebP RGB stride is too large".to_string())?,
-        )
-    } else {
-        (
-            pixels.as_ptr(),
-            width
-                .checked_mul(4)
-                .ok_or_else(|| "WebP RGBA stride is too large".to_string())?,
-        )
-    };
-
+    let mut argb_pixels = pixels
+        .chunks_exact(4)
+        .map(|pixel| {
+            (u32::from(pixel[3]) << 24)
+                | (u32::from(pixel[0]) << 16)
+                | (u32::from(pixel[1]) << 8)
+                | u32::from(pixel[2])
+        })
+        .collect::<Vec<_>>();
     let mut config = unsafe { std::mem::zeroed::<webp::WebPConfig>() };
     let initialized =
         unsafe { webp::WebPConfigPreset(&mut config, webp::WEBP_PRESET_DEFAULT, 75.0) } != 0;
@@ -225,7 +228,12 @@ pub(crate) fn encode_near_lossless_rgba(
         return Err("libwebp failed to initialize WebP near-lossless configuration".into());
     }
     config.lossless = 1;
-    config.near_lossless = c_int::from(near_lossless);
+    // Keep the explicit lossless path independent from the preset's lossy quality default.
+    config.quality = 100.0;
+    config.near_lossless = 100;
+    if let Some(near_lossless) = near_lossless {
+        config.near_lossless = c_int::from(near_lossless);
+    }
     config.method = c_int::from(method);
     config.exact = 1;
     if unsafe { webp::WebPValidateConfig(&config) } == 0 {
@@ -242,15 +250,11 @@ pub(crate) fn encode_near_lossless_rgba(
     picture.height = height;
     picture.writer = Some(write_to_memory);
     picture.custom_ptr = (&mut writer as *mut webp::WebPMemoryWriter).cast::<c_void>();
+    picture.use_argb = 1;
+    picture.argb = argb_pixels.as_mut_ptr();
+    picture.argb_stride = width;
 
-    let imported = unsafe {
-        if opaque {
-            webp::WebPPictureImportRGB(&mut picture, input, stride)
-        } else {
-            webp::WebPPictureImportRGBA(&mut picture, input, stride)
-        }
-    } != 0;
-    let encoded = imported && unsafe { webp::WebPEncode(&config, &mut picture) } != 0;
+    let encoded = unsafe { webp::WebPEncode(&config, &mut picture) } != 0;
     let bytes = if encoded && !writer.mem.is_null() {
         unsafe { slice::from_raw_parts(writer.mem, writer.size).to_vec() }
     } else {
@@ -261,7 +265,11 @@ pub(crate) fn encode_near_lossless_rgba(
         webp::WebPMemoryWriterClear(&mut writer);
     }
     if !encoded || bytes.is_empty() {
-        return Err("libwebp failed to encode a near-lossless WebP image".into());
+        return Err(if near_lossless.is_some() {
+            "libwebp failed to encode a near-lossless WebP image".into()
+        } else {
+            "libwebp failed to encode a lossless WebP image with the requested method".into()
+        });
     }
     Ok(bytes)
 }
@@ -476,6 +484,28 @@ mod tests {
         assert!(chunk_types(&output)
             .iter()
             .all(|kind| kind != b"ANIM" && kind != b"ANMF"));
+    }
+
+    #[test]
+    fn lossless_method_outputs_are_decodable_and_preserve_pixels() {
+        let source = sample_image(false);
+        let expected = source.clone();
+        for method in 0..=6 {
+            let output = encode_lossless_rgba_with_method(&source, method).unwrap();
+            let decoded = image::load_from_memory(&output).unwrap().to_rgba8();
+            assert_eq!(decoded, expected, "method {method} changed lossless pixels");
+        }
+        assert!(encode_lossless_rgba_with_method(&source, 7).is_err());
+    }
+
+    #[test]
+    fn lossless_method_preserves_transparent_pixels_and_alpha() {
+        let source = sample_image(true);
+        for method in 0..=6 {
+            let output = encode_lossless_rgba_with_method(&source, method).unwrap();
+            let decoded = image::load_from_memory(&output).unwrap().to_rgba8();
+            assert_eq!(decoded, source, "method {method} changed RGBA pixels");
+        }
     }
 
     #[test]

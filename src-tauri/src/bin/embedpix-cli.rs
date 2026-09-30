@@ -179,7 +179,26 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
             .as_bool()
             .ok_or(("request_error", "jpegOptimizeHuffman 必须是布尔值".into()))?,
     };
-    let result = compression::compress_file_cli_with_jpeg_options(
+    let lossless = match payload.get("lossless") {
+        None => format.eq_ignore_ascii_case("png"),
+        Some(value) => value
+            .as_bool()
+            .ok_or(("request_error", "lossless 必须是布尔值".into()))?,
+    };
+    let webp_lossless_method = match payload.get("webpLosslessMethod") {
+        None => None,
+        Some(value) => Some(
+            value
+                .as_u64()
+                .filter(|value| *value <= 6)
+                .map(|value| value as u8)
+                .ok_or((
+                    "request_error",
+                    "webpLosslessMethod 必须是 0 到 6 的无符号整数".into(),
+                ))?,
+        ),
+    };
+    let result = compression::compress_file_cli_with_advanced_options(
         std::path::Path::new(&input_path),
         std::path::Path::new(&output_path),
         format,
@@ -187,6 +206,8 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
         max_input_bytes,
         jpeg_progressive,
         jpeg_optimize_huffman,
+        lossless,
+        webp_lossless_method,
     )
     .map_err(|error| ("compression_error", error))?;
     serde_json::to_value(result).map_err(|error| ("response_error", error.to_string()))
@@ -372,6 +393,16 @@ mod tests {
         for field in ["jpegProgressive", "jpegOptimizeHuffman"] {
             let mut payload = json!({ "inputPath": "input.png", "outputPath": "output.jpg" });
             payload[field] = json!("true");
+            assert_eq!(execute_compression(payload).unwrap_err().0, "request_error");
+        }
+        for (field, value) in [
+            ("lossless", json!("true")),
+            ("webpLosslessMethod", json!(7)),
+            ("webpLosslessMethod", json!(6.5)),
+            ("webpLosslessMethod", json!("6")),
+        ] {
+            let mut payload = json!({ "inputPath": "input.png", "outputPath": "output.webp" });
+            payload[field] = value;
             assert_eq!(execute_compression(payload).unwrap_err().0, "request_error");
         }
         assert_eq!(execute_compression(json!({ "inputPath": "missing.png", "outputPath": "output.webp", "format": "webp", "quality": 82 })).unwrap_err().0, "compression_error");

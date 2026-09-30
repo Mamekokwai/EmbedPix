@@ -193,6 +193,19 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, webpPass: 2 })).toThrow("仅支持有损 WebP");
   });
 
+  it("serializes and validates optional lossless WebP effort", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, lossless: true, webpLosslessMethod: 6 });
+    const length = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
+    expect(metadata.webpLosslessMethod).toBe(6);
+    const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "webp", jpegQuality: 82, lossless: true, metadataPolicy: "strip", pngOptimizationLevel: 2, webpLosslessMethod: 3 });
+    const estimateLength = new DataView(estimate.buffer).getUint32(4, true);
+    expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).webpLosslessMethod).toBe(3);
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: true, webpLosslessMethod: 7 })).toThrow("webpLosslessMethod");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, webpLosslessMethod: 4 })).toThrow("仅支持无损 WebP");
+    expect(() => encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "png", jpegQuality: 82, lossless: true, metadataPolicy: "strip", pngOptimizationLevel: 2, webpLosslessMethod: 4 })).toThrow("仅支持无损 WebP");
+  });
+
   it("rejects PNG optimization levels outside the native contract", () => {
     expect(() => encodeCompressionEnvelope({ ...request, pngOptimizationLevel: 7 })).toThrow("pngOptimizationLevel");
   });

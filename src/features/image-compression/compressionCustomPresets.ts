@@ -14,6 +14,7 @@ export interface CompressionPresetValues {
   webpPass: number;
   pngOptimizeAlpha?: boolean;
   webpNearLossless: number | null;
+  webpLosslessMethod?: number | null;
   jpegBackground: string;
   jpegProgressive?: boolean;
   jpegOptimizeHuffman?: boolean;
@@ -87,6 +88,11 @@ function webpNearLosslessValue(value: unknown, index: number): number | null {
   return value;
 }
 
+function webpLosslessMethodValue(value: unknown, index: number): number | null {
+  if (value === undefined || value === null) return null;
+  return integerValue(value, COMPRESSION_WEBP_METHOD_MIN, COMPRESSION_WEBP_METHOD_MAX, "WebP 无损编码 effort", index);
+}
+
 function jpegBackgroundValue(value: unknown, index: number): string {
   if (typeof value !== "string" || !/^#[0-9a-f]{6}$/iu.test(value.trim())) throw new Error(`第 ${index + 1} 个压缩预设的 JPEG 透明背景无效。`);
   return value.trim().toLowerCase();
@@ -102,6 +108,8 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
   if (targetSizeEnabled && !supportsCompressionTargetSize(format, lossless)) throw new Error(`第 ${index + 1} 个压缩预设的目标体积不适用于当前格式。`);
   const webpNearLossless = webpNearLosslessValue(record.webpNearLossless, index);
   if (webpNearLossless !== null && (format !== "webp" || !lossless)) throw new Error(`第 ${index + 1} 个压缩预设的 WebP 近无损等级仅适用于无损 WebP。`);
+  const webpLosslessMethod = webpLosslessMethodValue(record.webpLosslessMethod, index);
+  if (webpLosslessMethod !== null && (format !== "webp" || !lossless)) throw new Error(`第 ${index + 1} 个压缩预设的 WebP 无损编码 effort 仅适用于无损 WebP。`);
   const jpegBackground = record.jpegBackground === undefined ? "#ffffff" : jpegBackgroundValue(record.jpegBackground, index);
   return {
     format,
@@ -111,6 +119,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     webpPass: record.webpPass === undefined ? 1 : integerValue(record.webpPass, 1, 10, "WebP 分析遍数", index),
     pngOptimizeAlpha: record.pngOptimizeAlpha === true,
     webpNearLossless,
+    webpLosslessMethod,
     jpegBackground,
     jpegProgressive: record.jpegProgressive === true,
     jpegOptimizeHuffman: record.jpegOptimizeHuffman === true,
@@ -138,6 +147,8 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   if (!Number.isInteger(values.webpPass) || values.webpPass < 1 || values.webpPass > 10) throw new Error("WebP 分析遍数必须在 1 到 10 之间。");
   if (values.webpNearLossless !== null && (!Number.isInteger(values.webpNearLossless) || values.webpNearLossless < 1 || values.webpNearLossless > 99)) throw new Error("WebP 近无损等级必须在 1 到 99 之间。");
   if (values.webpNearLossless !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 近无损等级仅适用于无损 WebP。");
+  if (values.webpLosslessMethod !== undefined && values.webpLosslessMethod !== null && (!Number.isInteger(values.webpLosslessMethod) || values.webpLosslessMethod < COMPRESSION_WEBP_METHOD_MIN || values.webpLosslessMethod > COMPRESSION_WEBP_METHOD_MAX)) throw new Error("WebP 无损编码 effort 必须在 0 到 6 之间。");
+  if (values.webpLosslessMethod !== undefined && values.webpLosslessMethod !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 无损编码 effort 仅适用于无损 WebP。");
   if (values.maxRgbMae !== "" && (values.format !== "webp" || values.lossless || !values.targetSizeEnabled)) throw new Error("RGB MAE 阈值仅适用于启用目标体积的有损 WebP。");
   if (!/^#[0-9a-f]{6}$/iu.test(values.jpegBackground.trim())) throw new Error("JPEG 透明背景必须是 #RRGGBB 颜色。");
   if ((values.jpegProgressive || values.jpegOptimizeHuffman) && values.format !== "jpg") throw new Error("JPEG 高级编码选项仅适用于 JPEG 输出。");

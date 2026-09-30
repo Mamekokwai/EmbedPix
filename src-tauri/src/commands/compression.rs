@@ -28,8 +28,8 @@ use super::{
     path_security,
     webp_metadata::{apply_strip_safe as apply_webp_strip_safe, extract_static_icc},
     webp_static::{
-        encode_lossy_rgba, encode_lossy_rgba_with_method_and_alpha_quality,
-        encode_near_lossless_rgba,
+        encode_lossless_rgba_with_method, encode_lossy_rgba,
+        encode_lossy_rgba_with_method_and_alpha_quality, encode_near_lossless_rgba,
     },
 };
 
@@ -471,6 +471,8 @@ struct CompressionMetadata {
     #[serde(default)]
     webp_near_lossless: Option<u8>,
     #[serde(default)]
+    webp_lossless_method: Option<u8>,
+    #[serde(default)]
     lossless: Option<bool>,
     #[serde(default = "default_skip_if_larger")]
     skip_if_larger: bool,
@@ -515,6 +517,8 @@ struct CompressionEstimateMetadata {
     webp_pass: Option<u8>,
     #[serde(default)]
     webp_near_lossless: Option<u8>,
+    #[serde(default)]
+    webp_lossless_method: Option<u8>,
     #[serde(default)]
     lossless: Option<bool>,
     #[serde(default = "default_skip_if_larger")]
@@ -1021,6 +1025,31 @@ pub fn compress_file_cli_with_jpeg_options(
     jpeg_progressive: bool,
     jpeg_optimize_huffman: bool,
 ) -> Result<CompressionResult, String> {
+    compress_file_cli_with_advanced_options(
+        input_path,
+        output_path,
+        format,
+        quality,
+        max_input_bytes,
+        jpeg_progressive,
+        jpeg_optimize_huffman,
+        format.eq_ignore_ascii_case("png"),
+        None,
+    )
+}
+
+/// Runs the CLI compression path with JPEG controls and optional lossless WebP method.
+pub fn compress_file_cli_with_advanced_options(
+    input_path: &Path,
+    output_path: &Path,
+    format: &str,
+    quality: u8,
+    max_input_bytes: Option<u64>,
+    jpeg_progressive: bool,
+    jpeg_optimize_huffman: bool,
+    lossless: bool,
+    webp_lossless_method: Option<u8>,
+) -> Result<CompressionResult, String> {
     let input =
         fs::read(input_path).map_err(|error| format!("failed to read input image: {error}"))?;
     let metadata = serde_json::json!({
@@ -1031,12 +1060,13 @@ pub fn compress_file_cli_with_jpeg_options(
         "sourcePath": input_path,
         "overwriteExisting": false,
         "jpegQuality": quality,
-        "lossless": format.eq_ignore_ascii_case("png"),
+        "lossless": lossless,
         "skipIfLarger": false,
         "maxInputBytes": max_input_bytes,
         "metadataPolicy": "strip",
         "jpegProgressive": jpeg_progressive,
         "jpegOptimizeHuffman": jpeg_optimize_huffman,
+        "webpLosslessMethod": webp_lossless_method,
     });
     let metadata = serde_json::to_vec(&metadata).map_err(|error| error.to_string())?;
     let mut payload = b"EGF1".to_vec();
@@ -1352,6 +1382,22 @@ fn validate_webp_near_lossless(
     Ok(())
 }
 
+fn validate_webp_lossless_method(
+    method: Option<u8>,
+    format: CompressionFormat,
+    lossless: bool,
+) -> Result<(), String> {
+    if let Some(method) = method {
+        if method > 6 {
+            return Err("webpLosslessMethod must be between 0 and 6".into());
+        }
+        if format != CompressionFormat::Webp || !lossless {
+            return Err("webpLosslessMethod is only supported for lossless WebP".into());
+        }
+    }
+    Ok(())
+}
+
 fn parse_jpeg_background(value: Option<&str>) -> Result<[u8; 3], String> {
     let value = value.unwrap_or("#ffffff").trim();
     let hex = value
@@ -1459,6 +1505,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_alpha_quality,
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
+            request.metadata.webp_lossless_method,
             request.metadata.metadata_policy,
             request.jpeg_options(),
         )?;
@@ -1491,6 +1538,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_alpha_quality,
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
+            request.metadata.webp_lossless_method,
             request.metadata.metadata_policy,
             request.jpeg_options(),
         )?;
@@ -1555,6 +1603,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_alpha_quality,
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
+            request.metadata.webp_lossless_method,
             request.metadata.metadata_policy,
             request.jpeg_options(),
         )?;
@@ -1656,6 +1705,7 @@ fn choose_webp_output_with_rgb_mae(
             request.metadata.webp_alpha_quality,
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
+            request.metadata.webp_lossless_method,
             request.metadata.metadata_policy,
             request.jpeg_options(),
         )?;
@@ -1742,6 +1792,7 @@ fn encode_and_verify(
     webp_alpha_quality: Option<u8>,
     webp_pass: Option<u8>,
     webp_near_lossless: Option<u8>,
+    webp_lossless_method: Option<u8>,
     metadata_policy: MetadataPolicy,
     jpeg_options: JpegEncodingOptions,
 ) -> Result<Vec<u8>, String> {
@@ -1757,6 +1808,7 @@ fn encode_and_verify(
         webp_alpha_quality,
         webp_pass,
         webp_near_lossless,
+        webp_lossless_method,
         metadata_policy,
         jpeg_options,
     )?;
@@ -2050,6 +2102,7 @@ fn encode_image_with_webp_method(
         webp_alpha_quality,
         webp_pass,
         webp_near_lossless,
+        None,
         MetadataPolicy::Strip,
         JpegEncodingOptions::default(),
     )
@@ -2068,6 +2121,7 @@ fn encode_image_with_webp_method_alpha(
     webp_alpha_quality: Option<u8>,
     webp_pass: Option<u8>,
     webp_near_lossless: Option<u8>,
+    webp_lossless_method: Option<u8>,
     metadata_policy: MetadataPolicy,
     jpeg_options: JpegEncodingOptions,
 ) -> Result<Vec<u8>, String> {
@@ -2147,6 +2201,8 @@ fn encode_image_with_webp_method_alpha(
                     near_lossless,
                     webp_method.unwrap_or(4),
                 )?;
+            } else if let Some(method) = webp_lossless_method {
+                output.bytes = encode_lossless_rgba_with_method(&image.to_rgba8(), method)?;
             } else {
                 image
                     .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::WebP)
@@ -2386,6 +2442,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     validate_webp_alpha_quality(metadata.webp_alpha_quality, format, lossless)?;
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
+    validate_webp_lossless_method(metadata.webp_lossless_method, format, lossless)?;
     validate_compression_mode(format, lossless)?;
     validate_compression_metadata_policy(metadata.metadata_policy)?;
     if metadata.replace_original && metadata.source_path.is_none() {
@@ -2520,6 +2577,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     validate_webp_alpha_quality(metadata.webp_alpha_quality, format, lossless)?;
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
+    validate_webp_lossless_method(metadata.webp_lossless_method, format, lossless)?;
     validate_compression_mode(format, lossless)?;
     validate_compression_metadata_policy(metadata.metadata_policy)?;
     let input = body[end..].to_vec();
@@ -2555,6 +2613,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             webp_alpha_quality: metadata.webp_alpha_quality,
             webp_pass: metadata.webp_pass,
             webp_near_lossless: metadata.webp_near_lossless,
+            webp_lossless_method: metadata.webp_lossless_method,
             lossless: Some(lossless),
             skip_if_larger: metadata.skip_if_larger,
             max_output_bytes: metadata.max_output_bytes,
@@ -3242,6 +3301,7 @@ mod tests {
                 webp_alpha_quality: None,
                 webp_pass: None,
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(true),
                 skip_if_larger: false,
                 max_output_bytes: None,
@@ -3397,6 +3457,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             MetadataPolicy::StripSafe,
             JpegEncodingOptions::default(),
         )
@@ -3439,6 +3500,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             MetadataPolicy::Strip,
             JpegEncodingOptions::default(),
         )
@@ -3456,6 +3518,7 @@ mod tests {
             2,
             false,
             true,
+            None,
             None,
             None,
             None,
@@ -3484,6 +3547,7 @@ mod tests {
             2,
             false,
             true,
+            None,
             None,
             None,
             None,
@@ -3557,6 +3621,7 @@ mod tests {
             2,
             false,
             true,
+            None,
             None,
             None,
             None,
@@ -3639,6 +3704,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
                 MetadataPolicy::Strip,
                 JpegEncodingOptions::default(),
             )
@@ -3693,6 +3759,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             MetadataPolicy::Strip,
             JpegEncodingOptions {
                 progressive: true,
@@ -3714,6 +3781,7 @@ mod tests {
             2,
             2,
             false,
+            None,
             None,
             None,
             None,
@@ -3758,6 +3826,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             MetadataPolicy::StripSafe,
             JpegEncodingOptions::default(),
         )
@@ -3783,6 +3852,7 @@ mod tests {
             2,
             2,
             false,
+            None,
             None,
             None,
             None,
@@ -3865,6 +3935,7 @@ mod tests {
                 webp_alpha_quality: None,
                 webp_pass: None,
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(false),
                 skip_if_larger: false,
                 max_output_bytes: None,
@@ -4123,6 +4194,24 @@ mod tests {
     }
 
     #[test]
+    fn validates_webp_lossless_method_contract_for_requests_and_estimates() {
+        let metadata = r#"{"fileName":"sample.png","outputFormat":"webp","lossless":true,"webpLosslessMethod":6}"#;
+        let request = parse_raw_payload(&raw_payload(metadata, &png_input())).unwrap();
+        assert_eq!(request.metadata.webp_lossless_method, Some(6));
+        let estimate = parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).unwrap();
+        assert_eq!(estimate.metadata.webp_lossless_method, Some(6));
+
+        for metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":true,"webpLosslessMethod":7}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"webpLosslessMethod":4}"#,
+            r#"{"fileName":"sample.png","outputFormat":"png","webpLosslessMethod":4}"#,
+        ] {
+            assert!(parse_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+            assert!(parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+        }
+    }
+
+    #[test]
     fn validates_jpeg_background_contract_for_requests_and_estimates() {
         let metadata =
             r##"{"fileName":"sample.png","outputFormat":"jpeg","jpegBackground":"#123456"}"##;
@@ -4328,6 +4417,7 @@ mod tests {
                 webp_alpha_quality: None,
                 webp_pass: None,
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(true),
                 skip_if_larger: true,
                 max_output_bytes: None,
@@ -4851,6 +4941,7 @@ mod tests {
                 webp_alpha_quality: None,
                 webp_pass: None,
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(true),
                 skip_if_larger: true,
                 max_output_bytes: None,
@@ -4958,6 +5049,7 @@ mod tests {
                 webp_alpha_quality: None,
                 webp_pass: None,
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(true),
                 skip_if_larger: true,
                 max_output_bytes: None,
@@ -5614,6 +5706,7 @@ mod tests {
                 webp_alpha_quality: None,
                 webp_pass: None,
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(false),
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
@@ -5685,6 +5778,7 @@ mod tests {
                 webp_alpha_quality: Some(60),
                 webp_pass: Some(10),
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(false),
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
@@ -5742,6 +5836,7 @@ mod tests {
                 webp_alpha_quality: None,
                 webp_pass: None,
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(false),
                 skip_if_larger: true,
                 max_output_bytes: Some(1),
@@ -5868,6 +5963,7 @@ mod tests {
                 webp_alpha_quality: None,
                 webp_pass: None,
                 webp_near_lossless: None,
+                webp_lossless_method: None,
                 lossless: Some(true),
                 skip_if_larger: false,
                 max_output_bytes: Some(1),

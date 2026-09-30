@@ -12,8 +12,8 @@
 - 交互与诊断增强：格式感知的高质量/平衡/小体积/自定义预设已落地；JPEG 渐进式与优化 Huffman 选项已接入并默认关闭；进度响应增加兼容性的可选错误码；发布链路增加本地 manifest/PE 边界 fixture。
 - 本轮回归结论：WebP 有损已接入静态 `libwebp-sys2` 0.2.0 封装；method 0–6 已通过初始化 FFI 接入 RGB/RGBA、预览、估算和候选搜索，默认 method=4 与旧路径兼容；无损 WebP 新增 80/90/95 近无损等级，标准无损仍为默认，三条编码路径共用同一协议并验证无动画块、尺寸、解码和 Alpha。目标体积候选搜索次数现可在前端选择 1–12 次，默认 8，偏好和自定义预设向后兼容，核心仍强制范围校验；预览、估算和正式结果现在返回并展示实际候选数量与搜索耗时（旧核心响应缺失这些字段时安全隐藏），正式候选搜索在每次编码前后检查取消信号。元数据策略也纳入三类原生响应，正式压缩、预览与估算会回报实际采用的 `strip`、`stripAll` 或 `stripSafe`；`stripAll` 使用无元数据编码路径并保持旧 `strip` 兼容，WebP `stripSafe` 仅限静态同格式路径并回报实际策略，估算请求不再隐式依赖核心默认值。由 Rust 边界负责质量范围、输出复制与释放。JPEG 透明输入现在必须按 `jpegBackground`（默认白色）合成后再编码，不再静默丢弃 Alpha；正式输出与体积估算共用同一背景策略，并验证解码结果与颜色接近度。当前 x64 Windows 静态构建已通过；ARM64 尚未在本环境安装目标，发布前仍需按架构复核。JPEG EXIF Orientation 已通过固定 `kamadak-exif` 0.6.1 在 strip 解码入口归一化。
 - 第二阶段已交付：压缩后更大则跳过、源文件夹/子目录/指定目录输出、实际输入输出体积与节省统计、逐项原图/输出（或候选）体积与节省/增加比例、跳过原因展示；批量导入现在会按稳定 itemId 关联同名文件的重试和体积统计，并在进入队列前拦截超过 32 MiB 的图片。
-- 第一阶段限制：单文件输入上限可在 1–32 MiB 内配置，默认 32 MiB，native 硬上限不会被放宽；WebP 有损使用质量 1–100、method 0–6、分析遍数 1–10 和 Alpha 质量 0–100（默认分别为 1 和 100；分析遍数影响编码分析耗时与结果，不代表画质）；近无损仅支持无损 WebP 的 1–99 协议值，界面提供 80/90/95，编码 effort 仍未单独开放；JPEG 不支持无损，含透明像素时按已校验的 `#RRGGBB` 背景合成（默认白色）；压缩支持 `strip`、PNG→PNG/JPEG→JPEG/静态 WebP→WebP 的 `stripSafe` 和明确删除所有可由当前编码器输出的元数据的 `stripAll`，`preserve` 仍由 native 以明确理由拒绝；三种 `stripSafe` 只保留结构合法且有界的 ICC payload（不保证 ICC 内部色彩语义），并移除 EXIF/GPS/XMP/COM/其他输入 metadata；浏览器预览不能直接执行原生压缩；同名文件默认拒绝写入，不自动改名。
-- 下一阶段优先级：完整元数据策略、WebP effort 独立控制，以及跨架构发布复核；当前压缩结果已明确回报实际模式与编码后端，但尚未开放用户选择 auto/backend。
+- 第一阶段限制：单文件输入上限可在 1–32 MiB 内配置，默认 32 MiB，native 硬上限不会被放宽；WebP 有损使用质量 1–100、method 0–6、分析遍数 1–10 和 Alpha 质量 0–100（默认分别为 1 和 100；分析遍数影响编码分析耗时与结果，不代表画质）；无损 WebP 支持可选 method 0–6，默认不发送并保留旧编码路径，近无损继续支持 1–99 协议值；JPEG 不支持无损，含透明像素时按已校验的 `#RRGGBB` 背景合成（默认白色）；压缩支持 `strip`、PNG→PNG/JPEG→JPEG/静态 WebP→WebP 的 `stripSafe` 和明确删除所有可由当前编码器输出的元数据的 `stripAll`，`preserve` 仍由 native 以明确理由拒绝；三种 `stripSafe` 只保留结构合法且有界的 ICC payload（不保证 ICC 内部色彩语义），并移除 EXIF/GPS/XMP/COM/其他输入 metadata；浏览器预览不能直接执行原生压缩；同名文件默认拒绝写入，不自动改名。
+- 下一阶段优先级：完整元数据策略、可选编码后端与跨架构发布复核；当前压缩结果已明确回报实际模式与编码后端，但尚未开放用户选择 auto/backend。
 - 本轮运行时复核：压缩页在 360×500、320×480 下无横向溢出，GIF 页在相同尺寸展开设置时 footer 与设置卡无重叠，700×1100 窄宽布局保持单列；本轮已完成 GIF 异步交互修复并通过回归验证。图片转换、压缩预览、GIF 帧/视频抽帧和下载 Blob URL 已复核创建/回收配对，取消、过期请求、替换、删除、清空及卸载路径未发现可证实的新泄漏；压缩尺寸读取已提取为可注入契约，覆盖 `createImageBitmap.close`（含尺寸 getter 异常）以及 fallback Blob URL 在加载成功、失败和 `src` 赋值异常时的一次性回收。签名预检已能执行临时签名并用独立 verifier 校验受信公钥，缺少私钥时会在构建前失败。
 - GIF/视频工作区交互审查：导入/拖放控件支持 `role=button` 的 Enter/Space，文件 input change 会清空 value 以支持同文件重选；GIF drop zone 与图片转换视图隔离；帧编辑与导出均有 disabled 与运行时 guard；时长手动编辑可切回 `custom`；压缩规划旧结果会失效且 request-safe；视频模式切换会取消过期抽帧；pending 图片导入期间阻止视频导入；取消 pending 导入可用并静默处理旧解码错误；尺寸读取在移除/清空或组件卸载后不会写回；压缩工作台的文件/文件夹导入、取消任务和打开输出目录错误、压缩跳过原因、native 格式边界错误、图片转换工作台的读取/检查/编码/写入/输出目录选择/导出预检错误、批量文件名模板规划错误、工作区导入校验错误以及预设导入校验错误会将已知协议前缀本地化并保留细节；更新页会显示失败原因、隐藏纯英文底层错误，并对发布页打开错误做同样脱敏，移除单项会清理对应尺寸错误；无帧或导出中按钮保持禁用。前端 32 个测试文件 / 381 个测试通过，types 与 lint 通过。
 - 本轮已完成两项协议修复：图片转换批量原生磁盘预检现在按每个输入的实际目标尺寸累计预算，修复混合尺寸与保持比例场景下的预算偏差；GIF/WebP/APNG 导出参数摘要现在显示自动压缩实际采用的候选尺寸，并在参数变化后清除陈旧候选状态。
@@ -156,7 +156,7 @@
 - [x] 支持 Alpha 质量：有损 WebP 提供 0–100 控制，默认 100；前端、preview、estimate、正式压缩和目标候选搜索共用同一校验与编码参数，并覆盖透明度回读。
 - [x] 支持编码 method 0–6；默认 4，正式压缩、预览、估算和候选搜索保持一致。
 - [x] 支持分析遍数 `pass` 1–10；默认 1，仅有损 WebP 可用，正式压缩、预览、估算和候选搜索保持一致；该参数表示分析遍数，不等同于画质质量。
-- [~] 支持编码 effort/near-lossless：无损 WebP 已提供 1–99 近无损等级并由现有 libwebp FFI 编码；本轮评估确认 `libwebp-sys2` 0.2.0 的 `WebPConfig` 没有独立 effort 字段：`method` 是唯一质量/速度档位（0–6），`quality` 仅在 lossless 模式下兼作压缩 effort（0–100），有损模式下仍是画质质量；因此新增独立 effort 会重复或重定义底层语义，当前不实现。若后续产品需要，应先明确按编码模式分离的协议含义、默认值、候选搜索与资源预算。
+- [x] 支持编码 effort/near-lossless：无损 WebP 提供可选 `webpLosslessMethod=0..6`，由 libwebp 的 ARGB lossless 路径编码并通过像素级回读验证；省略参数时保留旧 `image` 编码路径。近无损继续使用 1–99 等级，并与 method 共用同一安全校验；`quality` 在 libwebp lossless 中仍表示压缩 effort（0–100），不与前端的 method 档位混用。
 - [~] 支持 WebP 元数据保留/清理策略：WebP `stripSafe` 已完成窄范围实现：仅允许静态 WebP→WebP；有界 RIFF 解析只提取单个结构合法且不超过 4 MiB 的 ICCP，输出通过 RAII mux 删除 EXIF/XMP/旧 ICCP，允许合法 ALPH，且仅允许 VP8X、VP8/VP8L、ALPH 和最多一个合法 ICCP。动画块、重复块、坏 padding、截断/不完整数据、整数溢出、无效 ICC 结构和非白名单输出均拒绝；PNG/JPEG→WebP 与 `preserve` 仍拒绝。
 
   - `stripSafe` 已按该最小可审查方案落地：显式声明 `libwebp-sys2` 的 `mux` feature；仅对静态 WebP 输出在有界 RIFF 解析后允许保留经大小限制和结构校验的 ICCP，默认删除 EXIF/XMP（从而连同 EXIF 内嵌缩略图/GPS 一并删除），允许合法 ALPH，拒绝动画、重复块、坏 padding、非白名单输出、整数溢出和不完整 padding；以 RAII 封装 `WebPMux`/`WebPData`，保证 assemble 失败和早退路径都释放内存。
@@ -263,7 +263,7 @@
 - [x] 输出格式选择。
 - [x] 预设选择。
 - [x] 质量控制：JPEG/WebP 有损均支持 1–100。
-- [ ] 编码 effort 控制。
+- [x] 编码 effort 控制：无损 WebP 新增可选 `webpLosslessMethod=0..6`，默认不发送并保持原有 `image` 编码路径；preview/estimate/formal、Gateway、偏好、自定义预设和 native 校验共用同一范围，选中后使用 libwebp ARGB lossless 配置的 method 档位并回读验证像素一致性。
 - [x] 目标体积开关。
 - [x] 最大体积输入。
 - [ ] Alpha 保留开关。
@@ -367,7 +367,7 @@
 
 - [~] Windows x64 构建：本地已生成 `EmbedPix.exe` 与 `EmbedPix_0.7.0_x64-setup.exe`，并通过 Windows GUI subsystem=2 检查；完整 Tauri 构建仍因本机缺少 `TAURI_SIGNING_PRIVATE_KEY` 未完成签名。
 - [ ] Windows ARM64 构建。
-- [x] 压缩命令行输出、错误输出和退出码：`embedpix-cli` 使用 JSON/JSONL 事件输出成功与进度，错误事件写入 stdout、stderr 保留进程级诊断，退出码区分成功（0）、失败（1）和中断/部分失败（2）；CLI 现在支持 `jpegProgressive` 与 `jpegOptimizeHuffman`，并由 smoke 实际校验 JPEG SOF2；强制 CLI/OxiPNG smoke 已覆盖 PNG、JPEG、WebP、GIF 输出与二次解码。
+- [x] 压缩命令行输出、错误输出和退出码：`embedpix-cli` 使用 JSON/JSONL 事件输出成功与进度，错误事件写入 stdout、stderr 保留进程级诊断，退出码区分成功（0）、失败（1）和中断/部分失败（2）；CLI 现在支持 `jpegProgressive`、`jpegOptimizeHuffman` 与 `lossless + webpLosslessMethod=0..6`，并由 smoke 实际校验 JPEG SOF2 及 WebP 无损 method 0/6 输出；强制 CLI/OxiPNG smoke 已覆盖 PNG、JPEG、WebP、GIF 输出与二次解码。
 - [x] x64 安装、启动、压缩、卸载：`EmbedPix_0.7.0_x64-setup.exe` 隔离 NSIS smoke 安装退出码为 0，`EmbedPix.exe` 通过 GUI subsystem=2 检查，启动 8 秒仍运行，卸载退出码为 0 且临时安装目录清理完成。
 - [ ] ARM64 资产下载、SHA256、签名校验。
 - [~] `latest.json` 与签名文件一致性：本地 fixture 已覆盖清单、URL、签名、摘要与尺寸；真实线上资产待发布时验收。
@@ -440,14 +440,14 @@
 
 1. [x] 创建设计文档和本 TODO。
 2. [~] M0 数据契约和资源限制：第一阶段契约完成，高级模式/后端枚举待扩展。
-3. [~] M1 Rust 压缩核心与安全发布：PNG/JPEG/WebP、预览、目标搜索、OxiPNG、WebP method、schema 版本、活动任务上限和 GIF spool 跨进程锁已完成；WebP effort/near-lossless 独立控制仍待后续。
+3. [~] M1 Rust 压缩核心与安全发布：PNG/JPEG/WebP、预览、目标搜索、OxiPNG、WebP method、无损 WebP 可选编码档位、schema 版本、活动任务上限和 GIF spool 跨进程锁已完成；目标体积自动组合搜索和 near-lossless 策略仍待后续。
 4. [~] M2 PNG/JPEG/WebP 策略与预估：JPEG/WebP 有损目标体积搜索已完成，尺寸联动与更高阶自动择优待后续。
 5. [x] M3 压缩工作区 UI。
 6. [x] M4 设置、预设和工作区。
 7. [~] M5 安全与异常流程：核心路径已覆盖，窗口关闭/持久化任务待补齐。
 8. [~] M6 测试与门禁：现有门禁通过；暂停/继续受同步编码器不可恢复和缺少持久化恢复协议阻塞。
 9. [~] Alpha/Beta/RC 验收：Alpha/Beta 当前功能门禁通过，RC 仍需真实发布资产验收。
-10. [~] M7 自动择优：JPEG/WebP 有损候选和 WebP method 已完成，视觉质量阈值与 effort/near-lossless 待后续。
+10. [~] M7 自动择优：JPEG/WebP 有损候选和 WebP method 已完成，视觉质量阈值与 near-lossless 候选搜索待后续。
 11. [~] M8 动画压缩：GIF/APNG/WebP 动画链路已覆盖，GIF 帧间透明区域优化仍待后续。
 
 ## 12. 暂不实现或需要额外决策

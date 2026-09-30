@@ -327,6 +327,16 @@ function Assert-JpegAdvancedContract {
   [pscustomobject]@{ enabled = $true; defaultOff = $true; progressive = $true; optimizedHuffman = $true; jpegOnly = $true }
 }
 
+function Assert-WebpLosslessMethodContract {
+  $cli = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/bin/embedpix-cli.rs')
+  $source = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/commands/compression.rs')
+  $encoder = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/commands/webp_static.rs')
+  foreach ($token in @('webpLosslessMethod', 'compress_file_cli_with_advanced_options', 'encode_lossless_rgba_with_method', 'picture.use_argb = 1', 'config.lossless = 1')) {
+    if (($cli + $source + $encoder) -notmatch [regex]::Escape($token)) { throw "WebP lossless method contract is missing: $token" }
+  }
+  [pscustomobject]@{ enabled = $true; range = '0..6'; defaultOff = $true; argbLossless = $true; cli = $true }
+}
+
 $script:root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-compression-cli-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $script:root | Out-Null
 try {
@@ -342,6 +352,8 @@ try {
   $pngOutput = Join-Path $script:root 'roundtrip.png'
   $gifOutput = Join-Path $script:root 'roundtrip.gif'
   $compressionOutput = Join-Path $script:root 'compressed.webp'
+  $losslessMethodFastOutput = Join-Path $script:root 'compressed-lossless-method-0.webp'
+  $losslessMethodBestOutput = Join-Path $script:root 'compressed-lossless-method-6.webp'
   $jpegOutput = Join-Path $script:root 'compressed-progressive.jpg'
 
   $imageEvent = Invoke-CliRequest $CliPath @{ id = 'image-smoke'; op = 'image'; inputPath = $pngInput; outputPath = $pngOutput; format = 'png'; width = 1; height = 1 } 'image'
@@ -352,6 +364,10 @@ try {
 
   [void](Invoke-CliRequest $CliPath @{ id = 'compression-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $compressionOutput; format = 'webp'; quality = 82; maxInputBytes = 1MB } 'compression')
   $compressionResult = Assert-Output $compressionOutput 'webp' 'compression'
+  [void](Invoke-CliRequest $CliPath @{ id = 'webp-lossless-method-0'; op = 'compress'; inputPath = $pngInput; outputPath = $losslessMethodFastOutput; format = 'webp'; lossless = $true; webpLosslessMethod = 0; maxInputBytes = 1MB } 'WebP lossless method 0')
+  $losslessMethodFastResult = Assert-Output $losslessMethodFastOutput 'webp' 'WebP lossless method 0'
+  [void](Invoke-CliRequest $CliPath @{ id = 'webp-lossless-method-6'; op = 'compress'; inputPath = $pngInput; outputPath = $losslessMethodBestOutput; format = 'webp'; lossless = $true; webpLosslessMethod = 6; maxInputBytes = 1MB } 'WebP lossless method 6')
+  $losslessMethodBestResult = Assert-Output $losslessMethodBestOutput 'webp' 'WebP lossless method 6'
   [void](Invoke-CliRequest $CliPath @{ id = 'jpeg-advanced-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegOutput; format = 'jpg'; quality = 82; jpegProgressive = $true; jpegOptimizeHuffman = $true; maxInputBytes = 1MB } 'jpeg-advanced')
   $jpegResult = Assert-Output $jpegOutput 'jpg' 'JPEG advanced compression'
   $jpegBytes = [IO.File]::ReadAllBytes($jpegOutput)
@@ -378,10 +394,11 @@ try {
   $targetContract = Assert-TargetCompressionContract -Required:$RequireCompression
   $maxRgbMaeContract = Assert-MaxRgbMaeContract
   $jpegAdvancedContract = Assert-JpegAdvancedContract
+  $webpLosslessMethodContract = Assert-WebpLosslessMethodContract
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'compress'
-    outputs = @($imageResult, $decodeResult, $compressionResult, $jpegResult, $gifResult)
+    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $gifResult)
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
@@ -390,6 +407,7 @@ try {
     targetCompressionContract = $targetContract
     maxRgbMaeContract = $maxRgbMaeContract
     jpegAdvancedContract = $jpegAdvancedContract
+    webpLosslessMethodContract = $webpLosslessMethodContract
   }
 
   if ($RequireCompression) {

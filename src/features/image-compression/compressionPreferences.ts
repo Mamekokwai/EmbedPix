@@ -9,6 +9,7 @@ export interface CompressionPreferences {
   webpPass: number;
   pngOptimizeAlpha: boolean;
   webpNearLossless: number | null;
+  webpLosslessMethod: number | null;
   jpegBackground: string;
   jpegProgressive: boolean;
   jpegOptimizeHuffman: boolean;
@@ -44,6 +45,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   webpPass: 1,
   pngOptimizeAlpha: false,
   webpNearLossless: null,
+  webpLosslessMethod: null,
   jpegBackground: "#ffffff",
   jpegProgressive: false,
   jpegOptimizeHuffman: false,
@@ -120,6 +122,11 @@ function webpNearLosslessValue(record: Record<string, unknown>): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 99 ? value : null;
 }
 
+function webpLosslessMethodValue(record: Record<string, unknown>): number | null {
+  const value = record.webpLosslessMethod;
+  return typeof value === "number" && Number.isInteger(value) && value >= COMPRESSION_WEBP_METHOD_MIN && value <= COMPRESSION_WEBP_METHOD_MAX ? value : null;
+}
+
 function jpegBackgroundValue(record: Record<string, unknown>): string {
   const value = record.jpegBackground;
   return typeof value === "string" && /^#[0-9a-f]{6}$/iu.test(value.trim()) ? value.trim().toLowerCase() : DEFAULT_COMPRESSION_PREFERENCES.jpegBackground;
@@ -166,6 +173,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       webpPass: webpPassValue(record),
       pngOptimizeAlpha: record.pngOptimizeAlpha === true,
       webpNearLossless: format === "webp" && lossless ? webpNearLosslessValue(record) : null,
+      webpLosslessMethod: format === "webp" && lossless ? webpLosslessMethodValue(record) : null,
       jpegBackground: jpegBackgroundValue(record),
       jpegProgressive: booleanPreference(record, "jpegProgressive", DEFAULT_COMPRESSION_PREFERENCES.jpegProgressive),
       jpegOptimizeHuffman: booleanPreference(record, "jpegOptimizeHuffman", DEFAULT_COMPRESSION_PREFERENCES.jpegOptimizeHuffman),
@@ -217,6 +225,7 @@ export function saveCompressionPreferences(
       webpPass: preferences.webpPass,
       pngOptimizeAlpha: preferences.pngOptimizeAlpha,
       webpNearLossless: preferences.webpNearLossless,
+      webpLosslessMethod: preferences.webpLosslessMethod,
       jpegBackground: preferences.jpegBackground,
       jpegProgressive: preferences.jpegProgressive,
       jpegOptimizeHuffman: preferences.jpegOptimizeHuffman,

@@ -100,6 +100,8 @@ export function formatCompressionError(error: string): string {
     "webpPass is only supported for lossy WebP": "webpPass 仅支持有损 WebP",
     "webpNearLossless must be between": "WebP 近无损等级必须在",
     "webpNearLossless is only supported for lossless WebP": "webpNearLossless 仅支持无损 WebP",
+    "webpLosslessMethod must be between": "WebP 无损编码 effort 必须在",
+    "webpLosslessMethod is only supported for lossless WebP": "WebP 无损编码 effort 仅支持无损 WebP",
     "lossy compression is not supported for PNG": "PNG 不支持有损压缩",
     "lossless compression is not supported for JPEG": "JPEG 不支持无损压缩",
     "input image exceeds the 32 MiB limit": "输入图片超过 32 MiB 限制",
