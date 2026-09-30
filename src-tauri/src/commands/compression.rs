@@ -25,6 +25,7 @@ use super::{
     export_image::{write_exported_file, WriteOptions},
     image_orientation::normalize_jpeg_orientation,
     path_security,
+    webp_metadata::{apply_strip_safe as apply_webp_strip_safe, extract_static_icc},
     webp_static::{
         encode_lossy_rgba, encode_lossy_rgba_with_method_and_alpha_quality,
         encode_near_lossless_rgba,
@@ -255,12 +256,15 @@ fn validate_png_strip_safe(
     let supported = match format {
         CompressionFormat::Png => input.starts_with(b"\x89PNG\r\n\x1a\n"),
         CompressionFormat::Jpeg => input.starts_with(&[0xff, 0xd8]),
-        CompressionFormat::Webp => false,
+        CompressionFormat::Webp => input.starts_with(b"RIFF") && input.get(8..12) == Some(b"WEBP"),
     };
     if policy == MetadataPolicy::StripSafe && !supported {
         return Err(
-            "metadataPolicy=stripSafe is only supported for PNG or JPEG input to the same output format".into(),
+            "metadataPolicy=stripSafe is only supported for static PNG, JPEG, or WebP input to the same output format".into(),
         );
+    }
+    if policy == MetadataPolicy::StripSafe && format == CompressionFormat::Webp {
+        extract_static_icc(input)?;
     }
     Ok(())
 }
@@ -1803,6 +1807,13 @@ fn encode_image_with_webp_method_alpha(
     webp_near_lossless: Option<u8>,
     metadata_policy: MetadataPolicy,
 ) -> Result<Vec<u8>, String> {
+    let webp_strip_safe =
+        format == CompressionFormat::Webp && metadata_policy == MetadataPolicy::StripSafe;
+    let webp_icc_profile = if webp_strip_safe {
+        extract_static_icc(input)?
+    } else {
+        None
+    };
     let jpeg_icc_profile =
         if format == CompressionFormat::Jpeg && metadata_policy == MetadataPolicy::StripSafe {
             extract_jpeg_icc_profile(input)?
@@ -1894,6 +1905,9 @@ fn encode_image_with_webp_method_alpha(
                 },
             };
         }
+    }
+    if webp_strip_safe {
+        output.bytes = apply_webp_strip_safe(&output.bytes, webp_icc_profile.as_deref())?;
     }
     if output.bytes.len() > output.limit {
         return Err("compressed output exceeds the 128 MiB limit".into());
@@ -3718,10 +3732,10 @@ mod tests {
         let payload = raw_payload(metadata, &png_input());
         assert!(parse_raw_payload(&payload)
             .unwrap_err()
-            .contains("only supported for PNG or JPEG input to the same output format"));
+            .contains("static PNG, JPEG, or WebP input"));
         assert!(parse_estimate_raw_payload(&payload)
             .unwrap_err()
-            .contains("only supported for PNG or JPEG input to the same output format"));
+            .contains("static PNG, JPEG, or WebP input"));
 
         let png_safe = raw_payload(
             r#"{"fileName":"sample.png","outputFormat":"png","metadataPolicy":"stripSafe"}"#,
@@ -3764,6 +3778,26 @@ mod tests {
         assert_eq!(output.metadata_policy, "stripAll");
         assert!(output_path.exists());
         fs::remove_file(output_path).unwrap();
+    }
+
+    #[test]
+    fn webp_strip_safe_round_trips_bounded_icc_across_preview_and_estimate() {
+        let source =
+            encode_image_with_mode(&png_input(), CompressionFormat::Webp, 82, 2, false).unwrap();
+        let mut profile = vec![0; 128];
+        profile[..4].copy_from_slice(&(128u32.to_be_bytes()));
+        profile[36..40].copy_from_slice(b"acsp");
+        let source = apply_webp_strip_safe(&source, Some(&profile)).unwrap();
+        let metadata = r#"{"fileName":"sample.webp","outputFormat":"webp","lossless":false,"metadataPolicy":"stripSafe"}"#;
+        let request = parse_raw_payload(&raw_payload(metadata, &source)).unwrap();
+        let preview = run_preview(&request).unwrap();
+        assert_eq!(
+            extract_static_icc(&preview.data).unwrap(),
+            Some(profile.clone())
+        );
+        let estimate = run_estimate(&request).unwrap();
+        assert_eq!(estimate.metadata_policy, "strip-safe");
+        assert_eq!(estimate.output_bytes, preview.output_bytes);
     }
 
     #[test]

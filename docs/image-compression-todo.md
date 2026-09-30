@@ -12,13 +12,13 @@
 - 交互与诊断增强：格式感知的高质量/平衡/小体积/自定义预设已落地；进度响应增加兼容性的可选错误码；发布链路增加本地 manifest/PE 边界 fixture。
 - 本轮回归结论：WebP 有损已接入静态 `libwebp-sys2` 0.2.0 封装；method 0–6 已通过初始化 FFI 接入 RGB/RGBA、预览、估算和候选搜索，默认 method=4 与旧路径兼容；无损 WebP 新增 80/90/95 近无损等级，标准无损仍为默认，三条编码路径共用同一协议并验证无动画块、尺寸、解码和 Alpha。目标体积候选搜索次数现可在前端选择 1–12 次，默认 8，偏好和自定义预设向后兼容，核心仍强制范围校验；预览、估算和正式结果现在返回并展示实际候选数量与搜索耗时（旧核心响应缺失这些字段时安全隐藏），正式候选搜索在每次编码前后检查取消信号。元数据策略也纳入三类原生响应，正式压缩、预览与估算会回报实际采用的 `strip` 或 `stripAll`；`stripAll` 使用无元数据编码路径并保持旧 `strip` 兼容，估算请求不再隐式依赖核心默认值。由 Rust 边界负责质量范围、输出复制与释放。JPEG 透明输入现在必须按 `jpegBackground`（默认白色）合成后再编码，不再静默丢弃 Alpha；正式输出与体积估算共用同一背景策略，并验证解码结果与颜色接近度。当前 x64 Windows 静态构建已通过；ARM64 尚未在本环境安装目标，发布前仍需按架构复核。JPEG EXIF Orientation 已通过固定 `kamadak-exif` 0.6.1 在 strip 解码入口归一化。
 - 第二阶段已交付：压缩后更大则跳过、源文件夹/子目录/指定目录输出、实际输入输出体积与节省统计、逐项原图/输出（或候选）体积与节省/增加比例、跳过原因展示；批量导入现在会按稳定 itemId 关联同名文件的重试和体积统计，并在进入队列前拦截超过 32 MiB 的图片。
-- 第一阶段限制：单文件输入上限可在 1–32 MiB 内配置，默认 32 MiB，native 硬上限不会被放宽；WebP 有损使用质量 1–100、method 0–6、分析遍数 1–10 和 Alpha 质量 0–100（默认分别为 1 和 100；分析遍数影响编码分析耗时与结果，不代表画质）；近无损仅支持无损 WebP 的 1–99 协议值，界面提供 80/90/95，编码 effort 仍未单独开放；JPEG 不支持无损，含透明像素时按已校验的 `#RRGGBB` 背景合成（默认白色）；压缩支持 `strip`、PNG→PNG/JPEG→JPEG 的 `stripSafe` 和明确删除所有可由当前编码器输出的元数据的 `stripAll`，`preserve` 与 WebP 元数据保留仍由 native 以明确理由拒绝；JPEG `stripSafe` 只保留结构合法且有界的 ICC payload（不保证 ICC 内部色彩语义），并移除 EXIF/GPS/XMP/COM/其他输入 metadata；浏览器预览不能直接执行原生压缩；同名文件默认拒绝写入，不自动改名。
+- 第一阶段限制：单文件输入上限可在 1–32 MiB 内配置，默认 32 MiB，native 硬上限不会被放宽；WebP 有损使用质量 1–100、method 0–6、分析遍数 1–10 和 Alpha 质量 0–100（默认分别为 1 和 100；分析遍数影响编码分析耗时与结果，不代表画质）；近无损仅支持无损 WebP 的 1–99 协议值，界面提供 80/90/95，编码 effort 仍未单独开放；JPEG 不支持无损，含透明像素时按已校验的 `#RRGGBB` 背景合成（默认白色）；压缩支持 `strip`、PNG→PNG/JPEG→JPEG/静态 WebP→WebP 的 `stripSafe` 和明确删除所有可由当前编码器输出的元数据的 `stripAll`，`preserve` 仍由 native 以明确理由拒绝；三种 `stripSafe` 只保留结构合法且有界的 ICC payload（不保证 ICC 内部色彩语义），并移除 EXIF/GPS/XMP/COM/其他输入 metadata；浏览器预览不能直接执行原生压缩；同名文件默认拒绝写入，不自动改名。
 - 下一阶段优先级：完整元数据策略、WebP effort 独立控制，以及跨架构发布复核；当前压缩结果已明确回报实际模式与编码后端，但尚未开放用户选择 auto/backend。
 - 本轮运行时复核：压缩页在 360×500、320×480 下无横向溢出，GIF 页在相同尺寸展开设置时 footer 与设置卡无重叠，700×1100 窄宽布局保持单列；UI 负责人未发现需要新增修复的真实缺口。签名预检已能执行临时签名并用独立 verifier 校验受信公钥，缺少私钥时会在构建前失败。
 - GIF/视频工作区交互审查：导入/拖放控件支持 `role=button` 的 Enter/Space，文件 input change 会清空 value 以支持同文件重选；GIF drop zone 与图片转换视图隔离；帧编辑与导出均有 disabled 与运行时 guard；视频切换会清空旧帧，抽帧取消/失败可重试，无帧或导出中按钮保持禁用。前端 30 个测试文件 / 340 个测试通过，types 与 lint 通过。
 - 当前门禁：前端 30 个测试文件 / 340 个测试通过；类型检查、ESLint 和构建通过；Rust 253 个库测试 + 4 个 CLI 测试通过；构建、clippy、OxiPNG 强制 smoke、GIF 8/8 性能与 3/3 质量门禁、桌面 smoke、发布配置与本地 release fixture smoke、压缩 CLI smoke 通过；真实 `v0.7.0` 发布资产 smoke 已完成。压缩任务和预览现在会按读取、解码、规划、编码、校验、发布报告阶段，界面显示当前文件、阶段和实时体积，未知阶段保持向后兼容；正式结果、预览和估算会回报实际压缩模式（无损/有损）及编码后端（OxiPNG/image JPEG/libwebp），前端参数摘要和预览信息会展示这些字段；导出前参数摘要会展示格式、质量/编码参数、目标体积、元数据和输出策略；WebP 有损预览、估算和逐项正式结果现在额外展示 RGB MAE、PSNR 与 Alpha 差异像素，仅作相对比较参考，并支持 0–100 的 Alpha 质量控制和 1–10 的分析遍数；工作区和预设 JSON 下载统一延迟撤销 Blob URL，避免下载尚未启动时失效；PNG 的 `lossless=false` 现在在正式压缩与估算入口统一拒绝，避免静默生成无损结果；PNG 透明像素优化默认关闭，仅 PNG 可启用，并明确提示可能改变完全透明像素 RGB、但 Alpha 不变；`strip` 策略已用带 JPEG EXIF APP1 的输入验证 PNG/JPEG/WebP 输出不会复制该元数据；GIF 窄短窗口不再把素材/预览行压缩到 96px，改为内容驱动最小高度并新增布局契约；360×500 运行时展开 GIF 画布设置时，导出栏会回到正常文档流，避免与设置卡重叠；旧版本偏好或自定义预设若携带未支持的 `preserve` 或非 PNG `stripSafe`，现在会安全拒绝并使用明确的 `metadata_policy_unsupported` 分类；PNG→PNG/JPEG→JPEG `stripSafe` 与 `stripAll` 已可执行，JPEG `stripSafe` 只保留结构合法且有界的 ICC payload，不保证 ICC 内部色彩语义，坏 marker、截断、重复、不完整或超限输入拒绝；正式压缩、预览和估算摘要都会显示实际采用的元数据策略；压缩工作台新增桌面源文件删除选项，并由核心保证发布成功后才删除；目标体积候选搜索现在在每次编码前后响应取消；正式压缩 IPC 入口现在也会在前端拒绝越界 JPEG 质量、目标体积、32 MiB 硬上限和用户配置的 1–32 MiB 单文件输入，避免无效任务进入原生队列；正式压缩和原生预览在等待并发编码槽位时都响应取消，并在进度中明确显示“排队等待”，预览使用唯一内部 native ID 并在注册尚未完成时额外执行有界取消重试，不再因前序任务占满槽位或极短注册竞态而延迟到不可预测；窗口自绘关闭与 Alt+F4/系统关闭都会先有界取消活动压缩/GIF 任务，原生监听生命周期和超时期间的取消调用均有测试；错误码分类现在由 `CompressionErrorCode` 内部统一收敛，外部字符串协议保持兼容；本轮已覆盖损坏 PNG/JPEG/GIF 的 `decode` 分类与发布保护；压缩进度轮询取消/卸载清理已覆盖。
 
-- 当前 UI、偏好和自定义预设已支持 JPEG `stripSafe`；`preserve`/WebP 元数据保留仍保持未完成状态。
+- 当前 UI、偏好和自定义预设已支持 PNG/JPEG/静态 WebP `stripSafe`；`preserve`/WebP 元数据 `preserve` 仍保持未完成状态。
 
 ## 0. 总体门禁
 
@@ -118,12 +118,12 @@
 - [x] 支持编码 method 0–6；默认 4，正式压缩、预览、估算和候选搜索保持一致。
 - [x] 支持分析遍数 `pass` 1–10；默认 1，仅有损 WebP 可用，正式压缩、预览、估算和候选搜索保持一致；该参数表示分析遍数，不等同于画质质量。
 - [~] 支持编码 effort/near-lossless：无损 WebP 已提供 1–99 近无损等级并由现有 libwebp FFI 编码；本轮评估确认 `libwebp-sys2` 0.2.0 的 `WebPConfig` 没有独立 effort 字段：`method` 是唯一质量/速度档位（0–6），`quality` 仅在 lossless 模式下兼作压缩 effort（0–100），有损模式下仍是画质质量；因此新增独立 effort 会重复或重定义底层语义，当前不实现。若后续产品需要，应先明确按编码模式分离的协议含义、默认值、候选搜索与资源预算。
-- [ ] 支持 WebP 元数据保留/清理策略：本轮评估确认依赖中的 `libwebp-sys2=0.2.0` 暴露 `WebPMuxCreate`/`WebPMuxSetChunk`/`WebPMuxDeleteChunk`/`WebPMuxAssemble` 以及 ICCP/EXIF/XMP chunk；当前 `webp-animation` 传递启用了 `mux`，但静态模块未显式声明该 feature，不能把传递 feature 当作稳定的直接依赖契约。当前静态压缩先将输入解码为像素，输出编码 API 不携带源 ICC/EXIF/XMP，因此 `preserve` 无法在不改变输入提取协议的情况下成立；跨 PNG/JPEG/WebP 的元数据映射也没有既定语义。
+- [~] 支持 WebP 元数据保留/清理策略：WebP `stripSafe` 已显式启用 `libwebp-sys2=0.2.0` 的 `mux` feature，仅允许静态 WebP→WebP；有界 RIFF 解析只提取单个结构合法且不超过 4 MiB 的 ICCP，输出通过 RAII mux 删除 EXIF/XMP/旧 ICCP 后最多写入一个 ICCP。动画块、重复 ICCP、截断/不完整 padding、整数溢出、无效 ICC 结构和非 WebP 输入均拒绝；PNG/JPEG→WebP 与 `preserve` 仍拒绝。
 
   - `stripSafe` 的最小可审查方案是：显式声明 `libwebp-sys2` 的 `mux` feature；仅对静态 WebP 输出在有界 RIFF 解析后允许保留经大小限制和结构校验的 ICCP，默认删除 EXIF/XMP（从而连同 EXIF 内嵌缩略图/GPS 一并删除），拒绝动画块、重复保留块、整数溢出和不完整 padding；以 RAII 封装 `WebPMux`/`WebPData`，保证 assemble 失败和早退路径都释放内存。
   - `preserve` 仍需先定义“原始字节保留”还是“可验证字段保留”：前者要求按输入格式提取并复制 WebP/PNG/JPEG 的原始块，后者至少需要 ICC/EXIF/XMP 的来源、大小、重复块、方向和 GPS 语义契约；不能把 `WebPMuxSetChunk` 成功当作安全或完整保留的证据。
   - preview、estimate、formal 已共用 `encode_image_with_webp_method_alpha`/候选搜索入口，未来实现可共用同一 mux 后处理；但三条路径都必须回读检查输出尺寸/Alpha/可解码性，并额外检查无 `ANIM`/`ANMF`、策略允许的 chunk 集合、RIFF 长度/奇偶 padding 和输出上限。现有回读只验证像素结果，尚未验证元数据策略。
-  - 当前阻塞不是 API 缺失，而是元数据来源、隐私边界和 FFI 生命周期尚未形成可测试契约；本轮不引入 unsafe mux 代码、不新增依赖、不开放 WebP `stripSafe`/`preserve` 用户选项。落地前需先补 fixture（ICCP、EXIF 含 GPS/缩略图、XMP、重复/超限/损坏 chunk、静态与动画 WebP）及 x64/ARM64 构建验证。
+  - `preserve` 仍需先定义“原始字节保留”还是“可验证字段保留”；WebP `stripSafe` 已补齐静态/动画、ICCP、边界和 preview/estimate/formal 共用路径测试，发布前仍需按 x64/ARM64 构建复核。
 - [x] 保持透明度和透明边缘正确。
 - [x] 验证输出可解码、尺寸正确、Alpha 正确。
 - [x] 评估目标体积参数能否由底层后端直接支持：JPEG/WebP 有损均使用有界质量候选搜索，超目标返回明确的 `target_unmet`；WebP 有损的 RGB MAE、PSNR 与 Alpha 差异也会在预览、估算和正式结果中返回，便于同一输入下比较。
@@ -385,7 +385,7 @@
 
 ### RC：可发布
 
-- [~] 元数据策略完整：压缩工作区支持 `strip`、PNG→PNG/JPEG→JPEG 的 `stripSafe` 和 `stripAll`；JPEG `stripSafe` 仅保留结构合法且有界的 ICC payload，不保证 ICC 内部色彩语义；WebP 元数据 `preserve` 与跨格式安全保留仍待后续，图片转换保留策略仅限安全同格式直通。
+- [~] 元数据策略完整：压缩工作区支持 `strip`、PNG→PNG/JPEG→JPEG/静态 WebP→WebP 的 `stripSafe` 和 `stripAll`；三种 `stripSafe` 均只保留结构合法且有界的 ICC payload，不保证 ICC 内部色彩语义，并移除 EXIF/GPS/XMP/注释；WebP `preserve` 与跨格式安全保留仍待后续。
 - [x] 失败回滚完整。
 - [~] 桌面 smoke 通过：本地 smoke 与窄窗口运行时复核已通过，签名预检已加入；`prepare-release.yml` 在签名预检前接入 cleanup smoke，清理失败会以非零状态阻断发布；真实发布资产安装/启动仍待下一次正式 release 验收。
 - [x] 许可证清单完成。

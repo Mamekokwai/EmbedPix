@@ -5,6 +5,7 @@ pub mod gif;
 pub(crate) mod image_orientation;
 pub(crate) mod path_security;
 pub mod update;
+pub(crate) mod webp_metadata;
 pub(crate) mod webp_static;
 
 #[cfg(test)]

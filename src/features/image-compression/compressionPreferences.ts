@@ -165,7 +165,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       skipIfLarger: typeof record.skipIfLarger === "boolean" ? record.skipIfLarger : DEFAULT_COMPRESSION_PREFERENCES.skipIfLarger,
       lossless,
       preset: enumValue(record, "preset", PRESETS, DEFAULT_COMPRESSION_PREFERENCES.preset),
-      metadataPolicy: format === "png" || format === "jpg" ? enumValue(record, "metadataPolicy", METADATA_POLICIES, DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy) : enumValue(record, "metadataPolicy", new Set<MetadataPolicy>(["strip", "stripAll"]), DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy),
+      metadataPolicy: enumValue(record, "metadataPolicy", METADATA_POLICIES, DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy),
       outputLocation: enumValue(record, "outputLocation", OUTPUT_LOCATIONS, DEFAULT_COMPRESSION_PREFERENCES.outputLocation),
       outputFileName: outputFileNameValue(record, format),
       outputSubdirectory: subdirectoryValue(record),

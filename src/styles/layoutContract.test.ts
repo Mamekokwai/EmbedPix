@@ -152,7 +152,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("保留元数据（当前不可用：核心拒绝）");
     expect(compressionView).toContain("保留元数据请求会被核心拒绝");
     expect(compressionView).toContain("全部清理元数据");
-    expect(compressionView).toContain("JPEG 安全清理");
+    expect(compressionView).toContain('format === "webp" ? "WebP" : "PNG"');
     expect(compressionView).toContain("保留结构合法且有界的 ICC payload");
     expect(compressionView).toContain('<details className="compression-advanced-settings">');
     expect(compressionView).toContain("高级输出选项");

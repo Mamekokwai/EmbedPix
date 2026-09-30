@@ -19,7 +19,7 @@ npm run check:compression-cli-smoke
 
 当前阶段会明确报告压缩不通过 CLI 执行，不把图片转换 smoke 伪称为压缩 smoke。
 
-`embedpix-cli` 的 `op:"compress"` 保持现有窄合约，内部固定使用 `metadataPolicy:"strip"`，不透传 `stripSafe` 或 `pngOptimizeAlpha`。PNG-only `stripSafe` 属于 Tauri 原生 raw IPC 压缩路径；CLI smoke 不伪造该字段，相关 ICC 保留与元数据清理由 native Rust 测试覆盖。
+`embedpix-cli` 的 `op:"compress"` 保持现有窄合约，内部固定使用 `metadataPolicy:"strip"`，不透传 `stripSafe` 或 `pngOptimizeAlpha`。`stripSafe` 属于 Tauri 原生 raw IPC 压缩路径，仅支持同格式 PNG/JPEG 或静态 WebP；CLI smoke 不伪造该字段，相关 ICC 保留与元数据清理由 native Rust 测试覆盖。
 
 ## 压缩核心合并后的强制门禁
 
