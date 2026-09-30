@@ -3,6 +3,10 @@ export const MIN_VIDEO_FPS = 1;
 export const MAX_VIDEO_FPS = 30;
 export const MAX_VIDEO_FRAME_DURATION_MS = 60_000;
 
+export function isCurrentVideoExtractionRequest(currentRequestId: number, requestId: number): boolean {
+  return currentRequestId === requestId;
+}
+
 export interface VideoCropRect {
   x: number;
   y: number;

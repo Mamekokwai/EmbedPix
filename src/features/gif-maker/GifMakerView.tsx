@@ -32,7 +32,7 @@ import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import { createGifCustomPreset, loadGifCustomPresets, saveGifCustomPresets, type GifCustomPreset } from "./gifCustomPresets";
 import type { GifMakerBackground, GifMakerDitherMode, GifMakerEncodingQuality, GifMakerLoopMode, GifMakerOutputFormat, GifMakerPreferences, GifMakerPreset, GifMakerVideoCropPreset, GifMakerVideoRotation } from "./gifMakerPreferences";
-import { clampVideoFps, formatVideoTime, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
+import { clampVideoFps, formatVideoTime, isCurrentVideoExtractionRequest, normalizeVideoCropRect, planVideoFramesWithSampling } from "./videoGifLogic";
 import type { VideoCropRect } from "./videoGifLogic";
 import { extractVideoFrameBlobs } from "./videoFrameExtraction";
 import { readImageFile, type NativeImageFile } from "../../platform/image/imageExportGateway";
@@ -990,7 +990,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         extractedFrames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
         throw error;
       }
-      if (requestId !== videoImportRequestRef.current || controller.signal.aborted) {
+      if (!isCurrentVideoExtractionRequest(videoImportRequestRef.current, requestId) || controller.signal.aborted) {
         nextFrames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
         return;
       }
@@ -1004,7 +1004,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setCanvasHeight(outputSize.height);
       setStatus({ kind: "ready", text: `已提取 ${nextFrames.length} 帧，可以预览或导出` });
     } catch (extractError) {
-      if (controller.signal.aborted || requestId !== videoImportRequestRef.current) {
+      if (!isCurrentVideoExtractionRequest(videoImportRequestRef.current, requestId)) return;
+      if (controller.signal.aborted) {
         setError(null);
         setStatus({ kind: "ready", text: "已取消视频抽帧" });
       } else {
@@ -1012,9 +1013,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         setStatus({ kind: "error", text: "视频抽帧失败" });
       }
     } finally {
-      if (videoExtractControllerRef.current === controller) videoExtractControllerRef.current = null;
-      lockedRef.current = false;
-      setLocked(false);
+      if (isCurrentVideoExtractionRequest(videoImportRequestRef.current, requestId)) {
+        if (videoExtractControllerRef.current === controller) videoExtractControllerRef.current = null;
+        lockedRef.current = false;
+        setLocked(false);
+      }
     }
   };
 

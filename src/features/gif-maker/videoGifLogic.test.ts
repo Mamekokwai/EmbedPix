@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { clampVideoFps, clampVideoRange, formatVideoTime, isVideoCropRectWithinBounds, MAX_VIDEO_FRAME_DURATION_MS, normalizeVideoCropRect, planVideoFrames, planVideoFramesWithSampling } from "./videoGifLogic";
+import { clampVideoFps, clampVideoRange, formatVideoTime, isCurrentVideoExtractionRequest, isVideoCropRectWithinBounds, MAX_VIDEO_FRAME_DURATION_MS, normalizeVideoCropRect, planVideoFrames, planVideoFramesWithSampling } from "./videoGifLogic";
 
 describe("video GIF planning", () => {
+  it("only lets the current extraction request update UI state", () => {
+    expect(isCurrentVideoExtractionRequest(3, 3)).toBe(true);
+    expect(isCurrentVideoExtractionRequest(4, 3)).toBe(false);
+  });
   it("normalizes custom crops in pre-rotation source coordinates", () => {
     const crop = normalizeVideoCropRect({ x: 120, y: 80, width: 640, height: 360 }, 1920, 1080);
     expect(crop).toEqual({ x: 120, y: 80, width: 640, height: 360 });
