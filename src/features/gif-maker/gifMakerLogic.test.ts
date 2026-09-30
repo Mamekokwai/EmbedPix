@@ -4,9 +4,10 @@ import type { GifByteFrame } from "./gifMakerLogic";
 import { resolveGifExportCanvasSize } from "./gifMakerLogic";
 
 describe("GIF maker logic", () => {
-  it("uses measured compression dimensions for the pending export summary", () => {
+  it("uses measured compression dimensions until settings invalidate the measurement", () => {
     expect(resolveGifExportCanvasSize({ width: 800, height: 600 }, { width: 600, height: 450 })).toEqual({ width: 600, height: 450 });
     expect(resolveGifExportCanvasSize({ width: 800, height: 600 }, null)).toEqual({ width: 800, height: 600 });
+    expect(resolveGifExportCanvasSize({ width: 1024, height: 768 }, undefined)).toEqual({ width: 1024, height: 768 });
   });
   it("only treats the newest compression plan request as current", () => {
     expect(isCurrentCompressionPlanRequest(4, 4)).toBe(true);

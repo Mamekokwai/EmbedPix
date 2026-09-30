@@ -676,6 +676,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   useEffect(() => {
     setMeasuredSizeBytes(null);
+    setMeasuredCanvasSize(null);
     setSizeComparison(null);
     setCompressionSummary(null);
     setExportFrameSummary(null);
