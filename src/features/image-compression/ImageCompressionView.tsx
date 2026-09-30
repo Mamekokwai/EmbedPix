@@ -48,6 +48,7 @@ import {
   isCompressionSourcePathError,
   supportsCompressionTargetSize,
   waitForCompressionProgressTick,
+  readCompressionDimensions,
 } from "./imageCompressionLogic";
 import {
   COMPRESSION_MAX_TARGET_SIZE_KIB,
@@ -139,29 +140,6 @@ function compressionEngineLabel(engine?: "oxipng" | "image-jpeg" | "libwebp"): s
   if (engine === "image-jpeg") return "image JPEG";
   if (engine === "libwebp") return "libwebp";
   return null;
-}
-
-function readCompressionDimensions(file: File): Promise<{ width: number; height: number }> {
-  if (typeof createImageBitmap === "function") {
-    return createImageBitmap(file).then((bitmap) => {
-      const dimensions = { width: bitmap.width, height: bitmap.height };
-      bitmap.close();
-      return dimensions;
-    });
-  }
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("无法读取图片尺寸。"));
-    };
-    image.src = objectUrl;
-  });
 }
 
 function errorMessage(error: unknown): string {

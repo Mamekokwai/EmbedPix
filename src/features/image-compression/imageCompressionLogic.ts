@@ -7,6 +7,33 @@ export const COMPRESSION_MAX_CANDIDATES_MIN = 1;
 export const COMPRESSION_MAX_CANDIDATES_MAX = 12;
 export const COMPRESSION_MAX_CANDIDATES_DEFAULT = 8;
 export const COMPRESSION_FORMATS: ReadonlyArray<{ value: CompressionFormat; label: string }> = [{ value: "jpg", label: "JPEG" }, { value: "webp", label: "WebP" }, { value: "png", label: "PNG" }];
+export interface CompressionDimensionBitmap { width: number; height: number; close: () => void; }
+export interface CompressionDimensionImage { naturalWidth: number; naturalHeight: number; onload: ((event: Event) => void) | null; onerror: ((event: Event) => void) | null; src: string; }
+export interface CompressionDimensionDependencies { createImageBitmap?: (file: Blob) => Promise<CompressionDimensionBitmap>; createImage: () => CompressionDimensionImage; createObjectURL: (file: Blob) => string; revokeObjectURL: (url: string) => void; }
+
+export function readCompressionDimensions(file: Blob, dependencies: CompressionDimensionDependencies = {
+  createImageBitmap: typeof globalThis.createImageBitmap === "function" ? globalThis.createImageBitmap.bind(globalThis) : undefined,
+  createImage: () => new Image(),
+  createObjectURL: (value) => URL.createObjectURL(value),
+  revokeObjectURL: (value) => URL.revokeObjectURL(value),
+}): Promise<{ width: number; height: number }> {
+  if (dependencies.createImageBitmap) {
+    return dependencies.createImageBitmap(file).then((bitmap) => {
+      try { return { width: bitmap.width, height: bitmap.height }; }
+      finally { bitmap.close(); }
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const image = dependencies.createImage();
+    const objectUrl = dependencies.createObjectURL(file);
+    let released = false;
+    const release = () => { if (!released) { released = true; dependencies.revokeObjectURL(objectUrl); } };
+    image.onload = () => { try { resolve({ width: image.naturalWidth, height: image.naturalHeight }); } catch (error) { reject(error); } finally { release(); } };
+    image.onerror = () => { release(); reject(new Error("无法读取图片尺寸。")); };
+    try { image.src = objectUrl; } catch (error) { release(); reject(error); }
+  });
+}
+
 export const COMPRESSION_PRESETS: ReadonlyArray<{ value: Exclude<CompressionPreset, "custom">; label: string; description: string; quality: number; pngOptimizationLevel: number }> = [
   { value: "high-quality", label: "高质量", description: "JPEG/WebP 有损质量 92；PNG 优化 2；WebP 默认无损", quality: 92, pngOptimizationLevel: 2 },
   { value: "balanced", label: "平衡", description: "JPEG/WebP 有损质量 82；PNG 优化 3；WebP 默认无损", quality: 82, pngOptimizationLevel: 3 },

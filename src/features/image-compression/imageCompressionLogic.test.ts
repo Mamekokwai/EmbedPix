@@ -1,8 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
-import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, canWriteCompressionItemUpdate, estimateFallback, filterCompressionFiles, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionError, formatCompressionReason, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, isCurrentCompressionItem, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, removeCompressionDimensionError, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize, waitForCompressionProgressTick } from "./imageCompressionLogic";
+import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, canWriteCompressionItemUpdate, estimateFallback, filterCompressionFiles, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionItemResultStatus, formatCompressionError, formatCompressionReason, formatCompressionReplaceOriginalConfirmation, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getSuccessfulCompressionOutputPath, isCompressionSourcePathError, isCurrentCompressionEstimate, isCurrentCompressionItem, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, readCompressionDimensions, removeCompressionDimensionError, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize, waitForCompressionProgressTick } from "./imageCompressionLogic";
 import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
+  it("closes bitmap resources after dimension reads, including getter failures", async () => {
+    const close = vi.fn();
+    await expect(readCompressionDimensions(new Blob(), { createImageBitmap: async () => ({ get width(): number { throw new Error("bad bitmap"); }, height: 2, close }), createImage: () => { throw new Error("unused"); }, createObjectURL: () => "unused", revokeObjectURL: () => {} })).rejects.toThrow("bad bitmap");
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("revokes fallback URLs on load, load failure, and source assignment failure", async () => {
+    const revoke = vi.fn();
+    let image: { naturalWidth: number; naturalHeight: number; onload: ((event: Event) => void) | null; onerror: ((event: Event) => void) | null; src: string };
+    const dependencies = { createImage: () => image, createObjectURL: () => "blob:test", revokeObjectURL: revoke };
+    image = { naturalWidth: 10, naturalHeight: 20, onload: null, onerror: null, src: "" };
+    const loaded = readCompressionDimensions(new Blob(), dependencies); image.onload?.(new Event("load")); await expect(loaded).resolves.toEqual({ width: 10, height: 20 });
+    image = { naturalWidth: 0, naturalHeight: 0, onload: null, onerror: null, src: "" };
+    const failed = readCompressionDimensions(new Blob(), dependencies); image.onerror?.(new Event("error")); await expect(failed).rejects.toThrow("无法读取图片尺寸");
+    image = { naturalWidth: 0, naturalHeight: 0, onload: null, onerror: null, src: "" };
+    Object.defineProperty(image, "src", { set: () => { throw new Error("assign failed"); } });
+    await expect(readCompressionDimensions(new Blob(), dependencies)).rejects.toThrow("assign failed");
+    expect(revoke).toHaveBeenCalledTimes(3);
+  });
+
   it("only accepts dimension results for items still in the queue", () => {
     const first = { id: "a", file: {} };
     expect(isCurrentCompressionItem([first], first)).toBe(true);
