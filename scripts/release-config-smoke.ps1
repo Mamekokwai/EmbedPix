@@ -80,6 +80,9 @@ if ($reportBody -match '(?i)private|secret|password|probe|signature|TAURI_|env:'
 if ($signingPreflight -notmatch '\[IO\.File\]::WriteAllText\([^\r\n]*\[Text\.UTF8Encoding\]::new\(\$false\)') {
   throw 'Signing preflight report must be written as UTF-8 without BOM.'
 }
+foreach ($required in @('reportPartPath', '[IO.File]::Replace', '[IO.File]::Move', '已有报告（如存在）已保留')) {
+  if ($signingPreflight -notmatch [regex]::Escape($required)) { throw "Signing preflight report atomic write contract is missing: $required" }
+}
 $configKey = Decode-MinisignPublicKey $tauri.plugins.updater.pubkey 'tauri.conf.json updater pubkey'
 $fileKey = Decode-MinisignPublicKey (Get-Content -Raw -Encoding UTF8 'src-tauri/update-public-key.txt') 'src-tauri/update-public-key.txt'
 if ($configKey -ne $fileKey) { throw 'Tauri updater pubkey does not match src-tauri/update-public-key.txt.' }

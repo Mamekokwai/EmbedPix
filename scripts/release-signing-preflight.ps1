@@ -96,11 +96,23 @@ $report = [ordered]@{
   generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
 }
 if (-not [string]::IsNullOrWhiteSpace($ReportPath)) {
-  $reportParent = Split-Path -Parent ([IO.Path]::GetFullPath($ReportPath))
+  $reportFullPath = [IO.Path]::GetFullPath($ReportPath)
+  $reportParent = Split-Path -Parent $reportFullPath
   if (-not [string]::IsNullOrWhiteSpace($reportParent)) {
     New-Item -ItemType Directory -Path $reportParent -Force | Out-Null
   }
-  [IO.File]::WriteAllText([IO.Path]::GetFullPath($ReportPath), ($report | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
-  Write-Host "签名预检摘要已写入：$([IO.Path]::GetFullPath($ReportPath))"
+  $reportPartPath = Join-Path $reportParent ("." + [IO.Path]::GetFileName($reportFullPath) + "." + [guid]::NewGuid().ToString('N') + '.part')
+  try {
+    [IO.File]::WriteAllText($reportPartPath, ($report | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
+    if (Test-Path -LiteralPath $reportFullPath -PathType Leaf) {
+      [IO.File]::Replace($reportPartPath, $reportFullPath, $null)
+    } else {
+      [IO.File]::Move($reportPartPath, $reportFullPath)
+    }
+  } catch {
+    Remove-Item -LiteralPath $reportPartPath -Force -ErrorAction SilentlyContinue
+    throw '无法写入签名预检摘要；已有报告（如存在）已保留。'
+  }
+  Write-Host "签名预检摘要已写入：$reportFullPath"
 }
 Write-Host '签名预检通过：私钥可用且与受信更新公钥匹配，发布配置有效。'
