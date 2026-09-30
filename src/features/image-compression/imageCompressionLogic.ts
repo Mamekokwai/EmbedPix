@@ -154,6 +154,7 @@ export function normalizeCompressionOutputModes(modes: { autoNumbering?: boolean
   return { autoNumbering, overwrite: !replaceOriginal && !autoNumbering && modes.overwrite, replaceOriginal };
 }
 export function formatCompressionEstimateSource(source: "native" | "fallback", detail?: string): string { return `${source === "native" ? "原生精确预估" : "本地估算"}${detail ? `（${detail}）` : ""}`; }
+export function mergeCompressionEstimateResult(result: Omit<CompressionEstimate, "estimatedBytes"> & { outputBytes: number }): CompressionEstimate { return { ...result, estimatedBytes: result.outputBytes }; }
 export function isCurrentCompressionEstimate(requestId: number, currentRequestId: number, aborted: boolean): boolean { return !aborted && requestId === currentRequestId; }
 export function waitForCompressionProgressTick(signal: AbortSignal, delayMs = 160): Promise<void> {
   if (signal.aborted) return Promise.resolve();

@@ -37,6 +37,7 @@ import {
   getCompressionRetryQueue,
   getCompressionSourcePathError,
   mergeCompressionItems,
+  mergeCompressionEstimateResult,
   normalizeCompressionOutputFileName,
   normalizeCompressionOutputModes,
   removeCompressionItem,
@@ -72,7 +73,6 @@ import { downloadBlob } from "../../shared/downloadBlob";
 import { getStripSafeInputError } from "./stripSafeInput";
 
 type CompressionStatus = "idle" | "ready" | "busy" | "success" | "cancelled" | "error";
-type CompressionEstimateState = CompressionEstimate & { targetBytes?: number | null; targetMet?: boolean; selectedQuality?: number | null; status?: "completed" | "skipped"; skippedReason?: string | null };
 
 interface ImageCompressionViewProps {
   active?: boolean;
@@ -373,7 +373,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
         const result = await estimateImageCompression(request);
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
-        setEstimate({ ...result, estimatedBytes: result.outputBytes });
+        setEstimate(mergeCompressionEstimateResult(result));
           setEstimateNote(formatCompressionEstimateSource("native", result.status === "skipped" && result.skippedReason ? `输出将跳过：${formatCompressionReason(result.skippedReason)}` : "当前选中图片"));
       } catch (error) {
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
