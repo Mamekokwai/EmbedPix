@@ -39,6 +39,7 @@
 .update-release-open-error { margin: -4px 22px 12px; color: var(--qp-danger); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .update-release-notes { margin: 0; border-top: 1px solid var(--qp-border-subtle); padding: 16px 22px 18px; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .update-status-detail { margin: 0; border-top: 1px solid var(--qp-border-subtle); padding: 12px 22px 0; color: var(--qp-text-secondary); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.update-error-message { margin: 0; padding: 0 22px 12px; color: var(--qp-danger); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .update-progress { border-top: 1px solid var(--qp-border-subtle); padding: 14px 22px 18px; }
 .update-progress-label { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; color: var(--qp-text-tertiary); font-size: 11px; }
 .update-progress-label span { min-width: 0; overflow-wrap: anywhere; }

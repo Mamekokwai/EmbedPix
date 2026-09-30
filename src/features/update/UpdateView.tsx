@@ -164,6 +164,7 @@ export default function UpdateView({
   releaseUrl,
   assetAvailable = false,
   errorStage,
+  errorMessage,
   installHealthMessage,
   downloadedBytes,
   totalBytes,
@@ -281,6 +282,7 @@ export default function UpdateView({
             <StatusIcon status={status} offline={offline} />
             <span>{resolveUpdateStatusLabel(status, errorStage)}</span>
           </div>
+          {status === "error" && errorMessage ? <p className="update-error-message" role="alert">{errorMessage}</p> : null}
           {installHealthMessage ? <p className="update-release-open-error" role="alert">{installHealthMessage}</p> : null}
           {progress ? <UpdateProgressBar progress={progress} /> : null}
         </section>

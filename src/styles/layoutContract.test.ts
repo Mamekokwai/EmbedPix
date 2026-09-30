@@ -15,6 +15,8 @@ const appShell = readSource(new URL("../app/AppShell.tsx", import.meta.url));
 const compressionGateway = readSource(new URL("../platform/compression/compressionGateway.ts", import.meta.url));
 const compressionPreferences = readSource(new URL("../features/image-compression/compressionPreferences.ts", import.meta.url));
 const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
+const updateCss = readSource(new URL("./features/update.css", import.meta.url));
+const updateView = readSource(new URL("../features/update/UpdateView.tsx", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -28,6 +30,11 @@ const VIEWPORT_MATRIX = [
 ] as const;
 
 describe("compact layout viewport contract", () => {
+  it("renders update failure details only for error states and wraps long text", () => {
+    expect(updateView).toContain('status === "error" && errorMessage');
+    expect(updateCss).toContain(".update-error-message");
+    expect(updateCss).toContain("overflow-wrap: anywhere");
+  });
   it("normalizes both LF and CRLF source checkouts before matching contracts", () => {
     expect(".a\r\n.b\r.c\n".replace(/\r\n?/g, "\n")).toBe(".a\n.b\n.c\n");
   });
