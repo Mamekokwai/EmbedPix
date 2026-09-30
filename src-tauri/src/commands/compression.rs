@@ -4512,6 +4512,70 @@ mod tests {
     }
 
     #[test]
+    fn formal_results_trace_published_files_for_png_jpeg_and_static_webp() {
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-formal-result-trace-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let input = png_input();
+        for (index, (format, options)) in [
+            ("png", r#""lossless":true"#),
+            (
+                "jpeg",
+                r##""lossless":false,"jpegQuality":90,"jpegBackground":"#ffffff""##,
+            ),
+            ("webp", r#""lossless":true"#),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let extension = if format == "jpeg" { "jpg" } else { format };
+            let output_path = directory.join(format!("output-{index}.{extension}"));
+            let metadata = format!(
+                "{{\"fileName\":\"sample.png\",\"outputFormat\":\"{format}\",{options},\"skipIfLarger\":false,\"outputPath\":\"{}\",\"metadataPolicy\":\"strip\"}}",
+                output_path.to_string_lossy().replace('\\', "/")
+            );
+            let request = parse_raw_payload(&raw_payload(&metadata, &input)).unwrap();
+            let result =
+                run_compression(&request, &test_job(&format!("formal-trace-{format}"))).unwrap();
+            assert_eq!(result.status, "completed");
+            assert_eq!(
+                result.output_path.replace('/', "\\"),
+                output_path.to_string_lossy()
+            );
+            assert_eq!(result.input_bytes, input.len() as u64);
+            assert_eq!(
+                result.output_bytes,
+                fs::metadata(&output_path).unwrap().len()
+            );
+            assert_eq!(result.metadata_policy, "strip");
+            let decoded = decode_image(&fs::read(&output_path).unwrap()).unwrap();
+            assert_eq!(decoded.dimensions(), (2, 2));
+            fs::remove_file(output_path).unwrap();
+        }
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn skipped_formal_result_leaves_no_temporary_output() {
+        let directory = crate::commands::test_temp_dir()
+            .join(format!("embedpix-formal-result-skip-{}", uuid_like_id()));
+        fs::create_dir_all(&directory).unwrap();
+        let output_path = directory.join("output.jpg");
+        let metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"jpeg\",\"lossless\":false,\"jpegQuality\":100,\"maxOutputBytes\":1,\"maxCandidates\":1,\"outputPath\":\"{}\",\"metadataPolicy\":\"strip\"}}",
+            output_path.to_string_lossy().replace('\\', "/")
+        );
+        let request = parse_raw_payload(&raw_payload(&metadata, &png_input())).unwrap();
+        let result = run_compression(&request, &test_job("formal-trace-skip")).unwrap();
+        assert_eq!(result.status, "skipped");
+        assert!(result.skipped_reason.is_some());
+        assert!(!output_path.exists());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 0);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn configurable_input_limit_is_bounded_and_checked_before_encoding() {
         assert!(validate_max_input_bytes(Some(1024 * 1024 - 1)).is_err());
         assert_eq!(validate_max_input_bytes(Some(1024 * 1024)), Ok(1024 * 1024));
