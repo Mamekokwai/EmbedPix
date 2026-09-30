@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nativeImageFileToGifFile } from "./GifMakerView";
-import { canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifOutputLocationError, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, isVideoFile, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
+import { canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifFrameKeyboardTarget, getGifOutputLocationError, getGifSelectionAfterDeletion, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, isVideoFile, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("converts native image bytes into a browser File without changing the payload", async () => {
@@ -29,6 +29,22 @@ describe("GIF settings layout defaults", () => {
     expect(clampGifTimelineRange(3, 1, 4)).toEqual({ start: 3, end: 3 });
     expect(clampGifTimelineRange(0, 0, 0)).toEqual({ start: 0, end: 0 });
     expect(getGifTimelineZoomLabel(1.5)).toBe("150%");
+  });
+
+  it("keeps frame keyboard navigation inside the list boundaries", () => {
+    expect(getGifFrameKeyboardTarget(2, "ArrowLeft", 4)).toBe(1);
+    expect(getGifFrameKeyboardTarget(0, "ArrowUp", 4)).toBe(0);
+    expect(getGifFrameKeyboardTarget(3, "ArrowRight", 4)).toBe(3);
+    expect(getGifFrameKeyboardTarget(1, "Home", 4)).toBe(0);
+    expect(getGifFrameKeyboardTarget(1, "End", 4)).toBe(3);
+    expect(getGifFrameKeyboardTarget(1, "PageDown", 4)).toBeNull();
+    expect(getGifFrameKeyboardTarget(0, "End", 0)).toBeNull();
+  });
+
+  it("selects a valid neighbor after deleting the selected frame set", () => {
+    expect(getGifSelectionAfterDeletion(new Set([1, 2]), 2, 5)).toEqual({ nextIndex: 2, nextSelection: new Set([2]) });
+    expect(getGifSelectionAfterDeletion(new Set([3, 4]), 4, 5)).toEqual({ nextIndex: 2, nextSelection: new Set([2]) });
+    expect(getGifSelectionAfterDeletion(new Set([0, 1]), 0, 2)).toEqual({ nextIndex: 0, nextSelection: new Set() });
   });
 
   it("starts with the parameter groups folded so the workspace keeps its preview height", () => {

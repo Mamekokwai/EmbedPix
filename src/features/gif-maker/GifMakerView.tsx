@@ -87,6 +87,22 @@ export function clampGifTimelineRange(start: number, end: number, frameCount: nu
   return { start: nextStart, end: nextEnd };
 }
 
+export function getGifFrameKeyboardTarget(index: number, key: string, frameCount: number): number | null {
+  if (frameCount <= 0) return null;
+  if (key === "Home") return 0;
+  if (key === "End") return frameCount - 1;
+  if (key === "ArrowLeft" || key === "ArrowUp") return Math.max(0, index - 1);
+  if (key === "ArrowRight" || key === "ArrowDown") return Math.min(frameCount - 1, index + 1);
+  return null;
+}
+
+export function getGifSelectionAfterDeletion(selectedIndices: ReadonlySet<number>, selectedIndex: number, frameCount: number): { nextIndex: number; nextSelection: Set<number> } {
+  const remaining = Math.max(0, frameCount - selectedIndices.size);
+  if (!remaining) return { nextIndex: 0, nextSelection: new Set() };
+  const nextIndex = Math.min(selectedIndex, remaining - 1);
+  return { nextIndex, nextSelection: new Set([nextIndex]) };
+}
+
 export function getGifTimelineZoomLabel(zoom: number): string {
   return `${Math.round(zoom * 100)}%`;
 }
@@ -588,6 +604,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const ratioRef = useRef<GifCanvasSize>({ width: savedPreferences.canvasWidth, height: savedPreferences.canvasHeight });
   const repeatRef = useRef(0);
   const framesRef = useRef<GifFrameModel[]>([]);
+  const frameButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const clearOutputSelection = () => {
@@ -1234,7 +1251,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setStatus({ kind: "ready", text: "已移除一帧" });
   };
 
-  const selectFrame = (index: number, event: MouseEvent<HTMLButtonElement>) => {
+  const selectFrame = (index: number, event: Pick<MouseEvent<HTMLButtonElement>, "shiftKey" | "ctrlKey" | "metaKey">) => {
     setIsPlaying(false);
     if (event.shiftKey) {
       const start = Math.min(selectionAnchorRef.current, index);
@@ -1290,11 +1307,25 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const next = frames.filter((_, index) => !selectedFrameIndices.has(index));
     framesRef.current = next;
     setFrames(next);
-    const nextIndex = next.length ? Math.min(selectedIndex, next.length - 1) : 0;
+    const { nextIndex, nextSelection } = getGifSelectionAfterDeletion(selectedFrameIndices, selectedIndex, frames.length);
     setSelectedIndex(nextIndex);
-    setSelectedFrameIndices(next.length ? new Set([nextIndex]) : new Set());
+    setSelectedFrameIndices(nextSelection);
     selectionAnchorRef.current = nextIndex;
     setStatus({ kind: "ready", text: `已移除 ${selectedFrameIndices.size} 帧` });
+  };
+
+  const handleFrameKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (locked || pendingImports > 0 || status.kind === "exporting") return;
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      removeSelectedFrames();
+      return;
+    }
+    const target = getGifFrameKeyboardTarget(index, event.key, frames.length);
+    if (target === null) return;
+    event.preventDefault();
+    selectFrame(target, event);
+    requestAnimationFrame(() => frameButtonRefs.current[frames[target]?.id ?? ""]?.focus());
   };
 
   const moveFrame = (index: number, direction: -1 | 1) => {
@@ -2392,7 +2423,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <div className="gif-frame-list" aria-label="GIF 帧列表">
                   {frames.map((frame, index) => (
                     <div className={`gif-frame-row${selectedFrameIndices.has(index) ? " gif-frame-row-selected" : ""}`} key={frame.id} draggable={!locked} onDragStart={(event) => handleFrameDragStart(event, index)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleFrameDrop(event, index)} onDragEnd={() => { draggedFrameIndexRef.current = null; draggedFrameIndicesRef.current = []; }}>
-                      <button className="gif-frame-select" type="button" onClick={(event) => selectFrame(index, event)} aria-pressed={selectedFrameIndices.has(index)} aria-label={`选择第 ${index + 1} 帧：${frame.name}`}>
+                      <button className="gif-frame-select" type="button" ref={(element) => { frameButtonRefs.current[frame.id] = element; }} onClick={(event) => selectFrame(index, event)} onKeyDown={(event) => handleFrameKeyDown(event, index)} aria-pressed={selectedFrameIndices.has(index)} aria-label={`选择第 ${index + 1} 帧：${frame.name}`}>
                         <span className="gif-frame-number">{String(index + 1).padStart(2, "0")}</span>
                         <img src={frame.previewUrl} alt="" />
                         <span className="gif-frame-meta"><strong>{frame.name}</strong><small>{frame.width} × {frame.height} · {frame.durationMs} ms</small></span>
