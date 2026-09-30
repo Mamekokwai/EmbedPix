@@ -47,6 +47,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("下载 JSON 报告");
     expect(compressionView).toContain("createCompressionBatchReport");
   });
+  it("exposes per-item retry only for retryable result states", () => {
+    expect(compressionView).toContain('result.itemId && (result.status === "failed" || result.status === "skipped")');
+    expect(compressionView).toContain("runCompression([result.itemId as string])");
+    expect(compressionView).toContain("仅重试此项");
+  });
   it("clears stale compression preflight space when inputs or options change", () => {
     expect(compressionView).toContain("setPreflightSpaceBytes(null);");
     expect(compressionView).toMatch(/\[items, options, selectedItemId\]/);
@@ -276,7 +281,7 @@ describe("compact layout viewport contract", () => {
   });
 
   it("keeps batch cancellation, retry, and source-list transitions explicit", () => {
-    expect(compressionView).toContain('const queue = getCompressionRetryQueue(items, failures);');
+    expect(compressionView).toContain('const queue = getCompressionRetryQueue(items, retryItemIds ?? failures);');
     expect(compressionView).toContain('getCompressionCancelledItemResults(queue, index)');
     expect(compressionView).toContain('const finalState = getCompressionBatchFinalState(failedNames, cancelRequestedRef.current);');
     expect(compressionView).toContain('const merged = mergeCompressionItems(items, next, replaceItemId);');
