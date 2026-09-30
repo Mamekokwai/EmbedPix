@@ -200,10 +200,10 @@ describe("compression gateway", () => {
   });
 
   it("serializes the full metadata cleanup policy while keeping legacy strip compatible", () => {
-    const encoded = encodeCompressionEnvelope({ ...request, metadataPolicy: "strip-all" });
+    const encoded = encodeCompressionEnvelope({ ...request, metadataPolicy: "stripAll" });
     const length = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
-    expect(metadata.metadataPolicy).toBe("strip-all");
+    expect(metadata.metadataPolicy).toBe("stripAll");
     expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "stripSafe" })).toThrow("仅支持移除元数据");
   });
 
