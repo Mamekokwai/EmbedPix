@@ -57,6 +57,47 @@ export function formatCompressionReason(reason: string | undefined): string {
 }
 export function formatCompressionError(error: string): string {
   const labels: Readonly<Record<string, string>> = {
+    "unsupported compression format": "不支持的压缩格式",
+    "compression commands require a raw binary IPC request": "压缩命令需要原始二进制 IPC 请求",
+    "compression estimate requires a raw binary IPC request": "压缩估算需要原始二进制 IPC 请求",
+    "compression request is truncated": "压缩请求已截断",
+    "compression estimate request is truncated": "压缩估算请求已截断",
+    "compression request has invalid magic": "压缩请求标识无效",
+    "compression estimate request has invalid magic": "压缩估算请求标识无效",
+    "compression metadata is too large": "压缩元数据过大",
+    "compression estimate metadata is too large": "压缩估算元数据过大",
+    "compression metadata length overflowed": "压缩元数据长度溢出",
+    "compression estimate metadata length overflowed": "压缩估算元数据长度溢出",
+    "compression metadata length exceeds payload size": "压缩元数据长度超出载荷大小",
+    "compression estimate metadata length exceeds payload size": "压缩估算元数据长度超出载荷大小",
+    "invalid compression metadata JSON": "压缩元数据 JSON 无效",
+    "invalid compression estimate metadata JSON": "压缩估算元数据 JSON 无效",
+    "unsupported compression schemaVersion": "不支持的压缩 schemaVersion",
+    "fileName is invalid": "文件名无效",
+    "jpegQuality must be between": "JPEG 质量必须在",
+    "jpegBackground must be a #RRGGBB color": "JPEG 背景必须是 #RRGGBB 颜色",
+    "jpegBackground is only supported for JPEG output": "jpegBackground 仅支持 JPEG 输出",
+    "maxOutputBytes must be between": "最大输出体积必须在",
+    "maxInputBytes must be between": "最大输入体积必须在",
+    "maxCandidates must be between": "最大候选次数必须在",
+    "maxRgbMae must be a finite number between": "最大 RGB MAE 必须是介于",
+    "maxRgbMae is only supported for lossy WebP compression with maxOutputBytes": "maxRgbMae 仅支持带 maxOutputBytes 的有损 WebP 压缩",
+    "pngOptimizationLevel must be between": "PNG 优化级别必须在",
+    "pngOptimizeAlpha is only supported for PNG output": "pngOptimizeAlpha 仅支持 PNG 输出",
+    "webpMethod must be between": "WebP 编码方法必须在",
+    "webpMethod is only supported for lossy WebP": "webpMethod 仅支持有损 WebP",
+    "webpAlphaQuality must be between": "WebP Alpha 质量必须在",
+    "webpAlphaQuality is only supported for lossy WebP": "webpAlphaQuality 仅支持有损 WebP",
+    "webpPass must be between": "WebP 分析遍数必须在",
+    "webpPass is only supported for lossy WebP": "webpPass 仅支持有损 WebP",
+    "webpNearLossless must be between": "WebP 近无损等级必须在",
+    "webpNearLossless is only supported for lossless WebP": "webpNearLossless 仅支持无损 WebP",
+    "lossy compression is not supported for PNG": "PNG 不支持有损压缩",
+    "lossless compression is not supported for JPEG": "JPEG 不支持无损压缩",
+    "input image exceeds the 32 MiB limit": "输入图片超过 32 MiB 限制",
+    "input image exceeds the configured maxInputBytes limit": "输入图片超过配置的 maxInputBytes 限制",
+    "compressed output dimensions do not match the source image": "压缩输出尺寸与源图片不匹配",
+    "compressed preview dimensions do not match the source image": "压缩预览尺寸与源图片不匹配",
     "animated GIF input is not supported; provide a static GIF": "不支持动态 GIF 输入，请提供静态 GIF",
     "animated WebP input is not supported; provide a static WebP": "不支持动态 WebP 输入，请提供静态 WebP",
     "failed to decode input image": "输入图片解码失败",
@@ -67,7 +108,9 @@ export function formatCompressionError(error: string): string {
     if (index < 0) continue;
     const before = error.slice(0, index);
     const suffix = error.slice(index + prefix.length);
-    if (!suffix || suffix.startsWith(":")) return `${before}${label}${suffix ? `：${suffix.slice(1).trim()}` : ""}`;
+    if (!suffix) return `${before}${label}`;
+    if (suffix.startsWith(":")) return `${before}${label}：${suffix.slice(1).trim()}`;
+    return `${before}${label}${suffix}`;
   }
   return error;
 }
