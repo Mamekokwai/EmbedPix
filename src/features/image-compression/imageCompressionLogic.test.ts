@@ -75,6 +75,8 @@ describe("image compression logic", () => {
 
   it("localizes known native skip reason prefixes and preserves unknown reasons", () => {
     expect(formatCompressionReason("target_unmet: 12 KiB")).toBe("未达到目标体积：12 KiB");
+    expect(formatCompressionReason("target_unreachable: automatic resize candidates did not fit maxOutputBytes")).toBe("无法达到目标体积：自动缩放到最小档位仍未达到目标体积");
+    expect(formatCompressionReason("target_unreachable: manual settings")).toBe("无法达到目标体积：manual settings");
     expect(formatCompressionReason("quality_threshold_unmet: RGB MAE")).toBe("未达到质量阈值：RGB MAE");
     expect(formatCompressionReason("future_reason: detail")).toBe("future_reason: detail");
   });

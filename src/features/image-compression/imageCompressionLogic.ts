@@ -59,8 +59,13 @@ export function formatCompressionReason(reason: string | undefined): string {
   const labels: Readonly<Record<string, string>> = { target_unmet: "未达到目标体积", target_unreachable: "无法达到目标体积", quality_threshold_unmet: "未达到质量阈值" };
   const separator = reason.indexOf(":");
   if (separator < 0) return reason;
-  const label = labels[reason.slice(0, separator)];
-  return label ? `${label}：${reason.slice(separator + 1).trim()}` : reason;
+  const key = reason.slice(0, separator);
+  const detail = reason.slice(separator + 1).trim();
+  const label = labels[key];
+  const localizedDetail = key === "target_unreachable" && detail.startsWith("automatic resize candidates")
+    ? "自动缩放到最小档位仍未达到目标体积"
+    : detail;
+  return label ? `${label}：${localizedDetail}` : reason;
 }
 export function formatCompressionError(error: string): string {
   const labels: Readonly<Record<string, string>> = {
