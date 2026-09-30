@@ -99,6 +99,19 @@ describe("compact layout viewport contract", () => {
     expect(themeSelectCss).toContain(".theme-select-option:focus-visible");
   });
 
+  it("covers the requested portrait and narrow-tall viewport safeguards", () => {
+    expect(VIEWPORT_MATRIX).toEqual(expect.arrayContaining([
+      { name: "compact portrait", width: 320, height: 480 },
+      { name: "small portrait", width: 360, height: 500 },
+      { name: "narrow tall", width: 700, height: 1100 },
+    ]));
+    expect(gifCss).toContain("@media (max-width: 500px) and (max-height: 620px)");
+    expect(gifCss).toContain(".gif-maker-view > .gif-export-footer { position: sticky;");
+    expect(gifCss).toContain(".gif-busy-cancel { width: 100%; margin-top: 4px; }");
+    expect(compressionCss).toContain(".compression-settings-card { display: grid; grid-template-columns: minmax(0, 1fr); }");
+    expect(compressionCss).toContain("overflow-wrap: anywhere;");
+  });
+
   it("keeps export and cancellation controls represented in both workspaces", () => {
     expect(gifView).toContain("gif-export-button");
     expect(gifView).toContain("cancelVideoExtraction");
