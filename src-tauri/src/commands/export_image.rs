@@ -799,15 +799,19 @@ fn passthrough_preserved_input(request: &ExportRequest) -> Result<(Vec<u8>, u16)
             request.output_format.name()
         ));
     }
-    let image = ImageReader::new(Cursor::new(&request.input_data))
+    let mut reader = ImageReader::new(Cursor::new(&request.input_data))
         .with_guessed_format()
         .map_err(|_| {
             "metadataPolicy=preserve could not inspect the source image; use strip".to_string()
-        })?
-        .decode()
-        .map_err(|_| {
-            "metadataPolicy=preserve could not decode the source image; use strip".to_string()
         })?;
+    let mut limits = image::io::Limits::default();
+    limits.max_image_width = Some(MAX_IMAGE_DIMENSION);
+    limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
+    limits.max_alloc = Some(MAX_DECODER_ALLOC_BYTES);
+    reader.limits(limits);
+    let image = reader.decode().map_err(|_| {
+        "metadataPolicy=preserve could not decode the source image; use strip".to_string()
+    })?;
     if image.dimensions() != (request.width, request.height) {
         return Err(format!(
             "metadataPolicy=preserve requires unchanged dimensions for {} output; use strip",
