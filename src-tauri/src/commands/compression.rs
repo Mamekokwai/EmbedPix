@@ -2693,6 +2693,32 @@ mod tests {
         bytes
     }
 
+    fn jpeg_sof_markers(bytes: &[u8]) -> Vec<u8> {
+        assert_eq!(&bytes[..2], &[0xff, 0xd8]);
+        let mut markers = Vec::new();
+        let mut offset = 2;
+        while offset < bytes.len() {
+            assert_eq!(bytes[offset], 0xff);
+            while offset < bytes.len() && bytes[offset] == 0xff {
+                offset += 1;
+            }
+            let marker = bytes[offset];
+            offset += 1;
+            if marker == 0xda || marker == 0xd9 {
+                break;
+            }
+            if !matches!(marker, 0xd8 | 0xd9 | 0x01 | 0xd0..=0xd7) {
+                let length = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]) as usize;
+                assert!(length >= 2);
+                if (0xc0..=0xcf).contains(&marker) && !matches!(marker, 0xc4 | 0xc8 | 0xcc) {
+                    markers.push(marker);
+                }
+                offset += length;
+            }
+        }
+        markers
+    }
+
     fn raw_payload(metadata: &str, input: &[u8]) -> Vec<u8> {
         let mut payload = Vec::from(*b"EGF1");
         payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
@@ -3098,6 +3124,16 @@ mod tests {
             assert_eq!(decoded.color().channel_count(), 3);
             assert_eq!(decoded.to_rgb8().as_raw().len(), 7 * 5 * 3);
         }
+    }
+
+    #[test]
+    fn jpeg_formal_output_is_baseline_and_not_progressive() {
+        let output = encode_image(&png_input(), CompressionFormat::Jpeg, 82, 2).unwrap();
+        let markers = jpeg_sof_markers(&output);
+
+        assert!(markers.contains(&0xc0));
+        assert!(!markers.contains(&0xc2));
+        assert!(decode_image(&output).is_ok());
     }
 
     #[test]
