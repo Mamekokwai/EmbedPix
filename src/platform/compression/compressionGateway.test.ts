@@ -137,6 +137,20 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, maxCandidates: 13 })).toThrow("maxCandidates");
   });
 
+  it("serializes maxRgbMae only for bounded lossy WebP target searches", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, lossless: false, maxOutputBytes: 64 * 1024, maxCandidates: 8, maxRgbMae: 12.5 });
+    const length = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
+    expect(metadata.maxRgbMae).toBe(12.5);
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, maxRgbMae: Number.NaN })).toThrow("maxRgbMae");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, maxRgbMae: 256 })).toThrow("maxRgbMae");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: false, maxRgbMae: 12.5 })).toThrow("最大输出体积");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: true, maxOutputBytes: 64 * 1024, maxRgbMae: 12.5 })).toThrow("有损 WebP");
+    const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "webp", jpegQuality: 82, lossless: false, metadataPolicy: "strip", pngOptimizationLevel: 2, maxOutputBytes: 64 * 1024, maxCandidates: 8, maxRgbMae: 12.5 });
+    const estimateLength = new DataView(estimate.buffer).getUint32(4, true);
+    expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).maxRgbMae).toBe(12.5);
+  });
+
   it("serializes and validates lossy WebP alpha quality", () => {
     const encoded = encodeCompressionEnvelope({ ...request, lossless: false, webpAlphaQuality: 64 });
     const metadataLength = new DataView(encoded.buffer).getUint32(4, true);

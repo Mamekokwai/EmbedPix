@@ -187,6 +187,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [pngOptimizationLevel, setPngOptimizationLevel] = useState(initialPreferences.pngOptimizationLevel);
   const [targetSizeKiB, setTargetSizeKiB] = useState(initialPreferences.targetSizeKiB);
   const [maxCandidates, setMaxCandidates] = useState(initialPreferences.maxCandidates);
+  const [maxRgbMae, setMaxRgbMae] = useState(initialPreferences.maxRgbMae);
   const [maxInputMiB, setMaxInputMiB] = useState(initialPreferences.maxInputMiB);
   const [targetSizeEnabled, setTargetSizeEnabled] = useState(initialPreferences.targetSizeEnabled);
   const [skipIfLarger, setSkipIfLarger] = useState(initialPreferences.skipIfLarger);
@@ -254,6 +255,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const targetSizeActive = targetSizeEnabled && qualityEnabled;
   const targetSizeError = useMemo(() => getCompressionTargetSizeError(targetSizeActive, targetSizeKiB, COMPRESSION_MAX_TARGET_SIZE_KIB), [targetSizeActive, targetSizeKiB]);
   const maxOutputBytes = targetSizeActive && !targetSizeError && targetSizeKiB.trim() ? Math.round(Number(targetSizeKiB) * 1024) : undefined;
+  const maxRgbMaeValue = maxRgbMae.trim() ? Number(maxRgbMae) : undefined;
+  const maxRgbMaeError = maxRgbMae.trim() && (!Number.isFinite(maxRgbMaeValue) || (maxRgbMaeValue as number) < 0 || (maxRgbMaeValue as number) > 255) ? "RGB MAE 阈值必须在 0 到 255 之间。" : null;
   const maxInputBytes = maxInputMiB * 1024 * 1024;
   const outputFileNameError = useMemo(() => replaceOriginal ? null : getCompressionOutputFileNameError(outputFileName, format), [format, outputFileName, replaceOriginal]);
   const options = useMemo<CompressionOptions>(() => ({
@@ -279,8 +282,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     skipIfLarger,
     maxOutputBytes,
     maxCandidates: maxOutputBytes ? maxCandidates : undefined,
+    maxRgbMae: maxOutputBytes && format === "webp" && !lossless && !maxRgbMaeError && maxRgbMaeValue !== undefined ? maxRgbMaeValue : null,
     maxInputBytes,
-  }), [deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, jpegBackground, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates, maxInputBytes]);
+  }), [deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, jpegBackground, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates, maxRgbMaeError, maxRgbMaeValue, maxInputBytes]);
 
   const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, true), [outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;
@@ -325,6 +329,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     `后端 ${format === "png" ? "OxiPNG" : format === "jpg" ? "image JPEG" : "libwebp"}`,
     format === "jpg" ? `JPEG 背景 ${jpegBackground}` : null,
     targetSizeActive && maxOutputBytes ? `目标 ≤ ${targetSizeKiB.trim()} KiB · 候选 ${maxCandidates}` : "不启用目标体积",
+    maxRgbMaeValue !== undefined && !maxRgbMaeError && format === "webp" && !lossless ? `RGB MAE ≤ ${maxRgbMaeValue}` : null,
     `单文件输入 ≤ ${maxInputMiB} MiB`,
     metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理元数据` : metadataPolicy === "stripAll" ? "全部清理元数据" : metadataPolicy === "strip" ? "移除元数据" : `元数据 ${metadataPolicy}`,
     replaceOriginal ? "覆盖原图并备份到 bak" : outputLocation === "source" ? "输出到源文件夹" : outputLocation === "subfolder" ? `输出到子目录 ${outputSubdirectory.trim() || "（未设置）"}` : `输出到指定目录 ${outputDirectory.trim() || "（未设置）"}`,
@@ -380,12 +385,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           pngOptimizeAlpha: options.format === "png" ? options.pngOptimizeAlpha : undefined,
           maxOutputBytes: options.maxOutputBytes,
           maxCandidates: options.maxCandidates,
+          maxRgbMae: options.maxRgbMae,
           maxInputBytes: options.maxInputBytes,
         };
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
         const result = await estimateImageCompression(request);
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
-        setEstimate({ inputBytes: result.inputBytes, estimatedBytes: result.outputBytes, savingsPercent: result.savingsPercent, metadataPolicy: result.metadataPolicy, compressionMode: result.compressionMode, compressionEngine: result.compressionEngine, qualityMetrics: result.qualityMetrics, candidateSearchMs: result.candidateSearchMs, candidateCount: result.candidateCount });
+        setEstimate({ inputBytes: result.inputBytes, estimatedBytes: result.outputBytes, savingsPercent: result.savingsPercent, metadataPolicy: result.metadataPolicy, compressionMode: result.compressionMode, compressionEngine: result.compressionEngine, maxRgbMae: result.maxRgbMae, qualityMetrics: result.qualityMetrics, candidateSearchMs: result.candidateSearchMs, candidateCount: result.candidateCount });
         setEstimateNote(formatCompressionEstimateSource("native", result.status === "skipped" && result.skippedReason ? `输出将跳过：${result.skippedReason}` : "当前选中图片"));
       } catch (error) {
         if (!isCurrentCompressionEstimate(requestId, estimateRequestIdRef.current, controller.signal.aborted)) return;
@@ -417,6 +423,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       targetSizeEnabled: targetSizeActive,
       targetSizeKiB,
       maxCandidates,
+      maxRgbMae,
       maxInputMiB,
       skipIfLarger,
       lossless,
@@ -430,7 +437,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       replaceOriginal,
       deleteSource,
     });
-  }, [autoNumbering, deleteSource, format, lossless, maxCandidates, maxInputMiB, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, pngOptimizeAlpha, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground]);
+  }, [autoNumbering, deleteSource, format, lossless, maxCandidates, maxInputMiB, maxRgbMae, metadataPolicy, outputFileName, outputFileNameError, outputLocation, outputSubdirectory, overwrite, pngOptimizationLevel, pngOptimizeAlpha, preset, quality, replaceOriginal, skipIfLarger, targetSizeActive, targetSizeKiB, webpMethod, webpAlphaQuality, webpPass, webpNearLossless, jpegBackground]);
 
   useEffect(() => {
     if (!selectedItemId || !items.some((item) => item.id === selectedItemId)) setSelectedItemId(items[0]?.id ?? null);
@@ -874,11 +881,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setWebpNearLossless(null);
     setJpegBackground(initialPreferences.jpegBackground);
     setMaxCandidates(COMPRESSION_MAX_CANDIDATES_DEFAULT);
+    setMaxRgbMae("");
     setPngOptimizationLevel(values.pngOptimizationLevel);
     setSkipIfLarger(true);
   };
 
-  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, jpegBackground, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, maxCandidates, maxInputMiB, lossless, metadataPolicy, skipIfLarger });
+  const currentCustomPresetValues = (): CompressionPresetValues => ({ format, quality, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, jpegBackground, pngOptimizationLevel, targetSizeEnabled: targetSizeActive, targetSizeKiB, maxCandidates, maxRgbMae, maxInputMiB, lossless, metadataPolicy, skipIfLarger });
 
   const applyCustomPreset = (id: string) => {
     setCustomPresetId(id);
@@ -896,6 +904,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setTargetSizeEnabled(selected.values.targetSizeEnabled);
     setTargetSizeKiB(selected.values.targetSizeKiB);
     setMaxCandidates(selected.values.maxCandidates ?? COMPRESSION_MAX_CANDIDATES_DEFAULT);
+    setMaxRgbMae(selected.values.maxRgbMae ?? "");
     setMaxInputMiB(selected.values.maxInputMiB ?? 32);
     setSkipIfLarger(selected.values.skipIfLarger);
     setLossless(selected.values.lossless);
@@ -1052,6 +1061,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <label className="compression-check"><input type="checkbox" checked={targetSizeActive} onChange={(event) => setTargetSizeEnabled(event.target.checked)} disabled={busy || !qualityEnabled} /><span><strong>启用目标体积控制</strong><small>{format === "jpg" ? `启用后输入最大输出体积；核心最多尝试 ${maxCandidates} 个 JPEG 质量候选` : format === "webp" && !lossless ? `启用后输入最大输出体积；核心最多尝试 ${maxCandidates} 个 WebP 质量候选` : "PNG 和无损 WebP 不支持目标体积控制"}</small></span></label>
           <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（JPEG/WebP 有损）</span><strong>{targetSizeActive && targetSizeKiB ? `${targetSizeKiB} KiB` : "—"}</strong></span><input type="number" min="1" max={COMPRESSION_MAX_TARGET_SIZE_KIB} step="1" value={targetSizeKiB} onChange={(event) => setTargetSizeKiB(event.target.value)} placeholder="启用后输入 KiB" disabled={busy || !qualityEnabled || !targetSizeActive} aria-invalid={Boolean(targetSizeError)} /><small className="compression-field-hint">{format === "jpg" ? `JPEG 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : format === "webp" && !lossless ? `WebP 质量候选范围为 1–${COMPRESSION_MAX_TARGET_SIZE_KIB.toLocaleString()} KiB` : "PNG 和无损 WebP 不支持目标体积控制"}</small></label>
           {targetSizeActive ? <label className="compression-field"><span className="compression-label-row"><span>候选搜索次数</span><strong>{maxCandidates}</strong></span><input type="number" min={COMPRESSION_MAX_CANDIDATES_MIN} max={COMPRESSION_MAX_CANDIDATES_MAX} step="1" value={maxCandidates} onChange={(event) => { const next = Number(event.target.value); setMaxCandidates(Number.isFinite(next) ? Math.min(COMPRESSION_MAX_CANDIDATES_MAX, Math.max(COMPRESSION_MAX_CANDIDATES_MIN, Math.round(next))) : COMPRESSION_MAX_CANDIDATES_DEFAULT); setPreset("custom"); }} disabled={busy || !qualityEnabled} /><small className="compression-field-hint">次数越多越接近目标体积，但编码耗时会增加；范围 {COMPRESSION_MAX_CANDIDATES_MIN}–{COMPRESSION_MAX_CANDIDATES_MAX}，默认 {COMPRESSION_MAX_CANDIDATES_DEFAULT}。</small></label> : null}
+          {targetSizeActive && format === "webp" && !lossless ? <label className="compression-field"><span className="compression-label-row"><span>WebP 最大 RGB MAE（可选）</span><strong>{maxRgbMae.trim() || "—"}</strong></span><input type="number" min="0" max="255" step="0.01" value={maxRgbMae} onChange={(event) => { setMaxRgbMae(event.target.value); setPreset("custom"); }} placeholder="留空则关闭" disabled={busy} aria-invalid={Boolean(maxRgbMaeError)} /><small className="compression-field-hint">仅在目标体积控制下生效；范围 0–255。启用后核心扫描有限候选并同时满足体积与 RGB MAE。</small>{maxRgbMaeError ? <span className="compression-field-error" role="alert">{maxRgbMaeError}</span> : null}</label> : null}
           <label className="compression-field"><span className="compression-label-row"><span>单文件最大输入体积</span><strong>{maxInputMiB} MiB</strong></span><input type="number" min="1" max="32" step="1" value={maxInputMiB} onChange={(event) => { const next = Number(event.target.value); setMaxInputMiB(Number.isFinite(next) ? Math.min(32, Math.max(1, Math.round(next))) : 32); setPreset("custom"); }} disabled={busy} /><small className="compression-field-hint">范围 1–32 MiB；仅能收紧默认 32 MiB 上限，导入、预览、估算和正式压缩均生效。</small></label>
           {targetSizeError ? <p className="compression-field-error" role="alert">{targetSizeError}</p> : null}
           <label className="compression-check"><input type="checkbox" checked={skipIfLarger} onChange={(event) => { setSkipIfLarger(event.target.checked); setPreset("custom"); }} disabled={busy} /><span><strong>压缩后更大时跳过</strong><small className={skipIfLarger ? undefined : "compression-skip-larger-warning"}>{skipIfLarger ? "仅发布不大于原图的结果；目标体积仍按上方限制执行。" : "风险模式：压缩结果可能比原图更大，仍会写出；请确认输出位置和覆盖策略。"}</small></span></label>
@@ -1119,7 +1129,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
         </div>
         <div className="compression-progress" aria-label="压缩进度"><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
-        <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError) || Boolean(outputFileNameError) || Boolean(targetSizeError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
+          <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError) || Boolean(outputFileNameError) || Boolean(targetSizeError) || Boolean(maxRgbMaeError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
       </footer>
     </section>
   );

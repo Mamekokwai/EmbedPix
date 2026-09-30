@@ -38,6 +38,7 @@ export interface CompressionEnvelopeRequest {
   pngOptimizationLevel: number;
   maxOutputBytes?: number;
   maxCandidates?: number;
+  maxRgbMae?: number | null;
   maxInputBytes?: number;
   metadataPolicy: MetadataPolicy;
   jobId?: string;
@@ -68,6 +69,7 @@ export interface CompressionResult {
   selectedQuality: number | null;
   candidateSearchMs?: number;
   candidateCount?: number;
+  maxRgbMae?: number | null;
 }
 export interface CompressionProgress { jobId: string; status: string; stage: string; outputPath: string | null; error: string | null; code?: string | null; inputBytes?: number; outputBytes?: number; }
 export interface CompressionPreview {
@@ -87,6 +89,7 @@ export interface CompressionPreview {
   selectedQuality: number | null;
   candidateSearchMs?: number;
   candidateCount?: number;
+  maxRgbMae?: number | null;
   qualityMetrics?: CompressionQualityMetrics;
 }
 export interface CompressionEstimate {
@@ -108,6 +111,7 @@ export interface CompressionEstimate {
   selectedQuality: number | null;
   candidateSearchMs?: number;
   candidateCount?: number;
+  maxRgbMae?: number | null;
   qualityMetrics?: CompressionQualityMetrics;
 }
 export interface CompressionQualityMetrics { rgbMae: number; psnrDb: number | null; alphaMismatchPixels: number; }
@@ -129,10 +133,18 @@ export interface CompressionEstimateRequest {
   pngOptimizationLevel: number;
   maxOutputBytes?: number;
   maxCandidates?: number;
+  maxRgbMae?: number | null;
   maxInputBytes?: number;
 }
 
+function validateMaxRgbMae(value: number | null | undefined, outputFormat: Exclude<CompressionFormat, "original">, lossless: boolean, maxOutputBytes: number | undefined): void {
+  if (value === undefined || value === null) return;
+  if (!Number.isFinite(value) || value < 0 || value > 255) throw new Error("maxRgbMae 必须是 0 到 255 之间的有限数字。");
+  if (outputFormat !== "webp" || lossless || maxOutputBytes === undefined) throw new Error("maxRgbMae 仅支持启用最大输出体积的有损 WebP。");
+}
+
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
+  validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
   if (request.metadataPolicy === "stripSafe") { const error = getStripSafeInputError(request.inputData, request.outputFormat); if (error) throw new Error(error); }
   else if (request.metadataPolicy !== "strip" && request.metadataPolicy !== "stripAll") throw new Error("第一阶段原生压缩仅支持移除元数据。");
   return {
@@ -160,6 +172,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     pngOptimizationLevel: request.pngOptimizationLevel,
     ...(request.maxOutputBytes ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates ? { maxCandidates: request.maxCandidates } : {}),
+    ...(request.maxRgbMae !== undefined && request.maxRgbMae !== null ? { maxRgbMae: request.maxRgbMae } : {}),
     ...(request.maxInputBytes !== undefined ? { maxInputBytes: request.maxInputBytes } : {}),
     metadataPolicy: request.metadataPolicy,
     ...(request.jobId ? { jobId: request.jobId } : {}),
@@ -175,6 +188,7 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
   if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
   if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
+  validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
   if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
   if (request.webpMethod !== undefined && (request.outputFormat !== "webp" || request.lossless)) throw new Error("webpMethod 仅支持有损 WebP。");
   if (request.webpAlphaQuality !== undefined && (!Number.isInteger(request.webpAlphaQuality) || request.webpAlphaQuality < 0 || request.webpAlphaQuality > 100)) throw new Error("webpAlphaQuality 必须在 0 到 100 之间。");
@@ -220,6 +234,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
   if (request.webpNearLossless !== undefined && (request.outputFormat !== "webp" || !request.lossless)) throw new Error("webpNearLossless 仅支持无损 WebP。");
   if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
   if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
+  validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
   const metadataBytes = new TextEncoder().encode(JSON.stringify({
     schemaVersion: COMPRESSION_SCHEMA_VERSION,
     fileName: request.fileName,
@@ -236,6 +251,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     pngOptimizationLevel: request.pngOptimizationLevel,
     ...(request.maxOutputBytes !== undefined ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates !== undefined ? { maxCandidates: request.maxCandidates } : {}),
+    ...(request.maxRgbMae !== undefined && request.maxRgbMae !== null ? { maxRgbMae: request.maxRgbMae } : {}),
     ...(request.maxInputBytes !== undefined ? { maxInputBytes: request.maxInputBytes } : {}),
     metadataPolicy: request.metadataPolicy,
   }));
@@ -288,6 +304,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     pngOptimizationLevel: options.pngOptimizationLevel,
     maxOutputBytes: options.maxOutputBytes,
     maxCandidates: options.maxCandidates,
+    maxRgbMae: options.maxRgbMae,
     maxInputBytes: options.maxInputBytes,
     metadataPolicy: options.metadataPolicy,
     jobId,

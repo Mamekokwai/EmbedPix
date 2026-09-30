@@ -459,6 +459,8 @@ struct CompressionMetadata {
     #[serde(default)]
     max_candidates: Option<usize>,
     #[serde(default)]
+    max_rgb_mae: Option<f64>,
+    #[serde(default)]
     max_input_bytes: Option<u64>,
     #[serde(default)]
     png_optimization_level: Option<u8>,
@@ -497,6 +499,8 @@ struct CompressionEstimateMetadata {
     max_output_bytes: Option<u64>,
     #[serde(default)]
     max_candidates: Option<usize>,
+    #[serde(default)]
+    max_rgb_mae: Option<f64>,
     #[serde(default)]
     max_input_bytes: Option<u64>,
     #[serde(default)]
@@ -723,6 +727,8 @@ pub struct CompressionResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_count: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_rgb_mae: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quality_metrics: Option<CompressionQualityMetrics>,
 }
 
@@ -764,6 +770,8 @@ pub struct CompressionPreview {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_count: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_rgb_mae: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quality_metrics: Option<CompressionQualityMetrics>,
 }
 
@@ -798,6 +806,8 @@ pub struct CompressionEstimate {
     pub candidate_search_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_count: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_rgb_mae: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality_metrics: Option<CompressionQualityMetrics>,
 }
@@ -1097,6 +1107,7 @@ fn run_compression(
             selected_quality,
             candidate_search_ms,
             candidate_count,
+            max_rgb_mae: request.metadata.max_rgb_mae,
             quality_metrics,
         });
     }
@@ -1149,6 +1160,7 @@ fn run_compression(
         selected_quality,
         candidate_search_ms,
         candidate_count,
+        max_rgb_mae: request.metadata.max_rgb_mae,
         quality_metrics,
     };
     update_progress(
@@ -1228,6 +1240,26 @@ fn validate_max_input_bytes(value: Option<u64>) -> Result<usize, String> {
         return Err("maxInputBytes must be between 1 and 32 MiB".into());
     }
     Ok(bytes as usize)
+}
+
+fn validate_max_rgb_mae(
+    value: Option<f64>,
+    format: CompressionFormat,
+    lossless: bool,
+    target_bytes: Option<u64>,
+) -> Result<(), String> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    if !value.is_finite() || !(0.0..=255.0).contains(&value) {
+        return Err("maxRgbMae must be a finite number between 0 and 255".into());
+    }
+    if format != CompressionFormat::Webp || lossless || target_bytes.is_none() {
+        return Err(
+            "maxRgbMae is only supported for lossy WebP compression with maxOutputBytes".into(),
+        );
+    }
+    Ok(())
 }
 
 fn validate_webp_near_lossless(
@@ -1400,6 +1432,17 @@ fn choose_encoded_output_with_cancellation(
         });
     }
 
+    if let Some(max_rgb_mae) = request.metadata.max_rgb_mae {
+        return choose_webp_output_with_rgb_mae(
+            request,
+            width,
+            height,
+            target_bytes,
+            max_rgb_mae,
+            job,
+        );
+    }
+
     let search_started_at = Instant::now();
     let max_quality = quality;
     let mut low = 1u8;
@@ -1474,6 +1517,122 @@ fn choose_encoded_output_with_cancellation(
         })
     } else {
         None
+    };
+    Ok(EncodedSelection {
+        bytes,
+        selected_quality: Some(selected_quality),
+        target_met,
+        skipped_reason,
+        candidate_search_ms: Some(
+            search_started_at
+                .elapsed()
+                .as_millis()
+                .min(u64::MAX as u128) as u64,
+        ),
+        candidate_count: Some(candidates.len() as u8),
+    })
+}
+
+fn choose_webp_output_with_rgb_mae(
+    request: &CompressionRequest,
+    width: u32,
+    height: u32,
+    target_bytes: u64,
+    max_rgb_mae: f64,
+    job: Option<&Arc<CompressionJob>>,
+) -> Result<EncodedSelection, String> {
+    let search_started_at = Instant::now();
+    let max_quality = request.metadata.jpeg_quality.unwrap_or(82);
+    let mut candidates = Vec::new();
+    let mut smallest: Option<(u8, Vec<u8>)> = None;
+    let mut best_quality: Option<(u8, Vec<u8>, f64)> = None;
+    let mut best_fit: Option<(u8, Vec<u8>)> = None;
+    let mut target_fit = false;
+
+    for index in 0..request.max_candidates {
+        if let Some(job) = job {
+            checkpoint(job)?;
+        }
+        let candidate = if request.max_candidates == 1 {
+            max_quality
+        } else {
+            max_quality.saturating_sub(
+                ((usize::from(max_quality.saturating_sub(1)) * index)
+                    / (request.max_candidates - 1)) as u8,
+            )
+        };
+        if candidates.contains(&candidate) {
+            continue;
+        }
+        candidates.push(candidate);
+        let bytes = encode_and_verify(
+            &request.input,
+            request.format,
+            candidate,
+            request.png_optimization_level,
+            request.png_optimize_alpha,
+            width,
+            height,
+            request.lossless,
+            request.metadata.jpeg_background.as_deref(),
+            request.metadata.webp_method,
+            request.metadata.webp_alpha_quality,
+            request.metadata.webp_pass,
+            request.metadata.webp_near_lossless,
+            request.metadata.metadata_policy,
+        )?;
+        if let Some(job) = job {
+            update_progress_bytes(job, None, Some(bytes.len() as u64));
+        }
+        let decoded = decode_image(&bytes)?;
+        let metrics = quality_metrics_for_output(request, &decoded, job)?
+            .ok_or_else(|| "maxRgbMae requires lossy WebP quality metrics".to_string())?;
+        if let Some(job) = job {
+            checkpoint(job)?;
+        }
+        if smallest
+            .as_ref()
+            .is_none_or(|(_, current)| bytes.len() < current.len())
+        {
+            smallest = Some((candidate, bytes.clone()));
+        }
+        let fits_target = bytes.len() as u64 <= target_bytes;
+        let fits_quality = metrics.rgb_mae <= max_rgb_mae;
+        if fits_target {
+            target_fit = true;
+            if best_quality
+                .as_ref()
+                .is_none_or(|(_, _, current)| metrics.rgb_mae < *current)
+            {
+                best_quality = Some((candidate, bytes.clone(), metrics.rgb_mae));
+            }
+        }
+        if fits_target
+            && fits_quality
+            && best_fit
+                .as_ref()
+                .is_none_or(|(current, _)| candidate > *current)
+        {
+            best_fit = Some((candidate, bytes));
+        }
+    }
+
+    let target_met = best_fit.is_some();
+    let (selected_quality, bytes) = if let Some((quality, bytes)) = best_fit {
+        (quality, bytes)
+    } else if target_fit {
+        let (quality, bytes, _) = best_quality
+            .ok_or_else(|| "WebP maxRgbMae search produced no quality candidate".to_string())?;
+        (quality, bytes)
+    } else {
+        smallest.ok_or_else(|| "WebP maxRgbMae search produced no encoded output".to_string())?
+    };
+    let skipped_reason = if target_met {
+        None
+    } else if target_fit {
+        Some("quality_threshold_unmet: no WebP quality candidate meets maxRgbMae".to_string())
+    } else {
+        Some("target_unmet: no WebP quality candidate fits maxOutputBytes".to_string())
     };
     Ok(EncodedSelection {
         bytes,
@@ -1607,6 +1766,7 @@ fn run_preview_core(
         selected_quality,
         candidate_search_ms,
         candidate_count,
+        max_rgb_mae: request.metadata.max_rgb_mae,
         quality_metrics,
     })
 }
@@ -1726,6 +1886,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         selected_quality,
         candidate_search_ms,
         candidate_count,
+        max_rgb_mae: request.metadata.max_rgb_mae,
         quality_metrics,
     })
 }
@@ -2087,6 +2248,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
         }
     }
     let target_bytes = metadata.max_output_bytes;
+    validate_max_rgb_mae(metadata.max_rgb_mae, format, lossless, target_bytes)?;
     let max_input_bytes = validate_max_input_bytes(metadata.max_input_bytes)?;
     let max_candidates = metadata.max_candidates.unwrap_or(DEFAULT_MAX_CANDIDATES);
     if !(1..=MAX_CANDIDATES).contains(&max_candidates) {
@@ -2215,6 +2377,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
         }
     }
     let target_bytes = metadata.max_output_bytes;
+    validate_max_rgb_mae(metadata.max_rgb_mae, format, lossless, target_bytes)?;
     let max_input_bytes = validate_max_input_bytes(metadata.max_input_bytes)?;
     let max_candidates = metadata.max_candidates.unwrap_or(DEFAULT_MAX_CANDIDATES);
     if !(1..=MAX_CANDIDATES).contains(&max_candidates) {
@@ -2268,6 +2431,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             skip_if_larger: metadata.skip_if_larger,
             max_output_bytes: metadata.max_output_bytes,
             max_candidates: metadata.max_candidates,
+            max_rgb_mae: metadata.max_rgb_mae,
             max_input_bytes: metadata.max_input_bytes,
             png_optimization_level: metadata.png_optimization_level,
             png_optimize_alpha: metadata.png_optimize_alpha,
@@ -2952,6 +3116,7 @@ mod tests {
                 skip_if_larger: false,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -3483,6 +3648,7 @@ mod tests {
                 skip_if_larger: false,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -3532,6 +3698,27 @@ mod tests {
         assert!(CompressionFormat::parse("bmp").is_err());
         assert!(!(1..=100).contains(&0));
         assert_eq!(MetadataPolicy::default(), MetadataPolicy::Strip);
+    }
+
+    #[test]
+    fn max_rgb_mae_requires_finite_bounded_lossy_webp_target_search() {
+        for metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":true,"maxOutputBytes":100000,"maxRgbMae":10}"#,
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","lossless":false,"maxOutputBytes":100000,"maxRgbMae":10}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"maxRgbMae":10}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"maxOutputBytes":100000,"maxRgbMae":256}"#,
+        ] {
+            assert!(parse_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+            assert!(parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+        }
+        let valid = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"maxOutputBytes":100000,"maxCandidates":4,"maxRgbMae":10}"#,
+            &png_input(),
+        );
+        assert_eq!(
+            parse_raw_payload(&valid).unwrap().metadata.max_rgb_mae,
+            Some(10.0)
+        );
     }
 
     #[test]
@@ -3922,6 +4109,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -4378,6 +4566,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -4482,6 +4671,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: None,
                 max_candidates: None,
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5089,6 +5279,7 @@ mod tests {
             selected_quality: Some(82),
             candidate_search_ms: None,
             candidate_count: None,
+            max_rgb_mae: None,
             quality_metrics: Some(CompressionQualityMetrics {
                 rgb_mae: 1.25,
                 psnr_db: Some(42.5),
@@ -5134,6 +5325,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
                 max_candidates: Some(MAX_CANDIDATES),
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5202,6 +5394,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: Some(target),
                 max_candidates: Some(MAX_CANDIDATES),
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5256,6 +5449,7 @@ mod tests {
                 skip_if_larger: true,
                 max_output_bytes: Some(1),
                 max_candidates: Some(1),
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5277,6 +5471,77 @@ mod tests {
             .skipped_reason
             .as_deref()
             .is_some_and(|reason| reason.starts_with("target_unmet")));
+    }
+
+    #[test]
+    fn webp_rgb_mae_target_search_is_shared_and_reports_quality_failure() {
+        let input = lossy_webp_input();
+        let target = encode_image_with_webp_method(
+            &input,
+            CompressionFormat::Webp,
+            45,
+            2,
+            false,
+            None,
+            Some(4),
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .len();
+        let metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"webp\",\"lossless\":false,\"maxOutputBytes\":{target},\"maxCandidates\":12,\"maxRgbMae\":255}}"
+        );
+        let request = parse_raw_payload(&raw_payload(&metadata, &input)).unwrap();
+        let preview = run_preview(&request).unwrap();
+        let estimate = run_estimate(&request).unwrap();
+        assert!(preview.target_met);
+        assert_eq!(preview.max_rgb_mae, Some(255.0));
+        assert_eq!(preview.output_bytes, estimate.output_bytes);
+        assert_eq!(preview.selected_quality, estimate.selected_quality);
+
+        let unmet = raw_payload(
+            &format!(
+                "{{\"fileName\":\"sample.png\",\"outputFormat\":\"webp\",\"lossless\":false,\"maxOutputBytes\":{},\"maxCandidates\":3,\"maxRgbMae\":0}}",
+                MAX_OUTPUT_BYTES
+            ),
+            &input,
+        );
+        let unmet_request = parse_raw_payload(&unmet).unwrap();
+        let unmet_preview = run_preview(&unmet_request).unwrap();
+        assert!(!unmet_preview.target_met);
+        assert!(unmet_preview
+            .skipped_reason
+            .as_deref()
+            .is_some_and(|reason| reason.starts_with("quality_threshold_unmet")));
+        let output_path = crate::commands::test_temp_dir().join(format!(
+            "embedpix-max-rgb-mae-unmet-{}.webp",
+            uuid_like_id()
+        ));
+        let formal = raw_payload(
+            &format!(
+                "{{\"fileName\":\"sample.png\",\"outputFormat\":\"webp\",\"outputPath\":\"{}\",\"lossless\":false,\"maxOutputBytes\":{},\"maxCandidates\":3,\"maxRgbMae\":0}}",
+                output_path.to_string_lossy().replace('\\', "/"),
+                MAX_OUTPUT_BYTES
+            ),
+            &input,
+        );
+        let formal_request = parse_raw_payload(&formal).unwrap();
+        let result = run_compression(&formal_request, &test_job("max-rgb-mae-unmet")).unwrap();
+        assert_eq!(result.status, "skipped");
+        assert!(result
+            .skipped_reason
+            .as_deref()
+            .is_some_and(|reason| reason.starts_with("quality_threshold_unmet")));
+        assert!(!output_path.exists());
+
+        let cancelled = test_job("max-rgb-mae-cancel");
+        cancelled.cancelled.store(true, Ordering::Release);
+        assert_eq!(
+            run_preview_with_cancellation(&request, &cancelled).unwrap_err(),
+            "compression cancelled"
+        );
     }
 
     #[test]
@@ -5308,6 +5573,7 @@ mod tests {
                 skip_if_larger: false,
                 max_output_bytes: Some(1),
                 max_candidates: Some(DEFAULT_MAX_CANDIDATES),
+                max_rgb_mae: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,

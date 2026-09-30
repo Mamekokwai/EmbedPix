@@ -14,6 +14,7 @@ export interface CompressionPreferences {
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
   maxCandidates: number;
+  maxRgbMae: string;
   maxInputMiB: number;
   skipIfLarger: boolean;
   lossless: boolean;
@@ -46,6 +47,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   targetSizeEnabled: false,
   targetSizeKiB: "",
   maxCandidates: COMPRESSION_MAX_CANDIDATES_DEFAULT,
+  maxRgbMae: "",
   maxInputMiB: 32,
   skipIfLarger: true,
   lossless: true,
@@ -161,6 +163,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       targetSizeEnabled: record.targetSizeEnabled === true && supportsCompressionTargetSize(format, lossless),
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
       maxCandidates: integerValue(record, "maxCandidates", COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_MAX_CANDIDATES_MAX, COMPRESSION_MAX_CANDIDATES_DEFAULT),
+      maxRgbMae: typeof record.maxRgbMae === "string" && (/^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(record.maxRgbMae.trim())) && Number(record.maxRgbMae) >= 0 && Number(record.maxRgbMae) <= 255 ? record.maxRgbMae.trim() : "",
       maxInputMiB: integerValue(record, "maxInputMiB", 1, 32, DEFAULT_COMPRESSION_PREFERENCES.maxInputMiB),
       skipIfLarger: typeof record.skipIfLarger === "boolean" ? record.skipIfLarger : DEFAULT_COMPRESSION_PREFERENCES.skipIfLarger,
       lossless,
@@ -209,6 +212,7 @@ export function saveCompressionPreferences(
       targetSizeEnabled: preferences.targetSizeEnabled,
       targetSizeKiB: preferences.targetSizeKiB,
       maxCandidates: preferences.maxCandidates,
+      maxRgbMae: preferences.maxRgbMae,
       maxInputMiB: preferences.maxInputMiB,
       skipIfLarger: preferences.skipIfLarger,
       lossless: preferences.lossless,

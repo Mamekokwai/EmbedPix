@@ -19,6 +19,7 @@ export interface CompressionPresetValues {
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
   maxCandidates: number;
+  maxRgbMae: string;
   maxInputMiB: number;
   skipIfLarger: boolean;
   lossless: boolean;
@@ -69,6 +70,15 @@ function targetSizeValue(value: unknown, index: number): string {
   return trimmed;
 }
 
+function maxRgbMaeValue(value: unknown, index: number): string {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || !/^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(value.trim())) throw new Error(`第 ${index + 1} 个压缩预设的 RGB MAE 阈值无效。`);
+  const trimmed = value.trim();
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 255) throw new Error(`第 ${index + 1} 个压缩预设的 RGB MAE 阈值无效。`);
+  return trimmed;
+}
+
 function webpNearLosslessValue(value: unknown, index: number): number | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 99) throw new Error(`第 ${index + 1} 个压缩预设的 WebP 近无损等级无效。`);
@@ -104,6 +114,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
     maxCandidates: record.maxCandidates === undefined ? COMPRESSION_MAX_CANDIDATES_DEFAULT : integerValue(record.maxCandidates, COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_MAX_CANDIDATES_MAX, "候选搜索次数", index),
+    maxRgbMae: maxRgbMaeValue(record.maxRgbMae, index),
     maxInputMiB: record.maxInputMiB === undefined ? 32 : integerValue(record.maxInputMiB, 1, 32, "单文件输入上限", index),
     skipIfLarger: record.skipIfLarger === undefined ? true : booleanValue(record.skipIfLarger, "压缩后更大时跳过", index),
     lossless,
@@ -123,6 +134,7 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   if (!Number.isInteger(values.webpPass) || values.webpPass < 1 || values.webpPass > 10) throw new Error("WebP 分析遍数必须在 1 到 10 之间。");
   if (values.webpNearLossless !== null && (!Number.isInteger(values.webpNearLossless) || values.webpNearLossless < 1 || values.webpNearLossless > 99)) throw new Error("WebP 近无损等级必须在 1 到 99 之间。");
   if (values.webpNearLossless !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 近无损等级仅适用于无损 WebP。");
+  if (values.maxRgbMae !== "" && (values.format !== "webp" || values.lossless || !values.targetSizeEnabled)) throw new Error("RGB MAE 阈值仅适用于启用目标体积的有损 WebP。");
   if (!/^#[0-9a-f]{6}$/iu.test(values.jpegBackground.trim())) throw new Error("JPEG 透明背景必须是 #RRGGBB 颜色。");
   if (!Number.isInteger(values.maxCandidates) || values.maxCandidates < COMPRESSION_MAX_CANDIDATES_MIN || values.maxCandidates > COMPRESSION_MAX_CANDIDATES_MAX) throw new Error(`候选搜索次数必须在 ${COMPRESSION_MAX_CANDIDATES_MIN} 到 ${COMPRESSION_MAX_CANDIDATES_MAX} 之间。`);
   if (!Number.isInteger(values.maxInputMiB) || values.maxInputMiB < 1 || values.maxInputMiB > 32) throw new Error("单文件输入上限必须在 1 到 32 MiB 之间。");
