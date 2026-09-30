@@ -25,6 +25,7 @@
 - [x] 默认不覆盖、不删除源文件，压缩后更大时默认跳过。
 - [x] 取消、失败、切页不会留下不可清理的临时文件；GIF spool、更新下载临时文件和 Blob URL 均有清理/回收测试；`pending-install.json.part` 已在启动清理中按固定路径安全回收，并有 marker 保留/清除与文件/目录异常测试。
 - [x] 构建产物清理安全门禁：Windows/Linux 都拒绝 repoRoot 到目标之间任意 parent symlink/junction/reparse point；Windows 缺失目标安全 Skip，dry-run 与实际删除共用同一检查。已验证 Windows `check-cleanup`、Linux `check-cleanup`、`npm test`（338）、`cargo test`（253 + 4 CLI）、`check:release-config` 和 `check:release-signing-cleanup`。
+- [x] 全仓解码入口安全审查：普通图片、`preserve`、压缩、GIF 序列、WebP/APNG 动画均具备尺寸、像素、`max_alloc`、帧数/累计资源预算与发布前回读校验；损坏或截断输入不会发布。已复核 export_image 44、GIF 35、animation 8、sequence 12 相关测试通过。
 - [x] 输出位置、覆盖、`bak` 与删除源文件沿用现有安全策略；删除源文件仅允许桌面源文件队列，成功发布并校验后执行，失败或跳过保留源文件。
 - [~] 前端、Rust、桌面 smoke 已通过；发布资产门禁需下一个带真实 release 资产的版本再验收。
 - [x] 新增编码器的许可证、版本和第三方声明完成审查：`kamadak-exif=0.6.1` 已固定并核对 BSD-2-Clause；WebP 有损复用已在依赖树中的 `libwebp-sys2=0.2.0` 静态绑定，Rust crate 为 BSD-3-Clause，bundled libwebp 源码保留 BSD/WebM 许可文件。
