@@ -208,6 +208,10 @@ enum MetadataPolicy {
     #[default]
     Strip,
     Preserve,
+    #[serde(rename = "stripSafe")]
+    StripSafe,
+    #[serde(rename = "stripAll")]
+    StripAll,
 }
 
 impl MetadataPolicy {
@@ -215,7 +219,27 @@ impl MetadataPolicy {
         match self {
             Self::Strip => "strip",
             Self::Preserve => "preserve",
+            Self::StripSafe => "strip-safe",
+            Self::StripAll => "strip-all",
         }
+    }
+}
+
+fn validate_compression_metadata_policy(policy: MetadataPolicy) -> Result<(), String> {
+    match policy {
+        MetadataPolicy::Strip => Ok(()),
+        MetadataPolicy::Preserve => Err(
+            "metadataPolicy=preserve is not supported by first-stage compression; use strip"
+                .into(),
+        ),
+        MetadataPolicy::StripSafe => Err(
+            "metadataPolicy=stripSafe is not supported: safe ICC/EXIF/XMP copying requires a reviewed metadata copier"
+                .into(),
+        ),
+        MetadataPolicy::StripAll => Err(
+            "metadataPolicy=stripAll is not supported as a distinct strategy by first-stage compression; use strip"
+                .into(),
+        ),
     }
 }
 
@@ -1780,11 +1804,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
     validate_compression_mode(format, lossless)?;
-    if metadata.metadata_policy == MetadataPolicy::Preserve {
-        return Err(
-            "metadataPolicy=preserve is not supported by first-stage compression; use strip".into(),
-        );
-    }
+    validate_compression_metadata_policy(metadata.metadata_policy)?;
     if metadata.replace_original && metadata.source_path.is_none() {
         return Err("replaceOriginal requires sourcePath".into());
     }
@@ -1908,11 +1928,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
     validate_compression_mode(format, lossless)?;
-    if metadata.metadata_policy == MetadataPolicy::Preserve {
-        return Err(
-            "metadataPolicy=preserve is not supported by first-stage compression; use strip".into(),
-        );
-    }
+    validate_compression_metadata_policy(metadata.metadata_policy)?;
     let input = body[end..].to_vec();
     if input.len() > max_input_bytes {
         return Err(if max_input_bytes == MAX_INPUT_BYTES {
@@ -2980,6 +2996,20 @@ mod tests {
         assert!(parse_estimate_raw_payload(&payload)
             .unwrap_err()
             .contains("metadataPolicy=preserve"));
+
+        for (policy, reason) in [
+            ("stripSafe", "safe ICC/EXIF/XMP copying"),
+            ("stripAll", "not supported as a distinct strategy"),
+        ] {
+            let metadata = format!(
+                "{{\"fileName\":\"sample.png\",\"outputFormat\":\"webp\",\"metadataPolicy\":\"{policy}\"}}"
+            );
+            let payload = raw_payload(&metadata, &png_input());
+            assert!(parse_raw_payload(&payload).unwrap_err().contains(reason));
+            assert!(parse_estimate_raw_payload(&payload)
+                .unwrap_err()
+                .contains(reason));
+        }
     }
 
     #[test]
