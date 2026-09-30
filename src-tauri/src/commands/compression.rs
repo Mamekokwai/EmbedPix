@@ -236,10 +236,7 @@ fn validate_compression_metadata_policy(policy: MetadataPolicy) -> Result<(), St
             "metadataPolicy=stripSafe is not supported: safe ICC/EXIF/XMP copying requires a reviewed metadata copier"
                 .into(),
         ),
-        MetadataPolicy::StripAll => Err(
-            "metadataPolicy=stripAll is not supported as a distinct strategy by first-stage compression; use strip"
-                .into(),
-        ),
+        MetadataPolicy::StripAll => Ok(()),
     }
 }
 
@@ -3000,19 +2997,38 @@ mod tests {
             .unwrap_err()
             .contains("metadataPolicy=preserve"));
 
-        for (policy, reason) in [
-            ("stripSafe", "safe ICC/EXIF/XMP copying"),
-            ("stripAll", "not supported as a distinct strategy"),
-        ] {
-            let metadata = format!(
-                "{{\"fileName\":\"sample.png\",\"outputFormat\":\"webp\",\"metadataPolicy\":\"{policy}\"}}"
-            );
-            let payload = raw_payload(&metadata, &png_input());
-            assert!(parse_raw_payload(&payload).unwrap_err().contains(reason));
-            assert!(parse_estimate_raw_payload(&payload)
-                .unwrap_err()
-                .contains(reason));
-        }
+        let metadata =
+            r#"{"fileName":"sample.png","outputFormat":"webp","metadataPolicy":"stripSafe"}"#;
+        let payload = raw_payload(metadata, &png_input());
+        assert!(parse_raw_payload(&payload)
+            .unwrap_err()
+            .contains("safe ICC/EXIF/XMP copying"));
+        assert!(parse_estimate_raw_payload(&payload)
+            .unwrap_err()
+            .contains("safe ICC/EXIF/XMP copying"));
+
+        let estimate_payload = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"skipIfLarger":false,"metadataPolicy":"stripAll"}"#,
+            &png_input(),
+        );
+        let estimate_request = parse_estimate_raw_payload(&estimate_payload).unwrap();
+        assert_eq!(
+            run_estimate(&estimate_request).unwrap().metadata_policy,
+            "strip-all"
+        );
+
+        let output_path = crate::commands::test_temp_dir()
+            .join(format!("embedpix-strip-all-{}.webp", uuid_like_id()));
+        let output_metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"webp\",\"outputPath\":\"{}\",\"lossless\":false,\"skipIfLarger\":false,\"metadataPolicy\":\"stripAll\"}}",
+            output_path.to_string_lossy().replace('\\', "/")
+        );
+        let output_request =
+            parse_raw_payload(&raw_payload(&output_metadata, &png_input())).unwrap();
+        let output = run_compression(&output_request, &test_job("strip-all-output")).unwrap();
+        assert_eq!(output.metadata_policy, "strip-all");
+        assert!(output_path.exists());
+        fs::remove_file(output_path).unwrap();
     }
 
     #[test]
