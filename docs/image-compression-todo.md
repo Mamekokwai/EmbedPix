@@ -86,7 +86,7 @@
 - [x] 支持 `strip-all`：当前编码器路径不复制输入元数据，并由 native 响应明确回报 `stripAll`。
 - [x] 第一阶段 `strip` 实际验证：带 JPEG EXIF APP1 的输入在 PNG/JPEG/WebP 输出中不会被复制。
 - [x] 支持透明像素优化开关：PNG 请求/估算支持可选 `pngOptimizeAlpha`，默认关闭；仅 PNG 接受，启用后明确提示可能改变完全透明像素的 RGB 值，输出仍执行尺寸与解码校验。
-- [ ] 保持宽度、高度、颜色类型、Alpha 语义正确。
+- [x] 保持宽度、高度、颜色类型、Alpha 语义正确：PNG 优化级别与 `stripSafe` 均通过解码后的 RGBA 逐点和尺寸回归验证。
 - [x] 压缩后更大时返回带原因的 `skipped` 结果并默认跳过。
 - [x] 验证 PNG 解码结果。
 - [x] 补像素逐点一致测试：PNG 优化级别 0–6 均逐点验证 RGBA 输出与输入一致。
