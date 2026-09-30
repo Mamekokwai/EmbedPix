@@ -62,6 +62,10 @@ $cleanupSmoke = Get-Content -Raw -Encoding UTF8 -LiteralPath $cleanupSmokePath
 foreach ($required in @('Remove-ReleaseSigningProbeDirectory', '-RemoveItem', '清理残留 smoke 未报告失败')) {
   if ($cleanupSmoke -notmatch [regex]::Escape($required)) { throw "Signing cleanup smoke is missing: $required" }
 }
+$signingPreflight = Get-Content -Raw -Encoding UTF8 -LiteralPath $signingPreflightPath
+foreach ($required in @('ReportPath', 'trustedPublicKeyVerification', 'generatedAtUtc', '摘要已写入')) {
+  if ($signingPreflight -notmatch [regex]::Escape($required)) { throw "Signing preflight report contract is missing: $required" }
+}
 $configKey = Decode-MinisignPublicKey $tauri.plugins.updater.pubkey 'tauri.conf.json updater pubkey'
 $fileKey = Decode-MinisignPublicKey (Get-Content -Raw -Encoding UTF8 'src-tauri/update-public-key.txt') 'src-tauri/update-public-key.txt'
 if ($configKey -ne $fileKey) { throw 'Tauri updater pubkey does not match src-tauri/update-public-key.txt.' }

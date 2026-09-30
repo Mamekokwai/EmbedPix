@@ -1,4 +1,9 @@
 ﻿$ErrorActionPreference = 'Stop'
+[CmdletBinding()]
+param(
+  [string]$ReportPath
+)
+
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
 $privateKey = $env:TAURI_SIGNING_PRIVATE_KEY
@@ -83,4 +88,19 @@ if ($null -ne $cleanupFailure) {
   throw $cleanupFailure
 }
 
+$report = [ordered]@{
+  version = (Get-Content -Raw -Encoding UTF8 (Join-Path $root 'package.json') | ConvertFrom-Json).version
+  signingPreflight = 'passed'
+  trustedPublicKeyVerification = 'passed'
+  cleanup = 'passed'
+  generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+}
+if (-not [string]::IsNullOrWhiteSpace($ReportPath)) {
+  $reportParent = Split-Path -Parent ([IO.Path]::GetFullPath($ReportPath))
+  if (-not [string]::IsNullOrWhiteSpace($reportParent)) {
+    New-Item -ItemType Directory -Path $reportParent -Force | Out-Null
+  }
+  [IO.File]::WriteAllText([IO.Path]::GetFullPath($ReportPath), ($report | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
+  Write-Host "签名预检摘要已写入：$([IO.Path]::GetFullPath($ReportPath))"
+}
 Write-Host '签名预检通过：私钥可用且与受信更新公钥匹配，发布配置有效。'
