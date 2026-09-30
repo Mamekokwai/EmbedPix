@@ -1056,8 +1056,10 @@ fn run_compression(
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
+    let verified = verify_compressed_output(&bytes, request.format, width, height)
+        .map_err(|error| fail_message(job, error))?;
     let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
-        quality_metrics_for_output(request, &decode_image(&bytes)?, Some(job))?
+        quality_metrics_for_output(request, &verified, Some(job))?
     } else {
         None
     };
@@ -1584,7 +1586,7 @@ fn choose_webp_output_with_rgb_mae(
         if let Some(job) = job {
             update_progress_bytes(job, None, Some(bytes.len() as u64));
         }
-        let decoded = decode_image(&bytes)?;
+        let decoded = verify_compressed_output(&bytes, request.format, width, height)?;
         let metrics = quality_metrics_for_output(request, &decoded, job)?
             .ok_or_else(|| "maxRgbMae requires lossy WebP quality metrics".to_string())?;
         if let Some(job) = job {
@@ -1683,12 +1685,35 @@ fn encode_and_verify(
     if bytes.len() > MAX_OUTPUT_BYTES {
         return Err("compressed output exceeds the 128 MiB limit".into());
     }
-    let verified = decode_image(&bytes)
+    verify_compressed_output(&bytes, format, width, height)?;
+    Ok(bytes)
+}
+
+fn verify_compressed_output(
+    bytes: &[u8],
+    format: CompressionFormat,
+    width: u32,
+    height: u32,
+) -> Result<DynamicImage, String> {
+    let actual_format = image::guess_format(bytes)
+        .map_err(|error| format!("compressed output failed format verification: {error}"))?;
+    let expected_format = match format {
+        CompressionFormat::Png => ImageFormat::Png,
+        CompressionFormat::Jpeg => ImageFormat::Jpeg,
+        CompressionFormat::Webp => ImageFormat::WebP,
+    };
+    if actual_format != expected_format {
+        return Err(format!(
+            "compressed output format does not match requested {} format: detected {actual_format:?}",
+            format.name()
+        ));
+    }
+    let verified = decode_image(bytes)
         .map_err(|error| format!("compressed output failed decode verification: {error}"))?;
     if verified.dimensions() != (width, height) {
         return Err("compressed output dimensions do not match the source image".into());
     }
-    Ok(bytes)
+    Ok(verified)
 }
 
 #[cfg(test)]
@@ -1735,10 +1760,7 @@ fn run_preview_core(
         checkpoint(job)?;
         update_progress(job, CompressionStage::Validating, None, None);
     }
-    let verified = decode_image(&data)?;
-    if verified.dimensions() != (width, height) {
-        return Err("compressed preview dimensions do not match the source image".into());
-    }
+    let verified = verify_compressed_output(&data, request.format, width, height)?;
     let quality_metrics = quality_metrics_for_output(request, &verified, job)?;
     let output_bytes = data.len() as u64;
     if let Some(job) = job {
@@ -1847,8 +1869,9 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
+    let verified = verify_compressed_output(&bytes, request.format, width, height)?;
     let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
-        quality_metrics_for_output(request, &decode_image(&bytes)?, None)?
+        quality_metrics_for_output(request, &verified, None)?
     } else {
         None
     };
@@ -3512,6 +3535,23 @@ mod tests {
             assert_eq!(decoded.color().channel_count(), 3);
             assert_eq!(decoded.to_rgb8().as_raw().len(), 7 * 5 * 3);
         }
+    }
+
+    #[test]
+    fn compressed_output_verification_requires_the_requested_format() {
+        let png = encode_image(&png_input(), CompressionFormat::Png, 82, 2).unwrap();
+        assert_eq!(
+            verify_compressed_output(&png, CompressionFormat::Png, 2, 2)
+                .unwrap()
+                .dimensions(),
+            (2, 2)
+        );
+        let mismatch = verify_compressed_output(&png, CompressionFormat::Jpeg, 2, 2).unwrap_err();
+        assert!(mismatch.contains("compressed output format does not match requested jpeg"));
+
+        let invalid =
+            verify_compressed_output(b"not an image", CompressionFormat::Webp, 2, 2).unwrap_err();
+        assert!(invalid.contains("compressed output failed format verification"));
     }
 
     #[test]
