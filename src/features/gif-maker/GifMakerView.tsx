@@ -680,6 +680,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setSizeComparison(null);
     setCompressionSummary(null);
     setExportFrameSummary(null);
+    setLastExportPath(null);
     compressionPlanRequestRef.current += 1;
     setCompressionPlan(null);
     setCompressionPlanError(null);

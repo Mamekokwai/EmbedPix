@@ -57,6 +57,9 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("下载 JSON 报告");
     expect(gifView).toContain("{lastExportPath ? <div className=\"gif-output-actions\"");
   });
+  it("clears stale GIF export actions when export inputs change", () => {
+    expect(gifView).toContain("setExportFrameSummary(null);\n    setLastExportPath(null);");
+  });
   it("clears stale compression preflight space when inputs or options change", () => {
     expect(compressionView).toContain("setPreflightSpaceBytes(null);");
     expect(compressionView).toMatch(/\[items, options, selectedItemId\]/);
