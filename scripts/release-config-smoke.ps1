@@ -66,6 +66,20 @@ $signingPreflight = Get-Content -Raw -Encoding UTF8 -LiteralPath $signingPreflig
 foreach ($required in @('ReportPath', 'trustedPublicKeyVerification', 'generatedAtUtc', '摘要已写入')) {
   if ($signingPreflight -notmatch [regex]::Escape($required)) { throw "Signing preflight report contract is missing: $required" }
 }
+$reportMatch = [regex]::Match($signingPreflight, '(?s)\$report\s*=\s*\[ordered\]@\{(?<body>.*?)\n\}')
+if (-not $reportMatch.Success) { throw 'Signing preflight report object is missing.' }
+$reportBody = $reportMatch.Groups['body'].Value
+$reportFields = @([regex]::Matches($reportBody, '(?m)^\s{2}([A-Za-z][A-Za-z0-9]*)\s*=') | ForEach-Object { $_.Groups[1].Value })
+$expectedReportFields = @('version', 'signingPreflight', 'trustedPublicKeyVerification', 'cleanup', 'generatedAtUtc')
+if (($reportFields -join ',') -ne ($expectedReportFields -join ',')) {
+  throw "Signing preflight report fields are not restricted to the safe contract: $($reportFields -join ', ')."
+}
+if ($reportBody -match '(?i)private|secret|password|probe|signature|TAURI_|env:') {
+  throw 'Signing preflight report must not expose private material, probe paths, signatures, or environment values.'
+}
+if ($signingPreflight -notmatch '\[IO\.File\]::WriteAllText\([^\r\n]*\[Text\.UTF8Encoding\]::new\(\$false\)') {
+  throw 'Signing preflight report must be written as UTF-8 without BOM.'
+}
 $configKey = Decode-MinisignPublicKey $tauri.plugins.updater.pubkey 'tauri.conf.json updater pubkey'
 $fileKey = Decode-MinisignPublicKey (Get-Content -Raw -Encoding UTF8 'src-tauri/update-public-key.txt') 'src-tauri/update-public-key.txt'
 if ($configKey -ne $fileKey) { throw 'Tauri updater pubkey does not match src-tauri/update-public-key.txt.' }
