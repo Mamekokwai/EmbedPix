@@ -2638,11 +2638,13 @@ mod tests {
             let mut encoder = gif::Encoder::new(&mut bytes, 1, 1, &[]).unwrap();
             encoder.set_repeat(gif::Repeat::Infinite).unwrap();
             for color in [[255, 0, 0], [0, 255, 0]] {
-                let mut frame = gif::Frame::default();
-                frame.width = 1;
-                frame.height = 1;
-                frame.buffer = vec![0].into();
-                frame.palette = Some(vec![color[0], color[1], color[2]]);
+                let frame = gif::Frame {
+                    width: 1,
+                    height: 1,
+                    buffer: vec![0].into(),
+                    palette: Some(vec![color[0], color[1], color[2]]),
+                    ..gif::Frame::default()
+                };
                 encoder.write_frame(&frame).unwrap();
             }
         }
