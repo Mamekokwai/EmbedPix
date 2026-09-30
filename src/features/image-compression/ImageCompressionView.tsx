@@ -43,6 +43,7 @@ import {
   isCurrentCompressionEstimate,
   isCompressionSourcePathError,
   supportsCompressionTargetSize,
+  waitForCompressionProgressTick,
 } from "./imageCompressionLogic";
 import {
   COMPRESSION_MAX_TARGET_SIZE_KIB,
@@ -229,8 +230,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
   const activeJobIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const progressPollControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => {
+    mountedRef.current = false;
+    progressPollControllerRef.current?.abort();
+    progressPollControllerRef.current = null;
     const jobId = activeJobIdRef.current;
     if (!jobId || !isTauriEnvironment()) return;
     void cancelCompression(jobId).catch(() => undefined);
@@ -589,21 +595,33 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   };
 
   const monitorCompressionProgress = async (jobId: string) => {
-    while (activeJobIdRef.current === jobId) {
-      try {
-        const next = await getCompressionProgress(jobId);
-        setStage(next.stage);
-        setProgressBytes((current) => ({
-          input: typeof next.inputBytes === "number" ? next.inputBytes : current.input,
-          output: typeof next.outputBytes === "number" ? next.outputBytes : current.output,
-        }));
-        const progressError = formatCompressionProgressError(next);
-        if (progressError) setMessage(progressError);
-      } catch {
-        return;
+    const controller = new AbortController();
+    progressPollControllerRef.current = controller;
+    try {
+      while (mountedRef.current && !controller.signal.aborted && activeJobIdRef.current === jobId) {
+        try {
+          const next = await getCompressionProgress(jobId);
+          if (!mountedRef.current || controller.signal.aborted || activeJobIdRef.current !== jobId) return;
+          setStage(next.stage);
+          setProgressBytes((current) => ({
+            input: typeof next.inputBytes === "number" ? next.inputBytes : current.input,
+            output: typeof next.outputBytes === "number" ? next.outputBytes : current.output,
+          }));
+          const progressError = formatCompressionProgressError(next);
+          if (progressError) setMessage(progressError);
+        } catch {
+          return;
+        }
+        await waitForCompressionProgressTick(controller.signal);
       }
-      await new Promise((resolve) => window.setTimeout(resolve, 160));
+    } finally {
+      if (progressPollControllerRef.current === controller) progressPollControllerRef.current = null;
     }
+  };
+
+  const stopCompressionProgressPolling = () => {
+    progressPollControllerRef.current?.abort();
+    progressPollControllerRef.current = null;
   };
 
   const cancelActiveCompression = async () => {
@@ -726,6 +744,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         activeJobIdRef.current = jobId;
         const progressPoll = monitorCompressionProgress(jobId);
         const result = await compressImage(request);
+        stopCompressionProgressPolling();
         activeJobIdRef.current = null;
         await progressPoll;
         if (result.status === "skipped") {
@@ -744,6 +763,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes, targetMet: targetMet === null ? current.targetMet : current.targetMet === false || targetMet === false ? false : true, selectedQualities: typeof result.selectedQuality === "number" ? [...current.selectedQualities, result.selectedQuality] : current.selectedQualities }));
         }
       } catch (error) {
+        stopCompressionProgressPolling();
         let detail = errorMessage(error);
         try {
           const finalProgress = await getCompressionProgress(jobId);
@@ -771,6 +791,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       }
       setProgress({ current: index + 1, total: queue.length });
     }
+    stopCompressionProgressPolling();
     activeJobIdRef.current = null;
     setCurrentFileName(null);
     const finalState = getCompressionBatchFinalState(failedNames, cancelRequestedRef.current);

@@ -43,6 +43,20 @@ export function normalizeCompressionOutputModes(modes: { autoNumbering?: boolean
 }
 export function formatCompressionEstimateSource(source: "native" | "fallback", detail?: string): string { return `${source === "native" ? "原生精确预估" : "本地估算"}${detail ? `（${detail}）` : ""}`; }
 export function isCurrentCompressionEstimate(requestId: number, currentRequestId: number, aborted: boolean): boolean { return !aborted && requestId === currentRequestId; }
+export function waitForCompressionProgressTick(signal: AbortSignal, delayMs = 160): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const done = () => {
+      if (timeout !== undefined) globalThis.clearTimeout(timeout);
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    timeout = globalThis.setTimeout(done, delayMs);
+    signal.addEventListener("abort", done, { once: true });
+    if (signal.aborted) done();
+  });
+}
 export function getCompressionSourcePathError(location: CompressionOutputLocation, hasSourcePath: boolean, replaceOriginal = false): string | null {
   if (hasSourcePath || location === "directory") return null;
   return replaceOriginal ? "覆盖原图需要可访问的桌面源文件路径。" : "缺少桌面源文件路径；当前输出位置需要源文件路径，浏览器 File 请改用“指定目录”。";
