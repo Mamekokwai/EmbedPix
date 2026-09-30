@@ -18,6 +18,7 @@ $repository = 'Mamekokwai/EmbedPix'
 $version = (Get-Content -Raw (Join-Path (Split-Path -Parent $PSScriptRoot) 'package.json') | ConvertFrom-Json).version
 if ([string]::IsNullOrWhiteSpace($version)) { throw 'Fixture version could not be read from package.json.' }
 $tag = "v$version"
+$fixturePubDate = [DateTimeOffset]::Parse('2026-01-01T00:00:00Z').ToUniversalTime().ToString('o')
 $root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-release-fixture-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $root | Out-Null
 
@@ -43,7 +44,7 @@ try {
   $manifest = [ordered]@{
     version = $version
     notes = "EmbedPix v$version"
-    pub_date = (Get-Date).ToUniversalTime().ToString('o')
+    pub_date = $fixturePubDate
     platforms = [ordered]@{
       'windows-x86_64' = [ordered]@{
         signature = $encodedSignature
@@ -81,7 +82,11 @@ try {
   Assert-ReleaseChannel -Release ([pscustomobject]@{ draft = $false; prerelease = $true }) -Tag 'v0.7.0-rc.1'
   Expect-Rejection 'stable tag marked prerelease' { Assert-ReleaseChannel -Release ([pscustomobject]@{ draft = $false; prerelease = $true }) -Tag $tag }
   Expect-Rejection 'prerelease tag marked stable' { Assert-ReleaseChannel -Release ([pscustomobject]@{ draft = $false; prerelease = $false }) -Tag 'v0.7.0-rc.1' }
-  Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null
+  $firstContractSummary = Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag
+  $secondContractSummary = Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag
+  if (($firstContractSummary | ConvertTo-Json -Compress) -ne ($secondContractSummary | ConvertTo-Json -Compress)) {
+    throw 'Release fixture contract is not idempotent: repeated validation produced different summaries.'
+  }
   Write-Host '[release-fixture] accepted valid manifest, asset set, signatures, URLs, pub_date, sizes, provenance, and checksums.'
 
   $originalDownloadUrl = $release.assets[0].browser_download_url
@@ -98,7 +103,7 @@ try {
   $invalidPlatformManifest = [ordered]@{
     version = $version
     notes = "EmbedPix v$version"
-    pub_date = (Get-Date).ToUniversalTime().ToString('o')
+    pub_date = $fixturePubDate
     platforms = [ordered]@{
       'windows-x86_64' = $manifest.platforms.'windows-x86_64'
       'windows-aarch64' = $manifest.platforms.'windows-aarch64'
