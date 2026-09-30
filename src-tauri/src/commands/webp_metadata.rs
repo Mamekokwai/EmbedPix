@@ -73,7 +73,7 @@ fn validate_static_webp_output(input: &[u8]) -> Result<(), String> {
     inspect_static_webp(input, |fourcc, payload| {
         match fourcc {
             b"VP8X" => {}
-            b"VP8 " | b"VP8L" => {}
+            b"ALPH" | b"VP8 " | b"VP8L" => {}
             b"ICCP" => {
                 iccp_count += 1;
                 validate_icc(payload)?;
@@ -257,5 +257,11 @@ mod tests {
     fn rejects_non_whitelisted_assembled_output() {
         let input = riff(&[(b"VP8 ", b"x"), (b"EXIF", b"private")]);
         assert!(validate_static_webp_output(&input).is_err());
+    }
+
+    #[test]
+    fn accepts_alpha_chunk_in_static_webp_output() {
+        let input = riff(&[(b"VP8X", &[0]), (b"ALPH", b"alpha"), (b"VP8 ", b"pixels")]);
+        assert!(validate_static_webp_output(&input).is_ok());
     }
 }

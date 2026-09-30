@@ -3084,6 +3084,31 @@ mod tests {
     }
 
     #[test]
+    fn strip_safe_rgba_webp_accepts_libwebp_alpha_chunks() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([20, 40, 60, 96])));
+        let mut input = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut input), ImageOutputFormat::WebP)
+            .unwrap();
+        let output = encode_image_with_webp_method_alpha(
+            &input,
+            CompressionFormat::Webp,
+            80,
+            2,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            MetadataPolicy::StripSafe,
+        )
+        .unwrap();
+        assert_eq!(decode_image(&output).unwrap().dimensions(), (2, 2));
+    }
+
+    #[test]
     fn png_optimization_preserves_alpha_and_rgba_pixels_at_all_levels() {
         let image = DynamicImage::ImageRgba8(ImageBuffer::from_fn(3, 2, |x, y| {
             Rgba([
