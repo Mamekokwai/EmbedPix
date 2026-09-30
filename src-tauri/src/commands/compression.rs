@@ -210,7 +210,7 @@ enum MetadataPolicy {
     Preserve,
     #[serde(rename = "stripSafe")]
     StripSafe,
-    #[serde(rename = "stripAll")]
+    #[serde(rename = "stripAll", alias = "strip-all")]
     StripAll,
 }
 
@@ -220,7 +220,7 @@ impl MetadataPolicy {
             Self::Strip => "strip",
             Self::Preserve => "preserve",
             Self::StripSafe => "strip-safe",
-            Self::StripAll => "strip-all",
+            Self::StripAll => "stripAll",
         }
     }
 }
@@ -3008,13 +3008,13 @@ mod tests {
             .contains("safe ICC/EXIF/XMP copying"));
 
         let estimate_payload = raw_payload(
-            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"skipIfLarger":false,"metadataPolicy":"stripAll"}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"skipIfLarger":false,"metadataPolicy":"strip-all"}"#,
             &png_input(),
         );
         let estimate_request = parse_estimate_raw_payload(&estimate_payload).unwrap();
         assert_eq!(
             run_estimate(&estimate_request).unwrap().metadata_policy,
-            "strip-all"
+            "stripAll"
         );
 
         let output_path = crate::commands::test_temp_dir()
@@ -3026,7 +3026,7 @@ mod tests {
         let output_request =
             parse_raw_payload(&raw_payload(&output_metadata, &png_input())).unwrap();
         let output = run_compression(&output_request, &test_job("strip-all-output")).unwrap();
-        assert_eq!(output.metadata_policy, "strip-all");
+        assert_eq!(output.metadata_policy, "stripAll");
         assert!(output_path.exists());
         fs::remove_file(output_path).unwrap();
     }
