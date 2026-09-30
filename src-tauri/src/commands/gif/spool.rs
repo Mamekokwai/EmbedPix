@@ -284,6 +284,35 @@ impl GifFrameSpoolState {
             let path = item
                 .map_err(|error| format!("无法读取 GIF 临时目录项：{error}"))?
                 .path();
+            if path.is_file() {
+                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                let Some(id) = name.strip_suffix(".lock") else {
+                    continue;
+                };
+                if id.is_empty() || self.root.join(id).exists() {
+                    continue;
+                }
+                let recently_created = fs::metadata(&path)
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+                    .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                    .is_some_and(|age| age < grace_period);
+                if recently_created {
+                    skipped_grace_period += 1;
+                    continue;
+                }
+                let Some(lock) = SpoolLock::try_open(&path)
+                    .map_err(|error| format!("无法检查 GIF 临时帧目录锁：{error}"))?
+                else {
+                    skipped_active += 1;
+                    continue;
+                };
+                drop(lock);
+                let _ = fs::remove_file(&path);
+                continue;
+            }
             if !path.is_dir() {
                 continue;
             }
@@ -551,6 +580,37 @@ mod tests {
         state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
         assert!(!directory.exists());
         assert!(!lock_path.exists());
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn cleanup_skips_an_active_lock_without_a_directory() {
+        let state = test_state("active-lock-only");
+        fs::create_dir_all(&state.root).unwrap();
+        let lock_path = state.root.join("active-lock-only.lock");
+        let lock = SpoolLock::create(&lock_path).unwrap();
+
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        assert!(lock_path.exists());
+        assert_eq!(state.latest_cleanup_snapshot().unwrap().skipped_active, 1);
+
+        drop(lock);
+        let _ = fs::remove_file(lock_path);
+        let _ = fs::remove_dir_all(state.root.clone());
+    }
+
+    #[test]
+    fn cleanup_removes_a_stale_lock_without_a_directory() {
+        let state = test_state("stale-lock-only");
+        fs::create_dir_all(&state.root).unwrap();
+        let lock_path = state.root.join("stale-lock-only.lock");
+        let unrelated = state.root.join("unrelated.lock.bak");
+        fs::write(&unrelated, b"keep").unwrap();
+        drop(SpoolLock::create(&lock_path).unwrap());
+
+        state.cleanup_orphaned_directories(Duration::ZERO).unwrap();
+        assert!(!lock_path.exists());
+        assert!(unrelated.exists());
         let _ = fs::remove_dir_all(state.root.clone());
     }
 
