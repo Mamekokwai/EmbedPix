@@ -542,7 +542,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       try {
         imported.push(nativeFileToItem(nativeFile, maxInputBytes));
       } catch (error) {
-        skipped.push({ fileName: nativeFile.fileName, message: errorMessage(error) });
+        skipped.push({ fileName: nativeFile.fileName, message: formatCompressionError(errorMessage(error)) });
       }
     }
     if (imported.length > 0) {
@@ -582,7 +582,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       const replaceItemId = replaceItemIdRef.current;
       await importNativeFiles(await pickCompressionFiles(), replaceItemId);
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(formatCompressionError(errorMessage(error)));
       setStatus("error");
     } finally {
       replaceItemIdRef.current = null;
@@ -602,7 +602,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       const result = await pickCompressionDirectoryResult();
       if (result) await importNativeFiles(result.files, null, result.skipped);
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(formatCompressionError(errorMessage(error)));
       setStatus("error");
     } finally {
       setImportBusy(false);
@@ -668,7 +668,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     try {
       await cancelCompression(jobId);
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(formatCompressionError(errorMessage(error)));
     }
   };
 
@@ -983,7 +983,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setMessage("已打开输出文件夹");
       setStatus("ready");
     } catch (error) {
-      setMessage(errorMessage(error));
+      setMessage(formatCompressionError(errorMessage(error)));
       setStatus("error");
     }
   };
