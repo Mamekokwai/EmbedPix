@@ -1000,6 +1000,27 @@ pub fn compress_file_cli(
     quality: u8,
     max_input_bytes: Option<u64>,
 ) -> Result<CompressionResult, String> {
+    compress_file_cli_with_jpeg_options(
+        input_path,
+        output_path,
+        format,
+        quality,
+        max_input_bytes,
+        false,
+        false,
+    )
+}
+
+/// Runs the CLI compression path with optional JPEG scan/Huffman controls.
+pub fn compress_file_cli_with_jpeg_options(
+    input_path: &Path,
+    output_path: &Path,
+    format: &str,
+    quality: u8,
+    max_input_bytes: Option<u64>,
+    jpeg_progressive: bool,
+    jpeg_optimize_huffman: bool,
+) -> Result<CompressionResult, String> {
     let input =
         fs::read(input_path).map_err(|error| format!("failed to read input image: {error}"))?;
     let metadata = serde_json::json!({
@@ -1014,6 +1035,8 @@ pub fn compress_file_cli(
         "skipIfLarger": false,
         "maxInputBytes": max_input_bytes,
         "metadataPolicy": "strip",
+        "jpegProgressive": jpeg_progressive,
+        "jpegOptimizeHuffman": jpeg_optimize_huffman,
     });
     let metadata = serde_json::to_vec(&metadata).map_err(|error| error.to_string())?;
     let mut payload = b"EGF1".to_vec();

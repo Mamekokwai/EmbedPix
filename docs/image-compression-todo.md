@@ -367,7 +367,7 @@
 
 - [~] Windows x64 构建：本地已生成 `EmbedPix.exe` 与 `EmbedPix_0.7.0_x64-setup.exe`，并通过 Windows GUI subsystem=2 检查；完整 Tauri 构建仍因本机缺少 `TAURI_SIGNING_PRIVATE_KEY` 未完成签名。
 - [ ] Windows ARM64 构建。
-- [x] 压缩命令行输出、错误输出和退出码：`embedpix-cli` 使用 JSON/JSONL 事件输出成功与进度，错误事件写入 stdout、stderr 保留进程级诊断，退出码区分成功（0）、失败（1）和中断/部分失败（2）；强制 CLI/OxiPNG smoke 已覆盖 PNG、WebP、GIF 输出与二次解码。
+- [x] 压缩命令行输出、错误输出和退出码：`embedpix-cli` 使用 JSON/JSONL 事件输出成功与进度，错误事件写入 stdout、stderr 保留进程级诊断，退出码区分成功（0）、失败（1）和中断/部分失败（2）；CLI 现在支持 `jpegProgressive` 与 `jpegOptimizeHuffman`，并由 smoke 实际校验 JPEG SOF2；强制 CLI/OxiPNG smoke 已覆盖 PNG、JPEG、WebP、GIF 输出与二次解码。
 - [x] x64 安装、启动、压缩、卸载：`EmbedPix_0.7.0_x64-setup.exe` 隔离 NSIS smoke 安装退出码为 0，`EmbedPix.exe` 通过 GUI subsystem=2 检查，启动 8 秒仍运行，卸载退出码为 0 且临时安装目录清理完成。
 - [ ] ARM64 资产下载、SHA256、签名校验。
 - [~] `latest.json` 与签名文件一致性：本地 fixture 已覆盖清单、URL、签名、摘要与尺寸；真实线上资产待发布时验收。

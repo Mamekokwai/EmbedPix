@@ -167,12 +167,26 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
             "maxInputBytes 必须是 1 到 32 MiB 的无符号整数".into(),
         ))?),
     };
-    let result = compression::compress_file_cli(
+    let jpeg_progressive = match payload.get("jpegProgressive") {
+        None => false,
+        Some(value) => value
+            .as_bool()
+            .ok_or(("request_error", "jpegProgressive 必须是布尔值".into()))?,
+    };
+    let jpeg_optimize_huffman = match payload.get("jpegOptimizeHuffman") {
+        None => false,
+        Some(value) => value
+            .as_bool()
+            .ok_or(("request_error", "jpegOptimizeHuffman 必须是布尔值".into()))?,
+    };
+    let result = compression::compress_file_cli_with_jpeg_options(
         std::path::Path::new(&input_path),
         std::path::Path::new(&output_path),
         format,
         quality as u8,
         max_input_bytes,
+        jpeg_progressive,
+        jpeg_optimize_huffman,
     )
     .map_err(|error| ("compression_error", error))?;
     serde_json::to_value(result).map_err(|error| ("response_error", error.to_string()))
@@ -353,6 +367,11 @@ mod tests {
         ] {
             let mut payload = json!({ "inputPath": "input.png", "outputPath": "output.webp" });
             payload[field] = value;
+            assert_eq!(execute_compression(payload).unwrap_err().0, "request_error");
+        }
+        for field in ["jpegProgressive", "jpegOptimizeHuffman"] {
+            let mut payload = json!({ "inputPath": "input.png", "outputPath": "output.jpg" });
+            payload[field] = json!("true");
             assert_eq!(execute_compression(payload).unwrap_err().0, "request_error");
         }
         assert_eq!(execute_compression(json!({ "inputPath": "missing.png", "outputPath": "output.webp", "format": "webp", "quality": 82 })).unwrap_err().0, "compression_error");

@@ -77,10 +77,12 @@ function Assert-Output([string]$Path, [string]$Format, [string]$Label) {
     [Text.Encoding]::ASCII.GetString($bytes, 0, [Math]::Min(6, $bytes.Length))
   } elseif ($Format -eq 'webp') {
     ([BitConverter]::ToString($bytes[0..3])).Replace('-', '').ToLowerInvariant()
+  } elseif ($Format -eq 'jpg') {
+    ([BitConverter]::ToString($bytes[0..1])).Replace('-', '').ToLowerInvariant()
   } else {
     ([BitConverter]::ToString($bytes[0..7])).Replace('-', '').ToLowerInvariant()
   }
-  $expected = if ($Format -eq 'gif') { @('GIF87a', 'GIF89a') } else { @('89504e470d0a1a0a') }
+  $expected = if ($Format -eq 'gif') { @('GIF87a', 'GIF89a') } elseif ($Format -eq 'jpg') { @('ffd8') } else { @('89504e470d0a1a0a') }
   if ($Format -eq 'webp') { $expected = @('52494646') }
   if ($expected -notcontains $signature) { throw "$Label output signature is invalid: $signature" }
   $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -315,6 +317,16 @@ function Assert-MaxRgbMaeContract {
   [pscustomobject]@{ enabled = $true; defaultOff = $true; finiteRange = '0..255'; formalSkippedBeforePublish = $true }
 }
 
+function Assert-JpegAdvancedContract {
+  $source = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/commands/compression.rs')
+  $gateway = Get-Utf8Text (Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts')
+  foreach ($token in @('jpegProgressive', 'jpegOptimizeHuffman', 'jpeg-encoder', 'set_progressive', 'set_optimized_huffman_tables')) {
+    if ($source -notmatch [regex]::Escape($token) -and $gateway -notmatch [regex]::Escape($token)) { throw "JPEG advanced contract is missing: $token" }
+  }
+  if ($source -notmatch 'validate_jpeg_options' -or $gateway -notmatch '仅支持 JPEG 输出') { throw 'JPEG advanced options are not restricted to JPEG output.' }
+  [pscustomobject]@{ enabled = $true; defaultOff = $true; progressive = $true; optimizedHuffman = $true; jpegOnly = $true }
+}
+
 $script:root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-compression-cli-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $script:root | Out-Null
 try {
@@ -330,6 +342,7 @@ try {
   $pngOutput = Join-Path $script:root 'roundtrip.png'
   $gifOutput = Join-Path $script:root 'roundtrip.gif'
   $compressionOutput = Join-Path $script:root 'compressed.webp'
+  $jpegOutput = Join-Path $script:root 'compressed-progressive.jpg'
 
   $imageEvent = Invoke-CliRequest $CliPath @{ id = 'image-smoke'; op = 'image'; inputPath = $pngInput; outputPath = $pngOutput; format = 'png'; width = 1; height = 1 } 'image'
   $imageResult = Assert-Output $pngOutput 'png' 'image'
@@ -339,6 +352,14 @@ try {
 
   [void](Invoke-CliRequest $CliPath @{ id = 'compression-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $compressionOutput; format = 'webp'; quality = 82; maxInputBytes = 1MB } 'compression')
   $compressionResult = Assert-Output $compressionOutput 'webp' 'compression'
+  [void](Invoke-CliRequest $CliPath @{ id = 'jpeg-advanced-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegOutput; format = 'jpg'; quality = 82; jpegProgressive = $true; jpegOptimizeHuffman = $true; maxInputBytes = 1MB } 'jpeg-advanced')
+  $jpegResult = Assert-Output $jpegOutput 'jpg' 'JPEG advanced compression'
+  $jpegBytes = [IO.File]::ReadAllBytes($jpegOutput)
+  $hasSof2 = $false
+  for ($index = 0; $index -lt $jpegBytes.Length - 1; $index++) {
+    if ($jpegBytes[$index] -eq 0xff -and $jpegBytes[$index + 1] -eq 0xc2) { $hasSof2 = $true; break }
+  }
+  if (-not $hasSof2) { throw 'JPEG advanced compression did not emit a progressive SOF2 marker.' }
   $invalidRequest = Join-Path $script:root 'invalid-compression.request.json'
   $invalidStderr = Join-Path $script:root 'invalid-compression.stderr.log'
   Set-Utf8NoBomContent $invalidRequest (@{ id = 'invalid-compression'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'must-not-exist.webp'); quality = '82' } | ConvertTo-Json)
@@ -356,10 +377,11 @@ try {
   $imageTargetContract = Assert-ImageTargetCompressionContract -Required:$RequireCompression
   $targetContract = Assert-TargetCompressionContract -Required:$RequireCompression
   $maxRgbMaeContract = Assert-MaxRgbMaeContract
+  $jpegAdvancedContract = Assert-JpegAdvancedContract
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'compress'
-    outputs = @($imageResult, $decodeResult, $compressionResult, $gifResult)
+    outputs = @($imageResult, $decodeResult, $compressionResult, $jpegResult, $gifResult)
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
@@ -367,6 +389,7 @@ try {
     imageTargetCompressionContract = $imageTargetContract
     targetCompressionContract = $targetContract
     maxRgbMaeContract = $maxRgbMaeContract
+    jpegAdvancedContract = $jpegAdvancedContract
   }
 
   if ($RequireCompression) {
