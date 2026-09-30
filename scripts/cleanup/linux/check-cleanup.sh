@@ -6,7 +6,7 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd -P)"
 failures=0
 
 grep -Eq 'embedpix\)' "$SCRIPT_DIR/stop-project-processes.sh" || { printf 'Linux process allowlist must include embedpix\n' >&2; failures=1; }
-for required in '[[ -L' 'find -P' 'symlink itself'; do
+for required in '[[ -L' 'find -P' 'assert_parent_chain_safe' 'dirname -- "$target"' 'symlink itself'; do
     grep -Fq -- "$required" "$SCRIPT_DIR/clean-build-artifacts.sh" || { printf 'Linux cleanup is missing symlink safety check: %s\n' "$required" >&2; failures=1; }
 done
 

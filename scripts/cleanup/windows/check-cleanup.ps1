@@ -15,7 +15,7 @@ $cleanContent = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'clean-build-a
 if ($stopContent -notmatch 'embedpix\.exe') {
     $failures.Add('Windows process allowlist must include embedpix.exe')
 }
-foreach ($required in @('ReparsePoint', 'Resolve-Path', 'Refusing to clean reparse point')) {
+foreach ($required in @('ReparsePoint', 'Resolve-Path', 'Assert-NoReparsePoints', 'Test-Path -LiteralPath $current', 'Refusing to clean reparse point')) {
     if ($cleanContent -notmatch [regex]::Escape($required)) {
         $failures.Add("Windows cleanup is missing reparse-point safety check: $required")
     }

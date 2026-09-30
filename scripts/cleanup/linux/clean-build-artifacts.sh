@@ -22,6 +22,8 @@ remove_target() {
         *) printf 'Refusing to clean path outside project root: %s\n' "$target" >&2; return 1 ;;
     esac
 
+    assert_parent_chain_safe "$target" || return 1
+
     if [[ ! -e "$target" && ! -L "$target" ]]; then
         printf 'Skip: %s is absent (%s)\n' "$label" "$target"
         return 0
@@ -57,6 +59,23 @@ remove_target() {
         printf 'Failed to remove %s (%s)\n' "$label" "$target" >&2
         return 1
     fi
+}
+
+assert_parent_chain_safe() {
+    local target="$1"
+    local current
+    current="$(dirname -- "$target")"
+    while [[ "$current" != "$REPO_ROOT" ]]; do
+        if [[ -L "$current" ]]; then
+            printf 'Refusing to clean symlink parent: %s\n' "$current" >&2
+            return 1
+        fi
+        case "$current" in
+            "$REPO_ROOT"/*) ;;
+            *) printf 'Refusing to clean path without project-root parent: %s\n' "$target" >&2; return 1 ;;
+        esac
+        current="$(dirname -- "$current")"
+    done
 }
 
 remove_target 'frontend dist' 'dist' || exit 1

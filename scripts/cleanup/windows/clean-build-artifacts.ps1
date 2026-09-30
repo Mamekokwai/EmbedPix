@@ -14,6 +14,28 @@ function Assert-NoReparsePoints {
     param([Parameter(Mandatory)][string]$Path)
 
     $reparseAttribute = [IO.FileAttributes]::ReparsePoint
+    $fullPath = [IO.Path]::GetFullPath($Path).TrimEnd('\')
+    if ($fullPath -ne $repoRoot -and -not $fullPath.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean path outside project root: $fullPath"
+    }
+    $current = $fullPath
+    while ($true) {
+        if (Test-Path -LiteralPath $current) {
+            $ancestor = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+            if ($ancestor.Attributes -band $reparseAttribute) {
+                throw "Refusing to clean reparse-point parent: $current; remove the link first so cleanup cannot recurse through it"
+            }
+        }
+        if ($current -eq $repoRoot) {
+            break
+        }
+        $parent = [IO.Directory]::GetParent($current)
+        if ($null -eq $parent) {
+            throw "Refusing to clean path without project-root parent: $fullPath"
+        }
+        $current = $parent.FullName.TrimEnd('\')
+    }
+
     $rootItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
     $items = @($rootItem)
     if ($rootItem.PSIsContainer) {
@@ -40,16 +62,16 @@ foreach ($target in $targets) {
         exit 1
     }
 
-    if (-not (Test-Path -LiteralPath $path)) {
-        Write-Output "Skip: $($target.Label) is absent ($path)"
-        continue
-    }
-
     try {
         Assert-NoReparsePoints -Path $path
     } catch {
         Write-Error $_.Exception.Message
         exit 1
+    }
+
+    if (-not (Test-Path -LiteralPath $path)) {
+        Write-Output "Skip: $($target.Label) is absent ($path)"
+        continue
     }
 
     if ($PSCmdlet.ShouldProcess($path, "Remove $($target.Label)")) {
