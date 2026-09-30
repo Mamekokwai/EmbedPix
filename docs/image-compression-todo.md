@@ -82,8 +82,8 @@
 - [x] 评估并固定 OxiPNG 版本（9.1.5）。
 - [x] 完成 OxiPNG 许可证和依赖清单审查。
 - [x] 支持优化级别 0–6 的内部映射。
-- [ ] 支持 `strip-safe`。
-- [ ] 支持 `strip-all`。
+- [ ] 支持 `strip-safe`：技术评估结论是不能由当前跨格式解码→重编码链路直接实现。OxiPNG 9.1.5 虽提供 `StripChunks::Safe/All` 与 ICC 辅助 API，但当前入口先将输入解码并重新编码，源 PNG 的 ICC/辅助块已在 OxiPNG 接手前丢失；后续需限定为可验证的同格式 PNG 原始字节路径，并补 ICC 保留、EXIF/GPS/XMP/缩略图清理 fixture。
+- [x] 支持 `strip-all`：当前编码器路径不复制输入元数据，并由 native 响应明确回报 `stripAll`。
 - [x] 第一阶段 `strip` 实际验证：带 JPEG EXIF APP1 的输入在 PNG/JPEG/WebP 输出中不会被复制。
 - [ ] 支持透明像素优化开关。
 - [ ] 保持宽度、高度、颜色类型、Alpha 语义正确。
@@ -96,6 +96,7 @@
 - [x] 使用现有 Rust JPEG 编码能力完成第一阶段闭环。
 - [x] 支持质量 1–100 的边界校验。
 - [ ] 支持渐进式 JPEG 开关或明确列入后续任务。
+- [ ] 支持元数据保留/清理策略：当前 `image 0.24.9` 的 `JpegEncoder` 路径只有像素编码接口，没有可复用 ICC/EXIF/XMP 段的 mux API；`stripSafe` 需要经审查的 JPEG 段级复制规则。
 - [ ] 支持优化熵编码。
 - [x] 明确 Alpha 处理：JPEG 透明像素按已校验的 `#RRGGBB` 背景合成，默认白色，不允许静默丢失透明度。
 - [x] 正确处理 EXIF Orientation：strip 解码入口统一应用 JPEG 1–8 姿态，非法/缺失标签安全忽略。
@@ -112,6 +113,7 @@
 - [x] 支持编码 method 0–6；默认 4，正式压缩、预览、估算和候选搜索保持一致。
 - [x] 支持分析遍数 `pass` 1–10；默认 1，仅有损 WebP 可用，正式压缩、预览、估算和候选搜索保持一致；该参数表示分析遍数，不等同于画质质量。
 - [~] 支持编码 effort/near-lossless：无损 WebP 已提供 1–99 近无损等级并由现有 libwebp FFI 编码，独立 effort 控制仍待后续。
+- [ ] 支持元数据保留/清理策略：当前封装只调用像素编码 API；依赖中的 libwebp 0.2.0 虽暴露 `WebPMuxSetChunk` 及 ICCP/EXIF/XMP chunk，但仍需实现并测试格式化提取、缩略图/GPS 清理和 mux 生命周期，不能仅靠现有编码结果声明 `stripSafe`。
 - [x] 保持透明度和透明边缘正确。
 - [x] 验证输出可解码、尺寸正确、Alpha 正确。
 - [x] 评估目标体积参数能否由底层后端直接支持：JPEG/WebP 有损均使用有界质量候选搜索，超目标返回明确的 `target_unmet`；WebP 有损的 RGB MAE、PSNR 与 Alpha 差异也会在预览、估算和正式结果中返回，便于同一输入下比较。
