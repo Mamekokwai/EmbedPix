@@ -217,8 +217,8 @@ export function getCompressionCancelledItemResults(items: ReadonlyArray<Compress
   return items.slice(currentIndex + 1).map((item) => ({ itemId: item.id, fileName: item.file.name, status: "skipped", reason: "已取消，未处理" }));
 }
 
-export function getCompressionBatchFinalState(failedNames: ReadonlyArray<string>, cancelled: boolean): { status: "success" | "error"; stage: "completed" | "cancelled" | "failed" } {
-  if (cancelled) return { status: "error", stage: "cancelled" };
+export function getCompressionBatchFinalState(failedNames: ReadonlyArray<string>, cancelled: boolean): { status: "success" | "error" | "cancelled"; stage: "completed" | "cancelled" | "failed" } {
+  if (cancelled) return { status: "cancelled", stage: "cancelled" };
   return failedNames.length > 0
     ? { status: "error", stage: "failed" }
     : { status: "success", stage: "completed" };

@@ -202,8 +202,8 @@ describe("image compression logic", () => {
     expect(normalizeCompressionOutputModes({ overwrite: true, autoNumbering: true, replaceOriginal: true })).toEqual({ overwrite: false, autoNumbering: false, replaceOriginal: true });
     expect(getCompressionBatchFinalState([], false)).toEqual({ status: "success", stage: "completed" });
     expect(getCompressionBatchFinalState(["bad.png"], false)).toEqual({ status: "error", stage: "failed" });
-    expect(getCompressionBatchFinalState([], true)).toEqual({ status: "error", stage: "cancelled" });
-    expect(getCompressionBatchFinalState(["bad.png"], true)).toEqual({ status: "error", stage: "cancelled" });
+    expect(getCompressionBatchFinalState([], true)).toEqual({ status: "cancelled", stage: "cancelled" });
+    expect(getCompressionBatchFinalState(["bad.png"], true)).toEqual({ status: "cancelled", stage: "cancelled" });
     expect(COMPRESSION_WEBP_METHOD_DEFAULT).toBe(4);
     expect([COMPRESSION_WEBP_METHOD_MIN, COMPRESSION_WEBP_METHOD_MAX]).toEqual([0, 6]);
   });

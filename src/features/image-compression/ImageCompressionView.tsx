@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, Info, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
 import "../../styles/features/image-compression.css";
 import { cancelCompression, compressImage, createCompressionRequest, estimateImageCompression, formatCompressionProgressError, formatCompressionProgressStage, getCompressionProgress, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
 import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
@@ -70,7 +70,7 @@ import type { CompressionPreview } from "../../platform/compression/compressionG
 import { downloadBlob } from "../../shared/downloadBlob";
 import { getStripSafeInputError } from "./stripSafeInput";
 
-type CompressionStatus = "idle" | "ready" | "busy" | "success" | "error";
+type CompressionStatus = "idle" | "ready" | "busy" | "success" | "cancelled" | "error";
 
 interface ImageCompressionViewProps {
   active?: boolean;
@@ -809,11 +809,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     activeJobIdRef.current = null;
     setCurrentFileName(null);
     const finalState = getCompressionBatchFinalState(failedNames, cancelRequestedRef.current);
-    if (finalState.status === "error") {
+    if (finalState.status === "error" || finalState.status === "cancelled") {
       setFailures(failedItemIds);
       setStage(finalState.stage);
       setMessage(cancelRequestedRef.current ? "已取消当前任务；其余文件未处理，可点击“重试失败项”继续。" : `部分任务完成，请查看统计。${lastError ? ` ${lastError}` : ""}`);
-      setStatus("error");
+      setStatus(finalState.status);
     } else {
       setStatus("success");
       setStage(finalState.stage);
@@ -1103,10 +1103,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
       <footer className="compression-footer">
         <div className={`compression-status compression-status-${status}`} role={status === "error" ? "alert" : "status"}>
-          {status === "busy" ? <LoaderCircle size={15} className="compression-spin" aria-hidden="true" /> : status === "success" ? <CheckCircle2 size={15} aria-hidden="true" /> : status === "error" ? <AlertCircle size={15} aria-hidden="true" /> : null}
-          <span>{message || (status === "busy" ? `正在处理 ${progress.current}/${progress.total}${stage ? ` · ${formatCompressionProgressStage(stage)}` : ""}` : status === "success" ? "任务已完成" : "准备就绪")}</span>
+          {status === "busy" ? <LoaderCircle size={15} className="compression-spin" aria-hidden="true" /> : status === "success" ? <CheckCircle2 size={15} aria-hidden="true" /> : status === "error" ? <AlertCircle size={15} aria-hidden="true" /> : status === "cancelled" ? <Info size={15} aria-hidden="true" /> : null}
+          <span>{message || (status === "busy" ? `正在处理 ${progress.current}/${progress.total}${stage ? ` · ${formatCompressionProgressStage(stage)}` : ""}` : status === "success" ? "任务已完成" : status === "cancelled" ? "任务已取消" : "准备就绪")}</span>
           {busy ? <span className="compression-current-file" aria-live="polite">当前文件：{currentFileName || "准备中"}{stage ? ` · 阶段：${formatCompressionProgressStage(stage)}` : ""}{progressBytesSummary ? ` · ${progressBytesSummary}` : ""}</span> : null}
-          {failures.length > 0 && status === "error" ? <button type="button" className="compression-retry-button" onClick={() => { void runCompression(); }} disabled={busy}><RefreshCw size={13} aria-hidden="true" /> 重试失败项</button> : null}
+          {failures.length > 0 && (status === "error" || status === "cancelled") ? <button type="button" className="compression-retry-button" onClick={() => { void runCompression(); }} disabled={busy}><RefreshCw size={13} aria-hidden="true" /> 重试失败项</button> : null}
           {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
         </div>
         <div className="compression-progress" aria-label="压缩进度"><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
