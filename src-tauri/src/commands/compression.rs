@@ -1406,9 +1406,10 @@ fn run_preview_core(
     })
 }
 
-fn calculate_quality_metrics(
+fn calculate_quality_metrics_with_checkpoint(
     source: &DynamicImage,
     output: &DynamicImage,
+    job: Option<&Arc<CompressionJob>>,
 ) -> Result<CompressionQualityMetrics, String> {
     if source.dimensions() != output.dimensions() {
         return Err("quality comparison requires matching image dimensions".into());
@@ -1422,7 +1423,12 @@ fn calculate_quality_metrics(
     let mut absolute_error = 0.0;
     let mut squared_error = 0.0;
     let mut alpha_mismatch_pixels = 0u64;
-    for (source_pixel, output_pixel) in source.pixels().zip(output.pixels()) {
+    for (index, (source_pixel, output_pixel)) in source.pixels().zip(output.pixels()).enumerate() {
+        if index % 4096 == 0 {
+            if let Some(job) = job {
+                checkpoint(job)?;
+            }
+        }
         for channel in 0..3 {
             let difference = f64::from(source_pixel[channel]) - f64::from(output_pixel[channel]);
             absolute_error += difference.abs();
@@ -1458,7 +1464,9 @@ fn quality_metrics_for_output(
         checkpoint(job)?;
     }
     let source = decode_image(&request.input)?;
-    Ok(Some(calculate_quality_metrics(&source, output)?))
+    Ok(Some(calculate_quality_metrics_with_checkpoint(
+        &source, output, job,
+    )?))
 }
 
 fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, String> {
@@ -4091,8 +4099,8 @@ mod tests {
             encode_image_with_mode(&lossy_webp_input(), CompressionFormat::Webp, 52, 2, false)
                 .unwrap();
         let decoded = decode_image(&encoded).unwrap();
-        let metrics = calculate_quality_metrics(&source, &decoded).unwrap();
-        let repeated = calculate_quality_metrics(&source, &decoded).unwrap();
+        let metrics = calculate_quality_metrics_with_checkpoint(&source, &decoded, None).unwrap();
+        let repeated = calculate_quality_metrics_with_checkpoint(&source, &decoded, None).unwrap();
         assert_eq!(metrics.rgb_mae, repeated.rgb_mae);
         assert_eq!(metrics.psnr_db, repeated.psnr_db);
         assert_eq!(metrics.alpha_mismatch_pixels, 0);
@@ -4102,9 +4110,25 @@ mod tests {
 
         let mut changed = decoded.to_rgba8();
         changed.get_pixel_mut(0, 0)[3] ^= 1;
-        let changed_metrics =
-            calculate_quality_metrics(&source, &DynamicImage::ImageRgba8(changed)).unwrap();
+        let changed_metrics = calculate_quality_metrics_with_checkpoint(
+            &source,
+            &DynamicImage::ImageRgba8(changed),
+            None,
+        )
+        .unwrap();
         assert_eq!(changed_metrics.alpha_mismatch_pixels, 1);
+    }
+
+    #[test]
+    fn webp_quality_metrics_honor_cancellation_during_pixel_scan() {
+        let image =
+            DynamicImage::ImageRgba8(ImageBuffer::from_pixel(128, 128, Rgba([8, 16, 32, 255])));
+        let job = test_job("quality-metrics-cancel");
+        job.cancelled.store(true, Ordering::Release);
+
+        let error =
+            calculate_quality_metrics_with_checkpoint(&image, &image, Some(&job)).unwrap_err();
+        assert_eq!(error, "compression cancelled");
     }
 
     #[test]
