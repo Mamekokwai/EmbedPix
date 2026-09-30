@@ -43,6 +43,7 @@ import {
   isCurrentCompressionEstimate,
   formatCompressionReason,
   formatCompressionError,
+  isCompressionProgressCompleted,
   canWriteCompressionItemUpdate,
   removeCompressionDimensionError,
   isCompressionSourcePathError,
@@ -644,8 +645,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     progressPollControllerRef.current?.abort();
     progressPollControllerRef.current = null;
     try {
-      await cancelCompression(jobId);
+      const cancellation = await cancelCompression(jobId);
+      if (isCompressionProgressCompleted(cancellation)) cancelRequestedRef.current = false;
     } catch (error) {
+      try {
+        const progress = await getCompressionProgress(jobId);
+        if (isCompressionProgressCompleted(progress)) cancelRequestedRef.current = false;
+      } catch {
+        // Keep the cancellation request when the native job is no longer queryable.
+      }
       setMessage(formatCompressionError(errorMessage(error)));
     }
   };

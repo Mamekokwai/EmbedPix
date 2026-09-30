@@ -223,3 +223,6 @@ export function getCompressionBatchFinalState(failedNames: ReadonlyArray<string>
     ? { status: "error", stage: "failed" }
     : { status: "success", stage: "completed" };
 }
+export function isCompressionProgressCompleted(progress: Pick<{ status: string; stage: string }, "status" | "stage">): boolean {
+  return progress.status === "completed" || progress.stage === "completed";
+}
