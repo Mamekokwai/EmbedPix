@@ -152,8 +152,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("保留元数据（当前不可用：核心拒绝）");
     expect(compressionView).toContain("保留元数据请求会被核心拒绝");
     expect(compressionView).toContain("全部清理元数据");
-    expect(compressionView).toContain("PNG 安全清理（仅 PNG）");
-    expect(compressionView).toContain("输入坏 CRC 或无法验证会失败");
+    expect(compressionView).toContain("JPEG 安全清理");
+    expect(compressionView).toContain("保留 ICC 色彩配置，移除 EXIF/GPS/XMP/注释");
     expect(compressionView).toContain('<details className="compression-advanced-settings">');
     expect(compressionView).toContain("高级输出选项");
     expect(compressionView).toContain("元数据、路径与覆盖策略");

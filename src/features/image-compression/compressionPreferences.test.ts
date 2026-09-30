@@ -128,6 +128,10 @@ describe("compression preferences", () => {
     expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, metadataPolicy: "preserve" }) })).metadataPolicy).toBe("strip");
   });
 
+  it("restores JPEG stripSafe metadata policy", () => {
+    expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, format: "jpg", metadataPolicy: "stripSafe" }) })).metadataPolicy).toBe("stripSafe");
+  });
+
   it("restores only a safe custom filename and never stores a path", () => {
     const storage = createStorage();
     saveCompressionPreferences({ ...DEFAULT_COMPRESSION_PREFERENCES, format: "webp", outputFileName: "旅行照片.webp" }, storage);

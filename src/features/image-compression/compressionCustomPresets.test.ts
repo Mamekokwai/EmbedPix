@@ -66,6 +66,11 @@ describe("compression custom presets", () => {
     expect(() => importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "保留元数据", values: { ...values, metadataPolicy: "preserve" } }] }))).toThrow("元数据策略无效");
   });
 
+  it("imports JPEG stripSafe presets", () => {
+    const imported = importCompressionPresetsJson(JSON.stringify({ schema: COMPRESSION_CUSTOM_PRESETS_SCHEMA, version: 1, presets: [{ name: "JPEG 安全清理", values: { ...values, format: "jpg", lossless: false, metadataPolicy: "stripSafe" } }] }));
+    expect(imported[0]?.values.metadataPolicy).toBe("stripSafe");
+  });
+
   it("keeps older custom presets compatible with the safe default method", () => {
     const legacyValues = { ...values };
     delete (legacyValues as Partial<typeof values>).webpMethod;
