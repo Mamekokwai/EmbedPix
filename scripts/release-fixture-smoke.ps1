@@ -132,6 +132,20 @@ try {
   Expect-Rejection 'signature mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
+  $provenancePath = Join-Path $root 'release-provenance.json'
+  $originalProvenance = Get-Content -Raw -LiteralPath $provenancePath
+  $wrongWorkflowProvenance = $originalProvenance | ConvertFrom-Json
+  $wrongWorkflowProvenance.workflow_ref = 'refs/tags/v0.0.0'
+  Set-Utf8NoBomContent $provenancePath ($wrongWorkflowProvenance | ConvertTo-Json -Depth 6)
+  Expect-Rejection 'provenance workflow ref mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  Set-Utf8NoBomContent $provenancePath $originalProvenance
+
+  $wrongCommitProvenance = $originalProvenance | ConvertFrom-Json
+  $wrongCommitProvenance.release_commit = 'not-a-commit'
+  Set-Utf8NoBomContent $provenancePath ($wrongCommitProvenance | ConvertTo-Json -Depth 6)
+  Expect-Rejection 'provenance release commit format' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  Set-Utf8NoBomContent $provenancePath $originalProvenance
+
   $futureManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
   $futureManifest.pub_date = (Get-Date).ToUniversalTime().AddHours(1).ToString('o')
   Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($futureManifest | ConvertTo-Json -Depth 6)
