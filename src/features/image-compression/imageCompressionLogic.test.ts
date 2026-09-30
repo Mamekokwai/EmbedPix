@@ -4,8 +4,10 @@ import type { CompressionItem } from "./types";
 
 describe("image compression logic", () => {
   it("only accepts dimension results for items still in the queue", () => {
-    expect(isCurrentCompressionItem(["a", "b"], "a")).toBe(true);
-    expect(isCurrentCompressionItem(["b"], "a")).toBe(false);
+    const first = { id: "a", file: {} };
+    expect(isCurrentCompressionItem([first], first)).toBe(true);
+    expect(isCurrentCompressionItem([{ id: "a", file: {} }], first)).toBe(false);
+    expect(isCurrentCompressionItem([{ id: "b", file: first.file }], first)).toBe(false);
   });
   it("removes only the selected item's dimension error", () => {
     expect(removeCompressionDimensionError([{ id: "dimensions-a" }, { id: "dimensions-b" }, { id: "unsupported" }], "a")).toEqual([{ id: "dimensions-b" }, { id: "unsupported" }]);

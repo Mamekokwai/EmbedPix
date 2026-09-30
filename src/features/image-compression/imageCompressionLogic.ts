@@ -17,7 +17,7 @@ export function getCompressionPreset(preset: Exclude<CompressionPreset, "custom"
   return COMPRESSION_PRESETS.find((option) => option.value === preset) ?? COMPRESSION_PRESETS[1];
 }
 export function supportsCompressionTargetSize(format: CompressionFormat, lossless: boolean): boolean { return format === "jpg" || (format === "webp" && !lossless); }
-export function isCurrentCompressionItem(itemIds: ReadonlyArray<string>, itemId: string): boolean { return itemIds.includes(itemId); }
+export function isCurrentCompressionItem<T extends { id: string; file: unknown }>(items: ReadonlyArray<T>, item: Pick<T, "id" | "file">): boolean { return items.some((candidate) => candidate.id === item.id && candidate.file === item.file); }
 export function removeCompressionDimensionError<T extends { id: string }>(errors: ReadonlyArray<T>, itemId: string): T[] { return errors.filter((error) => error.id !== `dimensions-${itemId}`); }
 export function getCompressionTargetSizeError(enabled: boolean, value: string, maxKiB: number): string | null {
   if (!enabled) return null;

@@ -337,11 +337,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   const queueCompressionDimensions = (item: CompressionItem) => {
     void Promise.resolve().then(() => readCompressionDimensions(item.file)).then((dimensions) => {
-      if (isCurrentCompressionItem(itemsRef.current.map((candidate) => candidate.id), item.id)) {
+      if (isCurrentCompressionItem(itemsRef.current, item)) {
         setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, dimensions } : candidate));
       }
     }).catch((error) => {
-      if (isCurrentCompressionItem(itemsRef.current.map((candidate) => candidate.id), item.id)) setImportErrors((current) => [...current, { id: `dimensions-${item.id}`, fileName: item.file.name, message: errorMessage(error) }]);
+      if (isCurrentCompressionItem(itemsRef.current, item)) setImportErrors((current) => [...current, { id: `dimensions-${item.id}`, fileName: item.file.name, message: errorMessage(error) }]);
     });
   };
 
