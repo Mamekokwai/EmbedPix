@@ -72,6 +72,7 @@ import { downloadBlob } from "../../shared/downloadBlob";
 import { getStripSafeInputError } from "./stripSafeInput";
 
 type CompressionStatus = "idle" | "ready" | "busy" | "success" | "cancelled" | "error";
+type CompressionEstimateState = CompressionEstimate & { targetBytes?: number | null; targetMet?: boolean; selectedQuality?: number | null; status?: "completed" | "skipped"; skippedReason?: string | null };
 
 interface ImageCompressionViewProps {
   active?: boolean;
@@ -197,7 +198,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [progressBytes, setProgressBytes] = useState<{ input: number | null; output: number | null }>({ input: null, output: null });
   const [stage, setStage] = useState("");
-  const [estimate, setEstimate] = useState<CompressionEstimate>({ inputBytes: 0, estimatedBytes: 0, savingsPercent: 0 });
+  const [estimate, setEstimate] = useState<CompressionEstimateState>({ inputBytes: 0, estimatedBytes: 0, savingsPercent: 0 });
   const [estimateNote, setEstimateNote] = useState("等待导入图片");
   const [preflightSpaceBytes, setPreflightSpaceBytes] = useState<number | null>(null);
   const [message, setMessage] = useState("");
