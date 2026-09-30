@@ -113,7 +113,12 @@
 - [x] 支持编码 method 0–6；默认 4，正式压缩、预览、估算和候选搜索保持一致。
 - [x] 支持分析遍数 `pass` 1–10；默认 1，仅有损 WebP 可用，正式压缩、预览、估算和候选搜索保持一致；该参数表示分析遍数，不等同于画质质量。
 - [~] 支持编码 effort/near-lossless：无损 WebP 已提供 1–99 近无损等级并由现有 libwebp FFI 编码；本轮评估确认 `libwebp-sys2` 0.2.0 的 `WebPConfig` 没有独立 effort 字段：`method` 是唯一质量/速度档位（0–6），`quality` 仅在 lossless 模式下兼作压缩 effort（0–100），有损模式下仍是画质质量；因此新增独立 effort 会重复或重定义底层语义，当前不实现。若后续产品需要，应先明确按编码模式分离的协议含义、默认值、候选搜索与资源预算。
-- [ ] 支持元数据保留/清理策略：当前封装只调用像素编码 API；依赖中的 libwebp 0.2.0 虽暴露 `WebPMuxSetChunk` 及 ICCP/EXIF/XMP chunk，但仍需实现并测试格式化提取、缩略图/GPS 清理和 mux 生命周期，不能仅靠现有编码结果声明 `stripSafe`。
+- [ ] 支持 WebP 元数据保留/清理策略：本轮评估确认依赖中的 `libwebp-sys2=0.2.0` 暴露 `WebPMuxCreate`/`WebPMuxSetChunk`/`WebPMuxDeleteChunk`/`WebPMuxAssemble` 以及 ICCP/EXIF/XMP chunk；当前 `webp-animation` 传递启用了 `mux`，但静态模块未显式声明该 feature，不能把传递 feature 当作稳定的直接依赖契约。当前静态压缩先将输入解码为像素，输出编码 API 不携带源 ICC/EXIF/XMP，因此 `preserve` 无法在不改变输入提取协议的情况下成立；跨 PNG/JPEG/WebP 的元数据映射也没有既定语义。
+
+  - `stripSafe` 的最小可审查方案是：显式声明 `libwebp-sys2` 的 `mux` feature；仅对静态 WebP 输出在有界 RIFF 解析后允许保留经大小限制和结构校验的 ICCP，默认删除 EXIF/XMP（从而连同 EXIF 内嵌缩略图/GPS 一并删除），拒绝动画块、重复保留块、整数溢出和不完整 padding；以 RAII 封装 `WebPMux`/`WebPData`，保证 assemble 失败和早退路径都释放内存。
+  - `preserve` 仍需先定义“原始字节保留”还是“可验证字段保留”：前者要求按输入格式提取并复制 WebP/PNG/JPEG 的原始块，后者至少需要 ICC/EXIF/XMP 的来源、大小、重复块、方向和 GPS 语义契约；不能把 `WebPMuxSetChunk` 成功当作安全或完整保留的证据。
+  - preview、estimate、formal 已共用 `encode_image_with_webp_method_alpha`/候选搜索入口，未来实现可共用同一 mux 后处理；但三条路径都必须回读检查输出尺寸/Alpha/可解码性，并额外检查无 `ANIM`/`ANMF`、策略允许的 chunk 集合、RIFF 长度/奇偶 padding 和输出上限。现有回读只验证像素结果，尚未验证元数据策略。
+  - 当前阻塞不是 API 缺失，而是元数据来源、隐私边界和 FFI 生命周期尚未形成可测试契约；本轮不引入 unsafe mux 代码、不新增依赖、不开放 WebP `stripSafe`/`preserve` 用户选项。落地前需先补 fixture（ICCP、EXIF 含 GPS/缩略图、XMP、重复/超限/损坏 chunk、静态与动画 WebP）及 x64/ARM64 构建验证。
 - [x] 保持透明度和透明边缘正确。
 - [x] 验证输出可解码、尺寸正确、Alpha 正确。
 - [x] 评估目标体积参数能否由底层后端直接支持：JPEG/WebP 有损均使用有界质量候选搜索，超目标返回明确的 `target_unmet`；WebP 有损的 RGB MAE、PSNR 与 Alpha 差异也会在预览、估算和正式结果中返回，便于同一输入下比较。
