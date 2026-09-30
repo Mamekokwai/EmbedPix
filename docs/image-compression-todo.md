@@ -163,6 +163,7 @@
 - [x] 支持设置最大输出体积（JPEG/WebP 有损）。
 - [~] 支持设置目标体积：JPEG/WebP 有损按最大体积约束执行有界候选搜索，精确目标和尺寸联动待后续。
 - [~] 先调整质量，再调整尺寸：技术上可分阶段实现，但会改变像素尺寸/语义，需产品先确认协议。建议新增显式 `targetResize` 配置（默认关闭），包含 `maxScale`、`minScale`、`scaleStep` 或离散候选数，并复用现有 `ImageTransform` 的 Lanczos3、尺寸上限和像素预算；搜索顺序固定为“当前尺寸内先二分质量，再按比例降尺寸重新搜索质量”。总候选预算必须继续受 `maxCandidates`（1–12）约束，缩放候选也计入同一预算，且每次编码前后、缩放/解码/质量评估循环都检查取消。每个候选须校验可解码、尺寸、Alpha/颜色通道和输出上限；无候选满足目标时返回 `target_unmet/target_unreachable`，不进入发布 writer。最小安全阶段应只允许保持宽高比的整数尺寸、禁止放大、明确最小边/最小像素和质量下限，并让 preview/estimate/formal 共用同一 planner；是否允许改变尺寸、默认缩放下限、JPEG/WebP 视觉质量阈值、目标不可达语义和磁盘/CPU 预算仍需产品决策。
+- [ ] 安全门禁（2026-09-30）：暂不接入生产逻辑。当前 `CompressionRequest`/前端 envelope 只携带目标体积和质量预算，`choose_encoded_output*` 将候选输出尺寸固定校验为源尺寸；`run_estimate` 还走无取消上下文的同步 planner。直接增加缩放分支会造成 preview/estimate/formal 不共用同一候选状态，并可能让失败候选绕过尺寸、通道和取消检查。下一次实现必须先抽出统一 `CompressionPlanner`（候选计数、目标状态、选中尺寸/质量、取消 checkpoint），让三条路径共享；再把 resize 后的 `DynamicImage` 作为候选输入，沿用解码分配/像素/输出预算；最后补齐协议默认 false、JPEG/WebP 有损+目标体积限定、前端高级折叠控件与摘要，以及 Rust/前端/CLI 静态契约测试。未完成上述门禁前，不得声明 `targetResize` 已支持，也不得发布缩放后的 target-unmet 结果。
 - [x] 候选结果必须实际编码后测量。
 - [x] 候选结果必须经过解码校验。
 - [x] 目标不可达时不发布结果。
