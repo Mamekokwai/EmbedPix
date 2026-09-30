@@ -6,7 +6,7 @@
 
 - [ ] package.json、Cargo.toml、Cargo.lock、tauri.conf.json 和 tag 版本一致
 - [ ] 当前版本存在对应发布说明，标题为 `# EmbedPix v<version>`
-- [ ] `npm run check:release-config`、`npm run check:release-deps` 和 `npm run check:release-fixture` 通过：NSIS/updater 开启、公钥一致、静态 WebP 依赖版本/许可证/feature、GUI subsystem、manifest/资产和 PE 边界契约存在
+- [ ] `npm run check:release-config`、`npm run check:release-deps` 和 `npm run check:release-fixture` 通过：NSIS/updater 开启、公钥一致、静态 WebP 依赖版本/许可证/feature、GUI subsystem、manifest/资产和 PE 边界契约存在；fixture 必须拒绝可信 host 下错误仓库、Tag、查询串或 fragment 的资产 URL
 - [ ] Windows x64/ARM64 安装包和 `.sig` 成对存在
 - [ ] 资产集合恰为 7 项：4 个安装资产、`latest.json`、`SHA256SUMS.txt`、`release-provenance.json`
 - [ ] `latest.json` 版本、notes、平台 URL、Base64 minisign 签名与资产一致

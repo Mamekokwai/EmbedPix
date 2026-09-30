@@ -110,6 +110,17 @@ try {
   Expect-Rejection 'untrusted asset download URL' { Assert-ReleaseAssetUrls -Release $release -Repository $repository -Tag $tag }
   $release.assets[0].browser_download_url = $originalDownloadUrl
 
+  foreach ($urlVariant in @(
+    "https://github.com/$repository/releases/download/v0.0.0/$($release.assets[0].name)",
+    "https://github.com/other-owner/other-repo/releases/download/$tag/$($release.assets[0].name)",
+    "https://github.com/$repository/releases/download/$tag/$($release.assets[0].name)?download=1",
+    "https://github.com/$repository/releases/download/$tag/$($release.assets[0].name)#fragment"
+  )) {
+    $release.assets[0].browser_download_url = $urlVariant
+    Expect-Rejection "release asset URL variant: $urlVariant" { Assert-ReleaseAssetUrls -Release $release -Repository $repository -Tag $tag }
+  }
+  $release.assets[0].browser_download_url = $originalDownloadUrl
+
   $signatureAsset = $release.assets | Where-Object { $_.name -eq "EmbedPix_${version}_x64-setup.exe.sig" }
   $originalSignatureDownloadUrl = $signatureAsset.browser_download_url
   $signatureAsset.browser_download_url = 'https://example.com/not-EmbedPix.sig'
@@ -140,6 +151,19 @@ try {
   $wrongUrlManifest.platforms.'windows-x86_64'.url = 'https://example.com/not-EmbedPix.exe'
   Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($wrongUrlManifest | ConvertTo-Json -Depth 6)
   Expect-Rejection 'signature/url mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
+
+  foreach ($urlVariant in @(
+    "https://github.com/$repository/releases/download/v0.0.0/EmbedPix_${version}_x64-setup.exe",
+    "https://github.com/other-owner/other-repo/releases/download/$tag/EmbedPix_${version}_x64-setup.exe",
+    "https://github.com/$repository/releases/download/$tag/EmbedPix_${version}_x64-setup.exe?download=1",
+    "https://github.com/$repository/releases/download/$tag/EmbedPix_${version}_x64-setup.exe#fragment"
+  )) {
+    $manifestUrlVariant = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+    $manifestUrlVariant.platforms.'windows-x86_64'.url = $urlVariant
+    Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($manifestUrlVariant | ConvertTo-Json -Depth 6)
+    Expect-Rejection "manifest URL variant: $urlVariant" { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
   $wrongNotesManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
