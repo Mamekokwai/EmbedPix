@@ -25,6 +25,19 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not inspect locked Cargo metadata.' }
 $packages = ($metadataJson | ConvertFrom-Json).packages
 $notice = Get-Content -Raw 'NOTICE'
 
+$unreviewedBackendNames = @(
+  'mozjpeg', 'mozjpeg-sys',
+  'libavif', 'libavif-sys',
+  'aom', 'aom-sys', 'rav1e', 'rav1e-sys',
+  'svt-av1', 'svt-av1-sys', 'libyuv', 'libyuv-sys',
+  'dav1d', 'dav1d-sys'
+)
+$unreviewedBackends = @($packages | Where-Object { $unreviewedBackendNames -contains $_.name })
+if ($unreviewedBackends.Count -gt 0) {
+  $found = ($unreviewedBackends | ForEach-Object { "$($_.name)@$($_.version)" }) -join ', '
+  throw "Unreviewed MozJPEG/libavif/AV1 backend dependency detected: $found. Before release, complete NOTICE, license/patent review, static-vs-dynamic link audit, per-architecture builds, and real runner encode/decode/install smoke."
+}
+
 $requiredNotices = @(
   @{ name = 'kamadak-exif'; version = '0.6.1'; license = 'BSD-2-Clause'; marker = 'kamadak-exif 0.6.1'; attribution = "KAMADA Ken'ichi" },
   @{ name = 'jpeg-encoder'; version = '0.7.1'; license = '(MIT OR Apache-2.0) AND IJG'; marker = 'jpeg-encoder 0.7.1'; attribution = 'Independent JPEG Group' },
@@ -74,5 +87,6 @@ foreach ($entry in @(
   noticeAudit = $true
   staticFeatureTree = $true
   muxFeatureTree = $true
+  unreviewedCandidateBackendsRejected = $true
   artifactSizes = [pscustomobject]$sizeReport
 } | ConvertTo-Json -Depth 4
