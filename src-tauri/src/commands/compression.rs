@@ -2665,6 +2665,34 @@ mod tests {
         bytes
     }
 
+    fn static_gif_input() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = gif::Encoder::new(&mut bytes, 1, 1, &[]).unwrap();
+            let frame = gif::Frame {
+                width: 1,
+                height: 1,
+                buffer: vec![0].into(),
+                palette: Some(vec![255, 0, 0]),
+                ..gif::Frame::default()
+            };
+            encoder.write_frame(&frame).unwrap();
+        }
+        bytes
+    }
+
+    fn jpeg_input() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        JpegEncoder::new_with_quality(&mut bytes, 80)
+            .encode_image(&DynamicImage::ImageRgba8(ImageBuffer::from_pixel(
+                2,
+                2,
+                Rgba([255, 0, 0, 255]),
+            )))
+            .unwrap();
+        bytes
+    }
+
     fn raw_payload(metadata: &str, input: &[u8]) -> Vec<u8> {
         let mut payload = Vec::from(*b"EGF1");
         payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
@@ -3927,6 +3955,41 @@ mod tests {
         assert!(decode_image(&over_pixel_budget)
             .unwrap_err()
             .contains("dimensions exceed"));
+    }
+
+    #[test]
+    fn corrupted_png_jpeg_and_gif_fail_before_publishing_with_decode_code() {
+        let mut png = png_input();
+        png.truncate(png.len() / 2);
+        let mut jpeg = jpeg_input();
+        jpeg.truncate(jpeg.len() / 2);
+        let mut gif = static_gif_input();
+        gif.truncate(gif.len() / 2);
+
+        for (name, input) in [("png", png), ("jpeg", jpeg), ("gif", gif)] {
+            let output_path = crate::commands::test_temp_dir().join(format!(
+                "embedpix-corrupt-input-{name}-{}.webp",
+                uuid_like_id()
+            ));
+            let sentinel = format!("existing-{name}");
+            fs::write(&output_path, sentinel.as_bytes()).unwrap();
+            let request = CompressionRequest {
+                input,
+                ..path_request(&output_path)
+            };
+            let expected_error = decode_image(&request.input).unwrap_err();
+            let job = test_job(&format!("corrupt-input-{name}"));
+
+            let error = run_compression(&request, &job).unwrap_err();
+
+            assert_eq!(error, expected_error);
+            assert_eq!(fs::read(&output_path).unwrap(), sentinel.as_bytes());
+            let progress = job.progress.lock().unwrap();
+            assert_eq!(progress.error.as_deref(), Some(expected_error.as_str()));
+            assert_eq!(progress.code.as_deref(), Some("decode"));
+            drop(progress);
+            fs::remove_file(output_path).unwrap();
+        }
     }
 
     #[test]
