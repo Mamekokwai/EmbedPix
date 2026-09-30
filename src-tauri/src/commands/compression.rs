@@ -232,10 +232,7 @@ fn validate_compression_metadata_policy(policy: MetadataPolicy) -> Result<(), St
             "metadataPolicy=preserve is not supported by first-stage compression; use strip"
                 .into(),
         ),
-        MetadataPolicy::StripSafe => Err(
-            "metadataPolicy=stripSafe is not supported: safe ICC/EXIF/XMP copying requires a reviewed metadata copier"
-                .into(),
-        ),
+        MetadataPolicy::StripSafe => Ok(()),
         MetadataPolicy::StripAll => Ok(()),
     }
 }
@@ -243,6 +240,15 @@ fn validate_compression_metadata_policy(policy: MetadataPolicy) -> Result<(), St
 fn validate_png_optimize_alpha(enabled: bool, format: CompressionFormat) -> Result<(), String> {
     if enabled && format != CompressionFormat::Png {
         return Err("pngOptimizeAlpha is only supported for PNG output; it may change RGB values of fully transparent pixels".into());
+    }
+    Ok(())
+}
+
+fn validate_png_strip_safe(policy: MetadataPolicy, format: CompressionFormat, input: &[u8]) -> Result<(), String> {
+    if policy == MetadataPolicy::StripSafe
+        && (format != CompressionFormat::Png || !input.starts_with(b"\x89PNG\r\n\x1a\n"))
+    {
+        return Err("metadataPolicy=stripSafe is only supported for PNG input to PNG output".into());
     }
     Ok(())
 }
@@ -1191,6 +1197,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_alpha_quality,
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
+            request.metadata.metadata_policy,
         )?;
         return Ok(EncodedSelection {
             bytes,
@@ -1221,6 +1228,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_alpha_quality,
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
+            request.metadata.metadata_policy,
         )?;
         return Ok(EncodedSelection {
             target_met: (bytes.len() as u64) <= target_bytes,
@@ -1272,6 +1280,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_alpha_quality,
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
+            request.metadata.metadata_policy,
         )?;
         if let Some(job) = job {
             update_progress_bytes(job, None, Some(bytes.len() as u64));
@@ -1340,6 +1349,7 @@ fn encode_and_verify(
     webp_alpha_quality: Option<u8>,
     webp_pass: Option<u8>,
     webp_near_lossless: Option<u8>,
+    metadata_policy: MetadataPolicy,
 ) -> Result<Vec<u8>, String> {
     let bytes = encode_image_with_webp_method_alpha(
         input,
@@ -1353,6 +1363,7 @@ fn encode_and_verify(
         webp_alpha_quality,
         webp_pass,
         webp_near_lossless,
+        metadata_policy,
     )?;
     if bytes.len() > MAX_OUTPUT_BYTES {
         return Err("compressed output exceeds the 128 MiB limit".into());
@@ -1621,6 +1632,7 @@ fn encode_image_with_webp_method(
         webp_alpha_quality,
         webp_pass,
         webp_near_lossless,
+        MetadataPolicy::Strip,
     )
 }
 
@@ -1637,6 +1649,7 @@ fn encode_image_with_webp_method_alpha(
     webp_alpha_quality: Option<u8>,
     webp_pass: Option<u8>,
     webp_near_lossless: Option<u8>,
+    metadata_policy: MetadataPolicy,
 ) -> Result<Vec<u8>, String> {
     let image = decode_image(input)?;
     let mut output = LimitedWriter {
@@ -1656,9 +1669,17 @@ fn encode_image_with_webp_method_alpha(
                 .map_err(|error| format!("failed to encode jpeg: {error}"))?;
         }
         CompressionFormat::Png => {
-            image
-                .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::Png)
-                .map_err(|error| format!("failed to encode png: {error}"))?;
+            if metadata_policy == MetadataPolicy::StripSafe {
+                let mut options = oxipng::Options::from_preset(png_optimization_level);
+                options.strip = oxipng::StripChunks::Safe;
+                output.bytes = oxipng::optimize_from_memory(input, &options)
+                    .map_err(|error| format!("failed to strip-safe optimize png: {error}"))?;
+            } else {
+                image
+                    .write_to(&mut Cursor::new(&mut output.bytes), ImageFormat::Png)
+                    .map_err(|error| format!("failed to encode png: {error}"))?;
+            }
+            if metadata_policy != MetadataPolicy::StripSafe {
             let optimized = oxipng::optimize_from_memory(
                 &output.bytes,
                 &oxipng::Options {
@@ -1668,6 +1689,7 @@ fn encode_image_with_webp_method_alpha(
             )
             .map_err(|error| format!("failed to optimize png: {error}"))?;
             output.bytes = optimized;
+            }
         }
         CompressionFormat::Webp if lossless => {
             if let Some(near_lossless) = webp_near_lossless {
@@ -1886,6 +1908,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
             .map_err(|error| format!("invalid sourcePath: {error:?}"))?;
     }
     let input = body[end..].to_vec();
+    validate_png_strip_safe(metadata.metadata_policy, format, &input)?;
     if input.len() > max_input_bytes {
         return Err(if max_input_bytes == MAX_INPUT_BYTES {
             "input image exceeds the 32 MiB limit".into()
@@ -1981,6 +2004,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     validate_compression_mode(format, lossless)?;
     validate_compression_metadata_policy(metadata.metadata_policy)?;
     let input = body[end..].to_vec();
+    validate_png_strip_safe(metadata.metadata_policy, format, &input)?;
     if input.len() > max_input_bytes {
         return Err(if max_input_bytes == MAX_INPUT_BYTES {
             "input image exceeds the 32 MiB limit".into()
@@ -2520,6 +2544,39 @@ mod tests {
         bytes
     }
 
+    fn png_chunk(name: &[u8; 4], data: &[u8]) -> Vec<u8> {
+        let mut crc = 0xffff_ffffu32;
+        for byte in name.iter().chain(data) {
+            crc ^= u32::from(*byte);
+            for _ in 0..8 {
+                crc = if crc & 1 != 0 {
+                    (crc >> 1) ^ 0xedb8_8320
+                } else {
+                    crc >> 1
+                };
+            }
+        }
+        let mut chunk = Vec::new();
+        chunk.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        chunk.extend_from_slice(name);
+        chunk.extend_from_slice(data);
+        chunk.extend_from_slice(&(crc ^ 0xffff_ffff).to_be_bytes());
+        chunk
+    }
+
+    fn png_with_metadata_chunks() -> Vec<u8> {
+        let source = png_input();
+        let end = source.len() - 12;
+        let mut output = source[..end].to_vec();
+        output.extend_from_slice(&png_chunk(b"iCCP", b"icc\0\0x\x9c\x03\0\0\0\0\0\x01"));
+        output.extend_from_slice(&png_chunk(b"eXIf", b"Exif\0\0GPS"));
+        output.extend_from_slice(&png_chunk(b"iTXt", b"XML:com.adobe.xmp\0\0\0\0\0<xmp/>"));
+        output.extend_from_slice(&png_chunk(b"tEXt", b"Thumb\0thumbnail"));
+        output.extend_from_slice(&png_chunk(b"zzZZ", b"unknown ancillary"));
+        output.extend_from_slice(&source[end..]);
+        output
+    }
+
     fn raw_payload(metadata: &str, input: &[u8]) -> Vec<u8> {
         let mut payload = Vec::from(*b"EGF1");
         payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
@@ -2684,9 +2741,58 @@ mod tests {
             None,
             None,
             None,
+            MetadataPolicy::Strip,
         )
         .unwrap();
         assert_eq!(decode_image(&output).unwrap().dimensions(), (3, 2));
+    }
+
+    #[test]
+    fn png_strip_safe_preserves_iccp_and_removes_metadata_and_unknown_chunks() {
+        let input = png_with_metadata_chunks();
+        let output = encode_image_with_webp_method_alpha(
+            &input,
+            CompressionFormat::Png,
+            80,
+            2,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            MetadataPolicy::StripSafe,
+        )
+        .unwrap();
+        assert_eq!(decode_image(&output).unwrap().dimensions(), (2, 2));
+        assert!(output.windows(4).any(|chunk| chunk == b"iCCP"));
+        for removed in [b"eXIf".as_slice(), b"iTXt", b"tEXt", b"zzZZ"] {
+            assert!(!output.windows(4).any(|chunk| chunk == removed));
+        }
+    }
+
+    #[test]
+    fn png_strip_safe_rejects_bad_chunk_crc() {
+        let mut input = png_with_metadata_chunks();
+        let crc = input.len() - 8;
+        input[crc] ^= 1;
+        let error = encode_image_with_webp_method_alpha(
+            &input,
+            CompressionFormat::Png,
+            80,
+            2,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            MetadataPolicy::StripSafe,
+        )
+        .unwrap_err();
+        assert!(error.contains("strip-safe optimize png") || error.contains("decode"));
     }
 
     #[test]
@@ -2757,6 +2863,7 @@ mod tests {
                 None,
                 None,
                 None,
+                MetadataPolicy::Strip,
             )
             .unwrap();
             let decoded = decode_image(&output).unwrap();
@@ -3112,10 +3219,17 @@ mod tests {
         let payload = raw_payload(metadata, &png_input());
         assert!(parse_raw_payload(&payload)
             .unwrap_err()
-            .contains("safe ICC/EXIF/XMP copying"));
+            .contains("only supported for PNG input to PNG output"));
         assert!(parse_estimate_raw_payload(&payload)
             .unwrap_err()
-            .contains("safe ICC/EXIF/XMP copying"));
+            .contains("only supported for PNG input to PNG output"));
+
+        let png_safe = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"png","metadataPolicy":"stripSafe"}"#,
+            &png_input(),
+        );
+        assert_eq!(parse_raw_payload(&png_safe).unwrap().metadata.metadata_policy, MetadataPolicy::StripSafe);
+        assert_eq!(parse_estimate_raw_payload(&png_safe).unwrap().metadata.metadata_policy, MetadataPolicy::StripSafe);
 
         let estimate_payload = raw_payload(
             r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"skipIfLarger":false,"metadataPolicy":"strip-all"}"#,
