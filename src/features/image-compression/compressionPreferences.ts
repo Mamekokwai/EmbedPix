@@ -64,7 +64,7 @@ type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 
 const FORMATS = new Set<CompressionFormat>(["jpg", "webp", "png"]);
 const PRESETS = new Set<CompressionPreset>(["high-quality", "balanced", "small-size", "custom"]);
-const METADATA_POLICIES = new Set<MetadataPolicy>(["strip", "stripAll"]);
+const METADATA_POLICIES = new Set<MetadataPolicy>(["strip", "stripAll", "stripSafe"]);
 const OUTPUT_LOCATIONS = new Set<CompressionOutputLocation>(["source", "subfolder", "directory"]);
 
 function fallbackPreferences(): CompressionPreferences {
@@ -165,7 +165,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       skipIfLarger: typeof record.skipIfLarger === "boolean" ? record.skipIfLarger : DEFAULT_COMPRESSION_PREFERENCES.skipIfLarger,
       lossless,
       preset: enumValue(record, "preset", PRESETS, DEFAULT_COMPRESSION_PREFERENCES.preset),
-      metadataPolicy: enumValue(record, "metadataPolicy", METADATA_POLICIES, DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy),
+      metadataPolicy: format === "png" ? enumValue(record, "metadataPolicy", METADATA_POLICIES, DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy) : enumValue(record, "metadataPolicy", new Set<MetadataPolicy>(["strip", "stripAll"]), DEFAULT_COMPRESSION_PREFERENCES.metadataPolicy),
       outputLocation: enumValue(record, "outputLocation", OUTPUT_LOCATIONS, DEFAULT_COMPRESSION_PREFERENCES.outputLocation),
       outputFileName: outputFileNameValue(record, format),
       outputSubdirectory: subdirectoryValue(record),

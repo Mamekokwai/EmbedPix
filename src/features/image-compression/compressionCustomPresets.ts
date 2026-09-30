@@ -107,7 +107,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     maxInputMiB: record.maxInputMiB === undefined ? 32 : integerValue(record.maxInputMiB, 1, 32, "单文件输入上限", index),
     skipIfLarger: record.skipIfLarger === undefined ? true : booleanValue(record.skipIfLarger, "压缩后更大时跳过", index),
     lossless,
-    metadataPolicy: enumValue(record.metadataPolicy, ["strip", "stripAll"], "元数据策略", index),
+    metadataPolicy: enumValue(record.metadataPolicy, format === "png" ? ["strip", "stripAll", "stripSafe"] : ["strip", "stripAll"], "元数据策略", index),
   };
 }
 

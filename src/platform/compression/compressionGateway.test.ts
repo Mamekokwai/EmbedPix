@@ -204,7 +204,7 @@ describe("compression gateway", () => {
     const length = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
     expect(metadata.metadataPolicy).toBe("stripAll");
-    expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "stripSafe" })).toThrow("仅支持移除元数据");
+    expect(() => encodeCompressionEnvelope({ ...request, metadataPolicy: "stripSafe" })).toThrow("仅支持 PNG");
   });
 
   it("serializes PNG alpha optimization only for PNG output", () => {
@@ -216,6 +216,17 @@ describe("compression gateway", () => {
     expect(readMetadata(encodeCompressionEnvelope({ ...request, outputFormat: "webp", pngOptimizeAlpha: true }))).not.toHaveProperty("pngOptimizeAlpha");
     const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "png", jpegQuality: 82, lossless: true, metadataPolicy: "strip", pngOptimizationLevel: 2, pngOptimizeAlpha: true });
     expect(readMetadata(estimate).pngOptimizeAlpha).toBe(true);
+  });
+
+  it("allows PNG stripSafe metadata cleanup but rejects it for other formats", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, outputFormat: "png", metadataPolicy: "stripSafe" });
+    const length = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
+    expect(metadata.metadataPolicy).toBe("stripSafe");
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "webp", metadataPolicy: "stripSafe" })).toThrow("仅支持 PNG");
+    const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "png", jpegQuality: 82, lossless: true, metadataPolicy: "stripSafe", pngOptimizationLevel: 2 });
+    const estimateLength = new DataView(estimate.buffer).getUint32(4, true);
+    expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).metadataPolicy).toBe("stripSafe");
   });
 
   it("rejects metadata preservation for publish-free estimates before IPC", () => {

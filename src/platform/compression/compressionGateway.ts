@@ -132,7 +132,7 @@ export interface CompressionEstimateRequest {
 }
 
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
-  if (request.metadataPolicy !== "strip" && request.metadataPolicy !== "stripAll") throw new Error("第一阶段原生压缩仅支持移除元数据策略；当前支持兼容移除或全部清理。");
+  if (request.metadataPolicy !== "strip" && request.metadataPolicy !== "stripAll" && !(request.outputFormat === "png" && request.metadataPolicy === "stripSafe")) throw new Error(request.metadataPolicy === "preserve" ? "第一阶段原生压缩仅支持移除元数据。" : "原生压缩仅支持兼容移除或全部清理；stripSafe 仅支持 PNG。");
   return {
     schemaVersion: COMPRESSION_SCHEMA_VERSION,
     fileName: request.fileName,
@@ -203,7 +203,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
   if (request.inputData.byteLength > MAX_COMPRESSION_INPUT_BYTES) throw new Error("图片数据超过 32 MiB 限制。");
   if (request.maxInputBytes !== undefined && (!Number.isInteger(request.maxInputBytes) || request.maxInputBytes < MIN_COMPRESSION_INPUT_BYTES || request.maxInputBytes > MAX_COMPRESSION_INPUT_BYTES)) throw new Error("maxInputBytes 必须在 1 到 32 MiB 之间。");
   if (request.maxInputBytes !== undefined && request.inputData.byteLength > request.maxInputBytes) throw new Error("图片数据超过当前配置的单文件输入上限。");
-  if (request.metadataPolicy !== "strip" && request.metadataPolicy !== "stripAll") throw new Error("第一阶段原生压缩仅支持移除元数据策略；当前支持兼容移除或全部清理。");
+  if (request.metadataPolicy !== "strip" && request.metadataPolicy !== "stripAll" && !(request.outputFormat === "png" && request.metadataPolicy === "stripSafe")) throw new Error(request.metadataPolicy === "preserve" ? "第一阶段原生压缩仅支持移除元数据。" : "原生压缩仅支持兼容移除或全部清理；stripSafe 仅支持 PNG。");
   if (!Number.isInteger(request.pngOptimizationLevel) || request.pngOptimizationLevel < 0 || request.pngOptimizationLevel > 6) throw new Error("pngOptimizationLevel 必须在 0 到 6 之间。");
   if (!Number.isInteger(request.jpegQuality) || request.jpegQuality < 1 || request.jpegQuality > 100) throw new Error("jpegQuality 必须在 1 到 100 之间。");
   if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
