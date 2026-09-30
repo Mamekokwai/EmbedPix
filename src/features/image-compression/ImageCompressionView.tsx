@@ -1157,7 +1157,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           {failures.length > 0 && (status === "error" || status === "cancelled") ? <button type="button" className="compression-retry-button" onClick={() => { void runCompression(); }} disabled={busy}><RefreshCw size={13} aria-hidden="true" /> 重试失败项</button> : null}
           {busy ? <button type="button" className="compression-retry-button" onClick={() => { void cancelActiveCompression(); }}><AlertCircle size={13} aria-hidden="true" /> 取消当前任务</button> : null}
         </div>
-        <div className="compression-progress" aria-label="压缩进度"><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
+        <div
+          className="compression-progress"
+          role="progressbar"
+          aria-label="压缩进度"
+          aria-valuemin={0}
+          aria-valuemax={Math.max(progress.total, 1)}
+          aria-valuenow={Math.min(progress.current, Math.max(progress.total, 1))}
+          aria-valuetext={progress.total > 0 ? `${Math.min(progress.current, progress.total)}/${progress.total} 个文件` : "等待开始"}
+        ><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
           <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError) || Boolean(outputFileNameError) || Boolean(targetSizeError) || Boolean(maxRgbMaeError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
       </footer>
     </section>
