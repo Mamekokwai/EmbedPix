@@ -156,6 +156,12 @@ export function formatCompressionBatchSummary(summary: { total: number; succeede
   ];
   return lines.filter((line): line is string => Boolean(line)).join("\n");
 }
+export function formatCompressionProgressSummary(progress: { current: number; total: number; processedInputBytes: number; outputBytes: number; status: "idle" | "ready" | "busy" | "success" | "cancelled" | "error" }): string {
+  const total = Math.max(progress.total, 0);
+  const current = Math.min(Math.max(progress.current, 0), total);
+  const state = progress.status === "busy" ? "处理中" : progress.status === "cancelled" ? "已取消" : progress.status === "error" ? "存在失败项" : progress.status === "success" ? "已完成" : "等待开始";
+  return `${state} · ${current}/${total} 项 · 成功项输入 ${formatCompressionBytes(progress.processedInputBytes)} · 输出 ${formatCompressionBytes(progress.outputBytes)}`;
+}
 export function createCompressionBatchReport(report: { generatedAt: string; format: CompressionFormat; total: number; succeeded: number; skipped: number; failed: number; processedInputBytes: number; outputBytes: number; savedBytes: number; targetMet: boolean | null; selectedQualities: ReadonlyArray<number>; itemResults: ReadonlyArray<CompressionItemResult> }): string {
   return JSON.stringify({
     schemaVersion: 1,
