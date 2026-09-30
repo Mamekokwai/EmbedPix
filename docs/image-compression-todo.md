@@ -365,7 +365,7 @@
 - [~] Windows x64 构建：本地已生成 `EmbedPix.exe` 与 `EmbedPix_0.7.0_x64-setup.exe`，并通过 Windows GUI subsystem=2 检查；完整 Tauri 构建仍因本机缺少 `TAURI_SIGNING_PRIVATE_KEY` 未完成签名。
 - [ ] Windows ARM64 构建。
 - [x] 压缩命令行输出、错误输出和退出码：`embedpix-cli` 使用 JSON/JSONL 事件输出成功与进度，错误事件写入 stdout、stderr 保留进程级诊断，退出码区分成功（0）、失败（1）和中断/部分失败（2）；强制 CLI/OxiPNG smoke 已覆盖 PNG、WebP、GIF 输出与二次解码。
-- [ ] x64 安装、启动、压缩、卸载。
+- [x] x64 安装、启动、压缩、卸载：`EmbedPix_0.7.0_x64-setup.exe` 隔离 NSIS smoke 安装退出码为 0，`EmbedPix.exe` 通过 GUI subsystem=2 检查，启动 8 秒仍运行，卸载退出码为 0 且临时安装目录清理完成。
 - [ ] ARM64 资产下载、SHA256、签名校验。
 - [~] `latest.json` 与签名文件一致性：本地 fixture 已覆盖清单、URL、签名、摘要与尺寸；真实线上资产待发布时验收。
 - [x] 本地 release fixture 能拒绝平台数、URL、时间、大小和 PE 边界错误。
@@ -373,7 +373,7 @@
 - [x] 发布门禁收尾：provenance `workflow_ref`/`release_commit` 篡改拒绝与固定 fixture 重复执行一致性均已验证。
 - [x] 发布资产完整性门禁：provenance 与 SHA256SUMS 篡改/重复条目拒绝、固定 fixture 幂等性均已验证。
 - [x] 发布说明版本匹配：`docs/release-notes-v0.7.0.md` 标题与当前版本一致，并由 `check:release-config` 校验。
-- [ ] 安装包无控制台窗口。
+- [x] 安装包无控制台窗口：同一隔离 NSIS smoke 的 `EmbedPix.exe` 为 Windows GUI subsystem=2，启动后保持 GUI 进程运行。
 
 ## 8. M7：自动择优和高级编码器
 
