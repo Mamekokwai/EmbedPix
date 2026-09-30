@@ -264,6 +264,60 @@ describe("compression gateway", () => {
     expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).metadataPolicy).toBe("stripSafe");
   });
 
+  it("keeps format-specific metadata identical across all compression entry envelopes", async () => {
+    const readMetadata = (encoded: Uint8Array) => {
+      const length = new DataView(encoded.buffer).getUint32(4, true);
+      return JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
+    };
+    const cases = [
+      { inputData: pngInput, outputFormat: "png" as const, lossless: true, metadataPolicy: "stripSafe" as const },
+      { inputData: jpegInput, outputFormat: "jpg" as const, lossless: false, metadataPolicy: "stripAll" as const },
+      { inputData: staticWebpInput, outputFormat: "webp" as const, lossless: false, metadataPolicy: "stripSafe" as const, webpMethod: 6, webpPass: 10, webpNearLossless: undefined },
+    ];
+    for (const item of cases) {
+      const common = { ...request, ...item, maxOutputBytes: 64 * 1024, maxCandidates: 8, skipIfLarger: true };
+      const raw = readMetadata(encodeCompressionEnvelope(common));
+      const estimate = readMetadata(encodeCompressionEstimateEnvelope({
+        fileName: common.fileName,
+        inputData: common.inputData,
+        outputFormat: common.outputFormat,
+        jpegQuality: common.jpegQuality,
+        lossless: common.lossless,
+        metadataPolicy: common.metadataPolicy,
+        pngOptimizationLevel: common.pngOptimizationLevel,
+        webpMethod: common.webpMethod,
+        webpPass: common.webpPass,
+        maxOutputBytes: common.maxOutputBytes,
+        maxCandidates: common.maxCandidates,
+      }));
+      expect(raw).toMatchObject({ outputFormat: common.outputFormat, lossless: common.lossless, metadataPolicy: common.metadataPolicy, maxOutputBytes: 64 * 1024, maxCandidates: 8, skipIfLarger: true });
+      expect(estimate).toMatchObject({ outputFormat: common.outputFormat, lossless: common.lossless, metadataPolicy: common.metadataPolicy, maxOutputBytes: 64 * 1024, maxCandidates: 8 });
+      expect(raw.webpMethod).toBe(estimate.webpMethod);
+      expect(raw.webpPass).toBe(estimate.webpPass);
+      expect(raw).not.toHaveProperty("webpNearLossless");
+      expect(estimate).not.toHaveProperty("webpNearLossless");
+    }
+    vi.mocked(invoke).mockResolvedValue({});
+    await preflightCompression({ ...request, inputData: staticWebpInput, outputFormat: "webp", lossless: false, metadataPolicy: "stripAll", maxOutputBytes: 64 * 1024, maxCandidates: 8, skipIfLarger: true });
+    await previewCompression({ ...request, inputData: staticWebpInput, outputFormat: "webp", lossless: false, metadataPolicy: "stripAll", maxOutputBytes: 64 * 1024, maxCandidates: 8, skipIfLarger: true });
+    await estimateImageCompression({ fileName: "icon.webp", inputData: staticWebpInput, outputFormat: "webp", jpegQuality: 82, lossless: false, metadataPolicy: "stripAll", pngOptimizationLevel: 2, maxOutputBytes: 64 * 1024, maxCandidates: 8 });
+    await compressImage({ ...request, inputData: staticWebpInput, outputFormat: "webp", lossless: false, metadataPolicy: "stripAll", maxOutputBytes: 64 * 1024, maxCandidates: 8, skipIfLarger: true });
+    expect(vi.mocked(invoke).mock.calls.map(([command]) => command)).toEqual([
+      PREFLIGHT_COMPRESSION_COMMAND,
+      PREVIEW_COMPRESSION_COMMAND,
+      ESTIMATE_IMAGE_COMPRESSION_COMMAND,
+      COMPRESS_IMAGE_COMMAND,
+    ]);
+  });
+
+  it("rejects format-specific fields before any of the compression entry points reach IPC", () => {
+    expect(() => encodeCompressionEnvelope({ ...request, inputData: pngInput, outputFormat: "png", webpMethod: 4 })).toThrow("仅支持有损 WebP");
+    expect(() => encodeCompressionEstimateEnvelope({ fileName: "icon.jpg", inputData: jpegInput, outputFormat: "jpg", jpegQuality: 82, lossless: false, metadataPolicy: "strip", pngOptimizationLevel: 2, webpPass: 2 })).toThrow("仅支持有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, inputData: staticWebpInput, outputFormat: "webp", lossless: true, webpNearLossless: 90, webpMethod: 4 })).toThrow("仅支持有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, inputData: pngInput, outputFormat: "png", metadataPolicy: "stripSafe", maxOutputBytes: 64 * 1024, maxCandidates: 8, maxRgbMae: 12.5 })).toThrow("有损 WebP");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("rejects metadata preservation for publish-free estimates before IPC", () => {
     expect(() => encodeCompressionEstimateEnvelope({
       fileName: "icon.png",
