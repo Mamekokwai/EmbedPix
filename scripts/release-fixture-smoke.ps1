@@ -32,8 +32,24 @@ function Expect-Rejection([string]$Label, [scriptblock]$Action) {
   }
 }
 
+function Assert-FixtureReleaseNotesTitle([string]$Path, [string]$Version) {
+  $notes = Get-Content -Raw -Encoding UTF8 -LiteralPath $Path
+  if ([string]::IsNullOrWhiteSpace($notes) -or $notes -notmatch "(?m)^# EmbedPix v$([regex]::Escape($Version))\s*$") {
+    throw "Release notes title does not match fixture version $Version."
+  }
+}
+
 try {
   $expected = @(Get-ExpectedReleaseAssetNames $version)
+  $notesPath = Join-Path $root "release-notes-v$version.md"
+  $notesSourcePath = Join-Path (Split-Path -Parent $PSScriptRoot) "docs/release-notes-v$version.md"
+  Copy-Item -LiteralPath $notesSourcePath -Destination $notesPath
+  $originalNotes = Get-Content -Raw -Encoding UTF8 -LiteralPath $notesPath
+  Assert-FixtureReleaseNotesTitle -Path $notesPath -Version $version
+  Set-Utf8NoBomContent $notesPath ($originalNotes -replace "(?m)^# EmbedPix v$([regex]::Escape($version))\s*$", '# EmbedPix v0.0.0')
+  Expect-Rejection 'release notes version mismatch' { Assert-FixtureReleaseNotesTitle -Path $notesPath -Version $version }
+  Set-Utf8NoBomContent $notesPath $originalNotes
+
   $rawSignature = "untrusted comment: fixture`nAAAA`ntrusted comment: fixture`nAAAA"
   $encodedSignature = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($rawSignature))
   [IO.File]::WriteAllBytes((Join-Path $root "EmbedPix_${version}_x64-setup.exe"), [Text.Encoding]::UTF8.GetBytes('fixture-x64-installer'))
