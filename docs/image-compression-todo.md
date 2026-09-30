@@ -95,9 +95,9 @@
 
 - [x] 使用现有 Rust JPEG 编码能力完成第一阶段闭环。
 - [x] 支持质量 1–100 的边界校验。
-- [ ] 支持渐进式 JPEG 开关或明确列入后续任务。
+- [ ] 支持渐进式 JPEG 开关或明确列入后续任务：技术评估确认 `image 0.24.9::codecs::jpeg::JpegEncoder` 公开接口只有 `new/new_with_quality/set_pixel_density/encode/encode_image`；源码固定写入 JPEG SOF0（baseline）和单次 SOS，没有 progressive 参数或 SOF2 路径，当前不能安全暴露该开关。
 - [ ] 支持元数据保留/清理策略：当前 `image 0.24.9` 的 `JpegEncoder` 路径只有像素编码接口，没有可复用 ICC/EXIF/XMP 段的 mux API；`stripSafe` 需要经审查的 JPEG 段级复制规则。
-- [ ] 支持优化熵编码。
+- [ ] 支持优化熵编码：同一 `JpegEncoder` 直接使用内置静态 Huffman 表写入 DHT，没有统计输入图像频率并生成 optimized Huffman tables 的公开 API；需引入并审查独立 JPEG 后端（如 MozJPEG）后再评估，当前不改协议。
 - [x] 明确 Alpha 处理：JPEG 透明像素按已校验的 `#RRGGBB` 背景合成，默认白色，不允许静默丢失透明度。
 - [x] 正确处理 EXIF Orientation：strip 解码入口统一应用 JPEG 1–8 姿态，非法/缺失标签安全忽略。
 - [ ] 支持元数据保留/清理策略。
