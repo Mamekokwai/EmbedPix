@@ -1141,7 +1141,7 @@ export default function ImageConverter({
         ? `已执行原生目录与权限预检；${nativePreflight.diskSpaceChecked ? `预估 ${formatFileSize(estimatedBytes ?? 0)}，可用 ${formatFileSize(nativePreflight.availableBytes ?? 0)}` : "磁盘空间未检查"}`
         : "未执行原生文件系统预检（当前不是桌面应用）");
     } catch (probeError) {
-      const probeMessage = "原生预检失败，已阻止导出：" + (probeError instanceof Error ? probeError.message : "无法调用预检");
+      const probeMessage = `原生预检失败，已阻止导出：${formatImageConverterError(probeError)}`;
       setNativePreflightStatus(probeMessage);
       setError(probeMessage);
       setStatus({ kind: "error", text: "导出预检失败" });
