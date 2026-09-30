@@ -370,6 +370,20 @@ describe("compression gateway", () => {
     expect(result.savedBytes).toBe(-2);
   });
 
+  it("keeps optional quality metrics compatible with old and new native results", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "completed", inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: false, targetBytes: null, targetMet: false, selectedQuality: null });
+    await expect(compressImage(request)).resolves.toMatchObject({ format: "webp" });
+    vi.mocked(invoke).mockResolvedValueOnce({ jobId: "compression-test", outputPath: "C:/icon.webp", status: "completed", inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: false, targetBytes: null, targetMet: false, selectedQuality: 82, qualityMetrics: { rgbMae: 0.25, psnrDb: 48.5, alphaMismatchPixels: 3 } });
+    await expect(compressImage(request)).resolves.toMatchObject({ qualityMetrics: { rgbMae: 0.25, psnrDb: 48.5, alphaMismatchPixels: 3 } });
+  });
+
+  it("retains optional quality metrics on estimate responses", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: false, targetBytes: null, targetMet: false, selectedQuality: 82 });
+    await expect(estimateImageCompression({ fileName: "icon.png", inputData: new Uint8Array([1, 2, 3]), outputFormat: "webp", jpegQuality: 82, lossless: false, metadataPolicy: "strip", pngOptimizationLevel: 2 })).resolves.toMatchObject({ format: "webp" });
+    vi.mocked(invoke).mockResolvedValueOnce({ inputBytes: 3, outputBytes: 2, savedBytes: 1, savingsPercent: 33.3, width: 1, height: 1, format: "webp", lossless: false, targetBytes: null, targetMet: false, selectedQuality: 82, qualityMetrics: { rgbMae: 0.25, psnrDb: null, alphaMismatchPixels: 0 } });
+    await expect(estimateImageCompression({ fileName: "icon.png", inputData: new Uint8Array([1, 2, 3]), outputFormat: "webp", jpegQuality: 82, lossless: false, metadataPolicy: "strip", pngOptimizationLevel: 2 })).resolves.toMatchObject({ qualityMetrics: { rgbMae: 0.25, psnrDb: null, alphaMismatchPixels: 0 } });
+  });
+
   it("serializes source subfolder and directory output locations without unsupported fields", () => {
     const subfolder = encodeCompressionEnvelope({ ...request, outputLocation: "subfolder", outputSubdirectory: "compressed" });
     const metadataLength = new DataView(subfolder.buffer).getUint32(4, true);
