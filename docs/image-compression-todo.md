@@ -123,6 +123,7 @@
 
   - `stripSafe` 已按该最小可审查方案落地：显式声明 `libwebp-sys2` 的 `mux` feature；仅对静态 WebP 输出在有界 RIFF 解析后允许保留经大小限制和结构校验的 ICCP，默认删除 EXIF/XMP（从而连同 EXIF 内嵌缩略图/GPS 一并删除），允许合法 ALPH，拒绝动画、重复块、坏 padding、非白名单输出、整数溢出和不完整 padding；以 RAII 封装 `WebPMux`/`WebPData`，保证 assemble 失败和早退路径都释放内存。
   - `preserve` 仍需先定义“原始字节保留”还是“可验证字段保留”：前者要求按输入格式提取并复制 WebP/PNG/JPEG 的原始块，后者至少需要 ICC/EXIF/XMP 的来源、大小、重复块、方向和 GPS 语义契约；不能把 `WebPMuxSetChunk` 成功当作安全或完整保留的证据。
+  - 当前 `metadataPolicy=preserve` 在 native 入口明确拒绝，是有意的安全门禁而非遗漏。接入前必须由产品决定保留字段、跨格式行为、EXIF Orientation 是否重写、GPS/缩略图是否允许，以及重复/损坏字段的处理；下一阶段优先评估静态 WebP→WebP 的固定 allowlist（不透传未知私有 chunk），并补齐单 chunk/总 metadata 预算、RIFF/字段解析、WebPMux/WebPData RAII、组装后重新解析与尺寸/Alpha/可解码/输出上限回读，以及 preview/estimate/formal 一致和失败不发布测试。未闭合这些门禁前不得开放 preserve。
   - preview、estimate、formal 已共用 `encode_image_with_webp_method_alpha`/候选搜索和同一 mux 后处理；三条路径均回读检查输出尺寸/Alpha/可解码性，并验证无 `ANIM`/`ANMF`、仅允许 VP8X/VP8/VP8L/ALPH/单个合法 ICCP、RIFF 长度/奇偶 padding 和输出上限。ICCP、EXIF/XMP/旧 ICCP 清理及输出白名单均有回归覆盖。
   - `preserve` 仍需先定义“原始字节保留”还是“可验证字段保留”；WebP `stripSafe` 已补齐静态/动画、ICCP、边界和 preview/estimate/formal 共用路径测试，发布前仍需按 x64/ARM64 构建复核。
 - [x] 保持透明度和透明边缘正确。
