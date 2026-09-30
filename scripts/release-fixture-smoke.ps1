@@ -2,6 +2,11 @@
 param()
 
 $ErrorActionPreference = 'Stop'
+
+function Set-Utf8NoBomContent([string]$Path, [string]$Value) {
+  [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))
+}
+
 $assetContract = Join-Path $PSScriptRoot 'release-asset-contract.ps1'
 $peContract = Join-Path $PSScriptRoot 'release-pe-contract.ps1'
 if (-not (Test-Path -LiteralPath $assetContract -PathType Leaf)) { throw "Release asset contract is missing: $assetContract" }
@@ -50,18 +55,18 @@ try {
       }
     }
   }
-  $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
-  [ordered]@{
+  Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($manifest | ConvertTo-Json -Depth 6)
+  Set-Utf8NoBomContent (Join-Path $root 'release-provenance.json') (@{
     repository = $repository
     release_tag = $tag
     release_commit = 'a'.PadRight(40, 'a')
     workflow_ref = "refs/tags/$tag"
     workflow_sha = 'b'.PadRight(40, 'b')
-  } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'release-provenance.json') -Encoding utf8NoBOM
+  } | ConvertTo-Json)
   $checksumNames = @($expected | Where-Object { $_ -ne 'SHA256SUMS.txt' })
-  $checksumNames | Sort-Object | ForEach-Object {
+  Set-Utf8NoBomContent (Join-Path $root 'SHA256SUMS.txt') (($checksumNames | Sort-Object | ForEach-Object {
     "$((Get-FileHash -LiteralPath (Join-Path $root $_) -Algorithm SHA256).Hash.ToLower())  $_"
-  } | Set-Content -LiteralPath (Join-Path $root 'SHA256SUMS.txt') -Encoding utf8NoBOM
+  }) -join [Environment]::NewLine)
 
   $assets = @($expected | ForEach-Object {
     $name = $_
@@ -100,31 +105,31 @@ try {
       'unexpected' = $manifest.platforms.'windows-x86_64'
     }
   }
-  $invalidPlatformManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
+  Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($invalidPlatformManifest | ConvertTo-Json -Depth 6)
   Expect-Rejection 'unexpected platform count' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
   $wrongUrlManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
   $wrongUrlManifest.platforms.'windows-x86_64'.url = 'https://example.com/not-EmbedPix.exe'
-  $wrongUrlManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
+  Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($wrongUrlManifest | ConvertTo-Json -Depth 6)
   Expect-Rejection 'signature/url mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
   $wrongNotesManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
   $wrongNotesManifest.notes = 'EmbedPix v0.0.0'
-  $wrongNotesManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
+  Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($wrongNotesManifest | ConvertTo-Json -Depth 6)
   Expect-Rejection 'manifest notes/version mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
   $wrongSignatureManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
   $wrongSignatureManifest.platforms.'windows-x86_64'.signature = 'not-a-valid-signature'
-  $wrongSignatureManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
+  Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($wrongSignatureManifest | ConvertTo-Json -Depth 6)
   Expect-Rejection 'signature mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 
   $futureManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
   $futureManifest.pub_date = (Get-Date).ToUniversalTime().AddHours(1).ToString('o')
-  $futureManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'latest.json') -Encoding utf8NoBOM
+  Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($futureManifest | ConvertTo-Json -Depth 6)
   Expect-Rejection 'future pub_date' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Content -LiteralPath (Join-Path $root 'latest.json') -Value $originalManifest -NoNewline
 

@@ -7,6 +7,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Set-Utf8NoBomContent([string]$Path, [string]$Value) {
+  [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
@@ -14,7 +19,7 @@ function Invoke-CliRequest([string]$Path, [hashtable]$Request, [string]$Label) {
   $requestPath = Join-Path $script:root "$Label.request.json"
   $stdoutPath = Join-Path $script:root "$Label.stdout.log"
   $stderrPath = Join-Path $script:root "$Label.stderr.log"
-  $Request | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $requestPath -Encoding utf8NoBOM
+  Set-Utf8NoBomContent $requestPath ($Request | ConvertTo-Json -Depth 12)
   $inputText = Get-Content -Raw -LiteralPath $requestPath
   $stdout = $inputText | & $Path 2> $stderrPath | Out-String
   $exitCode = $LASTEXITCODE
@@ -300,7 +305,7 @@ try {
   $compressionResult = Assert-Output $compressionOutput 'webp' 'compression'
   $invalidRequest = Join-Path $script:root 'invalid-compression.request.json'
   $invalidStderr = Join-Path $script:root 'invalid-compression.stderr.log'
-  @{ id = 'invalid-compression'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'must-not-exist.webp'); quality = '82' } | ConvertTo-Json | Set-Content -LiteralPath $invalidRequest -Encoding utf8NoBOM
+  Set-Utf8NoBomContent $invalidRequest (@{ id = 'invalid-compression'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'must-not-exist.webp'); quality = '82' } | ConvertTo-Json)
   Get-Content -Raw -LiteralPath $invalidRequest | & $CliPath 2> $invalidStderr | Out-Null
   $invalidExitCode = $LASTEXITCODE
   if ($invalidExitCode -ne 1 -or (Get-Content -Raw -LiteralPath $invalidStderr) -notmatch 'request_error') { throw "CLI strict validation smoke failed (exit=$invalidExitCode): $(Get-Content -Raw -LiteralPath $invalidStderr)" }
@@ -334,7 +339,7 @@ try {
   }
 
   $json = $report | ConvertTo-Json -Depth 8
-  if ($ReportPath) { $json | Set-Content -LiteralPath $ReportPath -Encoding utf8NoBOM }
+  if ($ReportPath) { Set-Utf8NoBomContent $ReportPath $json }
   Write-Output $json
 } finally {
   Remove-Item -LiteralPath $script:root -Recurse -Force -ErrorAction SilentlyContinue
