@@ -51,7 +51,7 @@ export interface CompressionEnvelopeRequest {
   jobId?: string;
 }
 
-export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; lossless?: boolean; compressionMode?: "lossless" | "lossy"; compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp"; requiredSpaceBytes?: number | null; }
+export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; lossless?: boolean; compressionMode?: "lossless" | "lossy"; compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp"; requiredSpaceBytes?: number | null; autoResizeToTarget?: boolean; resizeCandidateCount?: number; maxPreparedInputBytes?: number; maxEncodedCandidateBytes?: number; maxPixels?: number; }
 export type CompressionResultStatus = "completed" | "skipped";
 export interface CompressionResult {
   jobId: string;
@@ -75,6 +75,8 @@ export interface CompressionResult {
   sourceDeleted?: boolean;
   targetBytes: number | null;
   targetMet: boolean;
+  selectedResizePercent?: number;
+  autoResizeToTarget?: boolean;
   selectedQuality: number | null;
   candidateSearchMs?: number;
   candidateCount?: number;
@@ -97,6 +99,8 @@ export interface CompressionPreview {
   preparedInputBytes?: number;
   targetBytes: number | null;
   targetMet: boolean;
+  selectedResizePercent?: number;
+  autoResizeToTarget?: boolean;
   selectedQuality: number | null;
   candidateSearchMs?: number;
   candidateCount?: number;
@@ -121,6 +125,8 @@ export interface CompressionEstimate {
   skippedReason: string | null;
   targetBytes: number | null;
   targetMet: boolean;
+  selectedResizePercent?: number;
+  autoResizeToTarget?: boolean;
   selectedQuality: number | null;
   candidateSearchMs?: number;
   candidateCount?: number;

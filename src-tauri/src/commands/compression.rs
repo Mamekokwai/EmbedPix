@@ -789,6 +789,9 @@ pub struct CompressionResult {
     pub source_deleted: bool,
     pub target_bytes: Option<u64>,
     pub target_met: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_resize_percent: Option<u8>,
+    pub auto_resize_to_target: bool,
     pub selected_quality: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_search_ms: Option<u64>,
@@ -812,6 +815,15 @@ pub struct CompressionPreflight {
     pub lossless: bool,
     pub compression_mode: &'static str,
     pub compression_engine: &'static str,
+    pub auto_resize_to_target: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resize_candidate_count: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_prepared_input_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_encoded_candidate_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_pixels: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required_space_bytes: Option<u64>,
 }
@@ -836,6 +848,9 @@ pub struct CompressionPreview {
     pub prepared_input_bytes: Option<u64>,
     pub target_bytes: Option<u64>,
     pub target_met: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_resize_percent: Option<u8>,
+    pub auto_resize_to_target: bool,
     pub selected_quality: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_search_ms: Option<u64>,
@@ -877,6 +892,9 @@ pub struct CompressionEstimate {
     pub skipped_reason: Option<String>,
     pub target_bytes: Option<u64>,
     pub target_met: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_resize_percent: Option<u8>,
+    pub auto_resize_to_target: bool,
     pub selected_quality: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate_search_ms: Option<u64>,
@@ -909,6 +927,26 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
         lossless: request.lossless,
         compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
         compression_engine: request.compression_engine().as_str(),
+        auto_resize_to_target: request.metadata.auto_resize_to_target,
+        resize_candidate_count: request.metadata.auto_resize_to_target.then_some(
+            AUTO_RESIZE_PERCENT_CANDIDATES
+                .len()
+                .min(request.max_candidates) as u8,
+        ),
+        max_prepared_input_bytes: request.metadata.auto_resize_to_target.then_some(
+            request
+                .metadata
+                .max_input_bytes
+                .unwrap_or(MAX_INPUT_BYTES as u64),
+        ),
+        max_encoded_candidate_bytes: request
+            .metadata
+            .auto_resize_to_target
+            .then_some(MAX_OUTPUT_BYTES as u64),
+        max_pixels: request
+            .metadata
+            .auto_resize_to_target
+            .then_some(u64::from(source_width).saturating_mul(u64::from(source_height))),
         output_path: output_path.to_string_lossy().into_owned(),
         required_space_bytes,
     })
@@ -1313,6 +1351,8 @@ fn run_compression(
             source_deleted: false,
             target_bytes: request.target_bytes,
             target_met,
+            selected_resize_percent: prepared_request.metadata.target_resize_percent,
+            auto_resize_to_target: request.metadata.auto_resize_to_target,
             selected_quality,
             candidate_search_ms,
             candidate_count,
@@ -1368,6 +1408,8 @@ fn run_compression(
         source_deleted: request.metadata.delete_source,
         target_bytes: request.target_bytes,
         target_met,
+        selected_resize_percent: prepared_request.metadata.target_resize_percent,
+        auto_resize_to_target: request.metadata.auto_resize_to_target,
         selected_quality,
         candidate_search_ms,
         candidate_count,
@@ -2155,6 +2197,8 @@ fn run_preview_core(
         prepared_input_bytes: Some(prepared_request.input.len() as u64),
         target_bytes: request.target_bytes,
         target_met,
+        selected_resize_percent: prepared_request.metadata.target_resize_percent,
+        auto_resize_to_target: request.metadata.auto_resize_to_target,
         selected_quality,
         candidate_search_ms,
         candidate_count,
@@ -2283,6 +2327,8 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         skipped_reason,
         target_bytes: request.target_bytes,
         target_met,
+        selected_resize_percent: prepared_request.metadata.target_resize_percent,
+        auto_resize_to_target: request.metadata.auto_resize_to_target,
         selected_quality,
         candidate_search_ms,
         candidate_count,
@@ -4532,6 +4578,41 @@ mod tests {
         assert!(request.metadata.auto_resize_to_target);
         assert_eq!(request.metadata.target_resize_percent, None);
 
+        let mut baseline = request.clone();
+        baseline.metadata.auto_resize_to_target = false;
+        baseline.metadata.max_output_bytes = None;
+        baseline.target_bytes = None;
+        let mut baseline_sizes = Vec::new();
+        for percent in AUTO_RESIZE_PERCENT_CANDIDATES {
+            let mut fixed = baseline.clone();
+            fixed.metadata.target_resize_percent = Some(percent);
+            let prepared = prepare_resize_request(&fixed, None).unwrap();
+            let (width, height) = inspect_image(&prepared.input).unwrap();
+            let selection =
+                choose_encoded_output_with_cancellation(&prepared, width, height, None).unwrap();
+            baseline_sizes.push((percent, selection.bytes.len() as u64));
+        }
+        let (target_bytes, expected_percent) = baseline_sizes
+            .windows(2)
+            .find_map(|pair| {
+                (pair[1].1 < pair[0].1).then_some(((pair[0].1 + pair[1].1) / 2, pair[1].0))
+            })
+            .expect("automatic resize fixture must shrink at one candidate boundary");
+        let reachable_metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"jpeg\",\"lossless\":false,\"autoResizeToTarget\":true,\"maxOutputBytes\":{target_bytes},\"maxCandidates\":5,\"skipIfLarger\":false}}"
+        );
+        let reachable_request =
+            parse_raw_payload(&raw_payload(&reachable_metadata, &luma_png_input(64, 48))).unwrap();
+        let reachable_preview = run_preview(&reachable_request).unwrap();
+        assert!(reachable_preview.target_met);
+        assert_eq!(
+            (reachable_preview.width, reachable_preview.height),
+            (
+                resize_dimension(64, expected_percent),
+                resize_dimension(48, expected_percent)
+            )
+        );
+
         let preview = run_preview(&request).unwrap();
         assert_eq!(preview.status, "skipped");
         assert!(!preview.target_met);
@@ -6026,6 +6107,8 @@ mod tests {
             prepared_input_bytes: None,
             target_bytes: None,
             target_met: false,
+            selected_resize_percent: None,
+            auto_resize_to_target: false,
             selected_quality: Some(82),
             candidate_search_ms: None,
             candidate_count: None,
