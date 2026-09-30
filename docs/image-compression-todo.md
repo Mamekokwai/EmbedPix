@@ -20,6 +20,8 @@
 - 本轮已完成第三项协议修复：图片转换预检摘要现在会在输出位置、目录、文件名模板、序号、覆盖和删除等所有导出计划参数变化时失效，避免继续显示旧预计体积和旧目标路径。
 - [x] 本轮新增功能与门禁：支持复制本次批处理摘要、下载 JSON 批处理报告；新增 PNG/JPEG/静态 WebP formal 结果与磁盘实体追踪矩阵，覆盖完成结果字段、最终路径、磁盘长度、输入长度、元数据策略、格式/尺寸回读，以及 skipped 无临时残留。
 - [x] 门禁统计修正：当前前端为 32 个测试文件 / 382 个测试通过；本轮 release fixture 使用固定 UTC 输入，重复执行的 manifest/asset summary 结果一致。
+- [x] 本轮收尾：支持“仅重试此项”；release fixture 已覆盖 `release-provenance.json` 的 `workflow_ref` 与 `release_commit` 篡改拒绝。
+- [x] 前端门禁统计更新：32 个测试文件 / 383 个测试通过。
 - 本轮新增 `compressionGateway` 四入口 envelope 矩阵回归：覆盖 PNG/JPEG/静态 WebP、格式专属字段不泄漏，以及非法组合在 IPC 前拒绝。
 - 本轮完成预检临时空间预算状态修复：参数、输入或选中项变化时清除旧预算，任务完成后保留最近一次有效预算。
 - 本轮新增 updater 签名提交/安装包提交边界清理回归：验证临时 `.part`、签名临时文件和 `.etag` 清理，以及既有/已提交缓存的保留或失败清理语义；真实异步 rename 间隙尚未通过 hook 注入验证，未扩大覆盖声明。
@@ -347,6 +349,7 @@
 - [~] `latest.json` 与签名文件一致性：本地 fixture 已覆盖清单、URL、签名、摘要与尺寸；真实线上资产待发布时验收。
 - [x] 本地 release fixture 能拒绝平台数、URL、时间、大小和 PE 边界错误。
 - [x] release fixture 幂等校验：有效 `pub_date` 固定为 UTC 输入，重复执行契约校验产生一致的 manifest/asset summary。
+- [x] 发布门禁收尾：provenance `workflow_ref`/`release_commit` 篡改拒绝与固定 fixture 重复执行一致性均已验证。
 - [x] 发布说明版本匹配：`docs/release-notes-v0.7.0.md` 标题与当前版本一致，并由 `check:release-config` 校验。
 - [ ] 安装包无控制台窗口。
 
