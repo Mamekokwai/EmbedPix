@@ -243,6 +243,13 @@ jobs:
             throw 'Missing TAURI_SIGNING_PRIVATE_KEY repository secret.'
           }
 
+      - name: Run signing preflight
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run check:release-signing
+
       - name: Build signed Tauri bundle
         env:
           RUST_TARGET: ${{ matrix.target }}
