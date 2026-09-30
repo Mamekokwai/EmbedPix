@@ -218,7 +218,8 @@ export function getCompressionCancelledItemResults(items: ReadonlyArray<Compress
 }
 
 export function getCompressionBatchFinalState(failedNames: ReadonlyArray<string>, cancelled: boolean): { status: "success" | "error"; stage: "completed" | "cancelled" | "failed" } {
+  if (cancelled) return { status: "error", stage: "cancelled" };
   return failedNames.length > 0
-    ? { status: "error", stage: cancelled ? "cancelled" : "failed" }
+    ? { status: "error", stage: "failed" }
     : { status: "success", stage: "completed" };
 }
