@@ -241,6 +241,17 @@ describe("GIF maker logic", () => {
     expect(released).toEqual([1]);
   });
 
+  it("swallows a rejected read after cancellation while releasing loaded frames", async () => {
+    const released: number[] = [];
+    let current = true;
+    const result = await readGifBatch([1, 2], async (value) => {
+      if (value === 2) { current = false; throw new Error("stale read"); }
+      return value;
+    }, (value) => released.push(value), () => current);
+    expect(result).toEqual([]);
+    expect(released).toEqual([1]);
+  });
+
   it("serializes queued imports and invalidates cancelled work", async () => {
     const queue = new GifImportQueue();
     const order: string[] = [];

@@ -309,6 +309,7 @@ export async function readGifBatch<T, F>(files: F[], read: (file: F) => Promise<
     if (isCurrent()) return loaded;
   } catch (error) {
     loaded.forEach(release);
+    if (!isCurrent()) return [];
     throw error;
   }
   loaded.forEach(release);
