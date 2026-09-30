@@ -265,6 +265,13 @@ describe("compact layout viewport contract", () => {
     expect(nativeImportSource).toContain("setItemResults([]);");
   });
 
+  it("invalidates stale image export preflight when request parameters change", () => {
+    expect(converterView).toContain("setExportPreflight(null);");
+    expect(converterView).toContain("setNativePreflightStatus(null);");
+    expect(converterView).toMatch(/\[bitDepth, file, height, imageTransform, keepAspectRatio, loadedImages, outputFormat, width\]/);
+    expect(converterView).toContain("setActualExportResult(null);");
+  });
+
   it("keeps GIF interaction modules, multiselect, and batch duration controls represented", () => {
     expect(gifView).toContain("素材帧");
     expect(gifView).toContain("动画预览");

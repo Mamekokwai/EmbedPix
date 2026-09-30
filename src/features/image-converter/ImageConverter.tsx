@@ -470,6 +470,11 @@ export default function ImageConverter({
   );
 
   useEffect(() => {
+    setExportPreflight(null);
+    setNativePreflightStatus(null);
+  }, [bitDepth, file, height, imageTransform, keepAspectRatio, loadedImages, outputFormat, width]);
+
+  useEffect(() => {
     let cancelled = false;
     const requestPreview = async () => {
       if (realPreviewUrlRef.current) URL.revokeObjectURL(realPreviewUrlRef.current);
