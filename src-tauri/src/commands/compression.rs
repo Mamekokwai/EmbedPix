@@ -2569,8 +2569,7 @@ mod tests {
         chunk
     }
 
-    fn png_with_metadata_chunks() -> Vec<u8> {
-        let source = png_input();
+    fn png_with_metadata_chunks_from(source: &[u8]) -> Vec<u8> {
         let end = source.len() - 12;
         let mut output = source[..end].to_vec();
         output.extend_from_slice(&png_chunk(b"iCCP", b"icc\0\0x\x9c\x03\0\0\0\0\0\x01"));
@@ -2580,6 +2579,10 @@ mod tests {
         output.extend_from_slice(&png_chunk(b"zzZZ", b"unknown ancillary"));
         output.extend_from_slice(&source[end..]);
         output
+    }
+
+    fn png_with_metadata_chunks() -> Vec<u8> {
+        png_with_metadata_chunks_from(&png_input())
     }
 
     fn raw_payload(metadata: &str, input: &[u8]) -> Vec<u8> {
@@ -2798,6 +2801,47 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("strip-safe optimize png") || error.contains("decode"));
+    }
+
+    #[test]
+    fn png_strip_safe_preserves_rgba_pixels_and_alpha() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_fn(3, 2, |x, y| {
+            Rgba([
+                (x * 61 + y * 17) as u8,
+                (y * 83 + x * 13) as u8,
+                211,
+                match (x, y) {
+                    (0, 0) => 0,
+                    (1, 0) => 64,
+                    (2, 0) => 128,
+                    _ => 255,
+                },
+            ])
+        }));
+        let expected = image.to_rgba8();
+        let mut source = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut source), ImageOutputFormat::Png)
+            .unwrap();
+        let input = png_with_metadata_chunks_from(&source);
+        let output = encode_image_with_webp_method_alpha(
+            &input,
+            CompressionFormat::Png,
+            80,
+            2,
+            false,
+            true,
+            None,
+            None,
+            None,
+            None,
+            None,
+            MetadataPolicy::StripSafe,
+        )
+        .unwrap();
+        let decoded = decode_image(&output).unwrap().to_rgba8();
+        assert_eq!(decoded.dimensions(), expected.dimensions());
+        assert_eq!(decoded, expected);
     }
 
     #[test]
