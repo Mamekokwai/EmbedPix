@@ -20,7 +20,8 @@ export function supportsCompressionTargetSize(format: CompressionFormat, lossles
 export function isCurrentCompressionItem<T extends { id: string; file: unknown }>(items: ReadonlyArray<T>, item: Pick<T, "id" | "file">): boolean { return items.some((candidate) => candidate.id === item.id && candidate.file === item.file); }
 export function canWriteCompressionItemUpdate<T extends { id: string; file: unknown }>(mounted: boolean, items: ReadonlyArray<T>, item: Pick<T, "id" | "file">): boolean { return mounted && isCurrentCompressionItem(items, item); }
 export function removeCompressionDimensionError<T extends { id: string }>(errors: ReadonlyArray<T>, itemId: string): T[] { return errors.filter((error) => error.id !== `dimensions-${itemId}`); }
-export function formatCompressionReason(reason: string): string {
+export function formatCompressionReason(reason: string | undefined): string {
+  if (!reason) return "";
   const labels: Readonly<Record<string, string>> = { target_unmet: "未达到目标体积", target_unreachable: "无法达到目标体积", quality_threshold_unmet: "未达到质量阈值" };
   const separator = reason.indexOf(":");
   if (separator < 0) return reason;
