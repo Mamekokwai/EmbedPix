@@ -34,7 +34,7 @@
 | 篡改 manifest | [ ] | [ ] | 版本/平台/签名校验失败 |
 | 下载中断 | [ ] | [ ] | 临时文件清理，可重试 |
 
-自动门禁：`scripts/release-config-smoke.ps1` 负责发布配置、公钥一致性和脚本契约；`scripts/release-fixture-smoke.ps1` 用临时伪造数据覆盖 7 项资产集合、manifest schema、平台 URL/签名、受信任 GitHub 下载 URL、`pub_date`、资产大小和 PE 边界负例；发布工作流在 publish 前用同一 release contract 校验本地资产并检查 x64/ARM64 构建产物的 GUI subsystem，publish 后由 `scripts/release-smoke.ps1` 先限制下载到精确的 GitHub release URL，再负责真实资产下载、SHA256、独立 minisign、安装后 PE GUI subsystem 和 Windows x64 安装/启动 smoke；不改变生产审批配置。
+自动门禁：`npm run check:release-signing` 先检查私钥变量与加密私钥密码，再调用 `scripts/release-config-smoke.ps1`；后者负责发布配置、公钥一致性和脚本契约；`scripts/release-fixture-smoke.ps1` 用临时伪造数据覆盖 7 项资产集合、manifest schema、平台 URL/签名、受信任 GitHub 下载 URL、`pub_date`、资产大小和 PE 边界负例；发布工作流在 publish 前用同一 release contract 校验本地资产并检查 x64/ARM64 构建产物的 GUI subsystem，publish 后由 `scripts/release-smoke.ps1` 先限制下载到精确的 GitHub release URL，再负责真实资产下载、SHA256、独立 minisign、安装后 PE GUI subsystem 和 Windows x64 安装/启动 smoke；不改变生产审批配置。
 
 ## v0.7.0 真实发布 smoke 记录
 
