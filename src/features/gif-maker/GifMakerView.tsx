@@ -103,6 +103,10 @@ export function getGifSelectionAfterDeletion(selectedIndices: ReadonlySet<number
   return { nextIndex, nextSelection: new Set([nextIndex]) };
 }
 
+export function canEditGifFrames(locked: boolean, pendingImports: number, statusKind: GifStatus["kind"]): boolean {
+  return !locked && pendingImports <= 0 && statusKind !== "importing" && statusKind !== "exporting";
+}
+
 export function getGifTimelineZoomLabel(zoom: number): string {
   return `${Math.round(zoom * 100)}%`;
 }
@@ -1235,8 +1239,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const removeFrame = (index: number) => {
-    if (lockedRef.current || pendingRef.current > 0 || status.kind === "exporting") return;
-    if (lockedRef.current) return;
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
     setIsPlaying(false);
     const frame = frames[index];
     if (!frame) return;
@@ -1281,7 +1284,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const copySelectedFrame = () => {
-    if (lockedRef.current || !selectedFrame) return;
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind) || !selectedFrame) return;
     try {
       validateGifFiles([...frames.map((frame) => frame.file), selectedFrame.file]);
     } catch (copyError) {
@@ -1301,7 +1304,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const removeSelectedFrames = () => {
-    if (lockedRef.current || !selectedFrameIndices.size) return;
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind) || !selectedFrameIndices.size) return;
     setIsPlaying(false);
     selectedFrameIndices.forEach((index) => { const frame = frames[index]; if (frame) URL.revokeObjectURL(frame.previewUrl); });
     const next = frames.filter((_, index) => !selectedFrameIndices.has(index));
@@ -1316,7 +1319,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const handleFrameKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    if (locked || pendingImports > 0 || status.kind === "exporting") return;
+    if (!canEditGifFrames(locked, pendingImports, status.kind)) return;
     if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       removeSelectedFrames();
@@ -1330,8 +1333,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const moveFrame = (index: number, direction: -1 | 1) => {
-    if (lockedRef.current || pendingRef.current > 0 || status.kind === "exporting") return;
-    if (lockedRef.current) return;
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
     setIsPlaying(false);
     const targetIndex = getGifFrameOrder(frames.length, index, direction);
     if (targetIndex === index || targetIndex < 0) return;
@@ -1345,7 +1347,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const reorderFrames = (fromIndices: number[], toIndex: number) => {
-    if (lockedRef.current || !fromIndices.length || toIndex < 0 || toIndex >= frames.length) return;
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind) || !fromIndices.length || toIndex < 0 || toIndex >= frames.length) return;
     setIsPlaying(false);
     const selectedFrame = frames[selectedIndex];
     const anchorFrame = frames[selectionAnchorRef.current];
@@ -1359,7 +1361,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const handleFrameDragStart = (event: DragEvent<HTMLDivElement>, index: number) => {
-    if (lockedRef.current) return;
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
     draggedFrameIndicesRef.current = selectedFrameIndices.has(index) ? [...selectedFrameIndices].sort((a, b) => a - b) : [index];
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", String(index));
@@ -1367,13 +1369,14 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const handleFrameDrop = (event: DragEvent<HTMLDivElement>, index: number) => {
     event.preventDefault();
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
     const fromIndices = draggedFrameIndicesRef.current;
     draggedFrameIndicesRef.current = [];
     if (fromIndices.length) reorderFrames(fromIndices, index);
   };
 
   const reverseFrames = () => {
-    if (lockedRef.current) return;
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
     setIsPlaying(false);
     const next = [...frames].reverse();
     framesRef.current = next;
@@ -1550,6 +1553,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const updateAllDurations = (value: number) => {
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
     const duration = clampFrameDuration(value);
     setGifPreset("custom");
     setGlobalDuration(duration);
@@ -1563,6 +1567,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const updateSelectedDuration = (value: number) => {
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
     const duration = clampFrameDuration(value);
     setGifPreset("custom");
     const next = applyGifFrameDuration(framesRef.current, duration, new Set([selectedIndex]));
@@ -1571,7 +1576,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
   const updateSelectedFramesDuration = () => {
-    if (lockedRef.current || !selectedFrameIndices.size) return;
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind) || !selectedFrameIndices.size) return;
     const duration = clampFrameDuration(batchDuration);
     setGifPreset("custom");
     setBatchDuration(duration);
@@ -2226,6 +2231,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const sourceHint = selectedFrame ? `${selectedFrame.width} × ${selectedFrame.height} px` : "导入后自动读取尺寸";
   const canMoveLeft = selectedIndex > 0;
   const canMoveRight = selectedIndex >= 0 && selectedIndex < frames.length - 1;
+  const canEditFrames = canEditGifFrames(locked, pendingImports, status.kind);
   const outputLocationLabel = outputFormat === "png-sequence" ? "输出目录" : "保存位置";
   const outputLocationHelp = outputLocationError ?? (
     outputLocation === "path"
@@ -2329,7 +2335,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         <div className="gif-header-note"><span className="status-dot" />支持图片序列与视频 <button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><label className="quiet-button workspace-file-button">打开工作区<input type="file" accept="application/json,.json" hidden onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} /></label></div>
       </header>
 
-      <fieldset className="page-content gif-maker-content" disabled={locked} aria-label="GIF 制作工作区" aria-busy={locked || pendingImports > 0}>
+      <fieldset className="page-content gif-maker-content" disabled={!canEditFrames} aria-label="GIF 制作工作区" aria-busy={!canEditFrames}>
         <>
         <div className="gif-maker-toolbar">
           <button className="primary-button" type="button" onClick={() => openFileDialog()}>
@@ -2412,28 +2418,28 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <div className="gif-frame-toolbar">
                   <span>帧顺序 · 已选 {selectedFrameIndices.size}</span>
                   <div>
-                    <button className="icon-button" type="button" aria-label="删除首帧" title="删除首帧" disabled={!frames.length || locked} onClick={() => removeFrame(0)}><ChevronsLeft size={15} aria-hidden="true" /></button>
-                    <button className="icon-button" type="button" aria-label="删除尾帧" title="删除尾帧" disabled={!frames.length || locked} onClick={() => removeFrame(frames.length - 1)}><ChevronsRight size={15} aria-hidden="true" /></button>
-                    <button className="icon-button" type="button" aria-label="复制当前帧" title="复制当前帧" disabled={!selectedFrame || locked} onClick={copySelectedFrame}><Copy size={15} aria-hidden="true" /></button>
-                    <button className="icon-button" type="button" aria-label="在当前帧前插入图片" title="在当前帧前插入图片" disabled={!selectedFrame || locked} onClick={() => openFileDialog(null, selectedIndex)}><Plus size={15} aria-hidden="true" /></button>
-                    <button className="icon-button" type="button" aria-label="删除选中帧" title="删除选中帧" disabled={!selectedFrameIndices.size || locked} onClick={removeSelectedFrames}><Trash2 size={15} aria-hidden="true" /></button>
-                    <button className="icon-button" type="button" aria-label="倒序" title="倒序" onClick={reverseFrames}><RotateCcw size={15} aria-hidden="true" /></button>
-                    <button className="icon-button" type="button" aria-label="清空帧" title="清空帧" onClick={clearFrames}><Trash2 size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="删除首帧" title="删除首帧" disabled={!frames.length || !canEditFrames} onClick={() => removeFrame(0)}><ChevronsLeft size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="删除尾帧" title="删除尾帧" disabled={!frames.length || !canEditFrames} onClick={() => removeFrame(frames.length - 1)}><ChevronsRight size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="复制当前帧" title="复制当前帧" disabled={!selectedFrame || !canEditFrames} onClick={copySelectedFrame}><Copy size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="在当前帧前插入图片" title="在当前帧前插入图片" disabled={!selectedFrame || !canEditFrames} onClick={() => openFileDialog(null, selectedIndex)}><Plus size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="删除选中帧" title="删除选中帧" disabled={!selectedFrameIndices.size || !canEditFrames} onClick={removeSelectedFrames}><Trash2 size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="倒序" title="倒序" disabled={!canEditFrames} onClick={reverseFrames}><RotateCcw size={15} aria-hidden="true" /></button>
+                    <button className="icon-button" type="button" aria-label="清空帧" title="清空帧" disabled={!canEditFrames} onClick={clearFrames}><Trash2 size={15} aria-hidden="true" /></button>
                   </div>
                 </div>
                 <div className="gif-frame-list" aria-label="GIF 帧列表">
                   {frames.map((frame, index) => (
-                    <div className={`gif-frame-row${selectedFrameIndices.has(index) ? " gif-frame-row-selected" : ""}`} key={frame.id} draggable={!locked} onDragStart={(event) => handleFrameDragStart(event, index)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleFrameDrop(event, index)} onDragEnd={() => { draggedFrameIndexRef.current = null; draggedFrameIndicesRef.current = []; }}>
+                    <div className={`gif-frame-row${selectedFrameIndices.has(index) ? " gif-frame-row-selected" : ""}`} key={frame.id} draggable={canEditFrames} onDragStart={(event) => handleFrameDragStart(event, index)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleFrameDrop(event, index)} onDragEnd={() => { draggedFrameIndexRef.current = null; draggedFrameIndicesRef.current = []; }}>
                       <button className="gif-frame-select" type="button" ref={(element) => { frameButtonRefs.current[frame.id] = element; }} onClick={(event) => selectFrame(index, event)} onKeyDown={(event) => handleFrameKeyDown(event, index)} aria-pressed={selectedFrameIndices.has(index)} aria-label={`选择第 ${index + 1} 帧：${frame.name}`}>
                         <span className="gif-frame-number">{String(index + 1).padStart(2, "0")}</span>
                         <img src={frame.previewUrl} alt="" />
                         <span className="gif-frame-meta"><strong>{frame.name}</strong><small>{frame.width} × {frame.height} · {frame.durationMs} ms</small></span>
                       </button>
                       <div className="gif-frame-actions">
-                        <button className="icon-button" type="button" aria-label={`第 ${index + 1} 帧上移`} title="上移" disabled={!canMoveLeft || selectedIndex !== index} onClick={() => moveFrame(index, -1)}><ArrowUp size={14} aria-hidden="true" /></button>
-                        <button className="icon-button" type="button" aria-label={`第 ${index + 1} 帧下移`} title="下移" disabled={!canMoveRight || selectedIndex !== index} onClick={() => moveFrame(index, 1)}><ArrowDown size={14} aria-hidden="true" /></button>
-                        <button className="icon-button" type="button" aria-label={`更换第 ${index + 1} 帧`} title="更换此帧" onClick={() => openFileDialog(frame.id)}><RotateCcw size={14} aria-hidden="true" /></button>
-                        <button className="icon-button" type="button" aria-label={`移除第 ${index + 1} 帧`} title="移除" onClick={() => removeFrame(index)}><X size={14} aria-hidden="true" /></button>
+                        <button className="icon-button" type="button" aria-label={`第 ${index + 1} 帧上移`} title="上移" disabled={!canEditFrames || !canMoveLeft || selectedIndex !== index} onClick={() => moveFrame(index, -1)}><ArrowUp size={14} aria-hidden="true" /></button>
+                        <button className="icon-button" type="button" aria-label={`第 ${index + 1} 帧下移`} title="下移" disabled={!canEditFrames || !canMoveRight || selectedIndex !== index} onClick={() => moveFrame(index, 1)}><ArrowDown size={14} aria-hidden="true" /></button>
+                        <button className="icon-button" type="button" aria-label={`更换第 ${index + 1} 帧`} title="更换此帧" disabled={!canEditFrames} onClick={() => openFileDialog(frame.id)}><RotateCcw size={14} aria-hidden="true" /></button>
+                        <button className="icon-button" type="button" aria-label={`移除第 ${index + 1} 帧`} title="移除" disabled={!canEditFrames} onClick={() => removeFrame(index)}><X size={14} aria-hidden="true" /></button>
                       </div>
                     </div>
                   ))}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nativeImageFileToGifFile } from "./GifMakerView";
-import { canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifFrameKeyboardTarget, getGifOutputLocationError, getGifSelectionAfterDeletion, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, isVideoFile, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
+import { canEditGifFrames, canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifFrameKeyboardTarget, getGifOutputLocationError, getGifSelectionAfterDeletion, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, isVideoFile, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("converts native image bytes into a browser File without changing the payload", async () => {
@@ -45,6 +45,14 @@ describe("GIF settings layout defaults", () => {
     expect(getGifSelectionAfterDeletion(new Set([1, 2]), 2, 5)).toEqual({ nextIndex: 2, nextSelection: new Set([2]) });
     expect(getGifSelectionAfterDeletion(new Set([3, 4]), 4, 5)).toEqual({ nextIndex: 2, nextSelection: new Set([2]) });
     expect(getGifSelectionAfterDeletion(new Set([0, 1]), 0, 2)).toEqual({ nextIndex: 0, nextSelection: new Set() });
+  });
+
+  it("blocks frame edits for every busy state", () => {
+    expect(canEditGifFrames(false, 0, "ready")).toBe(true);
+    expect(canEditGifFrames(false, 1, "ready")).toBe(false);
+    expect(canEditGifFrames(false, 0, "importing")).toBe(false);
+    expect(canEditGifFrames(false, 0, "exporting")).toBe(false);
+    expect(canEditGifFrames(true, 0, "ready")).toBe(false);
   });
 
   it("starts with the parameter groups folded so the workspace keeps its preview height", () => {
