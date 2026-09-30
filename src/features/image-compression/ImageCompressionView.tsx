@@ -36,6 +36,7 @@ import {
   getCompressionCancelledItemResults,
   getCompressionRetryQueue,
   getCompressionSourcePathError,
+  getCurrentStripSafeValidation,
   mergeCompressionItems,
   mergeCompressionEstimateResult,
   normalizeCompressionOutputFileName,
@@ -208,7 +209,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [itemResults, setItemResults] = useState<CompressionItemResult[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [stripSafeInputValidation, setStripSafeInputValidation] = useState<{ key: string; valid: boolean } | null>(null);
+  const [stripSafeInputValidation, setStripSafeInputValidation] = useState<{ format: CompressionFormat; items: Array<Pick<CompressionItem, "id" | "file">>; valid: boolean } | null>(null);
   const [preview, setPreview] = useState<CompressionPreview | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
@@ -279,17 +280,17 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const actualSavedBytes = resultStats.savedBytes;
   const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
-  const stripSafeValidationKey = useMemo(() => `${format}\u0000${items.map((item) => item.id).join("\u0001")}`, [format, items]);
-  const stripSafeInputVerified = stripSafeInputValidation?.key === stripSafeValidationKey ? stripSafeInputValidation.valid : null;
+  const stripSafeValidationItems = useMemo(() => items.map(({ id, file }) => ({ id, file })), [items]);
+  const stripSafeInputVerified = getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems);
   useEffect(() => {
     let active = true;
     setStripSafeInputValidation(null);
     if (items.length === 0) return () => { active = false; };
     void Promise.all(items.map(async (item) => getStripSafeInputError(new Uint8Array(await item.file.arrayBuffer()), format)))
-      .then((errors) => { if (active) setStripSafeInputValidation({ key: stripSafeValidationKey, valid: errors.every((error) => error === null) }); })
-      .catch(() => { if (active) setStripSafeInputValidation({ key: stripSafeValidationKey, valid: false }); });
+      .then((errors) => { if (active) setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: errors.every((error) => error === null) }); })
+      .catch(() => { if (active) setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: false }); });
     return () => { active = false; };
-  }, [format, items, stripSafeValidationKey]);
+  }, [format, items, stripSafeValidationItems]);
   const stripSafeInputAvailable = stripSafeInputVerified === true;
   useEffect(() => {
     if (metadataPolicy === "stripSafe" && stripSafeInputVerified === false) setMetadataPolicy("strip");
