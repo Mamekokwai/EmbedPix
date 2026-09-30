@@ -958,6 +958,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setLocked(true);
     setError(null);
     setStatus({ kind: "importing", text: `正在提取视频帧 0/${extractionPlan.times.length}…` });
+    const requestId = ++videoImportRequestRef.current;
     const controller = new AbortController();
     videoExtractControllerRef.current = controller;
     try {
@@ -989,6 +990,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         extractedFrames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
         throw error;
       }
+      if (requestId !== videoImportRequestRef.current || controller.signal.aborted) {
+        nextFrames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
+        return;
+      }
       framesRef.current.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
       framesRef.current = nextFrames;
       setFrames(nextFrames);
@@ -999,7 +1004,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setCanvasHeight(outputSize.height);
       setStatus({ kind: "ready", text: `已提取 ${nextFrames.length} 帧，可以预览或导出` });
     } catch (extractError) {
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || requestId !== videoImportRequestRef.current) {
         setError(null);
         setStatus({ kind: "ready", text: "已取消视频抽帧" });
       } else {
@@ -2187,6 +2192,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         : (outputDirectory.trim() || "尚未填写自定义目录");
 
   const selectSourceMode = (mode: GifSourceMode) => {
+    if (mode !== sourceMode) {
+      videoImportRequestRef.current += 1;
+      videoExtractControllerRef.current?.abort();
+    }
     if (mode === "video") setIsPlaying(false);
     setSourceMode(mode);
   };
