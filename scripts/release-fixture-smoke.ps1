@@ -146,6 +146,19 @@ try {
   Expect-Rejection 'provenance release commit format' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
   Set-Utf8NoBomContent $provenancePath $originalProvenance
 
+  $checksumPath = Join-Path $root 'SHA256SUMS.txt'
+  $originalChecksums = Get-Content -Raw -LiteralPath $checksumPath
+  $checksumLines = @(Get-Content -LiteralPath $checksumPath)
+  $checksumLines[0] = ('0' * 64) + $checksumLines[0].Substring(64)
+  Set-Utf8NoBomContent $checksumPath ($checksumLines -join [Environment]::NewLine)
+  Expect-Rejection 'SHA256 checksum mismatch' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  Set-Utf8NoBomContent $checksumPath $originalChecksums
+
+  $firstChecksumLine = (Get-Content -LiteralPath $checksumPath | Select-Object -First 1)
+  Set-Utf8NoBomContent $checksumPath ($originalChecksums.TrimEnd() + [Environment]::NewLine + $firstChecksumLine + [Environment]::NewLine)
+  Expect-Rejection 'duplicate SHA256 asset entry' { Assert-ReleaseAssetContract -Release $release -Root $root -Repository $repository -Tag $tag | Out-Null }
+  Set-Utf8NoBomContent $checksumPath $originalChecksums
+
   $futureManifest = $manifest | ConvertTo-Json -Depth 6 | ConvertFrom-Json
   $futureManifest.pub_date = (Get-Date).ToUniversalTime().AddHours(1).ToString('o')
   Set-Utf8NoBomContent (Join-Path $root 'latest.json') ($futureManifest | ConvertTo-Json -Depth 6)
