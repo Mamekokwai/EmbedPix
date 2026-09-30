@@ -156,6 +156,27 @@ export function formatCompressionBatchSummary(summary: { total: number; succeede
   ];
   return lines.filter((line): line is string => Boolean(line)).join("\n");
 }
+export function createCompressionBatchReport(report: { generatedAt: string; format: CompressionFormat; total: number; succeeded: number; skipped: number; failed: number; processedInputBytes: number; outputBytes: number; savedBytes: number; targetMet: boolean | null; selectedQualities: ReadonlyArray<number>; itemResults: ReadonlyArray<CompressionItemResult> }): string {
+  return JSON.stringify({
+    schemaVersion: 1,
+    generatedAt: report.generatedAt,
+    format: report.format,
+    totals: { total: report.total, succeeded: report.succeeded, skipped: report.skipped, failed: report.failed, processedInputBytes: report.processedInputBytes, outputBytes: report.outputBytes, savedBytes: report.savedBytes, targetMet: report.targetMet, selectedQualities: report.selectedQualities },
+    items: report.itemResults.map((item) => ({
+      fileName: item.fileName.split(/[\\/]/u).pop() ?? item.fileName,
+      status: item.status,
+      reason: item.reason,
+      inputBytes: item.inputBytes,
+      outputBytes: item.outputBytes,
+      savedBytes: item.savedBytes,
+      savingsPercent: item.savingsPercent,
+      candidateCount: item.candidateCount,
+      candidateSearchMs: item.candidateSearchMs,
+      qualityMetrics: item.qualityMetrics,
+      sourceDeleted: item.sourceDeleted,
+    })),
+  }, null, 2);
+}
 export function formatCompressionItemResultStatus(status: CompressionItemResultStatus): string { return status === "completed" ? "已完成" : status === "skipped" ? "已跳过" : "失败"; }
 export interface CompressionItemResultMetrics { inputBytes: number; outputBytes?: number; savedBytes?: number; savingsPercent?: number; }
 function finiteMetric(value: number | undefined, allowNegative = false): number | undefined { return typeof value === "number" && Number.isFinite(value) && (allowNegative || value >= 0) ? value : undefined; }

@@ -23,6 +23,7 @@ import {
   formatCompressionBytes,
   formatCompressionFailureDetails,
   formatCompressionBatchSummary,
+  createCompressionBatchReport,
   formatCompressionEstimateSource,
   formatCompressionItemResultStatus,
   getCompressionItemResultMetrics,
@@ -994,6 +995,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setStatus("error");
     }
   };
+  const downloadBatchReport = () => {
+    const stamp = new Date().toISOString().replace(/[.:]/gu, "-");
+    downloadBlob(new Blob([createCompressionBatchReport({ generatedAt: new Date().toISOString(), format, ...resultStats, itemResults })], { type: "application/json" }), `embedpix-compression-report-${stamp}.json`);
+    setMessage("批处理 JSON 报告已下载");
+    setStatus("ready");
+  };
 
   const openOutputFolder = async (outputPath: string) => {
     try {
@@ -1128,7 +1135,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       </section>
 
       <section className="compression-card compression-result-card" aria-label="压缩结果统计">
-        <div className="compression-failure-heading"><strong>压缩结果</strong><button type="button" className="compression-secondary-button" onClick={() => { void copyBatchSummary(); }} disabled={resultStats.total === 0}>复制批处理摘要</button></div>
+        <div className="compression-failure-heading"><strong>压缩结果</strong><div className="compression-output-buttons"><button type="button" className="compression-secondary-button" onClick={() => { void copyBatchSummary(); }} disabled={resultStats.total === 0}>复制批处理摘要</button><button type="button" className="compression-secondary-button" onClick={downloadBatchReport} disabled={resultStats.total === 0}>下载 JSON 报告</button></div></div>
         <div className="compression-summary-stat"><span>成功</span><strong>{resultStats.succeeded}</strong></div>
         <div className="compression-summary-stat"><span>跳过</span><strong>{resultStats.skipped}</strong></div>
         <div className="compression-summary-stat"><span>失败</span><strong className={resultStats.failed > 0 ? "compression-failure" : undefined}>{resultStats.failed}</strong></div>

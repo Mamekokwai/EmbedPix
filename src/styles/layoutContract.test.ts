@@ -44,6 +44,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("formatCompressionBatchSummary");
     expect(compressionView).toContain("复制批处理摘要");
     expect(compressionView).toContain("disabled={resultStats.total === 0}");
+    expect(compressionView).toContain("下载 JSON 报告");
+    expect(compressionView).toContain("createCompressionBatchReport");
   });
   it("clears stale compression preflight space when inputs or options change", () => {
     expect(compressionView).toContain("setPreflightSpaceBytes(null);");
