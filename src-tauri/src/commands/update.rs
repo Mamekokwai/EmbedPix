@@ -1371,7 +1371,8 @@ mod tests {
     use super::{
         cleanup_download_artifacts, cleanup_pending_install_marker_part,
         clear_pending_install_marker_paths, compare_versions, download_package_with_resume,
-        is_trusted_release_page_url, normalize_version, open_verified_package_file, parse_sha256,
+        is_allowed_redirect_url, is_trusted_release_page_url, normalize_version,
+        open_verified_package_file, parse_sha256,
         pending_install_diagnostic, pending_install_marker_part_path,
         select_trusted_asset_for_target, should_append_partial, signature_url_for_asset,
         validate_asset_url, validate_cached_package_path, validate_update_cache_dir,
@@ -1381,6 +1382,7 @@ mod tests {
     use base64::Engine;
     use sha2::Digest;
     use std::sync::{atomic::AtomicBool, Arc};
+    use reqwest::Url;
 
     #[test]
     fn reports_pending_install_only_when_marker_version_differs() {
@@ -1522,6 +1524,47 @@ mod tests {
         assert_eq!(result.unwrap().0, 4);
         assert_eq!(std::fs::read(&part).unwrap(), b"test");
         server.join().unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_trusted_host_redirect_variants_and_preserves_final_cache() {
+        let version = "0.4.1";
+        let variants = [
+            "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.0.0/EmbedPix_0.4.1_x64-setup.exe",
+            "https://github.com/other-owner/other-repo/releases/download/v0.4.1/EmbedPix_0.4.1_x64-setup.exe",
+            "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.4.1/EmbedPix_0.4.1_x64-setup.exe?download=1",
+            "https://github.com/Mamekokwai/EmbedPix/releases/download/v0.4.1/EmbedPix_0.4.1_x64-setup.exe#fragment",
+        ];
+        for value in variants {
+            let url = Url::parse(value).unwrap();
+            assert!(!is_allowed_redirect_url(&url, version), "accepted {value}");
+        }
+
+        let root = crate::commands::test_temp_dir().join(format!(
+            "embedpix-update-redirect-cleanup-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let package = root.join("package.exe");
+        let signature = root.join("package.exe.sig");
+        let part = root.join("package.exe.part");
+        let signature_part = root.join("package.exe.sig.part");
+        let etag = root.join("package.exe.etag");
+        std::fs::write(&package, b"existing-final").unwrap();
+        std::fs::write(&signature, b"existing-signature").unwrap();
+        std::fs::write(&part, b"redirected-partial").unwrap();
+        std::fs::write(&signature_part, b"redirected-signature-partial").unwrap();
+        std::fs::write(&etag, b"\"redirected\"").unwrap();
+
+        cleanup_download_artifacts(&package, &signature, false, false);
+
+        assert_eq!(std::fs::read(&package).unwrap(), b"existing-final");
+        assert_eq!(std::fs::read(&signature).unwrap(), b"existing-signature");
+        assert!(!part.exists());
+        assert!(!signature_part.exists());
+        assert!(!etag.exists());
         std::fs::remove_dir_all(root).unwrap();
     }
 
