@@ -3927,6 +3927,28 @@ mod tests {
     }
 
     #[test]
+    fn cancelled_candidate_search_stops_before_encoding_and_keeps_terminal_state() {
+        let mut request = path_request(Path::new("cancelled-candidate.webp"));
+        request.input = lossy_webp_input();
+        request.format = CompressionFormat::Webp;
+        request.lossless = false;
+        request.target_bytes = Some(1);
+        request.max_candidates = MAX_CANDIDATES;
+        request.metadata.output_format = "webp".into();
+        request.metadata.lossless = Some(false);
+        let job = test_job("cancelled-candidate-search");
+        job.cancelled.store(true, Ordering::Release);
+
+        let error =
+            choose_encoded_output_with_cancellation(&request, 64, 48, Some(&job)).unwrap_err();
+        assert_eq!(error, "compression cancelled");
+        let progress = job.progress.lock().unwrap().clone();
+        assert_eq!(progress.status, "cancelled");
+        assert_eq!(progress.stage, "cancelled");
+        assert!(progress.output_path.is_none());
+    }
+
+    #[test]
     fn cancelled_preview_slot_acquisition_returns_the_permit_for_reuse() {
         let semaphore = Arc::new(CompressionSemaphore {
             available: Mutex::new(1),
