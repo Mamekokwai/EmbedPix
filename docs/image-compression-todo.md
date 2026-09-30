@@ -27,6 +27,7 @@
 - [x] 门禁统计更新：前端 32 个测试文件 / 386 个测试通过；Rust 270 个库测试 + 4 个 CLI 测试通过；desktop smoke 图片导出测试已增至 46 项。
 - [x] 本轮交互与诊断收尾：压缩进度条补齐 `role=progressbar` 语义；GIF 进度帧数执行边界 clamp；签名预检清理失败显示残留目录路径。
 - [x] 当前门禁统计确认：前端 32 个测试文件 / 386 个测试通过；Rust 270 个库测试 + 4 个 CLI 测试通过；图片导出 smoke 46 项；release manifest 版本漂移拒绝与签名清理路径诊断均已验证。
+- [x] 发布收尾：GIF/视频 GIF 导出进度补齐 `role=progressbar` 语义；release notes 版本漂移拒绝用例已完成；本轮 release fixture 与 desktop smoke 均通过。
 - 本轮新增 `compressionGateway` 四入口 envelope 矩阵回归：覆盖 PNG/JPEG/静态 WebP、格式专属字段不泄漏，以及非法组合在 IPC 前拒绝。
 - 本轮完成预检临时空间预算状态修复：参数、输入或选中项变化时清除旧预算，任务完成后保留最近一次有效预算。
 - 本轮新增 updater 签名提交/安装包提交边界清理回归：验证临时 `.part`、签名临时文件和 `.etag` 清理，以及既有/已提交缓存的保留或失败清理语义；真实异步 rename 间隙尚未通过 hook 注入验证，未扩大覆盖声明。
