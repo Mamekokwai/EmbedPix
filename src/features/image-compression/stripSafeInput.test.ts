@@ -19,6 +19,13 @@ describe("stripSafe input validation", () => {
     expect(getStripSafeInputError(webp("VP8 ", "VP8L"), "webp")).toContain("只能包含一个");
   });
 
+  it("requires PNG and JPEG signatures instead of trusting file names", () => {
+    expect(getStripSafeInputError(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "png")).toBeNull();
+    expect(getStripSafeInputError(new Uint8Array([0xff, 0xd8, 0xff]), "jpg")).toBeNull();
+    expect(getStripSafeInputError(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "jpg")).toContain("匹配");
+    expect(getStripSafeInputError(new Uint8Array([0xff, 0xd8, 0xff]), "png")).toContain("匹配");
+  });
+
   it("disables a mixed-format queue for safe cleanup", () => {
     const queue = [webp("VP8 "), new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])];
     expect(queue.every((input) => getStripSafeInputError(input, "webp") === null)).toBe(false);

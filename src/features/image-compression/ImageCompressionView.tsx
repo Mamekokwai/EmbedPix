@@ -222,7 +222,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [itemResults, setItemResults] = useState<CompressionItemResult[]>([]);
   const [skipReasons, setSkipReasons] = useState<string[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [stripSafeWebpVerified, setStripSafeWebpVerified] = useState(false);
+  const [stripSafeInputVerified, setStripSafeInputVerified] = useState(false);
   const [preview, setPreview] = useState<CompressionPreview | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
@@ -293,25 +293,16 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const actualSavedBytes = resultStats.savedBytes;
   const actualSavingsPercent = resultStats.processedInputBytes > 0 ? (actualSavedBytes / resultStats.processedInputBytes) * 100 : 0;
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
-  const stripSafeExtensionMatch = items.length > 0 && items.every((item) => {
-    const extension = item.file.name.split(".").pop()?.toLowerCase();
-    if (format === "png") return extension === "png" || item.file.type === "image/png";
-    if (format === "jpg") return extension === "jpg" || extension === "jpeg" || item.file.type === "image/jpeg";
-    return extension === "webp" && (item.file.type === "image/webp" || item.file.type === "");
-  });
   useEffect(() => {
     let active = true;
-    setStripSafeWebpVerified(false);
-    if (format !== "webp" || !stripSafeExtensionMatch) {
-      setStripSafeWebpVerified(format !== "webp" && stripSafeExtensionMatch);
-      return () => { active = false; };
-    }
-    void Promise.all(items.map(async (item) => getStripSafeInputError(new Uint8Array(await item.file.arrayBuffer()), "webp")))
-      .then((errors) => { if (active) setStripSafeWebpVerified(errors.every((error) => error === null)); })
-      .catch(() => { if (active) setStripSafeWebpVerified(false); });
+    setStripSafeInputVerified(false);
+    if (items.length === 0) return () => { active = false; };
+    void Promise.all(items.map(async (item) => getStripSafeInputError(new Uint8Array(await item.file.arrayBuffer()), format)))
+      .then((errors) => { if (active) setStripSafeInputVerified(errors.every((error) => error === null)); })
+      .catch(() => { if (active) setStripSafeInputVerified(false); });
     return () => { active = false; };
-  }, [format, items, stripSafeExtensionMatch]);
-  const stripSafeInputAvailable = stripSafeExtensionMatch && (format !== "webp" || stripSafeWebpVerified);
+  }, [format, items]);
+  const stripSafeInputAvailable = stripSafeInputVerified;
   useEffect(() => {
     if (metadataPolicy === "stripSafe" && !stripSafeInputAvailable) setMetadataPolicy("strip");
   }, [metadataPolicy, stripSafeInputAvailable]);
