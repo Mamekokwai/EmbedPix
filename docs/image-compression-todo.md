@@ -35,6 +35,8 @@
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
 - [x] GIF 页头响应式修复已完成（commit `6748493`）：320–620px 宽度支持标题与控件换行且控件保持可聚焦，宽屏布局不变；前端验收统计为 32 个测试文件 / 388 个测试通过。
+- [x] 本轮门禁复核：桌面 smoke、compression CLI smoke、release dependency smoke、GIF benchmark 8/8、GIF quality benchmark 3/3 均通过；前端统计保持 32 个测试文件 / 388 个测试通过。
+- [~] 发布资产状态保持谨慎：未安装/未签名的真实 x64 或 ARM64 发布资产不标记为完成，仍需对应签名资产与安装/启动验收。
 - [x] 本轮用户流程审查：GIF、视频 GIF 与图片转换流程未发现可在现有依赖和设备条件下安全补齐的低风险缺口。
 - [~] 发布环境边界：发布链路本地门禁已覆盖；ARM64 安装/启动/卸载与 macOS/Linux 自动更新仍需真实签名资产或对应设备，暂无法由本地 fixture 替代。
 - 本轮新增 `compressionGateway` 四入口 envelope 矩阵回归：覆盖 PNG/JPEG/静态 WebP、格式专属字段不泄漏，以及非法组合在 IPC 前拒绝。
