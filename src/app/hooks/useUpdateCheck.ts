@@ -38,6 +38,11 @@ export function isNetworkAvailable(): boolean {
   return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
+export function isUpdateDownloadCancellation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return message.includes("更新下载已取消");
+}
+
 export function formatUpdateError(error: unknown, stage: UpdateErrorStage): string {
   console.error(`[update] ${stage} operation failed`, error);
   const detail = error instanceof Error
@@ -277,6 +282,20 @@ export function useUpdateCheck() {
       setState(downloaded);
       return downloaded;
     } catch (error) {
+      const latestState = stateRef.current as UpdateCheckState;
+      if (latestState.status === "cancelled") return latestState;
+      if (isUpdateDownloadCancellation(error)) {
+        const cancelled: UpdateCheckState = {
+          ...downloading,
+          status: "cancelled",
+          error: null,
+          errorStage: null,
+          downloadPath: null,
+        };
+        stateRef.current = cancelled;
+        setState(cancelled);
+        return cancelled;
+      }
       const failed: UpdateCheckState = { ...downloading, status: "error", error: formatUpdateError(error, "download"), errorStage: "download", downloadPath: null };
       stateRef.current = failed;
       setState(failed);
