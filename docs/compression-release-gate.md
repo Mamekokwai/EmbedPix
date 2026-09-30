@@ -1,6 +1,6 @@
 # 图片压缩发布门禁
 
-本文档只描述发布/验收侧契约。当前压缩核心是 Tauri 原生命令，不是 `embedpix-cli` 的 `op:"compress"`；CI 不虚构不存在的 CLI 操作。仓库变量 `EMBEDPIX_COMPRESSION_CLI_SMOKE` 设为 `true` 后，Windows CI 会切换到强制原生压缩契约检查。
+本文档只描述发布/验收侧契约。当前压缩核心是 Tauri 原生命令，不是 `embedpix-cli` 的 `op:"compress"`；CI 不虚构不存在的 CLI 操作。`npm run check:compression-cli-smoke` 默认启用强制原生压缩契约检查，避免契约缺失时仅以 warning 通过；Windows CI 的变量 `EMBEDPIX_COMPRESSION_CLI_SMOKE` 仍控制工作流内是否追加该强制检查。
 
 ## 当前可执行门禁
 
