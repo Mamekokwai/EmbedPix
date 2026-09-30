@@ -168,6 +168,12 @@ export function formatCompressionProgressSummary(progress: { current: number; to
   const state = progress.status === "busy" ? "处理中" : progress.status === "cancelled" ? "已取消" : progress.status === "error" ? "存在失败项" : progress.status === "success" ? "已完成" : "等待开始";
   return `${state} · ${current}/${total} 项 · 成功项输入 ${formatCompressionBytes(progress.processedInputBytes)} · 输出 ${formatCompressionBytes(progress.outputBytes)}`;
 }
+function redactCompressionDiagnostic(value: string | undefined): string | undefined {
+  return value
+    ?.replace(/[A-Za-z]:[\\/](?:[^\\/\s]+[\\/])*[^\\/\s]+/gu, "<path>")
+    .replace(/\\\\[^\\/\s]+(?:[\\/][^\\/\s]+)+/gu, "<path>")
+    .replace(/\/(?:[^\/\s]+\/)+[^\/\s]+/gu, "<path>");
+}
 export function createCompressionBatchReport(report: { generatedAt: string; format: CompressionFormat; total: number; succeeded: number; skipped: number; failed: number; processedInputBytes: number; outputBytes: number; savedBytes: number; targetMet: boolean | null; selectedQualities: ReadonlyArray<number>; itemResults: ReadonlyArray<CompressionItemResult> }): string {
   return JSON.stringify({
     schemaVersion: 1,
@@ -178,7 +184,7 @@ export function createCompressionBatchReport(report: { generatedAt: string; form
       fileName: item.fileName.split(/[\\/]/u).pop() ?? item.fileName,
       status: item.status,
       reason: item.reason,
-      nativeReason: item.nativeReason,
+      nativeReason: redactCompressionDiagnostic(item.nativeReason),
       inputBytes: item.inputBytes,
       outputBytes: item.outputBytes,
       savedBytes: item.savedBytes,
