@@ -15,6 +15,8 @@ export interface CompressionPresetValues {
   pngOptimizeAlpha?: boolean;
   webpNearLossless: number | null;
   jpegBackground: string;
+  jpegProgressive?: boolean;
+  jpegOptimizeHuffman?: boolean;
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
@@ -110,6 +112,8 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     pngOptimizeAlpha: record.pngOptimizeAlpha === true,
     webpNearLossless,
     jpegBackground,
+    jpegProgressive: record.jpegProgressive === true,
+    jpegOptimizeHuffman: record.jpegOptimizeHuffman === true,
     pngOptimizationLevel: integerValue(record.pngOptimizationLevel, 0, 6, "PNG 优化级别", index),
     targetSizeEnabled,
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
@@ -136,6 +140,7 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   if (values.webpNearLossless !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 近无损等级仅适用于无损 WebP。");
   if (values.maxRgbMae !== "" && (values.format !== "webp" || values.lossless || !values.targetSizeEnabled)) throw new Error("RGB MAE 阈值仅适用于启用目标体积的有损 WebP。");
   if (!/^#[0-9a-f]{6}$/iu.test(values.jpegBackground.trim())) throw new Error("JPEG 透明背景必须是 #RRGGBB 颜色。");
+  if ((values.jpegProgressive || values.jpegOptimizeHuffman) && values.format !== "jpg") throw new Error("JPEG 高级编码选项仅适用于 JPEG 输出。");
   if (!Number.isInteger(values.maxCandidates) || values.maxCandidates < COMPRESSION_MAX_CANDIDATES_MIN || values.maxCandidates > COMPRESSION_MAX_CANDIDATES_MAX) throw new Error(`候选搜索次数必须在 ${COMPRESSION_MAX_CANDIDATES_MIN} 到 ${COMPRESSION_MAX_CANDIDATES_MAX} 之间。`);
   if (!Number.isInteger(values.maxInputMiB) || values.maxInputMiB < 1 || values.maxInputMiB > 32) throw new Error("单文件输入上限必须在 1 到 32 MiB 之间。");
   return { id: createId(), name: trimmedName, values: { ...values }, createdAt: new Date().toISOString() };

@@ -28,6 +28,8 @@ export interface CompressionEnvelopeRequest {
   deleteSource?: boolean;
   jpegQuality: number;
   jpegBackground?: string;
+  jpegProgressive?: boolean;
+  jpegOptimizeHuffman?: boolean;
   webpMethod?: number;
   webpAlphaQuality?: number;
   webpPass?: number;
@@ -44,7 +46,7 @@ export interface CompressionEnvelopeRequest {
   jobId?: string;
 }
 
-export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; lossless?: boolean; compressionMode?: "lossless" | "lossy"; compressionEngine?: "oxipng" | "image-jpeg" | "libwebp"; requiredSpaceBytes?: number | null; }
+export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; lossless?: boolean; compressionMode?: "lossless" | "lossy"; compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp"; requiredSpaceBytes?: number | null; }
 export type CompressionResultStatus = "completed" | "skipped";
 export interface CompressionResult {
   jobId: string;
@@ -60,7 +62,7 @@ export interface CompressionResult {
   format: string;
   lossless: boolean;
   compressionMode?: "lossless" | "lossy";
-  compressionEngine?: "oxipng" | "image-jpeg" | "libwebp";
+  compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
   metadataPolicy: MetadataPolicy;
   qualityMetrics?: CompressionQualityMetrics;
   sourceDeleted?: boolean;
@@ -80,7 +82,7 @@ export interface CompressionPreview {
   outputBytes: number;
   lossless: boolean;
   compressionMode?: "lossless" | "lossy";
-  compressionEngine?: "oxipng" | "image-jpeg" | "libwebp";
+  compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
   metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;
@@ -102,7 +104,7 @@ export interface CompressionEstimate {
   format: string;
   lossless: boolean;
   compressionMode?: "lossless" | "lossy";
-  compressionEngine?: "oxipng" | "image-jpeg" | "libwebp";
+  compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
   metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;
@@ -122,6 +124,8 @@ export interface CompressionEstimateRequest {
   outputFormat: Exclude<CompressionFormat, "original">;
   jpegQuality: number;
   jpegBackground?: string;
+  jpegProgressive?: boolean;
+  jpegOptimizeHuffman?: boolean;
   webpMethod?: number;
   webpAlphaQuality?: number;
   webpPass?: number;
@@ -162,6 +166,8 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.deleteSource ? { deleteSource: true } : {}),
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
     ...(request.outputFormat === "jpg" && request.jpegBackground !== undefined ? { jpegBackground: request.jpegBackground } : {}),
+    ...(request.outputFormat === "jpg" && request.jpegProgressive === true ? { jpegProgressive: true } : {}),
+    ...(request.outputFormat === "jpg" && request.jpegOptimizeHuffman === true ? { jpegOptimizeHuffman: true } : {}),
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
     ...(request.outputFormat === "png" ? { pngOptimizeAlpha: request.pngOptimizeAlpha === true } : {}),
     ...(request.outputFormat === "webp" && !request.lossless && request.webpAlphaQuality !== undefined ? { webpAlphaQuality: request.webpAlphaQuality } : {}),
@@ -196,6 +202,7 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
   if (request.webpPass !== undefined && (!Number.isInteger(request.webpPass) || request.webpPass < 1 || request.webpPass > 10)) throw new Error("webpPass 必须在 1 到 10 之间。");
   if (request.webpPass !== undefined && (request.outputFormat !== "webp" || request.lossless)) throw new Error("webpPass 仅支持有损 WebP。");
   if (request.jpegBackground !== undefined && (!/^#[0-9a-f]{6}$/iu.test(request.jpegBackground.trim()) || request.outputFormat !== "jpg")) throw new Error("jpegBackground 必须是 JPEG 输出使用的 #RRGGBB 颜色。");
+  if ((request.jpegProgressive === true || request.jpegOptimizeHuffman === true) && request.outputFormat !== "jpg") throw new Error("jpegProgressive 和 jpegOptimizeHuffman 仅支持 JPEG 输出。");
   if (request.webpNearLossless !== undefined && (!Number.isInteger(request.webpNearLossless) || request.webpNearLossless < 1 || request.webpNearLossless > 99)) throw new Error("webpNearLossless 必须在 1 到 99 之间。");
   if (request.webpNearLossless !== undefined && (request.outputFormat !== "webp" || !request.lossless)) throw new Error("webpNearLossless 仅支持无损 WebP。");
   if (request.autoSequence && request.overwriteExisting) throw new Error("自动序号不能与覆盖同名同时启用。");
@@ -241,6 +248,8 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     outputFormat: request.outputFormat,
     ...(request.outputFormat === "jpg" || (request.outputFormat === "webp" && !request.lossless) ? { jpegQuality: request.jpegQuality } : {}),
     ...(request.outputFormat === "jpg" && request.jpegBackground !== undefined ? { jpegBackground: request.jpegBackground } : {}),
+    ...(request.outputFormat === "jpg" && request.jpegProgressive === true ? { jpegProgressive: true } : {}),
+    ...(request.outputFormat === "jpg" && request.jpegOptimizeHuffman === true ? { jpegOptimizeHuffman: true } : {}),
     ...(request.webpMethod !== undefined ? { webpMethod: request.webpMethod } : {}),
     ...(request.outputFormat === "png" ? { pngOptimizeAlpha: request.pngOptimizeAlpha === true } : {}),
     ...(request.outputFormat === "webp" && !request.lossless && request.webpAlphaQuality !== undefined ? { webpAlphaQuality: request.webpAlphaQuality } : {}),
@@ -294,6 +303,8 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     deleteSource: options.deleteSource ?? false,
     jpegQuality: options.quality,
     jpegBackground: options.jpegBackground,
+    jpegProgressive: options.format === "jpg" ? options.jpegProgressive : undefined,
+    jpegOptimizeHuffman: options.format === "jpg" ? options.jpegOptimizeHuffman : undefined,
     webpMethod: options.webpMethod,
     webpAlphaQuality: options.webpAlphaQuality,
     webpPass: options.webpPass,

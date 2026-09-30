@@ -96,6 +96,15 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, jpegBackground: "#123456" })).toThrow("JPEG 输出");
   });
 
+  it("serializes JPEG progressive and optimized Huffman options only for JPEG", () => {
+    const encoded = encodeCompressionEnvelope({ ...request, outputFormat: "jpg", lossless: false, jpegProgressive: true, jpegOptimizeHuffman: true });
+    const metadataLength = new DataView(encoded.buffer).getUint32(4, true);
+    const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + metadataLength))) as Record<string, unknown>;
+    expect(metadata).toMatchObject({ jpegProgressive: true, jpegOptimizeHuffman: true });
+    expect(() => encodeCompressionEnvelope({ ...request, jpegProgressive: true })).toThrow("JPEG 输出");
+    expect(() => encodeCompressionEnvelope({ ...request, outputFormat: "png", jpegOptimizeHuffman: true })).toThrow("JPEG 输出");
+  });
+
   it("normalizes lossless mode by output format when creating requests", () => {
     const file = { path: "C:/icon.png", fileName: "icon.png", data: [1, 2, 3] };
     const base = { quality: 64, pngOptimizationLevel: 2, metadataPolicy: "strip" as const, outputLocation: "source" as const, overwrite: false };

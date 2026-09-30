@@ -84,6 +84,7 @@ export function formatCompressionError(error: string): string {
     "jpegQuality must be between": "JPEG 质量必须在",
     "jpegBackground must be a #RRGGBB color": "JPEG 背景必须是 #RRGGBB 颜色",
     "jpegBackground is only supported for JPEG output": "jpegBackground 仅支持 JPEG 输出",
+    "jpegProgressive and jpegOptimizeHuffman are only supported for JPEG output": "JPEG 渐进式与优化 Huffman 仅支持 JPEG 输出",
     "maxOutputBytes must be between": "最大输出体积必须在",
     "maxInputBytes must be between": "最大输入体积必须在",
     "maxCandidates must be between": "最大候选次数必须在",

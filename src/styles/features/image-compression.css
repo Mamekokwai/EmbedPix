@@ -121,6 +121,8 @@
 .compression-check strong { color: var(--qp-text-primary); font-weight: 600; }
 .compression-check-danger strong { color: var(--qp-danger, #df6a6a); }
 .compression-check small { color: var(--qp-text-tertiary); font-size: 11px; }
+.compression-option-group { display: grid; gap: 8px; padding: 10px 0 2px; border-top: 1px solid color-mix(in srgb, var(--qp-border) 60%, transparent); }
+.compression-option-group-title { color: var(--qp-text-secondary); font-size: 12px; font-weight: 600; }
 .compression-summary-card { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 14px; padding: 14px 18px; }
 .compression-result-card { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 10px; padding: 14px 18px; }
 .compression-summary-stat { display: grid; gap: 5px; min-width: 100px; }

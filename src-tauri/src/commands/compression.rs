@@ -15,6 +15,7 @@ use image::{
     codecs::jpeg::JpegEncoder, io::Reader as ImageReader, DynamicImage, GenericImageView,
     ImageBuffer, ImageFormat, Rgb, RgbImage,
 };
+use jpeg_encoder::{ColorType as JpegColorType, Encoder as RustJpegEncoder};
 use serde::{Deserialize, Serialize};
 use tauri::{
     ipc::{InvokeBody, Request},
@@ -186,6 +187,7 @@ impl CompressionMode {
 enum CompressionEngine {
     OxiPng,
     ImageJpeg,
+    RustJpeg,
     LibWebp,
 }
 
@@ -202,6 +204,7 @@ impl CompressionEngine {
         match self {
             Self::OxiPng => "oxipng",
             Self::ImageJpeg => "image-jpeg",
+            Self::RustJpeg => "jpeg-encoder",
             Self::LibWebp => "libwebp",
         }
     }
@@ -244,6 +247,19 @@ fn validate_compression_metadata_policy(policy: MetadataPolicy) -> Result<(), St
 fn validate_png_optimize_alpha(enabled: bool, format: CompressionFormat) -> Result<(), String> {
     if enabled && format != CompressionFormat::Png {
         return Err("pngOptimizeAlpha is only supported for PNG output; it may change RGB values of fully transparent pixels".into());
+    }
+    Ok(())
+}
+
+fn validate_jpeg_options(
+    progressive: bool,
+    optimize_huffman: bool,
+    format: CompressionFormat,
+) -> Result<(), String> {
+    if (progressive || optimize_huffman) && format != CompressionFormat::Jpeg {
+        return Err(
+            "jpegProgressive and jpegOptimizeHuffman are only supported for JPEG output".into(),
+        );
     }
     Ok(())
 }
@@ -443,6 +459,10 @@ struct CompressionMetadata {
     #[serde(default)]
     jpeg_background: Option<String>,
     #[serde(default)]
+    jpeg_progressive: bool,
+    #[serde(default)]
+    jpeg_optimize_huffman: bool,
+    #[serde(default)]
     webp_method: Option<u8>,
     #[serde(default)]
     webp_alpha_quality: Option<u8>,
@@ -484,6 +504,10 @@ struct CompressionEstimateMetadata {
     #[serde(default)]
     jpeg_background: Option<String>,
     #[serde(default)]
+    jpeg_progressive: bool,
+    #[serde(default)]
+    jpeg_optimize_huffman: bool,
+    #[serde(default)]
     webp_method: Option<u8>,
     #[serde(default)]
     webp_alpha_quality: Option<u8>,
@@ -521,6 +545,31 @@ struct CompressionRequest {
     max_candidates: usize,
     png_optimization_level: u8,
     png_optimize_alpha: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct JpegEncodingOptions {
+    progressive: bool,
+    optimize_huffman: bool,
+}
+
+impl CompressionRequest {
+    fn jpeg_options(&self) -> JpegEncodingOptions {
+        JpegEncodingOptions {
+            progressive: self.metadata.jpeg_progressive,
+            optimize_huffman: self.metadata.jpeg_optimize_huffman,
+        }
+    }
+
+    fn compression_engine(&self) -> CompressionEngine {
+        if self.format == CompressionFormat::Jpeg
+            && (self.metadata.jpeg_progressive || self.metadata.jpeg_optimize_huffman)
+        {
+            CompressionEngine::RustJpeg
+        } else {
+            CompressionEngine::for_format(self.format)
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -827,7 +876,7 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
         overwrites_existing: output_path.exists(),
         lossless: request.lossless,
         compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
-        compression_engine: CompressionEngine::for_format(request.format).as_str(),
+        compression_engine: request.compression_engine().as_str(),
         output_path: output_path.to_string_lossy().into_owned(),
         required_space_bytes,
     })
@@ -1101,7 +1150,7 @@ fn run_compression(
             format: request.format.name().into(),
             lossless: request.lossless,
             compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
-            compression_engine: CompressionEngine::for_format(request.format).as_str(),
+            compression_engine: request.compression_engine().as_str(),
             metadata_policy: request.metadata.metadata_policy.as_str(),
             source_deleted: false,
             target_bytes: request.target_bytes,
@@ -1154,7 +1203,7 @@ fn run_compression(
         format: request.format.name().into(),
         lossless: request.lossless,
         compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
-        compression_engine: CompressionEngine::for_format(request.format).as_str(),
+        compression_engine: request.compression_engine().as_str(),
         metadata_policy: request.metadata.metadata_policy.as_str(),
         source_deleted: request.metadata.delete_source,
         target_bytes: request.target_bytes,
@@ -1388,6 +1437,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
             request.metadata.metadata_policy,
+            request.jpeg_options(),
         )?;
         return Ok(EncodedSelection {
             bytes,
@@ -1419,6 +1469,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
             request.metadata.metadata_policy,
+            request.jpeg_options(),
         )?;
         return Ok(EncodedSelection {
             target_met: (bytes.len() as u64) <= target_bytes,
@@ -1482,6 +1533,7 @@ fn choose_encoded_output_with_cancellation(
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
             request.metadata.metadata_policy,
+            request.jpeg_options(),
         )?;
         if let Some(job) = job {
             update_progress_bytes(job, None, Some(bytes.len() as u64));
@@ -1582,6 +1634,7 @@ fn choose_webp_output_with_rgb_mae(
             request.metadata.webp_pass,
             request.metadata.webp_near_lossless,
             request.metadata.metadata_policy,
+            request.jpeg_options(),
         )?;
         if let Some(job) = job {
             update_progress_bytes(job, None, Some(bytes.len() as u64));
@@ -1667,6 +1720,7 @@ fn encode_and_verify(
     webp_pass: Option<u8>,
     webp_near_lossless: Option<u8>,
     metadata_policy: MetadataPolicy,
+    jpeg_options: JpegEncodingOptions,
 ) -> Result<Vec<u8>, String> {
     let bytes = encode_image_with_webp_method_alpha(
         input,
@@ -1681,6 +1735,7 @@ fn encode_and_verify(
         webp_pass,
         webp_near_lossless,
         metadata_policy,
+        jpeg_options,
     )?;
     if bytes.len() > MAX_OUTPUT_BYTES {
         return Err("compressed output exceeds the 128 MiB limit".into());
@@ -1774,7 +1829,7 @@ fn run_preview_core(
         output_bytes,
         lossless: request.lossless,
         compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
-        compression_engine: CompressionEngine::for_format(request.format).as_str(),
+        compression_engine: request.compression_engine().as_str(),
         metadata_policy: request.metadata.metadata_policy.as_str(),
         status: if skipped_reason.is_some() {
             "skipped"
@@ -1896,7 +1951,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         format: request.format.name().into(),
         lossless: request.lossless,
         compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
-        compression_engine: CompressionEngine::for_format(request.format).as_str(),
+        compression_engine: request.compression_engine().as_str(),
         metadata_policy: request.metadata.metadata_policy.as_str(),
         status: if skipped_reason.is_some() {
             "skipped".into()
@@ -1973,6 +2028,7 @@ fn encode_image_with_webp_method(
         webp_pass,
         webp_near_lossless,
         MetadataPolicy::Strip,
+        JpegEncodingOptions::default(),
     )
 }
 
@@ -1990,6 +2046,7 @@ fn encode_image_with_webp_method_alpha(
     webp_pass: Option<u8>,
     webp_near_lossless: Option<u8>,
     metadata_policy: MetadataPolicy,
+    jpeg_options: JpegEncodingOptions,
 ) -> Result<Vec<u8>, String> {
     let webp_strip_safe =
         format == CompressionFormat::Webp && metadata_policy == MetadataPolicy::StripSafe;
@@ -2017,9 +2074,22 @@ fn encode_image_with_webp_method_alpha(
             } else {
                 image.to_rgb8()
             };
-            JpegEncoder::new_with_quality(&mut output, quality)
-                .encode_image(&rgb)
-                .map_err(|error| format!("failed to encode jpeg: {error}"))?;
+            if jpeg_options.progressive || jpeg_options.optimize_huffman {
+                let width = u16::try_from(rgb.width())
+                    .map_err(|_| "jpeg width exceeds encoder limit".to_string())?;
+                let height = u16::try_from(rgb.height())
+                    .map_err(|_| "jpeg height exceeds encoder limit".to_string())?;
+                let mut encoder = RustJpegEncoder::new(&mut output, quality);
+                encoder.set_progressive(jpeg_options.progressive);
+                encoder.set_optimized_huffman_tables(jpeg_options.optimize_huffman);
+                encoder
+                    .encode(rgb.as_raw(), width, height, JpegColorType::Rgb)
+                    .map_err(|error| format!("failed to encode jpeg: {error}"))?;
+            } else {
+                JpegEncoder::new_with_quality(&mut output, quality)
+                    .encode_image(&rgb)
+                    .map_err(|error| format!("failed to encode jpeg: {error}"))?;
+            }
             if let Some(profile) = jpeg_icc_profile {
                 output.bytes = inject_jpeg_icc_profile(&output.bytes, &profile)?;
             }
@@ -2284,6 +2354,11 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
         return Err("pngOptimizationLevel must be between 0 and 6".into());
     }
     validate_png_optimize_alpha(metadata.png_optimize_alpha, format)?;
+    validate_jpeg_options(
+        metadata.jpeg_progressive,
+        metadata.jpeg_optimize_huffman,
+        format,
+    )?;
     validate_webp_method(metadata.webp_method, format, lossless)?;
     validate_webp_alpha_quality(metadata.webp_alpha_quality, format, lossless)?;
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
@@ -2413,6 +2488,11 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
         return Err("pngOptimizationLevel must be between 0 and 6".into());
     }
     validate_png_optimize_alpha(metadata.png_optimize_alpha, format)?;
+    validate_jpeg_options(
+        metadata.jpeg_progressive,
+        metadata.jpeg_optimize_huffman,
+        format,
+    )?;
     validate_webp_method(metadata.webp_method, format, lossless)?;
     validate_webp_alpha_quality(metadata.webp_alpha_quality, format, lossless)?;
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
@@ -2446,6 +2526,8 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             auto_rename: false,
             jpeg_quality: metadata.jpeg_quality,
             jpeg_background: metadata.jpeg_background,
+            jpeg_progressive: metadata.jpeg_progressive,
+            jpeg_optimize_huffman: metadata.jpeg_optimize_huffman,
             webp_method: metadata.webp_method,
             webp_alpha_quality: metadata.webp_alpha_quality,
             webp_pass: metadata.webp_pass,
@@ -3131,6 +3213,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: None,
                 jpeg_background: None,
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: None,
                 webp_alpha_quality: None,
                 webp_pass: None,
@@ -3291,6 +3375,7 @@ mod tests {
             None,
             None,
             MetadataPolicy::StripSafe,
+            JpegEncodingOptions::default(),
         )
         .unwrap();
         assert_eq!(decode_image(&output).unwrap().dimensions(), (2, 2));
@@ -3332,6 +3417,7 @@ mod tests {
             None,
             None,
             MetadataPolicy::Strip,
+            JpegEncodingOptions::default(),
         )
         .unwrap();
         assert_eq!(decode_image(&output).unwrap().dimensions(), (3, 2));
@@ -3353,6 +3439,7 @@ mod tests {
             None,
             None,
             MetadataPolicy::StripSafe,
+            JpegEncodingOptions::default(),
         )
         .unwrap();
         assert_eq!(decode_image(&output).unwrap().dimensions(), (2, 2));
@@ -3380,6 +3467,7 @@ mod tests {
             None,
             None,
             MetadataPolicy::StripSafe,
+            JpegEncodingOptions::default(),
         )
         .unwrap_err();
         assert!(error.contains("strip-safe optimize png") || error.contains("decode"));
@@ -3452,6 +3540,7 @@ mod tests {
             None,
             None,
             MetadataPolicy::StripSafe,
+            JpegEncodingOptions::default(),
         )
         .unwrap();
         let decoded = decode_image(&output).unwrap().to_rgba8();
@@ -3528,6 +3617,7 @@ mod tests {
                 None,
                 None,
                 MetadataPolicy::Strip,
+                JpegEncodingOptions::default(),
             )
             .unwrap();
             let decoded = decode_image(&output).unwrap();
@@ -3565,6 +3655,70 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_advanced_options_emit_progressive_and_optimized_outputs() {
+        let progressive = encode_and_verify(
+            &png_input(),
+            CompressionFormat::Jpeg,
+            82,
+            2,
+            false,
+            2,
+            2,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            MetadataPolicy::Strip,
+            JpegEncodingOptions {
+                progressive: true,
+                optimize_huffman: false,
+            },
+        )
+        .unwrap();
+        let progressive_markers = jpeg_sof_markers(&progressive);
+        assert!(progressive_markers.contains(&0xc2));
+        assert!(!progressive_markers.contains(&0xc0));
+        assert!(decode_image(&progressive).is_ok());
+
+        let optimized = encode_and_verify(
+            &png_input(),
+            CompressionFormat::Jpeg,
+            82,
+            2,
+            false,
+            2,
+            2,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            MetadataPolicy::Strip,
+            JpegEncodingOptions {
+                progressive: false,
+                optimize_huffman: true,
+            },
+        )
+        .unwrap();
+        assert!(jpeg_sof_markers(&optimized).contains(&0xc0));
+        assert!(decode_image(&optimized).is_ok());
+        assert_ne!(
+            optimized,
+            encode_image(&png_input(), CompressionFormat::Jpeg, 82, 2).unwrap()
+        );
+    }
+
+    #[test]
+    fn jpeg_advanced_options_are_jpeg_only() {
+        assert!(validate_jpeg_options(true, false, CompressionFormat::Png).is_err());
+        assert!(validate_jpeg_options(false, true, CompressionFormat::Webp).is_err());
+        assert!(validate_jpeg_options(true, true, CompressionFormat::Jpeg).is_ok());
+    }
+
+    #[test]
     fn jpeg_strip_safe_reassembles_icc_and_removes_private_metadata() {
         let (input, profile) = jpeg_with_metadata_segments();
         let output = encode_and_verify(
@@ -3582,6 +3736,7 @@ mod tests {
             None,
             None,
             MetadataPolicy::StripSafe,
+            JpegEncodingOptions::default(),
         )
         .unwrap();
         assert_eq!(&output[..3], &[0xff, 0xd8, 0xff]);
@@ -3611,6 +3766,7 @@ mod tests {
             None,
             None,
             MetadataPolicy::StripSafe,
+            JpegEncodingOptions::default(),
         )
         .unwrap_err();
         assert!(error.contains("stripSafe JPEG") || error.contains("segment length"));
@@ -3680,6 +3836,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: Some(80),
                 jpeg_background: Some("#123456".into()),
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: None,
                 webp_alpha_quality: None,
                 webp_pass: None,
@@ -4141,6 +4299,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: None,
                 jpeg_background: None,
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: None,
                 webp_alpha_quality: None,
                 webp_pass: None,
@@ -4662,6 +4822,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: None,
                 jpeg_background: None,
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: None,
                 webp_alpha_quality: None,
                 webp_pass: None,
@@ -4767,6 +4929,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: None,
                 jpeg_background: None,
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: None,
                 webp_alpha_quality: None,
                 webp_pass: None,
@@ -5421,6 +5585,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: Some(100),
                 jpeg_background: None,
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: None,
                 webp_alpha_quality: None,
                 webp_pass: None,
@@ -5490,6 +5656,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: Some(100),
                 jpeg_background: None,
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: Some(6),
                 webp_alpha_quality: Some(60),
                 webp_pass: Some(10),
@@ -5545,6 +5713,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: Some(100),
                 jpeg_background: None,
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: None,
                 webp_alpha_quality: None,
                 webp_pass: None,
@@ -5669,6 +5839,8 @@ mod tests {
                 auto_rename: false,
                 jpeg_quality: None,
                 jpeg_background: None,
+                jpeg_progressive: false,
+                jpeg_optimize_huffman: false,
                 webp_method: None,
                 webp_alpha_quality: None,
                 webp_pass: None,

@@ -10,6 +10,8 @@ export interface CompressionPreferences {
   pngOptimizeAlpha: boolean;
   webpNearLossless: number | null;
   jpegBackground: string;
+  jpegProgressive: boolean;
+  jpegOptimizeHuffman: boolean;
   pngOptimizationLevel: number;
   targetSizeEnabled: boolean;
   targetSizeKiB: string;
@@ -43,6 +45,8 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   pngOptimizeAlpha: false,
   webpNearLossless: null,
   jpegBackground: "#ffffff",
+  jpegProgressive: false,
+  jpegOptimizeHuffman: false,
   pngOptimizationLevel: 3,
   targetSizeEnabled: false,
   targetSizeKiB: "",
@@ -121,6 +125,10 @@ function jpegBackgroundValue(record: Record<string, unknown>): string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/iu.test(value.trim()) ? value.trim().toLowerCase() : DEFAULT_COMPRESSION_PREFERENCES.jpegBackground;
 }
 
+function booleanPreference(record: Record<string, unknown>, key: string, fallback: boolean): boolean {
+  return typeof record[key] === "boolean" ? record[key] as boolean : fallback;
+}
+
 function sizeInputValue(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   if (typeof value !== "string") return "";
@@ -159,6 +167,8 @@ function parsePreferences(value: string | null): CompressionPreferences {
       pngOptimizeAlpha: record.pngOptimizeAlpha === true,
       webpNearLossless: format === "webp" && lossless ? webpNearLosslessValue(record) : null,
       jpegBackground: jpegBackgroundValue(record),
+      jpegProgressive: booleanPreference(record, "jpegProgressive", DEFAULT_COMPRESSION_PREFERENCES.jpegProgressive),
+      jpegOptimizeHuffman: booleanPreference(record, "jpegOptimizeHuffman", DEFAULT_COMPRESSION_PREFERENCES.jpegOptimizeHuffman),
       pngOptimizationLevel: integerValue(record, "pngOptimizationLevel", 0, 6, DEFAULT_COMPRESSION_PREFERENCES.pngOptimizationLevel),
       targetSizeEnabled: record.targetSizeEnabled === true && supportsCompressionTargetSize(format, lossless),
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
@@ -208,6 +218,8 @@ export function saveCompressionPreferences(
       pngOptimizeAlpha: preferences.pngOptimizeAlpha,
       webpNearLossless: preferences.webpNearLossless,
       jpegBackground: preferences.jpegBackground,
+      jpegProgressive: preferences.jpegProgressive,
+      jpegOptimizeHuffman: preferences.jpegOptimizeHuffman,
       pngOptimizationLevel: preferences.pngOptimizationLevel,
       targetSizeEnabled: preferences.targetSizeEnabled,
       targetSizeKiB: preferences.targetSizeKiB,

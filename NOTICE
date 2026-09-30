@@ -14,6 +14,7 @@ dependency in the future, its license and notices must be reviewed again.
 Image compression dependencies included in the distributed application:
 
 - kamadak-exif 0.6.1 — BSD-2-Clause
+- jpeg-encoder 0.7.1 — (MIT OR Apache-2.0) AND IJG
 - OxiPNG 9.1.5 — MIT
 - webp-animation 0.10.0 — MIT (selected from MIT OR Apache-2.0)
 - libwebp-sys2 0.2.0 and its transitive 0.1.11 package — BSD-3-Clause
@@ -43,6 +44,22 @@ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
+
+jpeg-encoder 0.7.1 — (MIT OR Apache-2.0) AND IJG
+
+Copyright (c) 2021 Volker Ströbel.
+The crate's non-IJG portions are available under the MIT or Apache-2.0
+license. The IJG-derived portions are based in part on the work of the
+Independent JPEG Group and retain the following attribution:
+
+This software is based in part on the work of the Independent JPEG Group.
+Copyright (C) 1991-2020, Thomas G. Lane, Guido Vollbeding.
+All Rights Reserved.
+
+The IJG-derived portions are provided "AS IS", without warranty. The
+Independent JPEG Group's conditions of distribution and use apply to those
+portions; this notice is included to satisfy the executable distribution
+acknowledgement requirement.
 
 OxiPNG 9.1.5 — MIT
 

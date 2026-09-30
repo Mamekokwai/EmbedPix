@@ -27,6 +27,7 @@ $notice = Get-Content -Raw 'NOTICE'
 
 $requiredNotices = @(
   @{ name = 'kamadak-exif'; version = '0.6.1'; license = 'BSD-2-Clause'; marker = 'kamadak-exif 0.6.1'; attribution = "KAMADA Ken'ichi" },
+  @{ name = 'jpeg-encoder'; version = '0.7.1'; license = '(MIT OR Apache-2.0) AND IJG'; marker = 'jpeg-encoder 0.7.1'; attribution = 'Independent JPEG Group' },
   @{ name = 'oxipng'; version = '9.1.5'; license = 'MIT'; marker = 'OxiPNG 9.1.5'; attribution = 'Joshua Holmer' },
   @{ name = 'webp-animation'; version = '0.10.0'; license = 'MIT OR Apache-2.0'; marker = 'webp-animation 0.10.0'; attribution = 'Permission is hereby granted' },
   @{ name = 'libwebp-sys2'; version = '0.2.0'; license = 'BSD-3-Clause'; marker = 'libwebp-sys2 0.2.0 and 0.1.11'; attribution = 'Masaki Hara' },
