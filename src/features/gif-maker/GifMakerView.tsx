@@ -1497,6 +1497,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const updateAllDurations = (value: number) => {
     const duration = clampFrameDuration(value);
+    setGifPreset("custom");
     setGlobalDuration(duration);
     const next = applyGifFrameDuration(framesRef.current, duration);
     framesRef.current = next;
@@ -1509,6 +1510,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const updateSelectedDuration = (value: number) => {
     const duration = clampFrameDuration(value);
+    setGifPreset("custom");
     const next = applyGifFrameDuration(framesRef.current, duration, new Set([selectedIndex]));
     framesRef.current = next;
     setFrames(next);
@@ -1517,6 +1519,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const updateSelectedFramesDuration = () => {
     if (lockedRef.current || !selectedFrameIndices.size) return;
     const duration = clampFrameDuration(batchDuration);
+    setGifPreset("custom");
     setBatchDuration(duration);
     const next = applyGifFrameDuration(framesRef.current, duration, selectedFrameIndices);
     framesRef.current = next;
