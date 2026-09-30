@@ -16,8 +16,8 @@ describe("image compression logic", () => {
     expect(summary).toContain("实际质量：82");
   });
   it("creates a versioned, parseable, path-redacted JSON batch report", () => {
-    const report = JSON.parse(createCompressionBatchReport({ generatedAt: "2026-10-01T00:00:00.000Z", format: "webp", total: 1, succeeded: 0, skipped: 0, failed: 1, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [], itemResults: [{ fileName: "C:\\Secret\\a.png", status: "failed", reason: "失败", outputPath: "C:\\Secret\\out.webp" }] }));
-    expect(report).toMatchObject({ schemaVersion: 1, generatedAt: "2026-10-01T00:00:00.000Z", format: "webp", items: [{ fileName: "a.png", status: "failed" }] });
+    const report = JSON.parse(createCompressionBatchReport({ generatedAt: "2026-10-01T00:00:00.000Z", format: "webp", total: 1, succeeded: 0, skipped: 0, failed: 1, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [], itemResults: [{ fileName: "C:\\Secret\\a.png", status: "failed", reason: "失败", nativeReason: "target_unreachable: manual settings", outputPath: "C:\\Secret\\out.webp" }] }));
+    expect(report).toMatchObject({ schemaVersion: 1, generatedAt: "2026-10-01T00:00:00.000Z", format: "webp", items: [{ fileName: "a.png", status: "failed", nativeReason: "target_unreachable: manual settings" }] });
     expect(JSON.stringify(report)).not.toContain("C:\\Secret");
   });
   it("invalidates strip-safe validation when a same-id file object is replaced", () => {

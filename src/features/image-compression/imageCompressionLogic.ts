@@ -178,6 +178,7 @@ export function createCompressionBatchReport(report: { generatedAt: string; form
       fileName: item.fileName.split(/[\\/]/u).pop() ?? item.fileName,
       status: item.status,
       reason: item.reason,
+      nativeReason: item.nativeReason,
       inputBytes: item.inputBytes,
       outputBytes: item.outputBytes,
       savedBytes: item.savedBytes,
