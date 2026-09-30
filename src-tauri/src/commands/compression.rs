@@ -539,6 +539,8 @@ pub struct CompressionPreflight {
     pub output_path: String,
     pub overwrites_existing: bool,
     pub lossless: bool,
+    pub compression_mode: &'static str,
+    pub compression_engine: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required_space_bytes: Option<u64>,
 }
@@ -615,6 +617,8 @@ pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPr
         input_bytes: request.input.len() as u64,
         overwrites_existing: output_path.exists(),
         lossless: request.lossless,
+        compression_mode: CompressionMode::from_lossless(request.lossless).as_str(),
+        compression_engine: CompressionEngine::for_format(request.format).as_str(),
         output_path: output_path.to_string_lossy().into_owned(),
         required_space_bytes,
     })

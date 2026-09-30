@@ -41,7 +41,7 @@ export interface CompressionEnvelopeRequest {
   jobId?: string;
 }
 
-export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; requiredSpaceBytes?: number | null; }
+export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; lossless?: boolean; compressionMode?: "lossless" | "lossy"; compressionEngine?: "oxipng" | "image-jpeg" | "libwebp"; requiredSpaceBytes?: number | null; }
 export type CompressionResultStatus = "completed" | "skipped";
 export interface CompressionResult {
   jobId: string;
