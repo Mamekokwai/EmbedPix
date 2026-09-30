@@ -198,6 +198,19 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
                 ))?,
         ),
     };
+    let target_resize_percent = match payload.get("targetResizePercent") {
+        None => None,
+        Some(value) => Some(
+            value
+                .as_u64()
+                .filter(|value| (10..=100).contains(value))
+                .map(|value| value as u8)
+                .ok_or((
+                    "request_error",
+                    "targetResizePercent 必须是 10 到 100 的无符号整数".into(),
+                ))?,
+        ),
+    };
     let result = compression::compress_file_cli_with_advanced_options(
         std::path::Path::new(&input_path),
         std::path::Path::new(&output_path),
@@ -208,6 +221,7 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
         jpeg_optimize_huffman,
         lossless,
         webp_lossless_method,
+        target_resize_percent,
     )
     .map_err(|error| ("compression_error", error))?;
     serde_json::to_value(result).map_err(|error| ("response_error", error.to_string()))
@@ -400,6 +414,10 @@ mod tests {
             ("webpLosslessMethod", json!(7)),
             ("webpLosslessMethod", json!(6.5)),
             ("webpLosslessMethod", json!("6")),
+            ("targetResizePercent", json!(9)),
+            ("targetResizePercent", json!(101)),
+            ("targetResizePercent", json!(50.5)),
+            ("targetResizePercent", json!("50")),
         ] {
             let mut payload = json!({ "inputPath": "input.png", "outputPath": "output.webp" });
             payload[field] = value;

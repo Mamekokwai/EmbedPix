@@ -18,6 +18,7 @@ export interface CompressionPreferences {
   targetSizeKiB: string;
   maxCandidates: number;
   maxRgbMae: string;
+  targetResizePercent: number | null;
   maxInputMiB: number;
   skipIfLarger: boolean;
   lossless: boolean;
@@ -54,6 +55,7 @@ export const DEFAULT_COMPRESSION_PREFERENCES: CompressionPreferences = {
   targetSizeKiB: "",
   maxCandidates: COMPRESSION_MAX_CANDIDATES_DEFAULT,
   maxRgbMae: "",
+  targetResizePercent: null,
   maxInputMiB: 32,
   skipIfLarger: true,
   lossless: true,
@@ -127,6 +129,11 @@ function webpLosslessMethodValue(record: Record<string, unknown>): number | null
   return typeof value === "number" && Number.isInteger(value) && value >= COMPRESSION_WEBP_METHOD_MIN && value <= COMPRESSION_WEBP_METHOD_MAX ? value : null;
 }
 
+function targetResizePercentValue(record: Record<string, unknown>): number | null {
+  const value = record.targetResizePercent;
+  return typeof value === "number" && Number.isInteger(value) && value >= 10 && value <= 100 ? value : null;
+}
+
 function jpegBackgroundValue(record: Record<string, unknown>): string {
   const value = record.jpegBackground;
   return typeof value === "string" && /^#[0-9a-f]{6}$/iu.test(value.trim()) ? value.trim().toLowerCase() : DEFAULT_COMPRESSION_PREFERENCES.jpegBackground;
@@ -182,6 +189,7 @@ function parsePreferences(value: string | null): CompressionPreferences {
       targetSizeKiB: sizeInputValue(record, "targetSizeKiB"),
       maxCandidates: integerValue(record, "maxCandidates", COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_MAX_CANDIDATES_MAX, COMPRESSION_MAX_CANDIDATES_DEFAULT),
       maxRgbMae: typeof record.maxRgbMae === "string" && (/^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(record.maxRgbMae.trim())) && Number(record.maxRgbMae) >= 0 && Number(record.maxRgbMae) <= 255 ? record.maxRgbMae.trim() : "",
+      targetResizePercent: targetResizePercentValue(record),
       maxInputMiB: integerValue(record, "maxInputMiB", 1, 32, DEFAULT_COMPRESSION_PREFERENCES.maxInputMiB),
       skipIfLarger: typeof record.skipIfLarger === "boolean" ? record.skipIfLarger : DEFAULT_COMPRESSION_PREFERENCES.skipIfLarger,
       lossless,
@@ -234,6 +242,7 @@ export function saveCompressionPreferences(
       targetSizeKiB: preferences.targetSizeKiB,
       maxCandidates: preferences.maxCandidates,
       maxRgbMae: preferences.maxRgbMae,
+      targetResizePercent: preferences.targetResizePercent,
       maxInputMiB: preferences.maxInputMiB,
       skipIfLarger: preferences.skipIfLarger,
       lossless: preferences.lossless,

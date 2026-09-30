@@ -337,6 +337,16 @@ function Assert-WebpLosslessMethodContract {
   [pscustomobject]@{ enabled = $true; range = '0..6'; defaultOff = $true; argbLossless = $true; cli = $true }
 }
 
+function Assert-TargetResizePercentContract {
+  $cli = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/bin/embedpix-cli.rs')
+  $source = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/commands/compression.rs')
+  $gateway = Get-Utf8Text (Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts')
+  foreach ($token in @('targetResizePercent', 'prepare_resize_request', 'resized_dimensions', 'MIN_COMPRESSION_RESIZE_PERCENT', 'validateTargetResizePercent')) {
+    if (($cli + $source + $gateway) -notmatch [regex]::Escape($token)) { throw "targetResizePercent contract is missing: $token" }
+  }
+  [pscustomobject]@{ enabled = $true; range = '10..100'; defaultOff = $true; lossyJpegWebpOnly = $true; cli = $true }
+}
+
 $script:root = Join-Path ([IO.Path]::GetTempPath()) ("embedpix-compression-cli-smoke-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $script:root | Out-Null
 try {
@@ -355,6 +365,7 @@ try {
   $losslessMethodFastOutput = Join-Path $script:root 'compressed-lossless-method-0.webp'
   $losslessMethodBestOutput = Join-Path $script:root 'compressed-lossless-method-6.webp'
   $jpegOutput = Join-Path $script:root 'compressed-progressive.jpg'
+  $jpegResizeOutput = Join-Path $script:root 'compressed-resized.jpg'
 
   $imageEvent = Invoke-CliRequest $CliPath @{ id = 'image-smoke'; op = 'image'; inputPath = $pngInput; outputPath = $pngOutput; format = 'png'; width = 1; height = 1 } 'image'
   $imageResult = Assert-Output $pngOutput 'png' 'image'
@@ -376,6 +387,8 @@ try {
     if ($jpegBytes[$index] -eq 0xff -and $jpegBytes[$index + 1] -eq 0xc2) { $hasSof2 = $true; break }
   }
   if (-not $hasSof2) { throw 'JPEG advanced compression did not emit a progressive SOF2 marker.' }
+  [void](Invoke-CliRequest $CliPath @{ id = 'jpeg-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegResizeOutput; format = 'jpg'; quality = 82; targetResizePercent = 50; maxInputBytes = 1MB } 'JPEG resize')
+  $jpegResizeResult = Assert-Output $jpegResizeOutput 'jpg' 'JPEG resize'
   $invalidRequest = Join-Path $script:root 'invalid-compression.request.json'
   $invalidStderr = Join-Path $script:root 'invalid-compression.stderr.log'
   Set-Utf8NoBomContent $invalidRequest (@{ id = 'invalid-compression'; op = 'compress'; inputPath = $pngInput; outputPath = (Join-Path $script:root 'must-not-exist.webp'); quality = '82' } | ConvertTo-Json)
@@ -395,10 +408,11 @@ try {
   $maxRgbMaeContract = Assert-MaxRgbMaeContract
   $jpegAdvancedContract = Assert-JpegAdvancedContract
   $webpLosslessMethodContract = Assert-WebpLosslessMethodContract
+  $targetResizePercentContract = Assert-TargetResizePercentContract
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'compress'
-    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $gifResult)
+    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $jpegResizeResult, $gifResult)
     decodeValidated = $true
     nativeCompressionContract = $nativeContract
     previewCompressionContract = $previewContract
@@ -408,6 +422,7 @@ try {
     maxRgbMaeContract = $maxRgbMaeContract
     jpegAdvancedContract = $jpegAdvancedContract
     webpLosslessMethodContract = $webpLosslessMethodContract
+    targetResizePercentContract = $targetResizePercentContract
   }
 
   if ($RequireCompression) {

@@ -23,6 +23,7 @@ export interface CompressionPresetValues {
   targetSizeKiB: string;
   maxCandidates: number;
   maxRgbMae: string;
+  targetResizePercent?: number | null;
   maxInputMiB: number;
   skipIfLarger: boolean;
   lossless: boolean;
@@ -82,6 +83,11 @@ function maxRgbMaeValue(value: unknown, index: number): string {
   return trimmed;
 }
 
+function targetResizePercentValue(value: unknown, index: number): number | null {
+  if (value === undefined || value === null) return null;
+  return integerValue(value, 10, 100, "输出缩放百分比", index);
+}
+
 function webpNearLosslessValue(value: unknown, index: number): number | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 99) throw new Error(`第 ${index + 1} 个压缩预设的 WebP 近无损等级无效。`);
@@ -111,6 +117,8 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
   const webpLosslessMethod = webpLosslessMethodValue(record.webpLosslessMethod, index);
   if (webpLosslessMethod !== null && (format !== "webp" || !lossless)) throw new Error(`第 ${index + 1} 个压缩预设的 WebP 无损编码 effort 仅适用于无损 WebP。`);
   const jpegBackground = record.jpegBackground === undefined ? "#ffffff" : jpegBackgroundValue(record.jpegBackground, index);
+  const targetResizePercent = targetResizePercentValue(record.targetResizePercent, index);
+  if (targetResizePercent !== null && ((format !== "jpg" && format !== "webp") || lossless)) throw new Error(`第 ${index + 1} 个压缩预设的输出缩放仅适用于 JPEG 或有损 WebP。`);
   return {
     format,
     quality: integerValue(record.quality, 1, 100, "质量", index),
@@ -128,6 +136,7 @@ function parseValues(value: unknown, index: number): CompressionPresetValues {
     targetSizeKiB: targetSizeValue(record.targetSizeKiB, index),
     maxCandidates: record.maxCandidates === undefined ? COMPRESSION_MAX_CANDIDATES_DEFAULT : integerValue(record.maxCandidates, COMPRESSION_MAX_CANDIDATES_MIN, COMPRESSION_MAX_CANDIDATES_MAX, "候选搜索次数", index),
     maxRgbMae: maxRgbMaeValue(record.maxRgbMae, index),
+    targetResizePercent,
     maxInputMiB: record.maxInputMiB === undefined ? 32 : integerValue(record.maxInputMiB, 1, 32, "单文件输入上限", index),
     skipIfLarger: record.skipIfLarger === undefined ? true : booleanValue(record.skipIfLarger, "压缩后更大时跳过", index),
     lossless,
@@ -150,6 +159,8 @@ export function createCompressionCustomPreset(name: string, values: CompressionP
   if (values.webpLosslessMethod !== undefined && values.webpLosslessMethod !== null && (!Number.isInteger(values.webpLosslessMethod) || values.webpLosslessMethod < COMPRESSION_WEBP_METHOD_MIN || values.webpLosslessMethod > COMPRESSION_WEBP_METHOD_MAX)) throw new Error("WebP 无损编码 effort 必须在 0 到 6 之间。");
   if (values.webpLosslessMethod !== undefined && values.webpLosslessMethod !== null && (values.format !== "webp" || !values.lossless)) throw new Error("WebP 无损编码 effort 仅适用于无损 WebP。");
   if (values.maxRgbMae !== "" && (values.format !== "webp" || values.lossless || !values.targetSizeEnabled)) throw new Error("RGB MAE 阈值仅适用于启用目标体积的有损 WebP。");
+  if (values.targetResizePercent !== undefined && values.targetResizePercent !== null && (!Number.isInteger(values.targetResizePercent) || values.targetResizePercent < 10 || values.targetResizePercent > 100)) throw new Error("输出缩放百分比必须在 10 到 100 之间。");
+  if (values.targetResizePercent !== undefined && values.targetResizePercent !== null && ((values.format !== "jpg" && values.format !== "webp") || values.lossless)) throw new Error("输出缩放仅适用于 JPEG 或有损 WebP。");
   if (!/^#[0-9a-f]{6}$/iu.test(values.jpegBackground.trim())) throw new Error("JPEG 透明背景必须是 #RRGGBB 颜色。");
   if ((values.jpegProgressive || values.jpegOptimizeHuffman) && values.format !== "jpg") throw new Error("JPEG 高级编码选项仅适用于 JPEG 输出。");
   if (!Number.isInteger(values.maxCandidates) || values.maxCandidates < COMPRESSION_MAX_CANDIDATES_MIN || values.maxCandidates > COMPRESSION_MAX_CANDIDATES_MAX) throw new Error(`候选搜索次数必须在 ${COMPRESSION_MAX_CANDIDATES_MIN} 到 ${COMPRESSION_MAX_CANDIDATES_MAX} 之间。`);

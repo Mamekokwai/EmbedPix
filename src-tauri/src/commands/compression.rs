@@ -12,8 +12,8 @@ use std::{
 
 use gif::DecodeOptions;
 use image::{
-    codecs::jpeg::JpegEncoder, io::Reader as ImageReader, DynamicImage, GenericImageView,
-    ImageBuffer, ImageFormat, Rgb, RgbImage,
+    codecs::jpeg::JpegEncoder, imageops::FilterType, io::Reader as ImageReader, DynamicImage,
+    GenericImageView, ImageBuffer, ImageFormat, Rgb, RgbImage,
 };
 use jpeg_encoder::{ColorType as JpegColorType, Encoder as RustJpegEncoder};
 use serde::{Deserialize, Serialize};
@@ -45,6 +45,8 @@ const MAX_JPEG_ICC_BYTES: usize = MAX_JPEG_ICC_SEGMENTS as usize * MAX_JPEG_ICC_
 const MAX_PREVIEW_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_MAX_CANDIDATES: usize = 8;
 const MAX_CANDIDATES: usize = 12;
+const MIN_TARGET_RESIZE_PERCENT: u8 = 10;
+const MAX_TARGET_RESIZE_PERCENT: u8 = 100;
 const MAX_AUTO_RENAME_ATTEMPTS: usize = 10_000;
 const PREFLIGHT_SPACE_ERROR_CODE: &str = "[preflight_output_space_insufficient]";
 const JOB_RETENTION: Duration = Duration::from_secs(5 * 60);
@@ -483,6 +485,8 @@ struct CompressionMetadata {
     #[serde(default)]
     max_rgb_mae: Option<f64>,
     #[serde(default)]
+    target_resize_percent: Option<u8>,
+    #[serde(default)]
     max_input_bytes: Option<u64>,
     #[serde(default)]
     png_optimization_level: Option<u8>,
@@ -529,6 +533,8 @@ struct CompressionEstimateMetadata {
     max_candidates: Option<usize>,
     #[serde(default)]
     max_rgb_mae: Option<f64>,
+    #[serde(default)]
+    target_resize_percent: Option<u8>,
     #[serde(default)]
     max_input_bytes: Option<u64>,
     #[serde(default)]
@@ -868,7 +874,12 @@ pub struct CompressionEstimate {
 #[tauri::command(rename_all = "camelCase")]
 pub async fn preflight_compression(request: Request<'_>) -> Result<CompressionPreflight, String> {
     let request = parse_request(request)?;
-    let (width, height) = inspect_image(&request.input)?;
+    let (source_width, source_height) = inspect_image(&request.input)?;
+    let (width, height) = resized_dimensions(
+        source_width,
+        source_height,
+        request.metadata.target_resize_percent,
+    );
     let output_path = resolve_preflight_output_path(&request)?;
     let required_space_bytes = estimate_preflight_required_space(&request);
     ensure_preflight_available_space(&output_path, required_space_bytes)?;
@@ -1035,6 +1046,7 @@ pub fn compress_file_cli_with_jpeg_options(
         jpeg_optimize_huffman,
         format.eq_ignore_ascii_case("png"),
         None,
+        None,
     )
 }
 
@@ -1049,6 +1061,7 @@ pub fn compress_file_cli_with_advanced_options(
     jpeg_optimize_huffman: bool,
     lossless: bool,
     webp_lossless_method: Option<u8>,
+    target_resize_percent: Option<u8>,
 ) -> Result<CompressionResult, String> {
     let input =
         fs::read(input_path).map_err(|error| format!("failed to read input image: {error}"))?;
@@ -1067,6 +1080,7 @@ pub fn compress_file_cli_with_advanced_options(
         "jpegProgressive": jpeg_progressive,
         "jpegOptimizeHuffman": jpeg_optimize_huffman,
         "webpLosslessMethod": webp_lossless_method,
+        "targetResizePercent": target_resize_percent,
     });
     let metadata = serde_json::to_vec(&metadata).map_err(|error| error.to_string())?;
     let mut payload = b"EGF1".to_vec();
@@ -1131,6 +1145,43 @@ pub fn get_compression_progress(
     Ok(progress)
 }
 
+fn resize_dimension(value: u32, percent: u8) -> u32 {
+    ((u64::from(value) * u64::from(percent) + 50) / 100).clamp(1, u64::from(MAX_IMAGE_DIMENSION))
+        as u32
+}
+
+fn resized_dimensions(width: u32, height: u32, percent: Option<u8>) -> (u32, u32) {
+    percent
+        .map(|percent| {
+            (
+                resize_dimension(width, percent),
+                resize_dimension(height, percent),
+            )
+        })
+        .unwrap_or((width, height))
+}
+
+fn prepare_resize_request(request: &CompressionRequest) -> Result<CompressionRequest, String> {
+    let Some(percent) = request.metadata.target_resize_percent else {
+        return Ok(request.clone());
+    };
+    let image = decode_image(&request.input)?;
+    let (source_width, source_height) = image.dimensions();
+    let target_width = resize_dimension(source_width, percent);
+    let target_height = resize_dimension(source_height, percent);
+    if (target_width, target_height) == (source_width, source_height) {
+        return Ok(request.clone());
+    }
+    let resized = image.resize_exact(target_width, target_height, FilterType::Lanczos3);
+    let mut encoded = Vec::new();
+    resized
+        .write_to(&mut Cursor::new(&mut encoded), ImageFormat::Png)
+        .map_err(|error| format!("failed to prepare resized compression input: {error}"))?;
+    let mut prepared = request.clone();
+    prepared.input = encoded;
+    Ok(prepared)
+}
+
 fn run_compression(
     request: &CompressionRequest,
     job: &Arc<CompressionJob>,
@@ -1138,8 +1189,10 @@ fn run_compression(
     checkpoint(job)?;
     update_progress(job, CompressionStage::Reading, None, None);
     update_progress(job, CompressionStage::Decoding, None, None);
+    let prepared_request =
+        prepare_resize_request(request).map_err(|error| fail_message(job, error))?;
     let (width, height) =
-        inspect_image(&request.input).map_err(|error| fail_message(job, error))?;
+        inspect_image(&prepared_request.input).map_err(|error| fail_message(job, error))?;
     update_progress(job, CompressionStage::Planning, None, None);
     update_progress(job, CompressionStage::Encoding, None, None);
     let EncodedSelection {
@@ -1149,7 +1202,7 @@ fn run_compression(
         skipped_reason: selection_skipped_reason,
         candidate_search_ms,
         candidate_count,
-    } = choose_encoded_output_with_cancellation(request, width, height, Some(job))
+    } = choose_encoded_output_with_cancellation(&prepared_request, width, height, Some(job))
         .map_err(|error| fail_message(job, error))?;
     checkpoint(job)?;
     update_progress(job, CompressionStage::Validating, None, None);
@@ -1161,7 +1214,7 @@ fn run_compression(
     let verified = verify_compressed_output(&bytes, request.format, width, height)
         .map_err(|error| fail_message(job, error))?;
     let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
-        quality_metrics_for_output(request, &verified, Some(job))?
+        quality_metrics_for_output(&prepared_request, &verified, Some(job))?
     } else {
         None
     };
@@ -1394,6 +1447,25 @@ fn validate_webp_lossless_method(
         if format != CompressionFormat::Webp || !lossless {
             return Err("webpLosslessMethod is only supported for lossless WebP".into());
         }
+    }
+    Ok(())
+}
+
+fn validate_target_resize_percent(
+    percent: Option<u8>,
+    format: CompressionFormat,
+    lossless: bool,
+) -> Result<(), String> {
+    let Some(percent) = percent else {
+        return Ok(());
+    };
+    if !(MIN_TARGET_RESIZE_PERCENT..=MAX_TARGET_RESIZE_PERCENT).contains(&percent) {
+        return Err(format!(
+            "targetResizePercent must be between {MIN_TARGET_RESIZE_PERCENT} and {MAX_TARGET_RESIZE_PERCENT}"
+        ));
+    }
+    if !matches!(format, CompressionFormat::Jpeg | CompressionFormat::Webp) || lossless {
+        return Err("targetResizePercent is only supported for lossy JPEG or WebP".into());
     }
     Ok(())
 }
@@ -1867,7 +1939,8 @@ fn run_preview_core(
         update_progress(job, CompressionStage::Reading, None, None);
         update_progress(job, CompressionStage::Decoding, None, None);
     }
-    let (width, height) = inspect_image(&request.input)?;
+    let prepared_request = prepare_resize_request(request)?;
+    let (width, height) = inspect_image(&prepared_request.input)?;
     if let Some(job) = job {
         update_progress(job, CompressionStage::Planning, None, None);
         update_progress(job, CompressionStage::Encoding, None, None);
@@ -1879,7 +1952,7 @@ fn run_preview_core(
         skipped_reason,
         candidate_search_ms,
         candidate_count,
-    } = choose_encoded_output_with_cancellation(request, width, height, job)?;
+    } = choose_encoded_output_with_cancellation(&prepared_request, width, height, job)?;
     if data.len() > MAX_PREVIEW_BYTES {
         return Err(format!(
             "compressed preview exceeds the {} MiB limit",
@@ -1891,7 +1964,7 @@ fn run_preview_core(
         update_progress(job, CompressionStage::Validating, None, None);
     }
     let verified = verify_compressed_output(&data, request.format, width, height)?;
-    let quality_metrics = quality_metrics_for_output(request, &verified, job)?;
+    let quality_metrics = quality_metrics_for_output(&prepared_request, &verified, job)?;
     let output_bytes = data.len() as u64;
     if let Some(job) = job {
         update_progress_bytes(job, None, Some(output_bytes));
@@ -1987,7 +2060,8 @@ fn quality_metrics_for_output(
 }
 
 fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, String> {
-    let (width, height) = inspect_image(&request.input)?;
+    let prepared_request = prepare_resize_request(request)?;
+    let (width, height) = inspect_image(&prepared_request.input)?;
     let EncodedSelection {
         bytes,
         selected_quality,
@@ -1995,13 +2069,13 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
         skipped_reason: selection_skipped_reason,
         candidate_search_ms,
         candidate_count,
-    } = choose_encoded_output(request, width, height)?;
+    } = choose_encoded_output(&prepared_request, width, height)?;
     let input_bytes = request.input.len() as u64;
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
     let verified = verify_compressed_output(&bytes, request.format, width, height)?;
     let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
-        quality_metrics_for_output(request, &verified, None)?
+        quality_metrics_for_output(&prepared_request, &verified, None)?
     } else {
         None
     };
@@ -2443,6 +2517,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
     validate_webp_lossless_method(metadata.webp_lossless_method, format, lossless)?;
+    validate_target_resize_percent(metadata.target_resize_percent, format, lossless)?;
     validate_compression_mode(format, lossless)?;
     validate_compression_metadata_policy(metadata.metadata_policy)?;
     if metadata.replace_original && metadata.source_path.is_none() {
@@ -2578,6 +2653,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     validate_webp_pass(metadata.webp_pass, format, lossless)?;
     validate_webp_near_lossless(metadata.webp_near_lossless, format, lossless)?;
     validate_webp_lossless_method(metadata.webp_lossless_method, format, lossless)?;
+    validate_target_resize_percent(metadata.target_resize_percent, format, lossless)?;
     validate_compression_mode(format, lossless)?;
     validate_compression_metadata_policy(metadata.metadata_policy)?;
     let input = body[end..].to_vec();
@@ -2619,6 +2695,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
             max_output_bytes: metadata.max_output_bytes,
             max_candidates: metadata.max_candidates,
             max_rgb_mae: metadata.max_rgb_mae,
+            target_resize_percent: metadata.target_resize_percent,
             max_input_bytes: metadata.max_input_bytes,
             png_optimization_level: metadata.png_optimization_level,
             png_optimize_alpha: metadata.png_optimize_alpha,
@@ -3307,6 +3384,7 @@ mod tests {
                 max_output_bytes: None,
                 max_candidates: None,
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -3941,6 +4019,7 @@ mod tests {
                 max_output_bytes: None,
                 max_candidates: None,
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -4212,6 +4291,31 @@ mod tests {
     }
 
     #[test]
+    fn validates_and_applies_lossy_target_resize_percent_across_paths() {
+        let metadata = r#"{"fileName":"sample.png","outputFormat":"jpeg","lossless":false,"targetResizePercent":50}"#;
+        let request = parse_raw_payload(&raw_payload(metadata, &png_input())).unwrap();
+        assert_eq!(request.metadata.target_resize_percent, Some(50));
+        let estimate_request =
+            parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).unwrap();
+        assert_eq!(estimate_request.metadata.target_resize_percent, Some(50));
+
+        let preview = run_preview(&request).unwrap();
+        assert_eq!((preview.width, preview.height), (1, 1));
+        let estimate = run_estimate(&estimate_request).unwrap();
+        assert_eq!((estimate.width, estimate.height), (1, 1));
+
+        for metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","targetResizePercent":9}"#,
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","targetResizePercent":101}"#,
+            r#"{"fileName":"sample.png","outputFormat":"png","targetResizePercent":50}"#,
+            r#"{"fileName":"sample.png","outputFormat":"webp","lossless":true,"targetResizePercent":50}"#,
+        ] {
+            assert!(parse_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+            assert!(parse_estimate_raw_payload(&raw_payload(metadata, &png_input())).is_err());
+        }
+    }
+
+    #[test]
     fn validates_jpeg_background_contract_for_requests_and_estimates() {
         let metadata =
             r##"{"fileName":"sample.png","outputFormat":"jpeg","jpegBackground":"#123456"}"##;
@@ -4423,6 +4527,7 @@ mod tests {
                 max_output_bytes: None,
                 max_candidates: None,
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -4947,6 +5052,7 @@ mod tests {
                 max_output_bytes: None,
                 max_candidates: None,
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5055,6 +5161,7 @@ mod tests {
                 max_output_bytes: None,
                 max_candidates: None,
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5712,6 +5819,7 @@ mod tests {
                 max_output_bytes: Some(target),
                 max_candidates: Some(MAX_CANDIDATES),
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5784,6 +5892,7 @@ mod tests {
                 max_output_bytes: Some(target),
                 max_candidates: Some(MAX_CANDIDATES),
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5842,6 +5951,7 @@ mod tests {
                 max_output_bytes: Some(1),
                 max_candidates: Some(1),
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,
@@ -5969,6 +6079,7 @@ mod tests {
                 max_output_bytes: Some(1),
                 max_candidates: Some(DEFAULT_MAX_CANDIDATES),
                 max_rgb_mae: None,
+                target_resize_percent: None,
                 max_input_bytes: None,
                 png_optimization_level: Some(2),
                 png_optimize_alpha: false,

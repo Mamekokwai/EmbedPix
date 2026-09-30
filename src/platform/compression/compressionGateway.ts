@@ -12,6 +12,8 @@ export const GET_COMPRESSION_PROGRESS_COMMAND = "get_compression_progress" as co
 export const COMPRESSION_SCHEMA_VERSION = 1 as const;
 export const MAX_COMPRESSION_INPUT_BYTES = 32 * 1024 * 1024;
 export const MIN_COMPRESSION_INPUT_BYTES = 1 * 1024 * 1024;
+export const MIN_COMPRESSION_RESIZE_PERCENT = 10;
+export const MAX_COMPRESSION_RESIZE_PERCENT = 100;
 
 export interface CompressionEnvelopeRequest {
   fileName: string;
@@ -42,6 +44,7 @@ export interface CompressionEnvelopeRequest {
   maxOutputBytes?: number;
   maxCandidates?: number;
   maxRgbMae?: number | null;
+  targetResizePercent?: number;
   maxInputBytes?: number;
   metadataPolicy: MetadataPolicy;
   jobId?: string;
@@ -140,6 +143,7 @@ export interface CompressionEstimateRequest {
   maxOutputBytes?: number;
   maxCandidates?: number;
   maxRgbMae?: number | null;
+  targetResizePercent?: number;
   maxInputBytes?: number;
 }
 
@@ -149,8 +153,15 @@ function validateMaxRgbMae(value: number | null | undefined, outputFormat: Exclu
   if (outputFormat !== "webp" || lossless || maxOutputBytes === undefined) throw new Error("maxRgbMae 仅支持启用最大输出体积的有损 WebP。");
 }
 
+function validateTargetResizePercent(value: number | undefined, outputFormat: Exclude<CompressionFormat, "original">, lossless: boolean): void {
+  if (value === undefined) return;
+  if (!Number.isInteger(value) || value < MIN_COMPRESSION_RESIZE_PERCENT || value > MAX_COMPRESSION_RESIZE_PERCENT) throw new Error(`targetResizePercent 必须在 ${MIN_COMPRESSION_RESIZE_PERCENT} 到 ${MAX_COMPRESSION_RESIZE_PERCENT} 之间。`);
+  if ((outputFormat !== "jpg" && outputFormat !== "webp") || lossless) throw new Error("targetResizePercent 仅支持 JPEG 或有损 WebP。");
+}
+
 function getCompressionMetadata(request: CompressionEnvelopeRequest) {
   validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
+  validateTargetResizePercent(request.targetResizePercent, request.outputFormat, request.lossless);
   if (request.metadataPolicy === "stripSafe") { const error = getStripSafeInputError(request.inputData, request.outputFormat); if (error) throw new Error(error); }
   else if (request.metadataPolicy !== "strip" && request.metadataPolicy !== "stripAll") throw new Error("第一阶段原生压缩仅支持移除元数据。");
   return {
@@ -182,6 +193,7 @@ function getCompressionMetadata(request: CompressionEnvelopeRequest) {
     ...(request.maxOutputBytes ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates ? { maxCandidates: request.maxCandidates } : {}),
     ...(request.maxRgbMae !== undefined && request.maxRgbMae !== null ? { maxRgbMae: request.maxRgbMae } : {}),
+    ...(request.targetResizePercent !== undefined ? { targetResizePercent: request.targetResizePercent } : {}),
     ...(request.maxInputBytes !== undefined ? { maxInputBytes: request.maxInputBytes } : {}),
     metadataPolicy: request.metadataPolicy,
     ...(request.jobId ? { jobId: request.jobId } : {}),
@@ -198,6 +210,7 @@ export function encodeCompressionEnvelope(request: CompressionEnvelopeRequest): 
   if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
   if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
   validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
+  validateTargetResizePercent(request.targetResizePercent, request.outputFormat, request.lossless);
   if (request.webpMethod !== undefined && (!Number.isInteger(request.webpMethod) || request.webpMethod < 0 || request.webpMethod > 6)) throw new Error("webpMethod 必须在 0 到 6 之间。");
   if (request.webpMethod !== undefined && (request.outputFormat !== "webp" || request.lossless)) throw new Error("webpMethod 仅支持有损 WebP。");
   if (request.webpAlphaQuality !== undefined && (!Number.isInteger(request.webpAlphaQuality) || request.webpAlphaQuality < 0 || request.webpAlphaQuality > 100)) throw new Error("webpAlphaQuality 必须在 0 到 100 之间。");
@@ -249,6 +262,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
   if (request.maxOutputBytes !== undefined && (!Number.isInteger(request.maxOutputBytes) || request.maxOutputBytes < 1 || request.maxOutputBytes > 128 * 1024 * 1024)) throw new Error("maxOutputBytes 必须在 1 到 128 MiB 之间。");
   if (request.maxCandidates !== undefined && (!Number.isInteger(request.maxCandidates) || request.maxCandidates < 1 || request.maxCandidates > 12)) throw new Error("maxCandidates 必须在 1 到 12 之间。");
   validateMaxRgbMae(request.maxRgbMae, request.outputFormat, request.lossless, request.maxOutputBytes);
+  validateTargetResizePercent(request.targetResizePercent, request.outputFormat, request.lossless);
   const metadataBytes = new TextEncoder().encode(JSON.stringify({
     schemaVersion: COMPRESSION_SCHEMA_VERSION,
     fileName: request.fileName,
@@ -269,6 +283,7 @@ export function encodeCompressionEstimateEnvelope(request: CompressionEstimateRe
     ...(request.maxOutputBytes !== undefined ? { maxOutputBytes: request.maxOutputBytes } : {}),
     ...(request.maxCandidates !== undefined ? { maxCandidates: request.maxCandidates } : {}),
     ...(request.maxRgbMae !== undefined && request.maxRgbMae !== null ? { maxRgbMae: request.maxRgbMae } : {}),
+    ...(request.targetResizePercent !== undefined ? { targetResizePercent: request.targetResizePercent } : {}),
     ...(request.maxInputBytes !== undefined ? { maxInputBytes: request.maxInputBytes } : {}),
     metadataPolicy: request.metadataPolicy,
   }));
@@ -325,6 +340,7 @@ export function createCompressionRequest(file: NativeImageFile, options: Compres
     maxOutputBytes: options.maxOutputBytes,
     maxCandidates: options.maxCandidates,
     maxRgbMae: options.maxRgbMae,
+    targetResizePercent: options.targetResizePercent ?? undefined,
     maxInputBytes: options.maxInputBytes,
     metadataPolicy: options.metadataPolicy,
     jobId,
