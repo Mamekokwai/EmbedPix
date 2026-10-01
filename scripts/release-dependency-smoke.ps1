@@ -25,18 +25,20 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not inspect locked Cargo metadata.' }
 $packages = ($metadataJson | ConvertFrom-Json).packages
 $notice = Get-Content -Raw 'NOTICE'
 
-$unreviewedBackendNames = @(
-  'mozjpeg', 'mozjpeg-sys',
-  'libavif', 'libavif-sys',
-  'aom', 'aom-sys', 'rav1e', 'rav1e-sys',
-  'svt-av1', 'svt-av1-sys', 'libyuv', 'libyuv-sys',
-  'dav1d', 'dav1d-sys'
-)
-$unreviewedBackends = @($packages | Where-Object { $unreviewedBackendNames -contains $_.name })
-if ($unreviewedBackends.Count -gt 0) {
+function Assert-NoUnreviewedCodecBackends([object[]]$Packages) {
+  $unreviewedBackendNames = @(
+    'mozjpeg', 'mozjpeg-sys',
+    'libavif', 'libavif-sys',
+    'aom', 'aom-sys', 'rav1e', 'rav1e-sys',
+    'svt-av1', 'svt-av1-sys', 'libyuv', 'libyuv-sys',
+    'dav1d', 'dav1d-sys'
+  )
+  $unreviewedBackends = @($Packages | Where-Object { $unreviewedBackendNames -contains $_.name })
+  if ($unreviewedBackends.Count -eq 0) { return }
   $found = ($unreviewedBackends | ForEach-Object { "$($_.name)@$($_.version)" }) -join ', '
   throw "Unreviewed MozJPEG/libavif/AV1 backend dependency detected: $found. Before release, complete NOTICE, license/patent review, static-vs-dynamic link audit, per-architecture builds, and real runner encode/decode/install smoke."
 }
+Assert-NoUnreviewedCodecBackends $packages
 
 $requiredNotices = @(
   @{ name = 'kamadak-exif'; version = '0.6.1'; license = 'BSD-2-Clause'; marker = 'kamadak-exif 0.6.1'; attribution = "KAMADA Ken'ichi" },
