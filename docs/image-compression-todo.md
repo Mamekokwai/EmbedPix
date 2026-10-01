@@ -57,6 +57,7 @@
 - [~] 发布环境边界：发布链路本地门禁已覆盖；ARM64 安装/启动/卸载与 macOS/Linux 自动更新仍需真实签名资产或对应设备，暂无法由本地 fixture 替代。
 - [~] 编码后端实验门禁：MozJPEG/libavif 仍保持未引入、默认关闭；接入前必须完成版本与上游来源锁定、精确 NOTICE/许可证审计、静态/动态链接证据、每架构 encode→decode/Alpha/元数据回读、x64 与 ARM64 安装启动卸载 smoke，并将证据纳入签名 manifest。当前本地依赖 smoke 不覆盖这些候选后端。
 - [x] 未审计编码后端阻断（commit `9992df7`）：release dependency smoke 会拒绝锁文件中出现的 MozJPEG、libavif、AOM、rav1e、SVT-AV1、libyuv、dav1d 等候选包，并明确提示 NOTICE、许可证/专利、链接方式、跨架构和真实 runner 验收要求；当前依赖集合保持不变。
+- [x] 编码后端阻断回归契约（commit `4ffeb11`）：拒绝逻辑抽为可注入的 `Assert-NoUnreviewedCodecBackends`，release-config smoke 同时守护函数、候选名称和失败提示，防止后续发布脚本回归放行未审计后端。
 - 本轮新增 `compressionGateway` 四入口 envelope 矩阵回归：覆盖 PNG/JPEG/静态 WebP、格式专属字段不泄漏，以及非法组合在 IPC 前拒绝。
 - 本轮完成预检临时空间预算状态修复：参数、输入或选中项变化时清除旧预算，任务完成后保留最近一次有效预算。
 - 本轮新增 updater 签名提交/安装包提交边界清理回归：验证临时 `.part`、签名临时文件和 `.etag` 清理，以及既有/已提交缓存的保留或失败清理语义；真实异步 rename 间隙尚未通过 hook 注入验证，未扩大覆盖声明。
