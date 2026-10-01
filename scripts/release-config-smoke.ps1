@@ -101,6 +101,13 @@ foreach ($required in @(
 )) {
   if ($mainSource -notmatch [regex]::Escape($required)) { throw "Windows console/subsystem contract is missing: $required" }
 }
+$argumentPosition = $mainSource.IndexOf('if has_explicit_arguments(&args)')
+$preparePosition = $mainSource.IndexOf('prepare_cli_console', $argumentPosition)
+$diagnosticPosition = $mainSource.IndexOf('eprintln!', $argumentPosition)
+$exitPosition = $mainSource.IndexOf('std::process::exit(2)', $diagnosticPosition)
+if ($preparePosition -lt 0 -or $diagnosticPosition -lt $preparePosition -or $exitPosition -lt $diagnosticPosition) {
+  throw 'GUI explicit-argument path must prepare the console before diagnostics and exit 2.'
+}
 if (-not (Test-Path -LiteralPath 'src-tauri/src/bin/embedpix-cli.rs' -PathType Leaf)) {
   throw 'Dedicated embedpix-cli binary is missing; GUI executable must not become the CLI entry point.'
 }
