@@ -16,6 +16,10 @@ describe("GIF export presets", () => {
       small: { label: "小体积", description: "50% 画布 · 64 色 · 8 FPS · 每 2 帧采样", encodingQuality: "fast", colorCount: 64, ditherMode: "none", canvasPreset: "50", videoFps: 8, videoEveryNthFrame: 2 },
     });
   });
+
+  it("keeps the balanced reset baseline separate from output destination settings", () => {
+    expect(GIF_PRESETS.balanced).toMatchObject({ encodingQuality: "balanced", colorCount: 128, ditherMode: "floydSteinberg", canvasPreset: "75", videoFps: 12, videoEveryNthFrame: 1 });
+  });
 });
 
 describe("GIF settings layout defaults", () => {

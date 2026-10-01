@@ -354,6 +354,9 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("导出设置");
     expect(gifView).toContain("selectedFrameIndices");
     expect(gifView).toContain("批量设置选中帧时长");
+    expect(gifView).toContain("恢复平衡默认");
+    expect(gifView).toContain("disabled={!canEditFrames}");
+    expect(gifView).toContain("DEFAULT_GIF_MAKER_PREFERENCES.targetSizeKiB");
   });
 
   it("does not reintroduce a horizontal scrolling frame list", () => {
@@ -361,6 +364,7 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toMatch(/\.gif-frame-list \{[^}]*overflow-x: hidden; overflow-y: auto;/s);
     expect(gifCss).toContain(".gif-frame-meta small { min-width: 0; overflow: hidden;");
     expect(gifCss).toContain(".gif-busy-cancel { width: 100%; margin-top: 4px; }");
+    expect(gifCss).toContain(".gif-balanced-reset { justify-self: start; }");
     expect(gifView).toContain('className="quiet-button gif-busy-cancel"');
   });
 
