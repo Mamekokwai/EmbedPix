@@ -55,7 +55,12 @@ describe("compact layout viewport contract", () => {
   it("exposes a GIF export report only after an export path exists", () => {
     expect(gifView).toContain("createGifExportReport");
     expect(gifView).toContain("下载 JSON 报告");
+    expect(gifView).toContain("打开文件夹");
+    expect(gifView).toContain("复制路径");
+    expect(gifView).toContain("openLastExportFolder");
+    expect(gifView).toContain("copyLastExportPath");
     expect(gifView).toContain("{lastExportPath ? <div className=\"gif-output-actions\"");
+    expect(gifCss).toContain(".gif-output-actions { display: flex; flex-wrap: wrap;");
   });
   it("clears stale GIF export actions when export inputs change", () => {
     expect(gifView).toContain("setExportFrameSummary(null);\n    setLastExportPath(null);");
