@@ -200,8 +200,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("formatCompressionDeleteSourceConfirmation");
     expect(compressionView).toContain("deleteSourceAvailable");
     expect(compressionView).toContain("!replaceOriginalAvailable");
-    expect(compressionView).toContain('disabled={busy || !qualityEnabled}');
-    expect(compressionView).toContain('disabled={busy || !qualityEnabled || !targetSizeActive}');
+    expect(compressionView).toContain('disabled={encodingOptionDisabled || !qualityEnabled}');
+    expect(compressionView).toContain('disabled={encodingOptionDisabled || !qualityEnabled || !targetSizeActive}');
+    expect(compressionView).toContain('const encodingOptionDisabled = busy || metadataPreserveActive;');
     expect(compressionView).toContain("maxCandidates: !metadataPreserveActive && maxOutputBytes ? maxCandidates : undefined");
     expect(compressionView).toContain("selectedQuality");
     expect(compressionView).toContain("PNG 优化级别");
@@ -231,7 +232,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("Alpha 质量 ${webpAlphaQuality}");
     expect(compressionView).toContain("分析遍数 ${webpPass}");
     expect(compressionView).toContain("compression-webp-method-hint");
-    expect(compressionView).toContain("disabled={busy || !webpLossyActive}");
+    expect(compressionView).toContain("disabled={encodingOptionDisabled || !webpLossyActive}");
     expect(compressionPreferences).toContain("webpMethod");
     expect(compressionPreferences).toContain("webpPass");
     expect(compressionPreferences).toContain("skipIfLarger");

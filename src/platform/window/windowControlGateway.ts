@@ -16,6 +16,10 @@ export async function closeCurrentWindow(): Promise<void> {
   await currentWindow().close();
 }
 
+export async function destroyCurrentWindow(): Promise<void> {
+  await currentWindow().destroy();
+}
+
 export async function startCurrentWindowDrag(): Promise<void> {
   await currentWindow().startDragging();
 }

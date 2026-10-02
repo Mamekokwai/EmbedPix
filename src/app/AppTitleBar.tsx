@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Maximize2, Minimize2, Minus, X } from "lucide-react";
 import {
-  closeCurrentWindow,
+  destroyCurrentWindow,
   minimizeCurrentWindow,
   readCurrentWindowMaximized,
   startCurrentWindowDrag,
@@ -28,7 +28,7 @@ export default function AppTitleBar() {
 
   const finishWindowClose = () => {
     nativeCloseHandledRef.current = true;
-    void requestWindowClose().then(closeCurrentWindow).catch((error) => {
+    void requestWindowClose().then(destroyCurrentWindow).catch((error) => {
       nativeCloseHandledRef.current = false;
       closeFlowStartedRef.current = false;
       setClosing(false);
