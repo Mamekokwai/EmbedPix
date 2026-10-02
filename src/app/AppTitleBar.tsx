@@ -22,7 +22,8 @@ function runWindowAction(action: () => Promise<void>, actionName: string) {
 
 export default function AppTitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
-  const closingAfterNativeRequestRef = useRef(false);
+  const closeFlowStartedRef = useRef(false);
+  const nativeCloseHandledRef = useRef(false);
 
   useEffect(() => {
     const lifecycle = { disposed: false };
@@ -39,11 +40,12 @@ export default function AppTitleBar() {
       }).catch(() => undefined);
       void watchCurrentWindowCloseRequested((event) => {
         if (lifecycle.disposed) return;
-        if (closingAfterNativeRequestRef.current) return;
+        if (nativeCloseHandledRef.current) return;
         event.preventDefault();
-        closingAfterNativeRequestRef.current = true;
+        nativeCloseHandledRef.current = true;
         void requestWindowClose().then(closeCurrentWindow).catch((error) => {
-          closingAfterNativeRequestRef.current = false;
+          nativeCloseHandledRef.current = false;
+          closeFlowStartedRef.current = false;
           console.warn("close current window failed", error);
         });
       }).then((unlisten) => {
@@ -65,17 +67,12 @@ export default function AppTitleBar() {
   };
 
   const handleClose = () => {
-    if (closingAfterNativeRequestRef.current) return;
-    closingAfterNativeRequestRef.current = true;
-    void (async () => {
-      try {
-      await requestWindowClose();
-      await closeCurrentWindow();
-      } catch (error) {
-        closingAfterNativeRequestRef.current = false;
-        console.warn("close current window failed", error);
-      }
-    })();
+    if (closeFlowStartedRef.current) return;
+    closeFlowStartedRef.current = true;
+    void closeCurrentWindow().catch((error) => {
+      closeFlowStartedRef.current = false;
+      console.warn("close current window failed", error);
+    });
   };
 
   return (
