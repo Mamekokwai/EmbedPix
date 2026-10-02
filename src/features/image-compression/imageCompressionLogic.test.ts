@@ -66,6 +66,21 @@ describe("image compression logic", () => {
     vi.useRealTimers();
   });
 
+  it("aborts a bitmap dimension read immediately and closes a late bitmap", async () => {
+    const controller = new AbortController();
+    let resolveBitmap: ((bitmap: { width: number; height: number; close: () => void }) => void) | undefined;
+    const pending = readCompressionDimensions(new Blob(), {
+      createImageBitmap: () => new Promise((resolve) => { resolveBitmap = resolve; }),
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    const close = vi.fn();
+    resolveBitmap?.({ width: 10, height: 20, close });
+    await Promise.resolve();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("revokes fallback URLs on load, load failure, and source assignment failure", async () => {
     const revoke = vi.fn();
     let image: { naturalWidth: number; naturalHeight: number; onload: ((event: Event) => void) | null; onerror: ((event: Event) => void) | null; src: string };

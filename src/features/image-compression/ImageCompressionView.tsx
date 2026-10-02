@@ -243,11 +243,14 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const cancelRequestedRef = useRef(false);
   const mountedRef = useRef(true);
   const progressPollControllerRef = useRef<AbortController | null>(null);
+  const dimensionControllersRef = useRef(new Map<string, AbortController>());
 
   useEffect(() => () => {
     mountedRef.current = false;
     progressPollControllerRef.current?.abort();
     progressPollControllerRef.current = null;
+    dimensionControllersRef.current.forEach((controller) => controller.abort());
+    dimensionControllersRef.current.clear();
     const jobId = activeJobIdRef.current;
     if (!jobId || !isTauriEnvironment()) return;
     void cancelCompression(jobId).catch(() => undefined);
@@ -382,12 +385,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   };
 
   const queueCompressionDimensions = (item: CompressionItem) => {
-    void Promise.resolve().then(() => readCompressionDimensions(item.file)).then((dimensions) => {
+    dimensionControllersRef.current.get(item.id)?.abort();
+    const controller = new AbortController();
+    dimensionControllersRef.current.set(item.id, controller);
+    void Promise.resolve().then(() => readCompressionDimensions(item.file, { signal: controller.signal })).then((dimensions) => {
       if (canWriteCompressionItemUpdate(mountedRef.current, itemsRef.current, item)) {
         setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, dimensions } : candidate));
       }
     }).catch((error) => {
+      if (error instanceof Error && error.name === "AbortError") return;
       if (canWriteCompressionItemUpdate(mountedRef.current, itemsRef.current, item)) setImportErrors((current) => [...current, { id: `dimensions-${item.id}`, fileName: item.file.name, message: errorMessage(error) }]);
+    }).finally(() => {
+      if (dimensionControllersRef.current.get(item.id) === controller) dimensionControllersRef.current.delete(item.id);
     });
   };
 
@@ -915,6 +924,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     if (sourceBusy) return;
     const removedItem = items.find((item) => item.id === id);
     if (!removedItem) return;
+    dimensionControllersRef.current.get(id)?.abort();
+    dimensionControllersRef.current.delete(id);
     const nextItems = removeCompressionItem(items, id);
     setItems(nextItems);
     setImportErrors((current) => removeCompressionDimensionError(current, id));
@@ -929,6 +940,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
   const clearItems = () => {
     if (sourceBusy) return;
+    dimensionControllersRef.current.forEach((controller) => controller.abort());
+    dimensionControllersRef.current.clear();
     setItems([]);
     setSelectedItemId(null);
     setFailures([]);

@@ -10,7 +10,7 @@ export const COMPRESSION_MAX_CANDIDATES_DEFAULT = 8;
 export const COMPRESSION_FORMATS: ReadonlyArray<{ value: CompressionFormat; label: string }> = [{ value: "jpg", label: "JPEG" }, { value: "webp", label: "WebP" }, { value: "png", label: "PNG" }];
 export interface CompressionDimensionBitmap { width: number; height: number; close: () => void; }
 export interface CompressionDimensionImage { naturalWidth: number; naturalHeight: number; onload: ((event: Event) => void) | null; onerror: ((event: Event) => void) | null; src: string; }
-export interface CompressionDimensionDependencies { createImageBitmap?: (file: Blob) => Promise<CompressionDimensionBitmap>; createImage: () => CompressionDimensionImage; createObjectURL: (file: Blob) => string; revokeObjectURL: (url: string) => void; }
+export interface CompressionDimensionDependencies { createImageBitmap?: (file: Blob) => Promise<CompressionDimensionBitmap>; createImage?: () => CompressionDimensionImage; createObjectURL?: (file: Blob) => string; revokeObjectURL?: (url: string) => void; signal?: AbortSignal; }
 
 export function readCompressionDimensions(file: Blob, dependencies: CompressionDimensionDependencies = {
   createImageBitmap: typeof globalThis.createImageBitmap === "function" ? globalThis.createImageBitmap.bind(globalThis) : undefined,
@@ -27,10 +27,21 @@ export function readCompressionDimensions(file: Blob, dependencies: CompressionD
         if (settled) return;
         settled = true;
         globalThis.clearTimeout(timeout);
+        dependencies.signal?.removeEventListener("abort", abort);
         if (error) reject(error);
         else resolve(dimensions!);
       };
+      const abort = () => {
+        const error = new Error("图片尺寸读取已取消。");
+        error.name = "AbortError";
+        finish(error);
+      };
       timeout = globalThis.setTimeout(() => finish(new Error("读取图片尺寸超时，请检查文件或更换图片。")), COMPRESSION_DIMENSIONS_TIMEOUT_MS);
+      if (dependencies.signal?.aborted) {
+        abort();
+        return;
+      }
+      dependencies.signal?.addEventListener("abort", abort, { once: true });
       try {
         void createImageBitmap(file).then((bitmap) => {
           try {
@@ -47,15 +58,19 @@ export function readCompressionDimensions(file: Blob, dependencies: CompressionD
     });
   }
   return new Promise((resolve, reject) => {
-    const image = dependencies.createImage();
-    const objectUrl = dependencies.createObjectURL(file);
+    const createImage = dependencies.createImage ?? (() => new Image());
+    const createObjectURL = dependencies.createObjectURL ?? ((value: Blob) => URL.createObjectURL(value));
+    const revokeObjectURL = dependencies.revokeObjectURL ?? ((url: string) => URL.revokeObjectURL(url));
+    const image = createImage();
+    const objectUrl = createObjectURL(file);
     let released = false;
     let settled = false;
-    const release = () => { if (!released) { released = true; dependencies.revokeObjectURL(objectUrl); } };
+    const release = () => { if (!released) { released = true; revokeObjectURL(objectUrl); } };
     const cleanup = () => {
       globalThis.clearTimeout(timeout);
       image.onload = null;
       image.onerror = null;
+      dependencies.signal?.removeEventListener("abort", abort);
       release();
     };
     const finish = (error: Error | null, dimensions?: { width: number; height: number }) => {
@@ -65,12 +80,22 @@ export function readCompressionDimensions(file: Blob, dependencies: CompressionD
       if (error) reject(error);
       else resolve(dimensions!);
     };
+    const abort = () => {
+      const error = new Error("图片尺寸读取已取消。");
+      error.name = "AbortError";
+      finish(error);
+    };
     const timeout = globalThis.setTimeout(() => finish(new Error("读取图片尺寸超时，请检查文件或更换图片。")), COMPRESSION_DIMENSIONS_TIMEOUT_MS);
     image.onload = () => {
       try { finish(null, { width: image.naturalWidth, height: image.naturalHeight }); }
       catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
     };
     image.onerror = () => finish(new Error("无法读取图片尺寸。"));
+    if (dependencies.signal?.aborted) {
+      abort();
+      return;
+    }
+    dependencies.signal?.addEventListener("abort", abort, { once: true });
     try { image.src = objectUrl; } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
   });
 }
