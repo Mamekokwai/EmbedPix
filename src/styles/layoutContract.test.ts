@@ -458,7 +458,9 @@ describe("compact layout viewport contract", () => {
 
   it("keeps the title-bar close flow on the native destroy path", () => {
     expect(appTitleBar).toContain("destroyCurrentWindow");
-    expect(appTitleBar).toContain("requestWindowClose().then(destroyCurrentWindow)");
+    expect(appTitleBar).toContain("requestWindowClose().then(async () =>");
+    expect(appTitleBar).toContain("falling back to close");
+    expect(appTitleBar).toContain("await closeCurrentWindow();");
     expect(windowControlGateway).toContain("await currentWindow().destroy();");
     expect(defaultCapabilities).toContain('"core:window:allow-destroy"');
   });

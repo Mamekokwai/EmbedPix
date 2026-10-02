@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Maximize2, Minimize2, Minus, X } from "lucide-react";
 import {
+  closeCurrentWindow,
   destroyCurrentWindow,
   minimizeCurrentWindow,
   readCurrentWindowMaximized,
@@ -28,7 +29,15 @@ export default function AppTitleBar() {
 
   const finishWindowClose = () => {
     nativeCloseHandledRef.current = true;
-    void requestWindowClose().then(destroyCurrentWindow).catch((error) => {
+    void requestWindowClose().then(async () => {
+      try {
+        await destroyCurrentWindow();
+      } catch (destroyError) {
+        // Older installed builds may not have the destroy capability; close remains a safe fallback because the event is already acknowledged.
+        console.warn("destroy current window failed, falling back to close", destroyError);
+        await closeCurrentWindow();
+      }
+    }).catch((error) => {
       nativeCloseHandledRef.current = false;
       closeFlowStartedRef.current = false;
       setClosing(false);
