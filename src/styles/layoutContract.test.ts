@@ -431,6 +431,7 @@ describe("compact layout viewport contract", () => {
   it("keeps GIF header workspace actions visible on narrow windows", () => {
     expect(gifCss).toContain(".gif-header-note { width: 100%; margin-left: 0; flex-wrap: wrap; white-space: normal; }");
     expect(gifCss).toContain(".gif-header-note .workspace-file-button, .gif-header-note > .quiet-button { flex: 1 1 auto; }");
+    expect(gifView).toContain("title={`${videoSource.name} · ${videoSource.width} × ${videoSource.height} px`}");
   });
 
   it("keeps GIF parameter summary copy action available and compact", () => {

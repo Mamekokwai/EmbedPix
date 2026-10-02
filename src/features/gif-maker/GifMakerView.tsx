@@ -2422,7 +2422,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                   <div className="gif-video-summary"><span>当前范围</span><strong>{formatVideoTime(videoStart)} – {formatVideoTime(videoEnd)}</strong><small>预计 {planVideoFramesWithSampling(videoStart, videoEnd, videoSource.duration, videoFps, { everyNthFrame: videoEveryNthFrame, maxFrames: videoMaxFrames }).times.length} 帧（最多 {MAX_VIDEO_FRAME_LIMIT} 帧）</small></div>
                 </div>
                 <div className="gif-video-actions">
-                  <span>{videoSource.name} · {videoSource.width} × {videoSource.height} px</span>
+                  <span title={`${videoSource.name} · ${videoSource.width} × ${videoSource.height} px`}>{videoSource.name} · {videoSource.width} × {videoSource.height} px</span>
                   <button className="primary-button" type="button" onClick={() => void extractVideo()}><Video size={15} aria-hidden="true" />提取视频帧</button>
                 </div>
               </>
