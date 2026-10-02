@@ -1,6 +1,7 @@
 import { MAX_VIDEO_FRAMES } from "./videoGifLogic";
 import type { VideoCropRect, VideoFramePlan } from "./videoGifLogic";
 import type { GifMakerVideoRotation as VideoRotation } from "./gifMakerPreferences";
+import { VIDEO_METADATA_TIMEOUT_MS } from "./videoMetadata";
 import {
   MAX_FRAME_BYTES,
   MAX_TOTAL_BYTES,
@@ -39,29 +40,36 @@ function createAbortError(): DOMException {
 
 function waitForVideoMetadata(video: HTMLVideoElement, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeout = globalThis.setTimeout(() => finish(new Error("读取视频元数据超时，请检查文件或更换视频。")), VIDEO_METADATA_TIMEOUT_MS);
     const cleanup = () => {
+      globalThis.clearTimeout(timeout);
       video.removeEventListener("loadedmetadata", handleMetadata);
       video.removeEventListener("error", handleError);
       signal?.removeEventListener("abort", handleAbort);
     };
-    const handleMetadata = () => {
+    const finish = (error: Error | DOMException | null) => {
+      if (settled) return;
+      settled = true;
       cleanup();
-      resolve();
+      if (error) reject(error);
+      else resolve();
+    };
+    const handleMetadata = () => {
+      finish(null);
     };
     const handleError = () => {
-      cleanup();
-      reject(new Error("无法解码视频，请尝试 MP4、WebM 或 OGG。"));
+      finish(new Error("无法解码视频，请尝试 MP4、WebM 或 OGG。"));
     };
     const handleAbort = () => {
-      cleanup();
-      reject(createAbortError());
+      finish(createAbortError());
     };
     if (signal?.aborted) {
       handleAbort();
       return;
     }
     if (video.readyState >= 1) {
-      resolve();
+      finish(null);
       return;
     }
     video.addEventListener("loadedmetadata", handleMetadata, { once: true });

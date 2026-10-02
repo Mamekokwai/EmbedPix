@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractVideoFrameBlobs } from "./videoFrameExtraction";
 import type { VideoFrameExtractionDependencies } from "./videoFrameExtraction";
 import { MAX_FRAME_BYTES, MAX_TOTAL_BYTES } from "./gifMakerLogic";
+import { VIDEO_METADATA_TIMEOUT_MS } from "./videoMetadata";
 
 type ListenerEntry = { listener: EventListener; once: boolean };
 
@@ -123,6 +124,8 @@ function extract(
   );
 }
 
+afterEach(() => vi.useRealTimers());
+
 describe("video frame extraction lifecycle", () => {
   it("carries the planned GIF duration into every extracted frame", async () => {
     const state = setup();
@@ -162,6 +165,22 @@ describe("video frame extraction lifecycle", () => {
     state.video.emit("error");
 
     await expect(pending).rejects.toThrow("MP4、WebM 或 OGG");
+    expect(state.video.src).toBe("");
+    expect(state.video.pauseCalls).toBe(1);
+    expect(state.video.loadCalls).toBe(1);
+    expect(state.revokedUrls).toEqual([]);
+  });
+
+  it("times out while waiting for video metadata and releases the video resource", async () => {
+    vi.useFakeTimers();
+    const state = setup();
+    const pending = extract(state, new AbortController());
+    const rejection = expect(pending).rejects.toThrow("超时");
+
+    await vi.advanceTimersByTimeAsync(VIDEO_METADATA_TIMEOUT_MS);
+    await rejection;
+
+    expect(state.video.removeAttributeCalls).toBe(1);
     expect(state.video.src).toBe("");
     expect(state.video.pauseCalls).toBe(1);
     expect(state.video.loadCalls).toBe(1);
