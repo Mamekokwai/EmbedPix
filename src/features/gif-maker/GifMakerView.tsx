@@ -41,6 +41,7 @@ import { exportPresetBundle, formatPresetTransferError, importPresetBundle, merg
 import { exportWorkspace, formatWorkspaceTransferError, importWorkspace } from "../../shared/workspaceTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
 import { loadVideoMetadata } from "./videoMetadata";
+import { loadGifImage } from "./gifImageLoader";
 import "../../styles/features/gif-maker.css";
 
 export type GifFitMode = GifContentFit;
@@ -370,18 +371,9 @@ function formatGifTimelineTime(milliseconds: number): string {
   return seconds >= 60 ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}` : `${seconds.toFixed(2)} 秒`;
 }
 
-function loadImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("无法读取这张图片，请选择有效的图片文件。"));
-    image.src = url;
-  });
-}
-
 function readImageFrame(file: File, id: string): Promise<GifFrameModel> {
   const previewUrl = URL.createObjectURL(file);
-  return loadImage(previewUrl)
+  return loadGifImage(previewUrl)
     .then((image) => ({
       id,
       file,
@@ -841,7 +833,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     let cancelled = false;
     canvas.width = canvasSize.width;
     canvas.height = canvasSize.height;
-    void loadImage(selectedFrame.previewUrl).then((image) => {
+    void loadGifImage(selectedFrame.previewUrl).then((image) => {
       if (cancelled) return;
       const context = canvas.getContext("2d");
       if (context) drawGifFrame(context, image, canvasSize, fitMode, contentAlignment, contentMargins, background, customBackgroundColor);
@@ -1689,7 +1681,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       for (const [index, frame] of selectedFrames.entries()) {
         throwIfAborted(signal);
         let data: Uint8Array;
-        const image = await loadImage(frame.previewUrl);
+        const image = await loadGifImage(frame.previewUrl);
         throwIfAborted(signal);
         drawGifFrame(context, image, size, fitMode, contentAlignment, contentMargins, background, customBackgroundColor);
         data = await canvasToBytes(exportCanvas, signal);
