@@ -190,8 +190,8 @@ export async function extractVideoFrameBlobs(
   video.preload = "auto";
   video.muted = true;
   video.playsInline = true;
-  video.src = source.previewUrl;
   try {
+    video.src = source.previewUrl;
     await waitForVideoMetadata(video, signal);
     if (signal?.aborted) throw createAbortError();
     canvas = dependencies.createCanvas();

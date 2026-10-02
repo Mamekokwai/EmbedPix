@@ -11,7 +11,8 @@ class FakeVideo {
   preload = "";
   muted = false;
   playsInline = false;
-  src = "";
+  failSourceAssignment = false;
+  private _src = "";
   paused = true;
   private _currentTime = 0;
   removeAttributeCalls = 0;
@@ -64,6 +65,15 @@ class FakeVideo {
   set currentTime(value: number) {
     this._currentTime = value;
     this.onCurrentTime?.();
+  }
+
+  get src() {
+    return this._src;
+  }
+
+  set src(value: string) {
+    if (this.failSourceAssignment && value) throw new Error("source assignment failed");
+    this._src = value;
   }
 }
 
@@ -181,6 +191,18 @@ describe("video frame extraction lifecycle", () => {
     await rejection;
 
     expect(state.video.removeAttributeCalls).toBe(1);
+    expect(state.video.src).toBe("");
+    expect(state.video.pauseCalls).toBe(1);
+    expect(state.video.loadCalls).toBe(1);
+    expect(state.revokedUrls).toEqual([]);
+  });
+
+  it("releases the video resource when source binding fails", async () => {
+    const state = setup();
+    state.video.failSourceAssignment = true;
+
+    await expect(extract(state, new AbortController())).rejects.toThrow("source assignment failed");
+
     expect(state.video.src).toBe("");
     expect(state.video.pauseCalls).toBe(1);
     expect(state.video.loadCalls).toBe(1);
