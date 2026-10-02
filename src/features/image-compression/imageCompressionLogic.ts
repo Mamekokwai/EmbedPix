@@ -230,11 +230,18 @@ export function formatCompressionParameterSummary(entries: ReadonlyArray<string>
   const safeEntries = entries.map((entry) => entry.startsWith("输出到指定目录 ") ? "输出到指定目录（路径未复制）" : entry);
   return `EmbedPix 压缩参数\n${safeEntries.join(" · ")}`;
 }
+export function formatCompressionSizeDelta(savedBytes: number, savingsPercent?: number): string {
+  const safeSavedBytes = Number.isFinite(savedBytes) ? savedBytes : 0;
+  const direction = safeSavedBytes >= 0 ? "节省" : "增加";
+  const percent = typeof savingsPercent === "number" && Number.isFinite(savingsPercent) ? ` · ${Math.abs(savingsPercent).toFixed(0)}%` : "";
+  return `${direction} ${formatCompressionBytes(Math.abs(safeSavedBytes))}${percent}`;
+}
 export function formatCompressionBatchSummary(summary: { total: number; succeeded: number; skipped: number; failed: number; processedInputBytes: number; outputBytes: number; savedBytes: number; targetMet: boolean | null; selectedQualities: ReadonlyArray<number>; itemResults: ReadonlyArray<Pick<CompressionItemResult, "fileName" | "status" | "reason">> }): string {
+  const savingsPercent = summary.processedInputBytes > 0 ? (summary.savedBytes / summary.processedInputBytes) * 100 : undefined;
   const lines = [
     `压缩批处理：${summary.total} 项`,
     `成功 ${summary.succeeded} · 跳过 ${summary.skipped} · 失败 ${summary.failed}`,
-    `已处理输入 ${formatCompressionBytes(summary.processedInputBytes)} · 输出 ${formatCompressionBytes(summary.outputBytes)} · 节省 ${formatCompressionBytes(summary.savedBytes)}`,
+    `已处理输入 ${formatCompressionBytes(summary.processedInputBytes)} · 输出 ${formatCompressionBytes(summary.outputBytes)} · ${formatCompressionSizeDelta(summary.savedBytes, savingsPercent)}`,
     summary.targetMet === null ? null : `目标体积：${summary.targetMet ? "已达成" : "未达成"}`,
     summary.selectedQualities.length ? `实际质量：${summary.selectedQualities.join(" / ")}` : null,
     ...summary.itemResults.filter((item) => item.status !== "completed" || item.reason).map((item) => `${item.status === "failed" ? "失败" : "跳过"} ${item.fileName.split(/[\\/]/u).pop() ?? item.fileName}${item.reason ? `：${item.reason}` : ""}`),

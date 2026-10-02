@@ -23,6 +23,7 @@ import {
   formatCompressionBytes,
   formatCompressionFailureDetails,
   formatCompressionParameterSummary,
+  formatCompressionSizeDelta,
   formatCompressionBatchSummary,
   formatCompressionProgressSummary,
   createCompressionBatchReport,
@@ -1276,7 +1277,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className="compression-summary-stat"><span>成功</span><strong>{resultStats.succeeded}</strong></div>
         <div className="compression-summary-stat"><span>跳过</span><strong>{resultStats.skipped}</strong></div>
         <div className="compression-summary-stat"><span>失败</span><strong className={resultStats.failed > 0 ? "compression-failure" : undefined}>{resultStats.failed}</strong></div>
-        <div className="compression-summary-stat"><span>实际节省</span><strong className="compression-saving">{formatCompressionBytes(actualSavedBytes)} · {actualSavingsPercent.toFixed(0)}%</strong></div>
+        <div className="compression-summary-stat"><span>实际体积变化</span><strong className={actualSavedBytes >= 0 ? "compression-saving" : "compression-failure"}>{formatCompressionSizeDelta(actualSavedBytes, actualSavingsPercent)}</strong></div>
         {maxOutputBytes ? <div className="compression-summary-stat"><span>目标体积</span><strong className={resultStats.targetMet === false ? "compression-failure" : "compression-saving"}>{resultStats.targetMet === null ? "待处理" : resultStats.targetMet ? "已达成" : "未达成"}</strong></div> : null}
         {resultStats.selectedQualities.length > 0 ? <div className="compression-summary-stat"><span>实际质量</span><strong>{resultStats.selectedQualities.join(" / ")}</strong></div> : null}
         <span className="compression-estimate-note" aria-live="polite">{formatCompressionProgressSummary({ current: progress.current, total: progress.total, processedInputBytes: resultStats.processedInputBytes, totalInputBytes: resultStats.inputBytes, outputBytes: resultStats.outputBytes, status })}{deleteSource ? " · 成功项源文件已按设置删除" : ""}</span>
