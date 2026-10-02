@@ -12,6 +12,13 @@ function Set-Utf8NoBomContent([string]$Path, [string]$Value) {
   [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))
 }
 
+function Write-CliSmokeFixtures([string]$Root) {
+  $png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+  $gif = 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+  [IO.File]::WriteAllBytes((Join-Path $Root 'cli-input.png'), [Convert]::FromBase64String($png))
+  [IO.File]::WriteAllBytes((Join-Path $Root 'cli-input.gif'), [Convert]::FromBase64String($gif))
+}
+
 function Get-Utf8Text([string]$Path) {
   [IO.File]::ReadAllText($Path, [Text.UTF8Encoding]::new($false))
 }
@@ -391,8 +398,9 @@ try {
   }
   if (-not (Test-Path -LiteralPath $CliPath -PathType Leaf)) { throw "CLI binary was not found: $CliPath" }
 
-  $pngInput = Join-Path $repoRoot 'benchmarks/cli-test/icon.png'
-  $gifInput = Join-Path $repoRoot 'benchmarks/cli-test/anim.gif'
+  Write-CliSmokeFixtures $script:root
+  $pngInput = Join-Path $script:root 'cli-input.png'
+  $gifInput = Join-Path $script:root 'cli-input.gif'
   $pngOutput = Join-Path $script:root 'roundtrip.png'
   $gifOutput = Join-Path $script:root 'roundtrip.gif'
   $compressionOutput = Join-Path $script:root 'compressed.webp'
@@ -429,11 +437,11 @@ try {
   [void](Invoke-CliRequest $CliPath @{ id = 'jpeg-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegResizeOutput; format = 'jpg'; quality = 82; targetResizePercent = 50; maxInputBytes = 1MB } 'JPEG resize')
   $jpegResizeResult = Assert-Output $jpegResizeOutput 'jpg' 'JPEG resize'
   $jpegResizeDimensions = Get-JpegDimensions $jpegResizeOutput
-  if ($jpegResizeDimensions.width -ne 16 -or $jpegResizeDimensions.height -ne 16) { throw "JPEG resize smoke emitted $($jpegResizeDimensions.width)x$($jpegResizeDimensions.height), expected 16x16." }
+  if ($jpegResizeDimensions.width -ne 1 -or $jpegResizeDimensions.height -ne 1) { throw "JPEG resize smoke emitted $($jpegResizeDimensions.width)x$($jpegResizeDimensions.height), expected 1x1." }
   [void](Invoke-CliRequest $CliPath @{ id = 'jpeg-original-size-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegOriginalSizeOutput; format = 'jpg'; quality = 82; targetResizePercent = 100; maxInputBytes = 1MB } 'JPEG original size')
   $jpegOriginalSizeResult = Assert-Output $jpegOriginalSizeOutput 'jpg' 'JPEG original size'
   $jpegOriginalSizeDimensions = Get-JpegDimensions $jpegOriginalSizeOutput
-  if ($jpegOriginalSizeDimensions.width -ne 32 -or $jpegOriginalSizeDimensions.height -ne 32) { throw "JPEG 100% smoke emitted $($jpegOriginalSizeDimensions.width)x$($jpegOriginalSizeDimensions.height), expected 32x32." }
+  if ($jpegOriginalSizeDimensions.width -ne 1 -or $jpegOriginalSizeDimensions.height -ne 1) { throw "JPEG 100% smoke emitted $($jpegOriginalSizeDimensions.width)x$($jpegOriginalSizeDimensions.height), expected 1x1." }
   $jpegQualityThresholdResult = Invoke-CliRequest $CliPath @{ id = 'jpeg-quality-threshold-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegQualityThresholdOutput; format = 'jpg'; quality = 82; maxOutputBytes = 64KB; maxCandidates = 3; maxRgbMae = 255; maxInputBytes = 1MB } 'JPEG RGB MAE threshold'
   $jpegQualityThresholdOutputResult = Assert-Output $jpegQualityThresholdOutput 'jpg' 'JPEG RGB MAE threshold'
   if ($jpegQualityThresholdResult.output.targetMet -ne $true -or $jpegQualityThresholdResult.output.maxRgbMae -ne 255) { throw 'JPEG RGB MAE threshold smoke did not report a bounded successful target.' }
