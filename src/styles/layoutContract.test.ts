@@ -464,4 +464,10 @@ describe("compact layout viewport contract", () => {
     expect(windowControlGateway).toContain("await currentWindow().destroy();");
     expect(defaultCapabilities).toContain('"core:window:allow-destroy"');
   });
+
+  it("uses one signed size-change vocabulary for preview and estimate", () => {
+    expect(compressionView).toContain("formatCompressionSizeDelta(previewSavedBytes, previewSavingsPercent)");
+    expect(compressionView).toContain("预计体积变化");
+    expect(compressionView).toContain("formatCompressionSizeDelta(estimate.inputBytes - estimate.estimatedBytes, estimate.savingsPercent)");
+  });
 });
