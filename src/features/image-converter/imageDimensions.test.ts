@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { readImageDimensions, type ImageDimensionImage } from "./imageDimensions";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { IMAGE_DIMENSIONS_TIMEOUT_MS, readImageDimensions, type ImageDimensionImage } from "./imageDimensions";
 
 function setup() {
   let image: ImageDimensionImage = { naturalWidth: 320, naturalHeight: 240, onload: null, onerror: null, src: "" };
@@ -13,6 +13,8 @@ function setup() {
 }
 
 describe("image dimension lifecycle", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("reads dimensions and revokes the object URL after load", async () => {
     const state = setup();
     const pending = readImageDimensions(new Blob(["image"]), state.dependencies);
@@ -37,5 +39,19 @@ describe("image dimension lifecycle", () => {
 
     await expect(readImageDimensions(new Blob(["image"]), state.dependencies)).rejects.toThrow("source assignment failed");
     expect(state.revokeObjectURL).toHaveBeenCalledOnce();
+  });
+
+  it("times out and cleans listeners when image decoding never settles", async () => {
+    vi.useFakeTimers();
+    const state = setup();
+    const pending = readImageDimensions(new Blob(["image"]), state.dependencies);
+    const rejection = expect(pending).rejects.toThrow("超时");
+
+    await vi.advanceTimersByTimeAsync(IMAGE_DIMENSIONS_TIMEOUT_MS);
+    await rejection;
+
+    expect(state.revokeObjectURL).toHaveBeenCalledOnce();
+    expect(state.image.onload).toBeNull();
+    expect(state.image.onerror).toBeNull();
   });
 });

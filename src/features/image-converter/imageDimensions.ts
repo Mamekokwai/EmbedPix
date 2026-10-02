@@ -1,3 +1,5 @@
+export const IMAGE_DIMENSIONS_TIMEOUT_MS = 15_000;
+
 export interface ImageDimensionImage {
   naturalWidth: number;
   naturalHeight: number;
@@ -26,30 +28,39 @@ export function readImageDimensions(
     const image = dependencies.createImage();
     const objectUrl = dependencies.createObjectURL(file);
     let released = false;
+    let settled = false;
     const release = () => {
       if (!released) {
         released = true;
         dependencies.revokeObjectURL(objectUrl);
       }
     };
+    const cleanup = () => {
+      globalThis.clearTimeout(timeout);
+      image.onload = null;
+      image.onerror = null;
+      release();
+    };
+    const finish = (error: Error | null, dimensions?: { width: number; height: number }) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(dimensions!);
+    };
+    const timeout = globalThis.setTimeout(() => finish(new Error("读取图片尺寸超时，请检查文件或更换图片。")), IMAGE_DIMENSIONS_TIMEOUT_MS);
     image.onload = () => {
       try {
-        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        finish(null, { width: image.naturalWidth, height: image.naturalHeight });
       } catch (error) {
-        reject(error);
-      } finally {
-        release();
+        finish(error instanceof Error ? error : new Error(String(error)));
       }
     };
-    image.onerror = () => {
-      release();
-      reject(new Error("无法读取这张图片，请选择有效的图片文件。"));
-    };
+    image.onerror = () => finish(new Error("无法读取这张图片，请选择有效的图片文件。"));
     try {
       image.src = objectUrl;
     } catch (error) {
-      release();
-      reject(error);
+      finish(error instanceof Error ? error : new Error(String(error)));
     }
   });
 }
