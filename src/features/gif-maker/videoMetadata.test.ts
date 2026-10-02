@@ -8,7 +8,8 @@ class FakeVideo {
   duration = 2.5;
   videoWidth = 640;
   videoHeight = 360;
-  src = "";
+  failSourceAssignment = false;
+  private _src = "";
   removeAttributeCalls = 0;
   loadCalls = 0;
   private readonly listeners = new Map<string, Set<EventListener>>();
@@ -38,6 +39,15 @@ class FakeVideo {
 
   load() {
     this.loadCalls += 1;
+  }
+
+  get src() {
+    return this._src;
+  }
+
+  set src(value: string) {
+    if (this.failSourceAssignment && value) throw new Error("source assignment failed");
+    this._src = value;
   }
 }
 
@@ -85,6 +95,16 @@ describe("video metadata lifecycle", () => {
 
     await expect(pending).rejects.toThrow("MP4、WebM 或 OGG");
     expect(video.src).toBe("");
+    expect(video.loadCalls).toBe(1);
+  });
+
+  it("cleans media state immediately when source binding fails", async () => {
+    const video = new FakeVideo();
+    video.failSourceAssignment = true;
+
+    await expect(loadVideoMetadata("blob:video", undefined, () => video as unknown as HTMLVideoElement)).rejects.toThrow("source assignment failed");
+    expect(video.src).toBe("");
+    expect(video.removeAttributeCalls).toBe(1);
     expect(video.loadCalls).toBe(1);
   });
 });

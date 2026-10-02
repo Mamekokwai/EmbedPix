@@ -51,6 +51,10 @@ export function loadVideoMetadata(
     video.addEventListener("loadedmetadata", handleMetadata, { once: true });
     video.addEventListener("error", handleError, { once: true });
     signal?.addEventListener("abort", handleAbort, { once: true });
-    video.src = url;
+    try {
+      video.src = url;
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }
