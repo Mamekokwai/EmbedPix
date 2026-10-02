@@ -70,6 +70,12 @@ export function formatUpdateCheckTime(value: Date | null): string {
   return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+export function shouldRecordUpdateCheckTime(status: UpdateStatus, errorStage?: UpdateErrorStage): boolean {
+  return status === "up-to-date"
+    || status === "available"
+    || (status === "error" && (errorStage === "check" || errorStage === "offline"));
+}
+
 export function formatReleaseOpenError(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
   return /[\u3400-\u9fff]/u.test(message) ? message : "无法打开发布页，请检查浏览器弹窗权限。";
@@ -194,10 +200,10 @@ export default function UpdateView({
   const viewClassName = ["update-view", embedded ? "update-view-embedded" : "page-view", className].filter(Boolean).join(" ");
 
   useEffect(() => {
-    if (status !== "idle" && status !== "checking" && status !== "downloading" && status !== "installing") {
+    if (shouldRecordUpdateCheckTime(status, errorStage)) {
       setLastCheckedAt(new Date());
     }
-  }, [status]);
+  }, [errorStage, status]);
 
   const handlePrimaryAction = () => {
     if (busy) return;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatReleaseOpenError, formatUpdateCheckTime, resolveUpdateProgress, resolveUpdateStatusLabel } from "./UpdateView";
+import { formatReleaseOpenError, formatUpdateCheckTime, resolveUpdateProgress, resolveUpdateStatusLabel, shouldRecordUpdateCheckTime } from "./UpdateView";
 import { makeOfflineState } from "../../app/hooks/useUpdateCheck";
 
 describe("update progress model", () => {
@@ -78,5 +78,17 @@ describe("compact update status", () => {
   it("formats the last check time without leaking a placeholder date", () => {
     expect(formatUpdateCheckTime(null)).toBe("—");
     expect(formatUpdateCheckTime(new Date(2026, 0, 2, 9, 5))).toMatch(/09:05|上午09:05/);
+  });
+
+  it("records the last-check time only for check results", () => {
+    expect(shouldRecordUpdateCheckTime("up-to-date")).toBe(true);
+    expect(shouldRecordUpdateCheckTime("available")).toBe(true);
+    expect(shouldRecordUpdateCheckTime("error", "check")).toBe(true);
+    expect(shouldRecordUpdateCheckTime("error", "offline")).toBe(true);
+    expect(shouldRecordUpdateCheckTime("downloading")).toBe(false);
+    expect(shouldRecordUpdateCheckTime("cancelled")).toBe(false);
+    expect(shouldRecordUpdateCheckTime("downloaded")).toBe(false);
+    expect(shouldRecordUpdateCheckTime("error", "download")).toBe(false);
+    expect(shouldRecordUpdateCheckTime("error", "install")).toBe(false);
   });
 });
