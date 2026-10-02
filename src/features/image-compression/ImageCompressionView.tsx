@@ -148,7 +148,8 @@ function compressionModeLabel(mode?: "lossless" | "lossy"): string | null {
   return null;
 }
 
-function compressionEngineLabel(engine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp"): string | null {
+function compressionEngineLabel(engine?: "passthrough" | "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp"): string | null {
+  if (engine === "passthrough") return "原字节透传";
   if (engine === "oxipng") return "OxiPNG";
   if (engine === "image-jpeg") return "image JPEG";
   if (engine === "jpeg-encoder") return "jpeg-encoder";
@@ -262,6 +263,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const sourceBusy = busy || importBusy;
   const qualityEnabled = supportsCompressionTargetSize(format, lossless);
   const webpLossyActive = format === "webp" && !lossless;
+  const metadataPreserveActive = metadataPolicy === "preserve";
   const replaceOriginalAvailable = canReplaceCompressionOriginal(items, isTauriEnvironment());
   const deleteSourceAvailable = canDeleteCompressionSource(items, isTauriEnvironment());
   const outputModes = useMemo(() => normalizeCompressionOutputModes({ autoNumbering, overwrite, replaceOriginal }), [autoNumbering, overwrite, replaceOriginal]);
@@ -292,15 +294,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const options = useMemo<CompressionOptions>(() => ({
     format,
     quality,
-    webpMethod: webpLossyActive ? webpMethod : undefined,
-    webpAlphaQuality: webpLossyActive ? webpAlphaQuality : undefined,
-    webpPass: webpLossyActive ? webpPass : undefined,
-    pngOptimizeAlpha: format === "png" ? pngOptimizeAlpha : undefined,
-    webpNearLossless: format === "webp" && lossless ? webpNearLossless : null,
-    webpLosslessMethod: format === "webp" && lossless ? webpLosslessMethod : null,
+    webpMethod: !metadataPreserveActive && webpLossyActive ? webpMethod : undefined,
+    webpAlphaQuality: !metadataPreserveActive && webpLossyActive ? webpAlphaQuality : undefined,
+    webpPass: !metadataPreserveActive && webpLossyActive ? webpPass : undefined,
+    pngOptimizeAlpha: !metadataPreserveActive && format === "png" ? pngOptimizeAlpha : undefined,
+    webpNearLossless: !metadataPreserveActive && format === "webp" && lossless ? webpNearLossless : null,
+    webpLosslessMethod: !metadataPreserveActive && format === "webp" && lossless ? webpLosslessMethod : null,
     jpegBackground,
-    jpegProgressive: format === "jpg" ? jpegProgressive : undefined,
-    jpegOptimizeHuffman: format === "jpg" ? jpegOptimizeHuffman : undefined,
+    jpegProgressive: !metadataPreserveActive && format === "jpg" ? jpegProgressive : undefined,
+    jpegOptimizeHuffman: !metadataPreserveActive && format === "jpg" ? jpegOptimizeHuffman : undefined,
     lossless,
     pngOptimizationLevel,
     metadataPolicy,
@@ -313,13 +315,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     replaceOriginal: outputModes.replaceOriginal,
     deleteSource: outputModes.replaceOriginal ? false : deleteSource,
     skipIfLarger,
-    maxOutputBytes,
-    maxCandidates: maxOutputBytes ? maxCandidates : undefined,
-    maxRgbMae: maxOutputBytes && (format === "jpg" || format === "webp") && !lossless && !maxRgbMaeError && maxRgbMaeValue !== undefined ? maxRgbMaeValue : null,
-    targetResizePercent: qualityEnabled && !autoResizeActive ? targetResizePercent : null,
-    autoResizeToTarget: autoResizeActive,
+    maxOutputBytes: metadataPreserveActive ? undefined : maxOutputBytes,
+    maxCandidates: !metadataPreserveActive && maxOutputBytes ? maxCandidates : undefined,
+    maxRgbMae: !metadataPreserveActive && maxOutputBytes && (format === "jpg" || format === "webp") && !lossless && !maxRgbMaeError && maxRgbMaeValue !== undefined ? maxRgbMaeValue : null,
+    targetResizePercent: !metadataPreserveActive && qualityEnabled && !autoResizeActive ? targetResizePercent : null,
+    autoResizeToTarget: !metadataPreserveActive && autoResizeActive,
     maxInputBytes,
-  }), [autoResizeActive, deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, webpLosslessMethod, jpegBackground, jpegProgressive, jpegOptimizeHuffman, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates, maxRgbMaeError, maxRgbMaeValue, targetResizePercent, qualityEnabled, maxInputBytes]);
+  }), [autoResizeActive, deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, webpLosslessMethod, jpegBackground, jpegProgressive, jpegOptimizeHuffman, lossless, pngOptimizationLevel, metadataPolicy, metadataPreserveActive, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates, maxRgbMaeError, maxRgbMaeValue, targetResizePercent, qualityEnabled, maxInputBytes]);
 
   useEffect(() => {
     const previous = previousOptionsRef.current;
@@ -359,7 +361,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   }, [format, items, stripSafeInputValidation, stripSafeValidationItems]);
   const stripSafeInputAvailable = stripSafeInputVerified === true;
   useEffect(() => {
-    if (metadataPolicy === "stripSafe" && stripSafeInputVerified === false) setMetadataPolicy("strip");
+    if ((metadataPolicy === "stripSafe" || metadataPolicy === "preserve") && stripSafeInputVerified === false) setMetadataPolicy("strip");
   }, [metadataPolicy, stripSafeInputVerified]);
   const previewSavedBytes = selectedItem && preview ? selectedItem.size - preview.outputBytes : 0;
   const previewSavingsPercent = selectedItem && preview && selectedItem.size > 0 ? (previewSavedBytes / selectedItem.size) * 100 : 0;
@@ -387,7 +389,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     maxRgbMaeValue !== undefined && !maxRgbMaeError && (format === "jpg" || format === "webp") && !lossless ? `RGB MAE ≤ ${maxRgbMaeValue}` : null,
     qualityEnabled ? (autoResizeActive ? "自动缩放至目标体积" : `输出缩放 ${targetResizePercent ?? 100}%`) : null,
     `单文件输入 ≤ ${maxInputMiB} MiB`,
-    metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理元数据` : metadataPolicy === "stripAll" ? "全部清理元数据" : metadataPolicy === "strip" ? "移除元数据" : `元数据 ${metadataPolicy}`,
+    metadataPolicy === "preserve" ? "原字节透传（元数据不变）" : metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理元数据` : metadataPolicy === "stripAll" ? "全部清理元数据" : "移除元数据",
     replaceOriginal ? "覆盖原图并备份到 bak" : outputLocation === "source" ? "输出到源文件夹" : outputLocation === "subfolder" ? `输出到子目录 ${outputSubdirectory.trim() || "（未设置）"}` : `输出到指定目录 ${outputDirectory.trim() || "（未设置）"}`,
     outputModes.overwrite ? "允许覆盖同名" : outputModes.autoNumbering ? "自动序号" : "同名时拒绝写入",
     deleteSource && !replaceOriginal ? "成功后删除源文件" : null,
@@ -1221,7 +1223,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <details className="compression-advanced-settings">
             <summary><strong>高级输出选项</strong><span>元数据、路径与覆盖策略</span></summary>
             <div className="compression-advanced-settings-body">
-          <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（兼容模式）</option><option value="stripAll">全部清理元数据</option><option value="stripSafe" disabled={!stripSafeInputAvailable}>{format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理</option><option value="preserve" disabled>保留元数据（当前不可用：核心拒绝）</option></select><small className="compression-field-hint">{metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"}：保留结构合法且有界的 ICC payload（不保证内部色彩语义），移除 EXIF/GPS/XMP/注释；输入格式或配置无法验证时会失败。` : "兼容模式保留原有清理范围；全部清理会移除可识别的元数据。"}</small></label>
+          <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy}><option value="strip">移除元数据（兼容模式）</option><option value="stripAll">全部清理元数据</option><option value="stripSafe" disabled={!stripSafeInputAvailable}>{format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理</option><option value="preserve" disabled={!stripSafeInputAvailable}>保留原始元数据（原字节透传）</option></select><small className="compression-field-hint">{metadataPolicy === "preserve" ? "仅允许同格式静态 PNG/JPEG/WebP；输出原字节，不应用压缩、缩放或目标体积参数。" : metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"}：保留结构合法且有界的 ICC payload（不保证内部色彩语义），移除 EXIF/GPS/XMP/注释；输入格式或配置无法验证时会失败。` : "兼容模式保留原有清理范围；全部清理会移除可识别的元数据。"}</small></label>
           <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy || replaceOriginal}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>
           {outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
           {outputLocation === "directory" ? <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="例如 D:\\Export" spellCheck={false} aria-invalid={Boolean(outputLocationError)} disabled={busy || replaceOriginal} /></label> : null}
@@ -1257,8 +1259,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         {preview ? <div className="compression-preview-stats"><span>尺寸 {preview.width} × {preview.height}</span>{typeof preview.selectedResizePercent === "number" ? <span>{preview.autoResizeToTarget ? "自动缩放" : "输出缩放"} {preview.selectedResizePercent}%</span> : null}<span>输出 {formatCompressionBytes(preview.outputBytes)}</span>{preview.preparedInputBytes !== undefined && preview.preparedInputBytes !== preview.originalInputBytes ? <span>缩放中间输入 {formatCompressionBytes(preview.preparedInputBytes)}</span> : null}<span className={previewSavedBytes >= 0 ? "compression-saving" : "compression-failure"}>{previewSavedBytes >= 0 ? `节省 ${formatCompressionBytes(previewSavedBytes)} · ${previewSavingsPercent.toFixed(0)}%` : `增加 ${formatCompressionBytes(Math.abs(previewSavedBytes))}`}</span>{maxOutputBytes ? <span className={preview.targetMet ? "compression-saving" : "compression-failure"}>目标 {preview.targetMet ? "已达成" : "未达成"}</span> : null}{typeof preview.selectedQuality === "number" ? <span>选中质量 {preview.selectedQuality}</span> : null}{typeof preview.candidateCount === "number" ? <span>尝试候选 {preview.candidateCount}</span> : null}{typeof preview.candidateSearchMs === "number" ? <span>候选搜索 {preview.candidateSearchMs} ms</span> : null}{preview.qualityMetrics ? <span title="基于解码后的输入和输出逐像素计算，仅供相对比较，不等同主观画质">RGB MAE {preview.qualityMetrics.rgbMae.toFixed(2)} · PSNR {preview.qualityMetrics.psnrDb === null ? "无误差" : `${preview.qualityMetrics.psnrDb.toFixed(1)} dB`} · Alpha 差异 {preview.qualityMetrics.alphaMismatchPixels} 像素</span> : null}{preview.status === "skipped" ? <span className="compression-failure" title={preview.skippedReason || undefined}>预览跳过：{formatCompressionReason(preview.skippedReason || "未发布输出")}{preview.skippedReason ? <span className="visually-hidden">原生原因：{preview.skippedReason}</span> : null}</span> : null}</div> : null}
       </section>
 
-      {preview ? <p className="compression-estimate-note">预览实际元数据策略：{preview.metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` : preview.metadataPolicy === "stripAll" ? "全部清理" : preview.metadataPolicy === "strip" ? "已移除" : preview.metadataPolicy}{compressionModeLabel(preview.compressionMode) ? ` · 模式 ${compressionModeLabel(preview.compressionMode)}` : ""}{compressionEngineLabel(preview.compressionEngine) ? ` · 后端 ${compressionEngineLabel(preview.compressionEngine)}` : ""}</p> : null}
-      {estimate.metadataPolicy ? <p className="compression-estimate-note">估算实际元数据策略：{estimate.metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` : estimate.metadataPolicy === "stripAll" ? "全部清理" : estimate.metadataPolicy === "strip" ? "已移除" : estimate.metadataPolicy}{compressionModeLabel(estimate.compressionMode) ? ` · 模式 ${compressionModeLabel(estimate.compressionMode)}` : ""}{compressionEngineLabel(estimate.compressionEngine) ? ` · 后端 ${compressionEngineLabel(estimate.compressionEngine)}` : ""}</p> : null}
+      {preview ? <p className="compression-estimate-note">预览实际元数据策略：{preview.metadataPolicy === "preserve" ? "原字节透传" : preview.metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` : preview.metadataPolicy === "stripAll" ? "全部清理" : "已移除"}{compressionModeLabel(preview.compressionMode) ? ` · 模式 ${compressionModeLabel(preview.compressionMode)}` : ""}{compressionEngineLabel(preview.compressionEngine) ? ` · 后端 ${compressionEngineLabel(preview.compressionEngine)}` : ""}</p> : null}
+      {estimate.metadataPolicy ? <p className="compression-estimate-note">估算实际元数据策略：{estimate.metadataPolicy === "preserve" ? "原字节透传" : estimate.metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` : estimate.metadataPolicy === "stripAll" ? "全部清理" : "已移除"}{compressionModeLabel(estimate.compressionMode) ? ` · 模式 ${compressionModeLabel(estimate.compressionMode)}` : ""}{compressionEngineLabel(estimate.compressionEngine) ? ` · 后端 ${compressionEngineLabel(estimate.compressionEngine)}` : ""}</p> : null}
       <section className="compression-card compression-summary-card" aria-live="polite">
         <div className="compression-summary-stat"><span>原始大小</span><strong>{formatCompressionBytes(estimate.inputBytes)}</strong></div>
         {estimate.width && estimate.height ? <div className="compression-summary-stat"><span>预估尺寸</span><strong>{estimate.width} × {estimate.height}</strong></div> : null}

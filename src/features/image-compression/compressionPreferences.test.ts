@@ -126,8 +126,8 @@ describe("compression preferences", () => {
     expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, skipIfLarger: false }) })).skipIfLarger).toBe(false);
   });
 
-  it("falls back to strip when legacy preferences request unsupported metadata preservation", () => {
-    expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, metadataPolicy: "preserve" }) })).metadataPolicy).toBe("strip");
+  it("restores the exact-byte metadata preservation policy", () => {
+    expect(loadCompressionPreferences(createStorage({ [COMPRESSION_PREFERENCES_STORAGE_KEY]: JSON.stringify({ version: 1, metadataPolicy: "preserve" }) })).metadataPolicy).toBe("preserve");
   });
 
   it("restores JPEG stripSafe metadata policy", () => {

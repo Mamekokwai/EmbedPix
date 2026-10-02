@@ -188,6 +188,7 @@ impl CompressionMode {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CompressionEngine {
+    Passthrough,
     OxiPng,
     ImageJpeg,
     RustJpeg,
@@ -205,6 +206,7 @@ impl CompressionEngine {
 
     fn as_str(self) -> &'static str {
         match self {
+            Self::Passthrough => "passthrough",
             Self::OxiPng => "oxipng",
             Self::ImageJpeg => "image-jpeg",
             Self::RustJpeg => "jpeg-encoder",
@@ -239,12 +241,32 @@ impl MetadataPolicy {
 fn validate_compression_metadata_policy(policy: MetadataPolicy) -> Result<(), String> {
     match policy {
         MetadataPolicy::Strip => Ok(()),
-        MetadataPolicy::Preserve => Err(
-            "metadataPolicy=preserve is not supported by first-stage compression; use strip".into(),
-        ),
+        MetadataPolicy::Preserve => Ok(()),
         MetadataPolicy::StripSafe => Ok(()),
         MetadataPolicy::StripAll => Ok(()),
     }
+}
+
+fn validate_preserve_options(
+    policy: MetadataPolicy,
+    max_output_bytes: Option<u64>,
+    max_rgb_mae: Option<f64>,
+    target_resize_percent: Option<u8>,
+    auto_resize_to_target: bool,
+) -> Result<(), String> {
+    if policy != MetadataPolicy::Preserve {
+        return Ok(());
+    }
+    if max_output_bytes.is_some()
+        || max_rgb_mae.is_some()
+        || target_resize_percent.is_some()
+        || auto_resize_to_target
+    {
+        return Err(
+            "metadataPolicy=preserve cannot be combined with target size or output resize".into(),
+        );
+    }
+    Ok(())
 }
 
 fn validate_png_optimize_alpha(enabled: bool, format: CompressionFormat) -> Result<(), String> {
@@ -286,6 +308,18 @@ fn validate_png_strip_safe(
         extract_static_icc(input)?;
     }
     Ok(())
+}
+
+fn validate_preserve_input(
+    policy: MetadataPolicy,
+    format: CompressionFormat,
+    input: &[u8],
+) -> Result<(), String> {
+    if policy != MetadataPolicy::Preserve {
+        return Ok(());
+    }
+    validate_png_strip_safe(MetadataPolicy::StripSafe, format, input)
+        .map_err(|error| error.replace("stripSafe", "metadataPolicy=preserve"))
 }
 
 fn extract_jpeg_icc_profile(input: &[u8]) -> Result<Option<Vec<u8>>, String> {
@@ -577,7 +611,9 @@ impl CompressionRequest {
     }
 
     fn compression_engine(&self) -> CompressionEngine {
-        if self.format == CompressionFormat::Jpeg
+        if self.metadata.metadata_policy == MetadataPolicy::Preserve {
+            CompressionEngine::Passthrough
+        } else if self.format == CompressionFormat::Jpeg
             && (self.metadata.jpeg_progressive || self.metadata.jpeg_optimize_huffman)
         {
             CompressionEngine::RustJpeg
@@ -2483,6 +2519,9 @@ fn encode_image_with_webp_method_alpha(
     metadata_policy: MetadataPolicy,
     jpeg_options: JpegEncodingOptions,
 ) -> Result<Vec<u8>, String> {
+    if metadata_policy == MetadataPolicy::Preserve {
+        return Ok(input.to_vec());
+    }
     let webp_strip_safe =
         format == CompressionFormat::Webp && metadata_policy == MetadataPolicy::StripSafe;
     let webp_icc_profile = if webp_strip_safe {
@@ -2752,6 +2791,13 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
         .map_err(|error| format!("invalid compression metadata JSON: {error}"))?;
     validate_compression_schema_version(metadata.schema_version)?;
     let format = CompressionFormat::parse(&metadata.output_format)?;
+    validate_preserve_options(
+        metadata.metadata_policy,
+        metadata.max_output_bytes,
+        metadata.max_rgb_mae,
+        metadata.target_resize_percent,
+        metadata.auto_resize_to_target,
+    )?;
     let output_location = normalize_output_location(metadata.output_location.as_deref())?;
     let lossless = metadata.lossless.unwrap_or(matches!(
         format,
@@ -2844,6 +2890,7 @@ fn parse_raw_payload(body: &[u8]) -> Result<CompressionRequest, String> {
             .map_err(|error| format!("invalid sourcePath: {error:?}"))?;
     }
     let input = body[end..].to_vec();
+    validate_preserve_input(metadata.metadata_policy, format, &input)?;
     validate_png_strip_safe(metadata.metadata_policy, format, &input)?;
     if input.len() > max_input_bytes {
         return Err(if max_input_bytes == MAX_INPUT_BYTES {
@@ -2896,6 +2943,13 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
         .map_err(|error| format!("invalid compression estimate metadata JSON: {error}"))?;
     validate_compression_schema_version(metadata.schema_version)?;
     let format = CompressionFormat::parse(&metadata.output_format)?;
+    validate_preserve_options(
+        metadata.metadata_policy,
+        metadata.max_output_bytes,
+        metadata.max_rgb_mae,
+        metadata.target_resize_percent,
+        metadata.auto_resize_to_target,
+    )?;
     let lossless = metadata.lossless.unwrap_or(matches!(
         format,
         CompressionFormat::Png | CompressionFormat::Webp
@@ -2955,6 +3009,7 @@ fn parse_estimate_raw_payload(body: &[u8]) -> Result<CompressionRequest, String>
     validate_compression_mode(format, lossless)?;
     validate_compression_metadata_policy(metadata.metadata_policy)?;
     let input = body[end..].to_vec();
+    validate_preserve_input(metadata.metadata_policy, format, &input)?;
     validate_png_strip_safe(metadata.metadata_policy, format, &input)?;
     if input.len() > max_input_bytes {
         return Err(if max_input_bytes == MAX_INPUT_BYTES {
@@ -4747,7 +4802,7 @@ mod tests {
     }
 
     #[test]
-    fn compression_rejects_metadata_preserve_contract() {
+    fn compression_preserve_requires_matching_static_input_and_transfers_bytes() {
         let metadata =
             br#"{"fileName":"sample.png","outputFormat":"webp","metadataPolicy":"preserve"}"#;
         let mut payload = Vec::from(*b"EGF1");
@@ -4761,6 +4816,39 @@ mod tests {
         assert!(parse_estimate_raw_payload(&payload)
             .unwrap_err()
             .contains("metadataPolicy=preserve"));
+
+        let source = png_input();
+        let preserve_payload = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"png","skipIfLarger":false,"metadataPolicy":"preserve"}"#,
+            &source,
+        );
+        let request = parse_raw_payload(&preserve_payload).unwrap();
+        assert_eq!(request.metadata.metadata_policy, MetadataPolicy::Preserve);
+        assert_eq!(run_preview(&request).unwrap().data, source);
+
+        for metadata in [
+            r#"{"fileName":"sample.png","outputFormat":"png","maxOutputBytes":1024,"metadataPolicy":"preserve"}"#,
+            r#"{"fileName":"sample.png","outputFormat":"png","targetResizePercent":50,"metadataPolicy":"preserve"}"#,
+        ] {
+            assert!(parse_raw_payload(&raw_payload(metadata, &source))
+                .unwrap_err()
+                .contains("target size or output resize"));
+            assert!(parse_estimate_raw_payload(&raw_payload(metadata, &source))
+                .unwrap_err()
+                .contains("target size or output resize"));
+        }
+
+        let output_path = crate::commands::test_temp_dir()
+            .join(format!("embedpix-preserve-{}.png", uuid_like_id()));
+        let output_metadata = format!(
+            "{{\"fileName\":\"sample.png\",\"outputFormat\":\"png\",\"outputPath\":\"{}\",\"skipIfLarger\":false,\"metadataPolicy\":\"preserve\"}}",
+            output_path.to_string_lossy().replace('\\', "/")
+        );
+        let output_request = parse_raw_payload(&raw_payload(&output_metadata, &source)).unwrap();
+        let output = run_compression(&output_request, &test_job("preserve-output")).unwrap();
+        assert_eq!(output.metadata_policy, "preserve");
+        assert_eq!(fs::read(&output_path).unwrap(), source);
+        fs::remove_file(output_path).unwrap();
 
         let metadata =
             r#"{"fileName":"sample.png","outputFormat":"webp","metadataPolicy":"stripSafe"}"#;
@@ -6004,7 +6092,7 @@ mod tests {
         assert_eq!(
             classify_error_code(
                 CompressionStage::Failed,
-                "metadataPolicy=preserve is not supported by first-stage compression"
+                "metadataPolicy=preserve cannot be combined with target size or output resize"
             )
             .as_str(),
             "metadata_policy_unsupported"

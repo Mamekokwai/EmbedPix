@@ -51,7 +51,7 @@ export interface CompressionEnvelopeRequest {
   jobId?: string;
 }
 
-export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; lossless?: boolean; compressionMode?: "lossless" | "lossy"; compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp"; requiredSpaceBytes?: number | null; autoResizeToTarget?: boolean; resizeCandidateCount?: number; maxPreparedInputBytes?: number; maxEncodedCandidateBytes?: number; maxPixels?: number; }
+export interface CompressionPreflight { format: string; width: number; height: number; inputBytes: number; outputPath: string; overwritesExisting: boolean; lossless?: boolean; compressionMode?: "lossless" | "lossy"; compressionEngine?: "passthrough" | "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp"; requiredSpaceBytes?: number | null; autoResizeToTarget?: boolean; resizeCandidateCount?: number; maxPreparedInputBytes?: number; maxEncodedCandidateBytes?: number; maxPixels?: number; }
 export type CompressionResultStatus = "completed" | "skipped";
 export interface CompressionResult {
   jobId: string;
@@ -69,7 +69,7 @@ export interface CompressionResult {
   format: string;
   lossless: boolean;
   compressionMode?: "lossless" | "lossy";
-  compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
+  compressionEngine?: "passthrough" | "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
   metadataPolicy: MetadataPolicy;
   qualityMetrics?: CompressionQualityMetrics;
   sourceDeleted?: boolean;
@@ -91,7 +91,7 @@ export interface CompressionPreview {
   outputBytes: number;
   lossless: boolean;
   compressionMode?: "lossless" | "lossy";
-  compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
+  compressionEngine?: "passthrough" | "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
   metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;
@@ -119,7 +119,7 @@ export interface CompressionEstimate {
   format: string;
   lossless: boolean;
   compressionMode?: "lossless" | "lossy";
-  compressionEngine?: "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
+  compressionEngine?: "passthrough" | "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp";
   metadataPolicy: MetadataPolicy;
   status: CompressionResultStatus;
   skippedReason: string | null;

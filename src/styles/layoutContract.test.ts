@@ -74,7 +74,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: null });");
     expect(compressionView).toContain("getCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems)");
     expect(compressionView).toContain("stripSafeInputVerified === true");
-    expect(compressionView).toContain('metadataPolicy === "stripSafe" && stripSafeInputVerified === false');
+    expect(compressionView).toContain('(metadataPolicy === "stripSafe" || metadataPolicy === "preserve") && stripSafeInputVerified === false');
     expect(compressionView).toContain("setStripSafeInputValidation({ format, items: stripSafeValidationItems, valid: errors.every((error) => error === null) });");
     expect(compressionView).toContain("isCurrentStripSafeValidation(stripSafeInputValidation, format, stripSafeValidationItems)");
   });
@@ -202,7 +202,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("!replaceOriginalAvailable");
     expect(compressionView).toContain('disabled={busy || !qualityEnabled}');
     expect(compressionView).toContain('disabled={busy || !qualityEnabled || !targetSizeActive}');
-    expect(compressionView).toContain("maxCandidates: maxOutputBytes ? maxCandidates : undefined");
+    expect(compressionView).toContain("maxCandidates: !metadataPreserveActive && maxOutputBytes ? maxCandidates : undefined");
     expect(compressionView).toContain("selectedQuality");
     expect(compressionView).toContain("PNG 优化级别");
     expect(compressionView).toContain("PNG 透明像素优化");
@@ -235,7 +235,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionPreferences).toContain("webpMethod");
     expect(compressionPreferences).toContain("webpPass");
     expect(compressionPreferences).toContain("skipIfLarger");
-    expect(compressionView).toContain("保留元数据（当前不可用：核心拒绝）");
+    expect(compressionView).toContain("保留原始元数据（原字节透传）");
     expect(compressionView).toContain("全部清理会移除可识别的元数据");
     expect(compressionView).toContain("全部清理元数据");
     expect(compressionView).toContain('format === "webp" ? "WebP" : "PNG"');

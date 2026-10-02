@@ -26,6 +26,16 @@ export default function AppTitleBar() {
   const closeFlowStartedRef = useRef(false);
   const nativeCloseHandledRef = useRef(false);
 
+  const finishWindowClose = () => {
+    nativeCloseHandledRef.current = true;
+    void requestWindowClose().then(closeCurrentWindow).catch((error) => {
+      nativeCloseHandledRef.current = false;
+      closeFlowStartedRef.current = false;
+      setClosing(false);
+      console.warn("close current window failed", error);
+    });
+  };
+
   useEffect(() => {
     const lifecycle = { disposed: false };
     let maximizedCleanup: (() => void) | undefined;
@@ -45,12 +55,7 @@ export default function AppTitleBar() {
         event.preventDefault();
         nativeCloseHandledRef.current = true;
         setClosing(true);
-        void requestWindowClose().then(closeCurrentWindow).catch((error) => {
-          nativeCloseHandledRef.current = false;
-          closeFlowStartedRef.current = false;
-          setClosing(false);
-          console.warn("close current window failed", error);
-        });
+        finishWindowClose();
       }).then((unlisten) => {
         retainWindowListener(lifecycle, (cleanup) => { closeCleanup = cleanup; }, unlisten);
       }).catch(() => undefined);
@@ -73,11 +78,7 @@ export default function AppTitleBar() {
     if (closeFlowStartedRef.current) return;
     closeFlowStartedRef.current = true;
     setClosing(true);
-    void closeCurrentWindow().catch((error) => {
-      closeFlowStartedRef.current = false;
-      setClosing(false);
-      console.warn("close current window failed", error);
-    });
+    finishWindowClose();
   };
 
   return (
