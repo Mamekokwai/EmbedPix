@@ -1372,17 +1372,16 @@ mod tests {
         cleanup_download_artifacts, cleanup_pending_install_marker_part,
         clear_pending_install_marker_paths, compare_versions, download_package_with_resume,
         is_allowed_redirect_url, is_trusted_release_page_url, normalize_version,
-        open_verified_package_file, parse_sha256,
-        pending_install_diagnostic, pending_install_marker_part_path,
-        select_trusted_asset_for_target, should_append_partial, signature_url_for_asset,
-        validate_asset_url, validate_cached_package_path, validate_update_cache_dir,
-        verify_cached_package_signature, verify_signature, PendingInstallMarker, ReleaseAsset,
-        UpdateTarget, MAX_DOWNLOAD_ATTEMPTS,
+        open_verified_package_file, parse_sha256, pending_install_diagnostic,
+        pending_install_marker_part_path, select_trusted_asset_for_target, should_append_partial,
+        signature_url_for_asset, validate_asset_url, validate_cached_package_path,
+        validate_update_cache_dir, verify_cached_package_signature, verify_signature,
+        PendingInstallMarker, ReleaseAsset, UpdateTarget, MAX_DOWNLOAD_ATTEMPTS,
     };
     use base64::Engine;
+    use reqwest::Url;
     use sha2::Digest;
     use std::sync::{atomic::AtomicBool, Arc};
-    use reqwest::Url;
 
     #[test]
     fn reports_pending_install_only_when_marker_version_differs() {
