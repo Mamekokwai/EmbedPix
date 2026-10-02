@@ -229,6 +229,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const [previewCompareMode, setPreviewCompareMode] = useState(false);
+  const [previewSplit, setPreviewSplit] = useState(50);
   const [lastSuccessfulOutputPath, setLastSuccessfulOutputPath] = useState<string | null>(null);
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
   const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
@@ -1191,8 +1193,14 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       </section>
 
       <section className="compression-card compression-preview-card" aria-live="polite" aria-label="压缩预览">
-        <div className="compression-card-heading"><div><span className="compression-card-kicker">03 / PREVIEW</span><h2>真实压缩预览</h2></div><span className="compression-count">{selectedItem?.file.name ?? "未选择图片"}</span></div>
-        {selectedItem ? <div className="compression-preview-grid">
+        <div className="compression-card-heading"><div><span className="compression-card-kicker">03 / PREVIEW</span><h2>真实压缩预览</h2></div><div className="compression-preview-heading-actions"><span className="compression-count">{selectedItem?.file.name ?? "未选择图片"}</span><button type="button" className="compression-secondary-button" aria-pressed={previewCompareMode} onClick={() => setPreviewCompareMode((current) => !current)} disabled={!originalPreviewUrl || !previewUrl || previewBusy}>{previewCompareMode ? "并排预览" : "滑动对比"}</button></div></div>
+        {selectedItem ? previewCompareMode && originalPreviewUrl && previewUrl ? <div className="compression-preview-compare" aria-label="滑动对比预览">
+          <div className="compression-preview-compare-image"><img src={originalPreviewUrl} alt={`原图 ${selectedItem.file.name}`} /></div>
+          <div className="compression-preview-compare-image compression-preview-compare-after" style={{ clipPath: `inset(0 0 0 ${previewSplit}%)` }}><img src={previewUrl} alt={`压缩预览 ${selectedItem.file.name}`} /></div>
+          <span className="compression-preview-compare-label compression-preview-compare-label-before">原图</span><span className="compression-preview-compare-label compression-preview-compare-label-after">压缩后</span>
+          <span className="compression-preview-compare-divider" style={{ left: `${previewSplit}%` }} aria-hidden="true" />
+          <label className="compression-preview-compare-range"><span className="visually-hidden">原图与压缩结果分界位置</span><input type="range" min="0" max="100" step="1" value={previewSplit} onChange={(event) => setPreviewSplit(Number(event.target.value))} aria-label="原图与压缩结果分界位置" /></label>
+        </div> : <div className="compression-preview-grid">
           <figure className="compression-preview-pane"><figcaption>原图<span>{formatCompressionBytes(selectedItem.size)}</span></figcaption><div className="compression-preview-stage">{originalPreviewUrl ? <img src={originalPreviewUrl} alt={`原图 ${selectedItem.file.name}`} /> : null}</div></figure>
           <figure className="compression-preview-pane"><figcaption>压缩后{preview ? <span>{formatCompressionBytes(preview.outputBytes)}</span> : null}</figcaption><div className="compression-preview-stage">{previewUrl ? <img src={previewUrl} alt={`压缩预览 ${selectedItem.file.name}`} /> : previewBusy ? <LoaderCircle size={20} className="compression-spin" aria-label="正在生成预览" /> : <span className="compression-preview-placeholder">{previewError || "等待预览"}</span>}</div></figure>
         </div> : <p className="compression-empty">选择一张图片后查看原图与真实压缩结果。</p>}

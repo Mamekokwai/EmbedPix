@@ -264,6 +264,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0");
     expect(compressionView).toContain("setFailures([]);");
     expect(compressionCss).toContain(".compression-preview-grid");
+    expect(compressionView).toContain("compression-preview-compare");
+    expect(compressionView).toContain("原图与压缩结果分界位置");
+    expect(compressionCss).toContain(".compression-preview-compare-divider");
     expect(compressionView).toContain("同名目标会拒绝写入");
     expect(compressionView).toContain("自动序号避免重名");
     expect(compressionView).toContain("autoNumbering");
