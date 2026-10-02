@@ -699,7 +699,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setCompressionPlan(null);
     setCompressionPlanError(null);
     setCompressionPlanBusy(false);
-  }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, targetSizeKiB]);
+  }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, sourceMode, targetSizeKiB, videoCropPreset, videoEveryNthFrame, videoFps, videoMaxFrames, videoReverse, videoRotation]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
 
