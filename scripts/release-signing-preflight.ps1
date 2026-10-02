@@ -1,8 +1,10 @@
-﻿$ErrorActionPreference = 'Stop'
+﻿
 [CmdletBinding()]
 param(
   [string]$ReportPath
 )
+
+$ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
