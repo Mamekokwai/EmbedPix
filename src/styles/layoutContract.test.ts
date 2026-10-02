@@ -432,6 +432,7 @@ describe("compact layout viewport contract", () => {
   it("keeps GIF parameter summary copy action available and compact", () => {
     expect(gifView).toContain("copyExportParameterSummary");
     expect(gifView).toContain("复制 GIF 导出参数摘要");
+    expect(gifView).toContain('setError(null);\n      setStatus({ kind: "success", text: "导出参数已复制" });');
     expect(gifCss).toContain(".gif-copy-parameter-summary");
   });
 

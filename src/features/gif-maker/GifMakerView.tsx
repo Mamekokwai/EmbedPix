@@ -2247,6 +2247,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     try {
       if (!navigator.clipboard) throw new Error("当前环境不支持复制路径，请手动复制。");
       await navigator.clipboard.writeText(lastExportPath);
+      setError(null);
       setStatus({ kind: "success", text: "导出路径已复制" });
     } catch (copyError) {
       setError(getErrorMessage(copyError));
@@ -2257,6 +2258,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     try {
       if (!navigator.clipboard) throw new Error("当前环境不支持复制参数，请手动查看摘要。");
       await navigator.clipboard.writeText(exportParameterSummary);
+      setError(null);
       setStatus({ kind: "success", text: "导出参数已复制" });
     } catch (copyError) {
       setError(getErrorMessage(copyError));
