@@ -232,6 +232,7 @@ fn should_append_partial(
         && content_range_start(content_range) == Some(offset)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn download_package_with_resume(
     client: &reqwest::Client,
     url: &Url,
@@ -603,6 +604,7 @@ pub fn cancel_update_download(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn download_update_inner(
     app: &AppHandle,
     state: &State<'_, UpdateProgressState>,

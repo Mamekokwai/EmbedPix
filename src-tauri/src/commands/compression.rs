@@ -1108,6 +1108,7 @@ pub fn compress_file_cli_with_jpeg_options(
 }
 
 /// Runs the CLI compression path with JPEG controls and optional lossless WebP method.
+#[allow(clippy::too_many_arguments)]
 pub fn compress_file_cli_with_advanced_options(
     input_path: &Path,
     output_path: &Path,
@@ -1141,6 +1142,7 @@ pub fn compress_file_cli_with_advanced_options(
 }
 
 /// Runs the CLI compression path with an optional lossy quality threshold.
+#[allow(clippy::too_many_arguments)]
 pub fn compress_file_cli_with_quality_threshold(
     input_path: &Path,
     output_path: &Path,
@@ -6173,7 +6175,7 @@ mod tests {
         .unwrap();
         let estimate = run_estimate(&request).unwrap();
         assert_eq!(estimate.max_rgb_mae, Some(255.0));
-        assert_eq!(estimate.target_met, true);
+        assert!(estimate.target_met);
         assert_eq!(estimate.candidate_count, Some(3));
         assert!(estimate.quality_metrics.is_some());
     }
