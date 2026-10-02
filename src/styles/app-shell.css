@@ -101,6 +101,11 @@
   color: var(--qp-text-primary);
 }
 
+.app-titlebar-button:disabled {
+  cursor: wait;
+  opacity: .6;
+}
+
 .app-titlebar-button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent);
   outline-offset: -2px;

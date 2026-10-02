@@ -22,6 +22,7 @@ function runWindowAction(action: () => Promise<void>, actionName: string) {
 
 export default function AppTitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [closing, setClosing] = useState(false);
   const closeFlowStartedRef = useRef(false);
   const nativeCloseHandledRef = useRef(false);
 
@@ -43,9 +44,11 @@ export default function AppTitleBar() {
         if (nativeCloseHandledRef.current) return;
         event.preventDefault();
         nativeCloseHandledRef.current = true;
+        setClosing(true);
         void requestWindowClose().then(closeCurrentWindow).catch((error) => {
           nativeCloseHandledRef.current = false;
           closeFlowStartedRef.current = false;
+          setClosing(false);
           console.warn("close current window failed", error);
         });
       }).then((unlisten) => {
@@ -69,8 +72,10 @@ export default function AppTitleBar() {
   const handleClose = () => {
     if (closeFlowStartedRef.current) return;
     closeFlowStartedRef.current = true;
+    setClosing(true);
     void closeCurrentWindow().catch((error) => {
       closeFlowStartedRef.current = false;
+      setClosing(false);
       console.warn("close current window failed", error);
     });
   };
@@ -99,6 +104,7 @@ export default function AppTitleBar() {
           type="button"
           className="app-titlebar-button"
           aria-label="最小化"
+          disabled={closing}
           onClick={() => runWindowAction(minimizeCurrentWindow, "minimize current window")}
         >
           <Minus size={14} strokeWidth={2} />
@@ -107,6 +113,7 @@ export default function AppTitleBar() {
           type="button"
           className="app-titlebar-button"
           aria-label={isMaximized ? "还原窗口" : "最大化"}
+          disabled={closing}
           onClick={() => runWindowAction(toggleCurrentWindowMaximized, "toggle window maximize")}
         >
           {isMaximized ? <Minimize2 size={13} strokeWidth={2} /> : <Maximize2 size={13} strokeWidth={2} />}
@@ -114,7 +121,9 @@ export default function AppTitleBar() {
         <button
           type="button"
           className="app-titlebar-button app-titlebar-close"
-          aria-label="关闭"
+          aria-label={closing ? "正在关闭" : "关闭"}
+          aria-busy={closing}
+          disabled={closing}
           onClick={handleClose}
         >
           <X size={14} strokeWidth={2} />
