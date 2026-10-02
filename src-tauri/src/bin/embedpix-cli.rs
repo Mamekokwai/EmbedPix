@@ -247,7 +247,7 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
             .as_bool()
             .ok_or(("request_error", "autoResizeToTarget 必须是布尔值".into()))?,
     };
-    if target_resize_percent.is_some() && (!matches!(format, "jpg" | "jpeg" | "webp") || lossless) {
+    if target_resize_percent.is_some() && (!is_lossy_target_format(format) || lossless) {
         return Err((
             "request_error",
             "targetResizePercent 仅支持 JPEG 或有损 WebP".into(),
@@ -260,7 +260,7 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
                 "autoResizeToTarget requires maxOutputBytes".into(),
             ));
         }
-        if !matches!(format, "jpg" | "jpeg" | "webp") || lossless {
+        if !is_lossy_target_format(format) || lossless {
             return Err((
                 "request_error",
                 "autoResizeToTarget 仅支持 JPEG 或有损 WebP".into(),
@@ -274,7 +274,7 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
         }
     }
     if max_rgb_mae.is_some()
-        && (!matches!(format, "jpg" | "jpeg" | "webp") || lossless || max_output_bytes.is_none())
+        && (!is_lossy_target_format(format) || lossless || max_output_bytes.is_none())
     {
         return Err((
             "request_error",
@@ -299,6 +299,12 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
     )
     .map_err(|error| ("compression_error", error))?;
     serde_json::to_value(result).map_err(|error| ("response_error", error.to_string()))
+}
+
+fn is_lossy_target_format(format: &str) -> bool {
+    format.eq_ignore_ascii_case("jpg")
+        || format.eq_ignore_ascii_case("jpeg")
+        || format.eq_ignore_ascii_case("webp")
 }
 
 fn execute_image(payload: Value) -> Result<Value, (&'static str, String)> {
@@ -510,5 +516,13 @@ mod tests {
             "request_error"
         );
         assert_eq!(execute_compression(json!({ "inputPath": "missing.png", "outputPath": "output.webp", "format": "webp", "quality": 82 })).unwrap_err().0, "compression_error");
+    }
+
+    #[test]
+    fn compression_target_formats_are_case_insensitive() {
+        assert!(is_lossy_target_format("JPG"));
+        assert!(is_lossy_target_format("JPEG"));
+        assert!(is_lossy_target_format("WebP"));
+        assert!(!is_lossy_target_format("PNG"));
     }
 }
