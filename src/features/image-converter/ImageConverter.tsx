@@ -89,6 +89,7 @@ import type { ExportPreflightResult } from "./imageConverterLogic";
 import { formatBatchConversionPlanError, planBatchConversions } from "./batchConversionPlan";
 import { exportWorkspace, formatWorkspaceTransferError, importWorkspace } from "../../shared/workspaceTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
+import { readImageDimensions } from "./imageDimensions";
 
 type ImageExportQueueProgress = ExportQueueProgress<{ file: { name: string } }>;
 
@@ -168,23 +169,6 @@ function getFullImageCropInputs(source: ImageDimensions | null): CropInputs {
   };
 }
 
-
-function readImageDimensions(file: File) {
-  return new Promise<ImageDimensions>((resolve, reject) => {
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("无法读取这张图片，请选择有效的图片文件。"));
-    };
-    image.src = objectUrl;
-  });
-}
 
 function FormatSelector({
   value,
