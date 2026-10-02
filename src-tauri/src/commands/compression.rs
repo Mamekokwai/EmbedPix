@@ -3317,7 +3317,7 @@ fn query_available_space(path: &Path) -> Option<u64> {
     let path = CString::new(path.as_os_str().as_bytes()).ok()?;
     let mut stats = unsafe { std::mem::zeroed::<libc::statvfs>() };
     let success = unsafe { libc::statvfs(path.as_ptr(), &mut stats) } == 0;
-    success.then(|| (stats.f_bavail as u64).checked_mul(stats.f_frsize as u64))?
+    success.then(|| stats.f_bavail.checked_mul(stats.f_frsize))?
 }
 
 #[cfg(not(any(unix, windows)))]

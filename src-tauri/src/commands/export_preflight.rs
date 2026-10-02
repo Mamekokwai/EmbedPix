@@ -68,8 +68,6 @@ pub fn preflight_image_exports(
     })
 }
 
-#[cfg(any(windows, test))]
-#[allow(dead_code)]
 fn evaluate_disk_space(available_bytes: u64, estimated_bytes: u64) -> DiskSpace {
     DiskSpace {
         available_bytes,

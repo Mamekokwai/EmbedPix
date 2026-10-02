@@ -86,7 +86,7 @@ fn lock_file(file: &File) -> io::Result<()> {
         Ok(())
     } else {
         let error = io::Error::last_os_error();
-        if matches!(error.raw_os_error(), Some(libc::EAGAIN | libc::EWOULDBLOCK)) {
+        if matches!(error.raw_os_error(), Some(libc::EAGAIN)) {
             Err(io::Error::new(io::ErrorKind::WouldBlock, error))
         } else {
             Err(error)
