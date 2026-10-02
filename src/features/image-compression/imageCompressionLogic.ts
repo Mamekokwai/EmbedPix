@@ -159,6 +159,10 @@ export function getCompressionTargetSizeError(enabled: boolean, value: string, m
 }
 export function getSuccessfulCompressionOutputPath(status: "completed" | "skipped", outputPath: string): string | null { const normalizedPath = outputPath.trim(); return status === "completed" && normalizedPath ? normalizedPath : null; }
 export function formatCompressionFailureDetails(details: ReadonlyArray<{ fileName: string; message: string }>): string { return details.map(({ fileName, message }) => `${fileName}：${message}`).join("\n"); }
+export function formatCompressionParameterSummary(entries: ReadonlyArray<string>): string {
+  const safeEntries = entries.map((entry) => entry.startsWith("输出到指定目录 ") ? "输出到指定目录（路径未复制）" : entry);
+  return `EmbedPix 压缩参数\n${safeEntries.join(" · ")}`;
+}
 export function formatCompressionBatchSummary(summary: { total: number; succeeded: number; skipped: number; failed: number; processedInputBytes: number; outputBytes: number; savedBytes: number; targetMet: boolean | null; selectedQualities: ReadonlyArray<number>; itemResults: ReadonlyArray<Pick<CompressionItemResult, "fileName" | "status" | "reason">> }): string {
   const lines = [
     `压缩批处理：${summary.total} 项`,

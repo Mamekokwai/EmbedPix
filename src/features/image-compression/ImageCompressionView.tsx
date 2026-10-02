@@ -22,6 +22,7 @@ import {
   splitCompressionImportFiles,
   formatCompressionBytes,
   formatCompressionFailureDetails,
+  formatCompressionParameterSummary,
   formatCompressionBatchSummary,
   formatCompressionProgressSummary,
   createCompressionBatchReport,
@@ -371,8 +372,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const copyParameterSummary = async () => {
     try {
       if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动记录参数摘要。 ");
-      const safeSummary = compressionParameterSummary.map((entry) => entry.startsWith("输出到指定目录 ") ? "输出到指定目录（路径未复制）" : entry);
-      await navigator.clipboard.writeText(`EmbedPix 压缩参数\n${safeSummary.join(" · ")}`);
+      await navigator.clipboard.writeText(formatCompressionParameterSummary(compressionParameterSummary));
       setMessage("压缩参数摘要已复制");
       setStatus("ready");
     } catch (error) {

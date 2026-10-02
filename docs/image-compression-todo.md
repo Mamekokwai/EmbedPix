@@ -113,7 +113,7 @@
 - [x] 新增 `MetadataPolicy`：已落地 `strip`、PNG→PNG/JPEG→JPEG/静态 WebP→WebP 的 `stripSafe` 与 `stripAll`；三种 `stripSafe` 只保留结构合法且有界的 ICC payload（不保证 ICC 内部色彩语义），移除 EXIF/GPS/XMP/COM/其他输入 metadata；WebP 由 RAII mux 删除 EXIF/XMP/旧 ICCP，允许合法 ALPH，拒绝动画、重复、坏 padding、截断和非白名单输出；正式压缩、预览与体积估算共用同一策略校验；WebP 元数据 `preserve` 仍待后续。
 - [~] 新增 `CompressionPreset`：内置 `high-quality`、`balanced`、`small-size`、`custom` 已在前端落地，版本化跨页面协议待后续。
 - [x] 新增统一任务状态：排队、读取、解码、规划、编码、校验、发布、完成、跳过、取消、失败；native 已用 `CompressionStage` 统一收敛阶段、终态判断和错误码分类，JSON/JSONL 仍保持原有字符串协议。
-- [~] 新增结果字段：体积、节省、格式、目标达成、选中质量、跳过原因、实际模式和编码后端已落地；完整参数摘要与可选后端仍待后续。
+- [~] 新增结果字段：体积、节省、格式、目标达成、选中质量、跳过原因、实际模式和编码后端已落地；完整参数摘要已在压缩工作区展示并支持安全复制（指定目录路径不会复制），可选后端仍待后续。
 - [x] 新增前端/原生命令请求和响应类型。
 - [~] 新增参数版本号：压缩/估算 IPC 已使用 `schemaVersion=1` 并拒绝未知版本；自定义预设从 schema v1 开始，新字段按可选默认值兼容。历史 `metadataPolicy=preserve` 因语义不再支持会整体安全拒绝/不加载，当前不自动改写为 `strip`，避免静默改变用户意图；后续迁移版本与该边界仍需产品决策。
 
