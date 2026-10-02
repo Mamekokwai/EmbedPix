@@ -499,6 +499,12 @@
 - [x] 本地 Rust 285 项测试、前端 421 项测试、构建、桌面 smoke、发布配置、fixture、依赖和压缩 CLI 门禁通过。
 - [ ] GitHub Actions 的 Windows、Linux、macOS 发布工作流全部通过。
 
+## 14. v0.7.9 跨平台修正版
+
+- [x] Unix `statvfs` 可用空间计算兼容 Linux 与 macOS 字段类型差异。
+- [x] 发布结果路径断言兼容 Windows 扩展路径与 Unix 路径格式。
+- [ ] v0.7.9 发布源验证、签名、Windows 安装包、跨平台检查和资产验收。
+
 - [!] pngquant 直接捆绑：需要 GPLv3/商业许可决策或替代算法。
 - [!] AVIF 默认启用：需要确认包体积、编码器依赖和构建时间。
 - [!] JPEG XL：需要确认生态和发行收益。
