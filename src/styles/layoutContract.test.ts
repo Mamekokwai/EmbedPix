@@ -12,8 +12,11 @@ const gifView = readSource(new URL("../features/gif-maker/GifMakerView.tsx", imp
 const converterView = readSource(new URL("../features/image-converter/ImageConverter.tsx", import.meta.url));
 const compressionView = readSource(new URL("../features/image-compression/ImageCompressionView.tsx", import.meta.url));
 const appShell = readSource(new URL("../app/AppShell.tsx", import.meta.url));
+const appTitleBar = readSource(new URL("../app/AppTitleBar.tsx", import.meta.url));
 const compressionGateway = readSource(new URL("../platform/compression/compressionGateway.ts", import.meta.url));
 const compressionPreferences = readSource(new URL("../features/image-compression/compressionPreferences.ts", import.meta.url));
+const windowControlGateway = readSource(new URL("../platform/window/windowControlGateway.ts", import.meta.url));
+const defaultCapabilities = readSource(new URL("../../src-tauri/capabilities/default.json", import.meta.url));
 const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
 const updateCss = readSource(new URL("./features/update.css", import.meta.url));
 const updateView = readSource(new URL("../features/update/UpdateView.tsx", import.meta.url));
@@ -449,5 +452,12 @@ describe("compact layout viewport contract", () => {
     expect(appShell).toContain('<div className="app-kept-view app-kept-gif" hidden={view !== "gif"}>');
     expect(gifView).toContain("onDrop={handleDrop}");
     expect(gifView).toContain('if (sourceMode === "video")');
+  });
+
+  it("keeps the title-bar close flow on the native destroy path", () => {
+    expect(appTitleBar).toContain("destroyCurrentWindow");
+    expect(appTitleBar).toContain("requestWindowClose().then(destroyCurrentWindow)");
+    expect(windowControlGateway).toContain("await currentWindow().destroy();");
+    expect(defaultCapabilities).toContain('"core:window:allow-destroy"');
   });
 });
