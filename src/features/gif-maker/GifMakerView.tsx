@@ -831,16 +831,17 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const canvas = canvasRef.current;
     if (!active || !canvas || !selectedFrame) return;
     let cancelled = false;
+    const controller = new AbortController();
     canvas.width = canvasSize.width;
     canvas.height = canvasSize.height;
-    void loadGifImage(selectedFrame.previewUrl).then((image) => {
+    void loadGifImage(selectedFrame.previewUrl, { signal: controller.signal }).then((image) => {
       if (cancelled) return;
       const context = canvas.getContext("2d");
       if (context) drawGifFrame(context, image, canvasSize, fitMode, contentAlignment, contentMargins, background, customBackgroundColor);
     }).catch(() => {
       if (!cancelled) setError("预览帧读取失败，请重新导入图片。");
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [active, background, canvasSize, contentAlignment, contentMargins, customBackgroundColor, fitMode, selectedFrame]);
 
   const openFileDialog = (frameId: string | null = null, insertAt: number | null = null) => {
@@ -1681,7 +1682,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       for (const [index, frame] of selectedFrames.entries()) {
         throwIfAborted(signal);
         let data: Uint8Array;
-        const image = await loadGifImage(frame.previewUrl);
+        const image = await loadGifImage(frame.previewUrl, { signal });
         throwIfAborted(signal);
         drawGifFrame(context, image, size, fitMode, contentAlignment, contentMargins, background, customBackgroundColor);
         data = await canvasToBytes(exportCanvas, signal);
