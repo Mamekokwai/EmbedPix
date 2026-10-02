@@ -279,15 +279,14 @@ export function formatGifCancelledStatus(format: string): string {
   return `${formatLabel}导出已取消`;
 }
 
+export function formatGifExportStage(stage: GifExportProgress["stage"]): string {
+  return ({ validating: "校验中", encoding: "编码中", publishing: "写入中", completed: "已完成", cancelled: "已取消", failed: "失败" } as const)[stage];
+}
+
 export function formatGifExportProgress(progress: Pick<GifExportProgress, "format" | "stage" | "completedFrames" | "totalFrames">): string {
   const formatLabel = progress.format === "png-sequence" ? "PNG 帧序列" : `${progress.format.toUpperCase()} `;
   const frameSummary = `${progress.completedFrames}/${progress.totalFrames} 帧`;
-  if (progress.stage === "validating") return `${formatLabel}导出 · validating · ${frameSummary}`;
-  if (progress.stage === "encoding") return `${formatLabel}导出 · encoding · ${frameSummary}`;
-  if (progress.stage === "publishing") return `${formatLabel}导出 · publishing · ${frameSummary}`;
-  if (progress.stage === "completed") return `${formatLabel}导出 · completed · ${frameSummary}`;
-  if (progress.stage === "cancelled") return `${formatLabel}导出 · cancelled · ${frameSummary}`;
-  return `${formatLabel}导出 · failed · ${frameSummary}`;
+  return `${formatLabel}导出 · ${formatGifExportStage(progress.stage)} · ${frameSummary}`;
 }
 
 interface GifCompressionResult {

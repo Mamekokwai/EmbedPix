@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nativeImageFileToGifFile } from "./GifMakerView";
-import { canEditGifFrames, canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, getGifCancelButtonLabel, getGifFrameKeyboardTarget, getGifOutputLocationError, getGifSelectionAfterDeletion, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, isVideoFile, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
+import { canEditGifFrames, canRequestGifExportCancel, clampGifTimelineRange, createGifExportJobId, DEFAULT_GIF_SETTINGS_GROUP, formatGifCancelledStatus, formatGifExportProgress, formatGifExportStage, getGifCancelButtonLabel, getGifFrameKeyboardTarget, getGifOutputLocationError, getGifSelectionAfterDeletion, getGifSourcePath, getGifTimelineZoomLabel, getPngSequenceOutputLocationFields, GIF_ERROR_DETAILS_THRESHOLD, GIF_PRESETS, isCompletedGifExport, isVideoFile, selectAnimationCompressionResult, shouldOfferGifErrorDetails } from "./GifMakerView";
 
 describe("GIF export presets", () => {
   it("converts native image bytes into a browser File without changing the payload", async () => {
@@ -122,9 +122,10 @@ describe("GIF export jobs", () => {
   });
 
   it("surfaces native GIF stages and frame progress", () => {
-    expect(formatGifExportProgress({ format: "gif", stage: "validating", completedFrames: 0, totalFrames: 4 })).toContain("GIF 导出 · validating · 0/4 帧");
-    expect(formatGifExportProgress({ format: "webp", stage: "encoding", completedFrames: 2, totalFrames: 4 })).toContain("WEBP 导出 · encoding · 2/4 帧");
-    expect(formatGifExportProgress({ format: "png-sequence", stage: "publishing", completedFrames: 4, totalFrames: 4 })).toContain("PNG 帧序列导出 · publishing · 4/4 帧");
+    expect(formatGifExportProgress({ format: "gif", stage: "validating", completedFrames: 0, totalFrames: 4 })).toContain("GIF 导出 · 校验中 · 0/4 帧");
+    expect(formatGifExportProgress({ format: "webp", stage: "encoding", completedFrames: 2, totalFrames: 4 })).toContain("WEBP 导出 · 编码中 · 2/4 帧");
+    expect(formatGifExportProgress({ format: "png-sequence", stage: "publishing", completedFrames: 4, totalFrames: 4 })).toContain("PNG 帧序列导出 · 写入中 · 4/4 帧");
+    expect(formatGifExportStage("cancelled")).toBe("已取消");
   });
 
   it("protects cancelling jobs from duplicate requests and uses explicit cancel copy", () => {
