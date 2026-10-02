@@ -3317,7 +3317,8 @@ fn query_available_space(path: &Path) -> Option<u64> {
     let path = CString::new(path.as_os_str().as_bytes()).ok()?;
     let mut stats = unsafe { std::mem::zeroed::<libc::statvfs>() };
     let success = unsafe { libc::statvfs(path.as_ptr(), &mut stats) } == 0;
-    success.then(|| stats.f_bavail.checked_mul(stats.f_frsize))?
+    let available = u128::from(stats.f_bavail).checked_mul(u128::from(stats.f_frsize))?;
+    success.then(|| available.try_into().ok())?
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -5366,8 +5367,8 @@ mod tests {
                 run_compression(&request, &test_job(&format!("formal-trace-{format}"))).unwrap();
             assert_eq!(result.status, "completed");
             assert_eq!(
-                result.output_path.replace('/', "\\"),
-                output_path.to_string_lossy()
+                result.output_path.replace('\\', "/"),
+                output_path.to_string_lossy().replace('\\', "/")
             );
             assert_eq!(result.input_bytes, input.len() as u64);
             assert_eq!(
