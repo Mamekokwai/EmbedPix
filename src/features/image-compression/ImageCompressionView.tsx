@@ -368,6 +368,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     outputModes.overwrite ? "允许覆盖同名" : outputModes.autoNumbering ? "自动序号" : "同名时拒绝写入",
     deleteSource && !replaceOriginal ? "成功后删除源文件" : null,
   ].filter((entry): entry is string => Boolean(entry));
+  const copyParameterSummary = async () => {
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动记录参数摘要。 ");
+      const safeSummary = compressionParameterSummary.map((entry) => entry.startsWith("输出到指定目录 ") ? "输出到指定目录（路径未复制）" : entry);
+      await navigator.clipboard.writeText(`EmbedPix 压缩参数\n${safeSummary.join(" · ")}`);
+      setMessage("压缩参数摘要已复制");
+      setStatus("ready");
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
+  };
 
   const queueCompressionDimensions = (item: CompressionItem) => {
     void Promise.resolve().then(() => readCompressionDimensions(item.file)).then((dimensions) => {
@@ -1194,6 +1206,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       <section className="compression-parameter-summary" aria-label="导出参数摘要">
         <strong>当前参数</strong>
         <div>{compressionParameterSummary.map((entry, index) => <span key={`${entry}-${index}`}>{entry}</span>)}</div>
+        <button type="button" className="compression-secondary-button compression-copy-summary" onClick={() => { void copyParameterSummary(); }} aria-label="复制当前压缩参数摘要">复制参数</button>
       </section>
 
       <section className="compression-card compression-preview-card" aria-live="polite" aria-label="压缩预览">
