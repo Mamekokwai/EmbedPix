@@ -54,4 +54,16 @@ describe("image dimension lifecycle", () => {
     expect(state.image.onload).toBeNull();
     expect(state.image.onerror).toBeNull();
   });
+
+  it("aborts immediately and releases the object URL", async () => {
+    const state = setup();
+    const controller = new AbortController();
+    const pending = readImageDimensions(new Blob(["image"]), { ...state.dependencies, signal: controller.signal });
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(state.revokeObjectURL).toHaveBeenCalledOnce();
+    expect(state.image.onload).toBeNull();
+    expect(state.image.onerror).toBeNull();
+  });
 });

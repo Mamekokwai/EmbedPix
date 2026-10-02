@@ -304,6 +304,7 @@ export default function ImageConverter({
   const previewUrlRef = useRef<string | null>(null);
   const realPreviewUrlRef = useRef<string | null>(null);
   const loadIdRef = useRef(0);
+  const dimensionControllerRef = useRef<AbortController | null>(null);
   const imageIdRef = useRef(0);
   const loadedImagesRef = useRef<LoadedImage[]>([]);
   const replaceImageIdRef = useRef<string | null>(null);
@@ -314,6 +315,8 @@ export default function ImageConverter({
   useEffect(() => {
     return () => {
       loadIdRef.current += 1;
+      dimensionControllerRef.current?.abort();
+      dimensionControllerRef.current = null;
       exportCancelRef.current = true;
       exportPauseRef.current = false;
       exportCancelWaitRef.current?.();
@@ -548,6 +551,8 @@ export default function ImageConverter({
   const loadFile = async (nextFile: File, replaceImageId: string | null = null) => {
     const loadId = loadIdRef.current + 1;
     loadIdRef.current = loadId;
+    dimensionControllerRef.current?.abort();
+    dimensionControllerRef.current = null;
     setError(null);
     setStatus({ kind: "busy", text: "正在读取图片…" });
 
@@ -563,8 +568,10 @@ export default function ImageConverter({
       return;
     }
 
+    const dimensionController = new AbortController();
+    dimensionControllerRef.current = dimensionController;
     try {
-      const nextDimensions = await readImageDimensions(nextFile);
+      const nextDimensions = await readImageDimensions(nextFile, { signal: dimensionController.signal });
       if (loadId !== loadIdRef.current) {
         return;
       }
@@ -607,6 +614,8 @@ export default function ImageConverter({
       setStatus({ kind: "error", text: "读取失败" });
       setError(message);
       return false;
+    } finally {
+      if (dimensionControllerRef.current === dimensionController) dimensionControllerRef.current = null;
     }
   };
 
