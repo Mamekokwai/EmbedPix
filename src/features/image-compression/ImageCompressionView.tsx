@@ -231,6 +231,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [previewError, setPreviewError] = useState("");
   const [previewCompareMode, setPreviewCompareMode] = useState(false);
   const [previewSplit, setPreviewSplit] = useState(50);
+  useEffect(() => {
+    if (!originalPreviewUrl || !previewUrl) setPreviewCompareMode(false);
+  }, [originalPreviewUrl, previewUrl]);
   const [lastSuccessfulOutputPath, setLastSuccessfulOutputPath] = useState<string | null>(null);
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
   const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
