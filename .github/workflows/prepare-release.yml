@@ -639,7 +639,7 @@ jobs:
           if (-not $latestAsset -or -not $latestAsset.browser_download_url) {
             throw 'Published latest.json asset has no browser download URL.'
           }
-          $downloadHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; 'User-Agent' = 'EmbedPix release verifier' }
+          $downloadHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; 'User-Agent' = 'EmbedPix release verifier'; 'Cache-Control' = 'no-cache'; Pragma = 'no-cache' }
           $latest = $null
           $publishedPlatforms = @()
           $publishedVersion = ''
