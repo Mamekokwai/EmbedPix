@@ -2253,6 +2253,16 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setStatus({ kind: "error", text: "无法复制导出路径" });
     }
   };
+  const copyExportParameterSummary = async () => {
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制参数，请手动查看摘要。");
+      await navigator.clipboard.writeText(exportParameterSummary);
+      setStatus({ kind: "success", text: "导出参数已复制" });
+    } catch (copyError) {
+      setError(getErrorMessage(copyError));
+      setStatus({ kind: "error", text: "无法复制导出参数" });
+    }
+  };
   const downloadExportReport = () => {
     if (!lastExportPath) return;
     const generatedAt = new Date().toISOString();
@@ -2624,7 +2634,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             </div>
             {lastExportPath ? <div className="gif-output-actions"><button className="quiet-button" type="button" onClick={() => void openLastExportFolder()}><FolderOpen size={14} aria-hidden="true" />打开文件夹</button><button className="quiet-button" type="button" onClick={() => void copyLastExportPath()}><Copy size={14} aria-hidden="true" />复制路径</button><button className="quiet-button" type="button" onClick={downloadExportReport}>下载 JSON 报告</button></div> : null}
           </div>
-          <div className="gif-parameter-summary" aria-label="导出参数摘要"><strong>导出参数摘要</strong><span>{exportParameterSummary}</span></div>
+          <div className="gif-parameter-summary" aria-label="导出参数摘要"><strong>导出参数摘要</strong><span>{exportParameterSummary}</span><button type="button" className="quiet-button gif-copy-parameter-summary" onClick={() => { void copyExportParameterSummary(); }} aria-label="复制 GIF 导出参数摘要">复制参数</button></div>
           {outputFormat === "gif" ? <div className={`gif-workload-summary gif-workload-${workload.level}`}>
             <strong>导出负载</strong>
             <span>{(workload.totalPixels / 1_000_000).toFixed(1)} MP · 帧缓冲 {formatGifBytes(workload.decodedBytes)} · 调色板 {formatGifBytes(workload.paletteBytes)}</span>

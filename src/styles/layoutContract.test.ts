@@ -429,6 +429,12 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toContain(".gif-header-note .workspace-file-button, .gif-header-note > .quiet-button { flex: 1 1 auto; }");
   });
 
+  it("keeps GIF parameter summary copy action available and compact", () => {
+    expect(gifView).toContain("copyExportParameterSummary");
+    expect(gifView).toContain("复制 GIF 导出参数摘要");
+    expect(gifCss).toContain(".gif-copy-parameter-summary");
+  });
+
   it("does not compress narrow short GIF cards below readable content height", () => {
     expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 621px) and (max-height: 760px)");
     expect(gifCss).toContain(".gif-workspace-grid { grid-template-rows: minmax(128px, auto) minmax(220px, auto); }");
