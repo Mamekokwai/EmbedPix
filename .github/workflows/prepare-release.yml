@@ -92,7 +92,8 @@ jobs:
 
           $peeledRef = 'refs/tags/{0}^{{}}' -f $tag
           $peeledTagRef = git ls-remote --exit-code origin $peeledRef
-          if ($LASTEXITCODE -eq 0 -and $peeledTagRef) {
+          $peeledExitCode = $LASTEXITCODE
+          if ($peeledExitCode -eq 0 -and $peeledTagRef) {
             $commitLine = $peeledTagRef
           } else {
             $commitLine = $tagRef
@@ -127,6 +128,7 @@ jobs:
           }
 
           Write-Host "Release $tag is ready for validation and publication."
+          $global:LASTEXITCODE = 0
 
   quality:
     name: Validate release source
