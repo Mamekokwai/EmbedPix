@@ -48,6 +48,17 @@ try {
     throw '签名私钥无法解析、密码不正确或无法完成探针签名。'
   }
 
+  $publicKey = Join-Path $root 'src-tauri/update-public-key.txt'
+  $trustedPublicKeyId = 'unknown'
+  try {
+    $encodedPublicKey = (Get-Content -Raw -Encoding UTF8 -LiteralPath $publicKey).Trim()
+    $decodedPublicKey = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encodedPublicKey))
+    $publicKeyMatch = [regex]::Match($decodedPublicKey, 'minisign public key: (?<id>[A-F0-9]{16})')
+    if ($publicKeyMatch.Success) { $trustedPublicKeyId = $publicKeyMatch.Groups['id'].Value }
+  } catch {
+    # The configuration smoke already owns structural validation; keep diagnostics best-effort here.
+  }
+
   $verifierManifest = Join-Path $root 'tools/minisign-verifier/Cargo.toml'
   $verifierBase = Join-Path $root 'tools/minisign-verifier/target/release/embedpix-minisign-verifier'
   $verifier = if (Test-Path -LiteralPath "$verifierBase.exe" -PathType Leaf) { "$verifierBase.exe" } else { $verifierBase }
@@ -62,10 +73,9 @@ try {
     throw '独立 minisign verifier 构建后仍不存在。'
   }
 
-  $publicKey = Join-Path $root 'src-tauri/update-public-key.txt'
   & $verifier $publicKey $probeInput $probeSignature *> $null
   if ($LASTEXITCODE -ne 0) {
-    throw '签名私钥对应的公钥与 EmbedPix 受信更新公钥不匹配。'
+    throw "签名私钥对应的公钥与 EmbedPix 受信更新公钥不匹配。受信公钥标识：$trustedPublicKeyId。请更新 TAURI_SIGNING_PRIVATE_KEY，或在轮换密钥时同步公钥配置。"
   }
 } catch {
   $failure = $_.Exception
