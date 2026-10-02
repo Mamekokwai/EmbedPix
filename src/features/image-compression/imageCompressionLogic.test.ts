@@ -25,8 +25,8 @@ describe("image compression logic", () => {
     expect(summary).not.toContain("C:\\Secret\\Exports");
   });
   it("formats bounded cumulative progress without exposing paths", () => {
-    expect(formatCompressionProgressSummary({ current: 9, total: 4, processedInputBytes: 2048, outputBytes: 1024, status: "busy" })).toBe("处理中 · 4/4 项 · 成功项输入 2.0 KB · 输出 1.0 KB");
-    expect(formatCompressionProgressSummary({ current: -1, total: 0, processedInputBytes: 0, outputBytes: 0, status: "cancelled" })).toContain("已取消 · 0/0 项");
+    expect(formatCompressionProgressSummary({ current: 9, total: 4, processedInputBytes: 2048, totalInputBytes: 4096, outputBytes: 1024, status: "busy" })).toBe("处理中 · 4/4 项 · 已处理输入 2.0 KB/4.0 KB · 输出 1.0 KB");
+    expect(formatCompressionProgressSummary({ current: -1, total: 0, processedInputBytes: 0, totalInputBytes: 0, outputBytes: 0, status: "cancelled" })).toContain("已取消 · 0/0 项");
   });
   it("formats a batch summary without leaking absolute output paths", () => {
     const summary = formatCompressionBatchSummary({ total: 3, succeeded: 1, skipped: 1, failed: 1, processedInputBytes: 2048, outputBytes: 1024, savedBytes: 1024, targetMet: false, selectedQualities: [82], itemResults: [{ fileName: "C:\\Secret\\a.png", status: "failed", reason: "写入失败" }] });

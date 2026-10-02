@@ -241,11 +241,11 @@ export function formatCompressionBatchSummary(summary: { total: number; succeede
   ];
   return lines.filter((line): line is string => Boolean(line)).join("\n");
 }
-export function formatCompressionProgressSummary(progress: { current: number; total: number; processedInputBytes: number; outputBytes: number; status: "idle" | "ready" | "busy" | "success" | "cancelled" | "error" }): string {
+export function formatCompressionProgressSummary(progress: { current: number; total: number; processedInputBytes: number; totalInputBytes: number; outputBytes: number; status: "idle" | "ready" | "busy" | "success" | "cancelled" | "error" }): string {
   const total = Math.max(progress.total, 0);
   const current = Math.min(Math.max(progress.current, 0), total);
   const state = progress.status === "busy" ? "处理中" : progress.status === "cancelled" ? "已取消" : progress.status === "error" ? "存在失败项" : progress.status === "success" ? "已完成" : "等待开始";
-  return `${state} · ${current}/${total} 项 · 成功项输入 ${formatCompressionBytes(progress.processedInputBytes)} · 输出 ${formatCompressionBytes(progress.outputBytes)}`;
+  return `${state} · ${current}/${total} 项 · 已处理输入 ${formatCompressionBytes(Math.max(progress.processedInputBytes, 0))}/${formatCompressionBytes(Math.max(progress.totalInputBytes, 0))} · 输出 ${formatCompressionBytes(progress.outputBytes)}`;
 }
 function redactCompressionDiagnostic(value: string | undefined): string | undefined {
   return value

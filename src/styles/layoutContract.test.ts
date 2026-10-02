@@ -157,6 +157,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('role="progressbar"');
     expect(compressionView).toContain("aria-valuetext={progress.total > 0");
     expect(compressionView).toContain("formatCompressionProgressSummary");
+    expect(compressionView).toContain("totalInputBytes: resultStats.inputBytes");
     expect(compressionView).toContain("setCustomResizeActive(false); setTargetResizePercent(null); setPreset(\"custom\"); return;");
     expect(compressionView).toContain('className="compression-estimate-note" aria-live="polite"');
     expect(compressionView).toContain("isCompressionSourcePathError");
