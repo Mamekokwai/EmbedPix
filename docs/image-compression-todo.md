@@ -58,6 +58,7 @@
 - [x] 压缩参数快速恢复（commit `7223ac4`）：压缩参数卡新增“恢复平衡默认”，完整恢复格式、质量、WebP 分析遍数、PNG 透明像素优化、JPEG 背景、目标体积、自动缩放、输入上限和元数据策略；不清空队列，也不改变输出位置、文件名或覆盖/删除策略。前端回归增至 399 项。
 - [x] 更新器重定向与缓存清理契约复核（commit `70555f3`）：可信 GitHub host 下错误 Tag、仓库、query 和 fragment 变体均被拒绝；清理 `.part`、`.sig.part`、`.etag` 时保留已提交安装包与签名。当前证据为本地单测/fixture，不冒充真实 GitHub 网络覆盖。
 - [x] 发布诊断收尾：`scripts/release-signing-preflight.ps1` 支持 `-ReportPath` 输出不含私钥/签名内容的脱敏 JSON 预检摘要；验收统计为前端 32 个测试文件 / 387 个测试通过。
+- [x] 签名轮换预检修复：预检先解码 Tauri 外层 Base64 公钥与签名，再交给独立 minisign verifier，避免把编码层错误误报为私钥不匹配；临时解码文件随探针目录统一清理。
 - [x] 发布门禁复核：`npm run check:release-config`、`npm run check:release-signing-cleanup`、`npm run check:release-fixture` 均通过。
 - [x] 签名预检报告安全契约（commit `8696532`）：报告字段白名单、敏感字段拒绝和 UTF-8 无 BOM 写入均由 `check:release-config` 校验并通过。
 - [x] 签名预检报告原子提交（commit `30b90ad`）：`ReportPath` 使用同目录 `.part` 临时文件与 `File.Replace`/`File.Move` 提交，失败时保留旧报告并清理临时文件；`check:release-config`、`check:release-signing-cleanup`、前端 32 个测试文件 / 388 个测试及 build 均通过。
@@ -80,7 +81,7 @@
 - [x] JPEG 视觉质量门槛：`maxRgbMae` 现在支持目标体积下的有损 JPEG 与 WebP；JPEG 透明输入先按 `jpegBackground` 合成再计算 RGB MAE，候选搜索、preview/estimate/formal、CLI、Gateway、UI 和自定义预设共用范围校验，默认关闭且不可达时不发布。新增透明背景回归、CLI smoke 与前端门禁，当前 Rust library 280 项、前端 401 项通过。
 - [x] 压缩预览滑动对比：在保留并排预览的基础上增加原图/压缩结果分界线与键盘可操作范围控件，便于在同一画布快速观察细节变化；不改变原生压缩协议、Blob URL 生命周期或窄窗口单列布局。
 - [x] CLI 格式边界回归：目标体积、自动缩放和 `maxRgbMae` 的 JPEG/WebP 判断统一改为大小写不敏感，避免 `JPG`、`JPEG` 或 `WebP` 命令行请求被错误拒绝。
-- [~] `v0.7.6` 发布准备：包含压缩/GIF/更新状态与发布 manifest 校验稳定性修复；待本地发布门禁通过后由新 tag 触发真实签名资产与安装启动验收。
+- [x] `v0.7.7` 发布准备：包含压缩/GIF/更新状态与发布 manifest 校验稳定性修复，以及签名轮换预检的 Tauri Base64 解码修复；待新 tag 触发真实签名资产与安装启动验收。
 - [x] 发布效率优化：签名预检从 x64/ARM64 矩阵中前置为单独 job，两个架构构建复用同一通过结果；不改变各架构实际签名和资产校验。
 - 本轮新增 `compressionGateway` 四入口 envelope 矩阵回归：覆盖 PNG/JPEG/静态 WebP、格式专属字段不泄漏，以及非法组合在 IPC 前拒绝。
 - 本轮完成预检临时空间预算状态修复：参数、输入或选中项变化时清除旧预算，任务完成后保留最近一次有效预算。

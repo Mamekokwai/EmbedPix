@@ -50,13 +50,19 @@ try {
 
   $publicKey = Join-Path $root 'src-tauri/update-public-key.txt'
   $trustedPublicKeyId = 'unknown'
+  $decodedPublicKeyPath = Join-Path $probeDirectory 'update-public-key.pub'
+  $rawSignaturePath = Join-Path $probeDirectory 'probe.bin.sig.raw'
   try {
     $encodedPublicKey = (Get-Content -Raw -Encoding UTF8 -LiteralPath $publicKey).Trim()
     $decodedPublicKey = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encodedPublicKey))
+    [IO.File]::WriteAllText($decodedPublicKeyPath, $decodedPublicKey, [Text.UTF8Encoding]::new($false))
+    $encodedSignature = (Get-Content -Raw -Encoding UTF8 -LiteralPath $probeSignature).Trim()
+    $rawSignature = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encodedSignature))
+    [IO.File]::WriteAllText($rawSignaturePath, $rawSignature, [Text.UTF8Encoding]::new($false))
     $publicKeyMatch = [regex]::Match($decodedPublicKey, 'minisign public key: (?<id>[A-F0-9]{16})')
     if ($publicKeyMatch.Success) { $trustedPublicKeyId = $publicKeyMatch.Groups['id'].Value }
   } catch {
-    # The configuration smoke already owns structural validation; keep diagnostics best-effort here.
+    throw '受信公钥或探针签名无法从 Tauri 外层 Base64 解码。'
   }
 
   $verifierManifest = Join-Path $root 'tools/minisign-verifier/Cargo.toml'
@@ -73,7 +79,7 @@ try {
     throw '独立 minisign verifier 构建后仍不存在。'
   }
 
-  & $verifier $publicKey $probeInput $probeSignature *> $null
+  & $verifier $decodedPublicKeyPath $probeInput $rawSignaturePath *> $null
   if ($LASTEXITCODE -ne 0) {
     throw "签名私钥对应的公钥与 EmbedPix 受信更新公钥不匹配。受信公钥标识：$trustedPublicKeyId。请更新 TAURI_SIGNING_PRIVATE_KEY，或在轮换密钥时同步公钥配置。"
   }

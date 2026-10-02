@@ -63,7 +63,7 @@ foreach ($required in @('Remove-ReleaseSigningProbeDirectory', '-RemoveItem', '�
   if ($cleanupSmoke -notmatch [regex]::Escape($required)) { throw "Signing cleanup smoke is missing: $required" }
 }
 $signingPreflight = Get-Content -Raw -Encoding UTF8 -LiteralPath $signingPreflightPath
-foreach ($required in @('ReportPath', 'trustedPublicKeyVerification', 'generatedAtUtc', '摘要已写入')) {
+foreach ($required in @('ReportPath', 'trustedPublicKeyVerification', 'generatedAtUtc', '摘要已写入', 'decodedPublicKeyPath', 'rawSignaturePath', 'FromBase64String($encodedPublicKey)', 'FromBase64String($encodedSignature)')) {
   if ($signingPreflight -notmatch [regex]::Escape($required)) { throw "Signing preflight report contract is missing: $required" }
 }
 $reportMatch = [regex]::Match($signingPreflight, '(?s)\$report\s*=\s*\[ordered\]@\{(?<body>.*?)\n\}')
