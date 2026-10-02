@@ -1,5 +1,4 @@
-﻿
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [string]$ReportPath
 )
