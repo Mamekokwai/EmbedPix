@@ -470,11 +470,11 @@
 
 - [~] 元数据策略完整：压缩工作区支持 `strip`、PNG→PNG/JPEG→JPEG/静态 WebP→WebP 的 `stripSafe` 和 `stripAll`；三种 `stripSafe` 均只保留结构合法且有界的 ICC payload，不保证 ICC 内部色彩语义，并移除 EXIF/GPS/XMP/注释；WebP `preserve` 与跨格式安全保留仍待后续。
 - [x] 失败回滚完整。
-- [~] 桌面 smoke 通过：本地 smoke 与窄窗口运行时复核已通过，签名预检已加入；`prepare-release.yml` 在签名预检前接入 cleanup smoke，清理失败会以非零状态阻断发布；真实发布资产安装/启动仍待下一次正式 release 验收。
+- [x] 桌面 smoke 通过：本地 smoke 与窄窗口运行时复核已通过，签名预检已加入；`prepare-release.yml` 在签名预检前接入 cleanup smoke，清理失败会以非零状态阻断发布；v0.7.9/v0.7.10 真实发布资产已完成 x64 安装、启动、下载和签名烟测。
 - [x] 许可证清单完成。
 - [x] 发布说明完成：`docs/release-notes-v0.7.0.md` 已存在并通过版本标题校验。
-- [ ] x64 安装和启动通过。
-- [ ] ARM64 资产校验通过。
+- [x] x64 安装和启动通过。
+- [x] ARM64 资产校验通过。
 
 ## 11. 当前执行顺序
 
@@ -497,20 +497,20 @@
 - [x] 修复 Linux/macOS Clippy 对磁盘空间计算和 GIF 非阻塞错误码的跨平台编译问题。
 - [x] 将压缩 CLI 冒烟测试改为运行时生成确定性 fixture，避免 CI 依赖被忽略的工作树文件。
 - [x] 本地 Rust 285 项测试、前端 421 项测试、构建、桌面 smoke、发布配置、fixture、依赖和压缩 CLI 门禁通过。
-- [ ] GitHub Actions 的 Windows、Linux、macOS 发布工作流全部通过。
+- [x] GitHub Actions 的 Windows、Linux、macOS 发布工作流全部通过。
 
 ## 14. v0.7.9 跨平台修正版
 
 - [x] Unix `statvfs` 可用空间计算兼容 Linux 与 macOS 字段类型差异。
 - [x] 发布结果路径断言兼容 Windows 扩展路径与 Unix 路径格式。
-- [ ] v0.7.9 发布源验证、签名、Windows 安装包、跨平台检查和资产验收。
+- [x] v0.7.9 发布源验证、签名、Windows 安装包、跨平台检查和资产验收。
 
 ## 15. v0.7.10 窗口交互验收
 
 - [x] 关闭按钮显示关闭中状态并阻止重复操作。
 - [x] 关闭失败时恢复交互状态。
 - [x] 前端类型、lint 与完整 Vitest 门禁通过。
-- [ ] v0.7.10 发布源、签名、Windows 安装包、跨平台检查和资产验收。
+- [x] v0.7.10 发布源、签名、Windows 安装包、跨平台检查和资产验收。
 
 - [!] pngquant 直接捆绑：需要 GPLv3/商业许可决策或替代算法。
 - [!] AVIF 默认启用：需要确认包体积、编码器依赖和构建时间。
