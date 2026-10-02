@@ -640,10 +640,26 @@ jobs:
             throw 'Published latest.json asset has no browser download URL.'
           }
           $downloadHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; 'User-Agent' = 'EmbedPix release verifier' }
-          $latest = Invoke-RestMethod -Headers $downloadHeaders -Uri $latestAsset.browser_download_url
-          $publishedPlatforms = @($latest.platforms.PSObject.Properties.Name)
-          $publishedVersion = [string]$latest.version
-          if ($publishedVersion -ne $env:RELEASE_VERSION -or $publishedPlatforms.Count -ne 2) {
+          $latest = $null
+          $publishedPlatforms = @()
+          $publishedVersion = ''
+          $manifestReady = $false
+          for ($attempt = 1; $attempt -le 6; $attempt++) {
+            try {
+              $latest = Invoke-RestMethod -Headers $downloadHeaders -Uri $latestAsset.browser_download_url -ErrorAction Stop
+              $publishedPlatforms = @($latest.platforms.PSObject.Properties.Name)
+              $publishedVersion = [string]$latest.version
+              if ($publishedVersion -eq $env:RELEASE_VERSION -and $publishedPlatforms.Count -eq 2) {
+                $manifestReady = $true
+                break
+              }
+              Write-Warning "Published latest.json is not propagated yet (attempt $attempt/6): version=$publishedVersion platforms=$($publishedPlatforms -join ', ')."
+            } catch {
+              Write-Warning "Published latest.json fetch failed (attempt $attempt/6): $($_.Exception.Message)"
+            }
+            if ($attempt -lt 6) { Start-Sleep -Seconds ([Math]::Min(30, 5 * $attempt)) }
+          }
+          if (-not $manifestReady) {
             throw "Published latest.json version/platform count is invalid. Expected version=$env:RELEASE_VERSION and platforms=2; actual version=$publishedVersion and platforms=$($publishedPlatforms -join ', ')."
           }
           if ($publishedPlatforms -notcontains 'windows-x86_64' -or $publishedPlatforms -notcontains 'windows-aarch64') {
