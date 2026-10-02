@@ -62,6 +62,7 @@
 - [x] GIF 参数快速恢复（commit `381ad5a`）：新增“恢复平衡默认”，覆盖画布、帧时长、首尾停留、播放、背景/循环、颜色/抖动、目标体积、自动压缩、合并相同帧及视频 FPS/抽帧/裁剪/旋转/倒放；保留素材、输出格式、输出位置、文件名和覆盖策略，视频源仅标记需要重新抽帧。前端回归增至 400 项。
 - [x] GUI 启动参数发布契约（commit `6cd43cd`）：发布配置 smoke 固定检查 Windows GUI 在显式参数路径中先准备控制台、再输出诊断、最后以退出码 2 结束；同时保留 GUI subsystem 与独立 CLI binary 边界，不接触签名密钥。
 - [x] 主线全量回归复核（2026-10-01）：前端 32 个测试文件 / 400 项通过；Rust library 279 项通过；压缩 CLI、GIF benchmark 8/8、GIF quality 3/3、release config、release fixture、签名清理 smoke 均通过，工作树与 `origin/main` 一致。
+- [x] JPEG 视觉质量门槛：`maxRgbMae` 现在支持目标体积下的有损 JPEG 与 WebP；JPEG 透明输入先按 `jpegBackground` 合成再计算 RGB MAE，候选搜索、preview/estimate/formal、CLI、Gateway、UI 和自定义预设共用范围校验，默认关闭且不可达时不发布。新增透明背景回归、CLI smoke 与前端门禁，当前 Rust library 280 项、前端 401 项通过。
 - 本轮新增 `compressionGateway` 四入口 envelope 矩阵回归：覆盖 PNG/JPEG/静态 WebP、格式专属字段不泄漏，以及非法组合在 IPC 前拒绝。
 - 本轮完成预检临时空间预算状态修复：参数、输入或选中项变化时清除旧预算，任务完成后保留最近一次有效预算。
 - 本轮新增 updater 签名提交/安装包提交边界清理回归：验证临时 `.part`、签名临时文件和 `.etag` 清理，以及既有/已提交缓存的保留或失败清理语义；真实异步 rename 间隙尚未通过 hook 注入验证，未扩大覆盖声明。

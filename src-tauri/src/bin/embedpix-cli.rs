@@ -187,6 +187,28 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
             .as_bool()
             .ok_or(("request_error", "jpegOptimizeHuffman 必须是布尔值".into()))?,
     };
+    let jpeg_background = match payload.get("jpegBackground") {
+        None => None,
+        Some(value) => Some(
+            value
+                .as_str()
+                .ok_or(("request_error", "jpegBackground 必须是字符串".into()))?
+                .to_string(),
+        ),
+    };
+    let max_rgb_mae = match payload.get("maxRgbMae") {
+        None => None,
+        Some(value) => {
+            let value = value
+                .as_f64()
+                .filter(|value| value.is_finite() && (0.0..=255.0).contains(value))
+                .ok_or((
+                    "request_error",
+                    "maxRgbMae 必须是 0 到 255 之间的有限数字".into(),
+                ))?;
+            Some(value)
+        }
+    };
     let lossless = match payload.get("lossless") {
         None => format.eq_ignore_ascii_case("png"),
         Some(value) => value
@@ -251,7 +273,15 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
             ));
         }
     }
-    let result = compression::compress_file_cli_with_advanced_options(
+    if max_rgb_mae.is_some()
+        && (!matches!(format, "jpg" | "jpeg" | "webp") || lossless || max_output_bytes.is_none())
+    {
+        return Err((
+            "request_error",
+            "maxRgbMae 仅支持带最大输出体积的有损 JPEG 或 WebP".into(),
+        ));
+    }
+    let result = compression::compress_file_cli_with_quality_threshold(
         std::path::Path::new(&input_path),
         std::path::Path::new(&output_path),
         format,
@@ -264,6 +294,8 @@ fn execute_compression(payload: Value) -> Result<Value, (&'static str, String)> 
         webp_lossless_method,
         target_resize_percent,
         auto_resize_to_target,
+        jpeg_background.as_deref(),
+        max_rgb_mae,
     )
     .map_err(|error| ("compression_error", error))?;
     serde_json::to_value(result).map_err(|error| ("response_error", error.to_string()))

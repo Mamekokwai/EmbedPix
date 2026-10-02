@@ -164,7 +164,7 @@ export interface CompressionEstimateRequest {
 function validateMaxRgbMae(value: number | null | undefined, outputFormat: Exclude<CompressionFormat, "original">, lossless: boolean, maxOutputBytes: number | undefined): void {
   if (value === undefined || value === null) return;
   if (!Number.isFinite(value) || value < 0 || value > 255) throw new Error("maxRgbMae 必须是 0 到 255 之间的有限数字。");
-  if (outputFormat !== "webp" || lossless || maxOutputBytes === undefined) throw new Error("maxRgbMae 仅支持启用最大输出体积的有损 WebP。");
+  if ((outputFormat !== "jpg" && outputFormat !== "webp") || lossless || maxOutputBytes === undefined) throw new Error("maxRgbMae 仅支持启用最大输出体积的有损 JPEG 或 WebP。");
 }
 
 function validateTargetResizePercent(value: number | undefined, outputFormat: Exclude<CompressionFormat, "original">, lossless: boolean): void {

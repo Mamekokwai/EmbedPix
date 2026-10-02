@@ -90,6 +90,14 @@ describe("compression custom presets", () => {
     expect(() => createCompressionCustomPreset("自动缩放无目标", { ...jpegValues, targetSizeEnabled: false })).toThrow("需要 JPEG/有损 WebP 的目标体积");
   });
 
+  it("round-trips a JPEG RGB MAE threshold with a target size", () => {
+    const jpegValues: CompressionPresetValues = { ...values, format: "jpg", lossless: false, targetSizeEnabled: true, targetSizeKiB: "64", maxRgbMae: "12.5" };
+    const preset = createCompressionCustomPreset("JPEG 质量门槛", jpegValues);
+    const imported = importCompressionPresetsJson(exportCompressionPresetsJson([preset]));
+    expect(imported[0]?.values.maxRgbMae).toBe("12.5");
+    expect(() => createCompressionCustomPreset("JPEG 无目标门槛", { ...jpegValues, targetSizeEnabled: false })).toThrow("启用目标体积");
+  });
+
   it("keeps older custom presets compatible with the safe default method", () => {
     const legacyValues = { ...values };
     delete (legacyValues as Partial<typeof values>).webpMethod;

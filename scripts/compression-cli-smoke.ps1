@@ -325,7 +325,7 @@ function Assert-TargetCompressionContract([switch]$Required) {
 function Assert-MaxRgbMaeContract {
   $source = Get-Utf8Text (Join-Path $repoRoot 'src-tauri/src/commands/compression.rs')
   $gateway = Get-Utf8Text (Join-Path $repoRoot 'src/platform/compression/compressionGateway.ts')
-  foreach ($token in @('max_rgb_mae: Option<f64>', 'validate_max_rgb_mae', 'is_finite()', '0.0..=255.0', 'choose_webp_output_with_rgb_mae', 'quality_threshold_unmet')) {
+  foreach ($token in @('max_rgb_mae: Option<f64>', 'validate_max_rgb_mae', 'is_finite()', '0.0..=255.0', 'choose_lossy_output_with_rgb_mae', 'CompressionFormat::Jpeg | CompressionFormat::Webp', 'quality_threshold_unmet')) {
     if ($source -notmatch [regex]::Escape($token)) { throw "maxRgbMae contract is missing: $token" }
   }
   if ($gateway -notmatch 'maxRgbMae' -or $gateway -notmatch 'Number\.isFinite') { throw 'Gateway maxRgbMae validation is missing.' }
@@ -401,6 +401,7 @@ try {
   $jpegOutput = Join-Path $script:root 'compressed-progressive.jpg'
   $jpegResizeOutput = Join-Path $script:root 'compressed-resized.jpg'
   $jpegOriginalSizeOutput = Join-Path $script:root 'compressed-original-size.jpg'
+  $jpegQualityThresholdOutput = Join-Path $script:root 'compressed-quality-threshold.jpg'
   $jpegAutoResizeOutput = Join-Path $script:root 'compressed-auto-resize.jpg'
   $jpegAutoUnreachableOutput = Join-Path $script:root 'compressed-auto-unreachable.jpg'
   $webpResizeOutput = Join-Path $script:root 'compressed-resized.webp'
@@ -433,6 +434,9 @@ try {
   $jpegOriginalSizeResult = Assert-Output $jpegOriginalSizeOutput 'jpg' 'JPEG original size'
   $jpegOriginalSizeDimensions = Get-JpegDimensions $jpegOriginalSizeOutput
   if ($jpegOriginalSizeDimensions.width -ne 32 -or $jpegOriginalSizeDimensions.height -ne 32) { throw "JPEG 100% smoke emitted $($jpegOriginalSizeDimensions.width)x$($jpegOriginalSizeDimensions.height), expected 32x32." }
+  $jpegQualityThresholdResult = Invoke-CliRequest $CliPath @{ id = 'jpeg-quality-threshold-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegQualityThresholdOutput; format = 'jpg'; quality = 82; maxOutputBytes = 64KB; maxCandidates = 3; maxRgbMae = 255; maxInputBytes = 1MB } 'JPEG RGB MAE threshold'
+  $jpegQualityThresholdOutputResult = Assert-Output $jpegQualityThresholdOutput 'jpg' 'JPEG RGB MAE threshold'
+  if ($jpegQualityThresholdResult.output.targetMet -ne $true -or $jpegQualityThresholdResult.output.maxRgbMae -ne 255) { throw 'JPEG RGB MAE threshold smoke did not report a bounded successful target.' }
   $jpegAutoResizeResult = Invoke-CliRequest $CliPath @{ id = 'jpeg-auto-resize-smoke'; op = 'compress'; inputPath = $pngInput; outputPath = $jpegAutoResizeOutput; format = 'jpg'; quality = 82; maxOutputBytes = 64KB; maxCandidates = 8; autoResizeToTarget = $true; maxInputBytes = 1MB } 'JPEG automatic target resize'
   $jpegAutoResizeOutputResult = Assert-Output $jpegAutoResizeOutput 'jpg' 'JPEG automatic target resize'
   if ($jpegAutoResizeResult.output.targetMet -ne $true) { throw 'JPEG automatic target resize did not report targetMet=true.' }
@@ -478,9 +482,10 @@ try {
   $report = [ordered]@{
     cli = (Resolve-Path -LiteralPath $CliPath).Path
     compressionCommand = 'compress'
-    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $jpegResizeResult, $jpegOriginalSizeResult, $jpegAutoResizeOutputResult, $webpResizeResult, $gifResult)
+    outputs = @($imageResult, $decodeResult, $compressionResult, $losslessMethodFastResult, $losslessMethodBestResult, $jpegResult, $jpegResizeResult, $jpegOriginalSizeResult, $jpegQualityThresholdOutputResult, $jpegAutoResizeOutputResult, $webpResizeResult, $gifResult)
     jpegResizeDimensions = $jpegResizeDimensions
     jpegOriginalSizeDimensions = $jpegOriginalSizeDimensions
+    jpegQualityThresholdTargetMet = $jpegQualityThresholdResult.output.targetMet
     jpegAutoResizeTargetMet = $jpegAutoResizeResult.output.targetMet
     jpegAutoResizeUnreachableSkipped = $jpegAutoUnreachableResult.output.status -eq 'skipped'
     jpegAutoResizeUnreachablePreservedExisting = $jpegAutoUnreachableHashBefore -eq $jpegAutoUnreachableHashAfter

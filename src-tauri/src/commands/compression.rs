@@ -1122,6 +1122,41 @@ pub fn compress_file_cli_with_advanced_options(
     target_resize_percent: Option<u8>,
     auto_resize_to_target: bool,
 ) -> Result<CompressionResult, String> {
+    compress_file_cli_with_quality_threshold(
+        input_path,
+        output_path,
+        format,
+        quality,
+        max_input_bytes,
+        max_output_bytes,
+        jpeg_progressive,
+        jpeg_optimize_huffman,
+        lossless,
+        webp_lossless_method,
+        target_resize_percent,
+        auto_resize_to_target,
+        None,
+        None,
+    )
+}
+
+/// Runs the CLI compression path with an optional lossy quality threshold.
+pub fn compress_file_cli_with_quality_threshold(
+    input_path: &Path,
+    output_path: &Path,
+    format: &str,
+    quality: u8,
+    max_input_bytes: Option<u64>,
+    max_output_bytes: Option<u64>,
+    jpeg_progressive: bool,
+    jpeg_optimize_huffman: bool,
+    lossless: bool,
+    webp_lossless_method: Option<u8>,
+    target_resize_percent: Option<u8>,
+    auto_resize_to_target: bool,
+    jpeg_background: Option<&str>,
+    max_rgb_mae: Option<f64>,
+) -> Result<CompressionResult, String> {
     let input =
         fs::read(input_path).map_err(|error| format!("failed to read input image: {error}"))?;
     let metadata = serde_json::json!({
@@ -1142,6 +1177,8 @@ pub fn compress_file_cli_with_advanced_options(
         "webpLosslessMethod": webp_lossless_method,
         "targetResizePercent": target_resize_percent,
         "autoResizeToTarget": auto_resize_to_target,
+        "jpegBackground": jpeg_background,
+        "maxRgbMae": max_rgb_mae,
     });
     let metadata = serde_json::to_vec(&metadata).map_err(|error| error.to_string())?;
     let mut payload = b"EGF1".to_vec();
@@ -1507,9 +1544,13 @@ fn validate_max_rgb_mae(
     if !value.is_finite() || !(0.0..=255.0).contains(&value) {
         return Err("maxRgbMae must be a finite number between 0 and 255".into());
     }
-    if format != CompressionFormat::Webp || lossless || target_bytes.is_none() {
+    if !matches!(format, CompressionFormat::Jpeg | CompressionFormat::Webp)
+        || lossless
+        || target_bytes.is_none()
+    {
         return Err(
-            "maxRgbMae is only supported for lossy WebP compression with maxOutputBytes".into(),
+            "maxRgbMae is only supported for lossy JPEG or WebP compression with maxOutputBytes"
+                .into(),
         );
     }
     Ok(())
@@ -1833,7 +1874,7 @@ fn choose_encoded_output_with_cancellation(
     }
 
     if let Some(max_rgb_mae) = request.metadata.max_rgb_mae {
-        return choose_webp_output_with_rgb_mae(
+        return choose_lossy_output_with_rgb_mae(
             request,
             width,
             height,
@@ -1935,7 +1976,7 @@ fn choose_encoded_output_with_cancellation(
     })
 }
 
-fn choose_webp_output_with_rgb_mae(
+fn choose_lossy_output_with_rgb_mae(
     request: &CompressionRequest,
     width: u32,
     height: u32,
@@ -1990,7 +2031,7 @@ fn choose_webp_output_with_rgb_mae(
         }
         let decoded = verify_compressed_output(&bytes, request.format, width, height)?;
         let metrics = quality_metrics_for_output(request, &decoded, job)?
-            .ok_or_else(|| "maxRgbMae requires lossy WebP quality metrics".to_string())?;
+            .ok_or_else(|| "maxRgbMae requires lossy JPEG or WebP quality metrics".to_string())?;
         if let Some(job) = job {
             checkpoint(job)?;
         }
@@ -2034,9 +2075,15 @@ fn choose_webp_output_with_rgb_mae(
     let skipped_reason = if target_met {
         None
     } else if target_fit {
-        Some("quality_threshold_unmet: no WebP quality candidate meets maxRgbMae".to_string())
+        Some(format!(
+            "quality_threshold_unmet: no {} quality candidate meets maxRgbMae",
+            request.format.name().to_ascii_uppercase()
+        ))
     } else {
-        Some("target_unmet: no WebP quality candidate fits maxOutputBytes".to_string())
+        Some(format!(
+            "target_unmet: no {} quality candidate fits maxOutputBytes",
+            request.format.name().to_ascii_uppercase()
+        ))
     };
     Ok(EncodedSelection {
         bytes,
@@ -2258,13 +2305,33 @@ fn quality_metrics_for_output(
     output: &DynamicImage,
     job: Option<&Arc<CompressionJob>>,
 ) -> Result<Option<CompressionQualityMetrics>, String> {
-    if request.format != CompressionFormat::Webp || request.lossless {
+    if !matches!(
+        request.format,
+        CompressionFormat::Jpeg | CompressionFormat::Webp
+    ) || request.lossless
+    {
+        return Ok(None);
+    }
+    if request.format == CompressionFormat::Jpeg && request.metadata.max_rgb_mae.is_none() {
         return Ok(None);
     }
     if let Some(job) = job {
         checkpoint(job)?;
     }
     let source = decode_image(&request.input)?;
+    let source = if request.format == CompressionFormat::Jpeg {
+        let rgba = source.to_rgba8();
+        if rgba.pixels().any(|pixel| pixel[3] < 255) {
+            DynamicImage::ImageRgb8(composite_jpeg_background(
+                &rgba,
+                parse_jpeg_background(request.metadata.jpeg_background.as_deref())?,
+            ))
+        } else {
+            DynamicImage::ImageRgb8(source.to_rgb8())
+        }
+    } else {
+        source
+    };
     Ok(Some(calculate_quality_metrics_with_checkpoint(
         &source, output, job,
     )?))
@@ -2289,11 +2356,7 @@ fn run_estimate(request: &CompressionRequest) -> Result<CompressionEstimate, Str
     let output_bytes = bytes.len() as u64;
     let (saved_bytes, savings_percent) = compression_statistics(input_bytes, output_bytes);
     let verified = verify_compressed_output(&bytes, request.format, width, height)?;
-    let quality_metrics = if request.format == CompressionFormat::Webp && !request.lossless {
-        quality_metrics_for_output(&prepared_request, &verified, None)?
-    } else {
-        None
-    };
+    let quality_metrics = quality_metrics_for_output(&prepared_request, &verified, None)?;
     let skipped_reason = selection_skipped_reason.or_else(|| {
         request
             .metadata
@@ -4308,10 +4371,9 @@ mod tests {
     }
 
     #[test]
-    fn max_rgb_mae_requires_finite_bounded_lossy_webp_target_search() {
+    fn max_rgb_mae_requires_finite_bounded_lossy_target_search() {
         for metadata in [
             r#"{"fileName":"sample.png","outputFormat":"webp","lossless":true,"maxOutputBytes":100000,"maxRgbMae":10}"#,
-            r#"{"fileName":"sample.png","outputFormat":"jpeg","lossless":false,"maxOutputBytes":100000,"maxRgbMae":10}"#,
             r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"maxRgbMae":10}"#,
             r#"{"fileName":"sample.png","outputFormat":"webp","lossless":false,"maxOutputBytes":100000,"maxRgbMae":256}"#,
         ] {
@@ -4324,6 +4386,14 @@ mod tests {
         );
         assert_eq!(
             parse_raw_payload(&valid).unwrap().metadata.max_rgb_mae,
+            Some(10.0)
+        );
+        let jpeg_valid = raw_payload(
+            r#"{"fileName":"sample.png","outputFormat":"jpeg","lossless":false,"maxOutputBytes":100000,"maxCandidates":4,"maxRgbMae":10}"#,
+            &png_input(),
+        );
+        assert_eq!(
+            parse_raw_payload(&jpeg_valid).unwrap().metadata.max_rgb_mae,
             Some(10.0)
         );
     }
@@ -6087,6 +6157,25 @@ mod tests {
         let error =
             calculate_quality_metrics_with_checkpoint(&image, &image, Some(&job)).unwrap_err();
         assert_eq!(error, "compression cancelled");
+    }
+
+    #[test]
+    fn jpeg_max_rgb_mae_reports_metrics_after_background_compositing() {
+        let image = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([255, 0, 0, 0])));
+        let mut input = Vec::new();
+        image
+            .write_to(&mut Cursor::new(&mut input), ImageOutputFormat::Png)
+            .unwrap();
+        let request = parse_raw_payload(&raw_payload(
+            r##"{"fileName":"transparent.png","outputFormat":"jpeg","lossless":false,"jpegQuality":82,"jpegBackground":"#123456","maxOutputBytes":100000,"maxCandidates":3,"maxRgbMae":255,"skipIfLarger":false}"##,
+            &input,
+        ))
+        .unwrap();
+        let estimate = run_estimate(&request).unwrap();
+        assert_eq!(estimate.max_rgb_mae, Some(255.0));
+        assert_eq!(estimate.target_met, true);
+        assert_eq!(estimate.candidate_count, Some(3));
+        assert!(estimate.quality_metrics.is_some());
     }
 
     #[test]

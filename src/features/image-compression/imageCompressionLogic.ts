@@ -92,7 +92,7 @@ export function formatCompressionError(error: string): string {
     "maxInputBytes must be between": "最大输入体积必须在",
     "maxCandidates must be between": "最大候选次数必须在",
     "maxRgbMae must be a finite number between": "最大 RGB MAE 必须是介于",
-    "maxRgbMae is only supported for lossy WebP compression with maxOutputBytes": "maxRgbMae 仅支持带 maxOutputBytes 的有损 WebP 压缩",
+    "maxRgbMae is only supported for lossy JPEG or WebP compression with maxOutputBytes": "maxRgbMae 仅支持带 maxOutputBytes 的有损 JPEG 或 WebP 压缩",
     "pngOptimizationLevel must be between": "PNG 优化级别必须在",
     "pngOptimizeAlpha is only supported for PNG output": "pngOptimizeAlpha 仅支持 PNG 输出",
     "webpMethod must be between": "WebP 编码方法必须在",

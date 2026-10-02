@@ -158,7 +158,7 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, maxCandidates: 13 })).toThrow("maxCandidates");
   });
 
-  it("serializes maxRgbMae only for bounded lossy WebP target searches", () => {
+  it("serializes maxRgbMae for bounded lossy JPEG and WebP target searches", () => {
     const encoded = encodeCompressionEnvelope({ ...request, lossless: false, maxOutputBytes: 64 * 1024, maxCandidates: 8, maxRgbMae: 12.5 });
     const length = new DataView(encoded.buffer).getUint32(4, true);
     const metadata = JSON.parse(new TextDecoder().decode(encoded.slice(8, 8 + length))) as Record<string, unknown>;
@@ -166,7 +166,10 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, lossless: false, maxRgbMae: Number.NaN })).toThrow("maxRgbMae");
     expect(() => encodeCompressionEnvelope({ ...request, lossless: false, maxRgbMae: 256 })).toThrow("maxRgbMae");
     expect(() => encodeCompressionEnvelope({ ...request, lossless: false, maxRgbMae: 12.5 })).toThrow("最大输出体积");
-    expect(() => encodeCompressionEnvelope({ ...request, lossless: true, maxOutputBytes: 64 * 1024, maxRgbMae: 12.5 })).toThrow("有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, lossless: true, maxOutputBytes: 64 * 1024, maxRgbMae: 12.5 })).toThrow("有损 JPEG 或 WebP");
+    const jpeg = encodeCompressionEnvelope({ ...request, outputFormat: "jpg", lossless: false, maxOutputBytes: 64 * 1024, maxCandidates: 8, maxRgbMae: 12.5 });
+    const jpegLength = new DataView(jpeg.buffer).getUint32(4, true);
+    expect(JSON.parse(new TextDecoder().decode(jpeg.slice(8, 8 + jpegLength))).maxRgbMae).toBe(12.5);
     const estimate = encodeCompressionEstimateEnvelope({ fileName: "icon.png", inputData: request.inputData, outputFormat: "webp", jpegQuality: 82, lossless: false, metadataPolicy: "strip", pngOptimizationLevel: 2, maxOutputBytes: 64 * 1024, maxCandidates: 8, maxRgbMae: 12.5 });
     const estimateLength = new DataView(estimate.buffer).getUint32(4, true);
     expect(JSON.parse(new TextDecoder().decode(estimate.slice(8, 8 + estimateLength))).maxRgbMae).toBe(12.5);
@@ -367,7 +370,7 @@ describe("compression gateway", () => {
     expect(() => encodeCompressionEnvelope({ ...request, inputData: pngInput, outputFormat: "png", webpMethod: 4 })).toThrow("仅支持有损 WebP");
     expect(() => encodeCompressionEstimateEnvelope({ fileName: "icon.jpg", inputData: jpegInput, outputFormat: "jpg", jpegQuality: 82, lossless: false, metadataPolicy: "strip", pngOptimizationLevel: 2, webpPass: 2 })).toThrow("仅支持有损 WebP");
     expect(() => encodeCompressionEnvelope({ ...request, inputData: staticWebpInput, outputFormat: "webp", lossless: true, webpNearLossless: 90, webpMethod: 4 })).toThrow("仅支持有损 WebP");
-    expect(() => encodeCompressionEnvelope({ ...request, inputData: pngInput, outputFormat: "png", metadataPolicy: "stripSafe", maxOutputBytes: 64 * 1024, maxCandidates: 8, maxRgbMae: 12.5 })).toThrow("有损 WebP");
+    expect(() => encodeCompressionEnvelope({ ...request, inputData: pngInput, outputFormat: "png", metadataPolicy: "stripSafe", maxOutputBytes: 64 * 1024, maxCandidates: 8, maxRgbMae: 12.5 })).toThrow("有损 JPEG 或 WebP");
     expect(invoke).not.toHaveBeenCalled();
   });
 
