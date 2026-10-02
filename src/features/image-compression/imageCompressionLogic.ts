@@ -44,6 +44,14 @@ export function getCompressionPreset(preset: Exclude<CompressionPreset, "custom"
   return COMPRESSION_PRESETS.find((option) => option.value === preset) ?? COMPRESSION_PRESETS[1];
 }
 export function supportsCompressionTargetSize(format: CompressionFormat, lossless: boolean): boolean { return format === "jpg" || (format === "webp" && !lossless); }
+export interface CompressionAlphaHandling { title: string; description: string; }
+export function getCompressionAlphaHandling(format: CompressionFormat, lossless: boolean): CompressionAlphaHandling {
+  if (format === "jpg") return { title: "JPEG 不支持透明度", description: "含透明像素时会按 JPEG 透明背景颜色合成，避免静默丢失 Alpha。" };
+  if (format === "png") return { title: "PNG 保留透明度", description: "Alpha 通道保持不变；透明像素 RGB 优化只影响无效颜色数据。" };
+  return lossless
+    ? { title: "WebP 保留透明度", description: "无损模式下 Alpha 完全保留；近无损只量化 RGB。" }
+    : { title: "WebP 保留透明度", description: "有损模式下 Alpha 仍会保留；可用 Alpha 质量控制透明度细节。" };
+}
 export interface StripSafeValidationSnapshot { format: CompressionFormat; items: ReadonlyArray<Pick<CompressionItem, "id" | "file">>; valid: boolean | null; }
 export function isCurrentStripSafeValidation(snapshot: StripSafeValidationSnapshot | null, format: CompressionFormat, items: ReadonlyArray<Pick<CompressionItem, "id" | "file">>): boolean {
   return Boolean(snapshot && snapshot.format === format && snapshot.items.length === items.length && snapshot.items.every((item, index) => item.id === items[index]?.id && item.file === items[index]?.file));

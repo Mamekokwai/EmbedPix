@@ -152,6 +152,9 @@
 .compression-parameter-summary span:last-child::after { display: none; }
 .compression-field-error { margin: -6px 0 0; color: var(--qp-danger, #df6a6a); font-size: 11px; line-height: 1.5; }
 .compression-field-hint, .compression-output-file-name-hint { color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.compression-alpha-status { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 1px; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--qp-border-subtle) 82%, transparent); border-radius: var(--qp-radius-control); background: color-mix(in srgb, var(--qp-bg-elevated) 72%, transparent); color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; }
+.compression-alpha-status-title { flex: 0 0 auto; color: var(--qp-text-secondary); font-size: 11px; }
+.compression-alpha-status-copy { min-width: 0; overflow-wrap: anywhere; }
 .compression-webp-method-hint { display: block; min-width: 0; }
 .compression-output-file-name-hint[role="alert"] { color: var(--qp-danger, #df6a6a); }
 .compression-skip-larger-warning { color: var(--qp-danger, #df6a6a) !important; }
@@ -214,6 +217,7 @@
   .compression-preview-grid { grid-template-columns: minmax(0, 1fr); }
   .compression-settings-card .compression-card-heading { grid-column: auto; }
   .compression-webp-method-hint { max-width: 100%; }
+  .compression-alpha-status { align-items: flex-start; flex-direction: column; gap: 2px; }
   .compression-summary-card { gap: 14px; }
   .compression-result-card { gap: 14px; }
   .compression-estimate-note { flex-basis: 100%; margin-left: 0; }
