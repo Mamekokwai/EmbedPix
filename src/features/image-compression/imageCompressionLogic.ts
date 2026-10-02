@@ -2,6 +2,7 @@ import type { CompressionEstimate, CompressionFormat, CompressionItem, Compressi
 export const COMPRESSION_WEBP_METHOD_MIN = 0;
 export const COMPRESSION_WEBP_METHOD_MAX = 6;
 export const COMPRESSION_WEBP_METHOD_DEFAULT = 4;
+export const COMPRESSION_DIMENSIONS_TIMEOUT_MS = 15_000;
 export const COMPRESSION_MAX_INPUT_BYTES = 32 * 1024 * 1024;
 export const COMPRESSION_MAX_CANDIDATES_MIN = 1;
 export const COMPRESSION_MAX_CANDIDATES_MAX = 12;
@@ -17,20 +18,60 @@ export function readCompressionDimensions(file: Blob, dependencies: CompressionD
   createObjectURL: (value) => URL.createObjectURL(value),
   revokeObjectURL: (value) => URL.revokeObjectURL(value),
 }): Promise<{ width: number; height: number }> {
-  if (dependencies.createImageBitmap) {
-    return dependencies.createImageBitmap(file).then((bitmap) => {
-      try { return { width: bitmap.width, height: bitmap.height }; }
-      finally { bitmap.close(); }
+  const createImageBitmap = dependencies.createImageBitmap;
+  if (createImageBitmap) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timeout: ReturnType<typeof globalThis.setTimeout>;
+      const finish = (error: Error | null, dimensions?: { width: number; height: number }) => {
+        if (settled) return;
+        settled = true;
+        globalThis.clearTimeout(timeout);
+        if (error) reject(error);
+        else resolve(dimensions!);
+      };
+      timeout = globalThis.setTimeout(() => finish(new Error("读取图片尺寸超时，请检查文件或更换图片。")), COMPRESSION_DIMENSIONS_TIMEOUT_MS);
+      try {
+        void createImageBitmap(file).then((bitmap) => {
+          try {
+            if (!settled) finish(null, { width: bitmap.width, height: bitmap.height });
+          } catch (error) {
+            finish(error instanceof Error ? error : new Error(String(error)));
+          } finally {
+            bitmap.close();
+          }
+        }, (error) => finish(error instanceof Error ? error : new Error(String(error))));
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
   return new Promise((resolve, reject) => {
     const image = dependencies.createImage();
     const objectUrl = dependencies.createObjectURL(file);
     let released = false;
+    let settled = false;
     const release = () => { if (!released) { released = true; dependencies.revokeObjectURL(objectUrl); } };
-    image.onload = () => { try { resolve({ width: image.naturalWidth, height: image.naturalHeight }); } catch (error) { reject(error); } finally { release(); } };
-    image.onerror = () => { release(); reject(new Error("无法读取图片尺寸。")); };
-    try { image.src = objectUrl; } catch (error) { release(); reject(error); }
+    const cleanup = () => {
+      globalThis.clearTimeout(timeout);
+      image.onload = null;
+      image.onerror = null;
+      release();
+    };
+    const finish = (error: Error | null, dimensions?: { width: number; height: number }) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(dimensions!);
+    };
+    const timeout = globalThis.setTimeout(() => finish(new Error("读取图片尺寸超时，请检查文件或更换图片。")), COMPRESSION_DIMENSIONS_TIMEOUT_MS);
+    image.onload = () => {
+      try { finish(null, { width: image.naturalWidth, height: image.naturalHeight }); }
+      catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
+    };
+    image.onerror = () => finish(new Error("无法读取图片尺寸。"));
+    try { image.src = objectUrl; } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
   });
 }
 

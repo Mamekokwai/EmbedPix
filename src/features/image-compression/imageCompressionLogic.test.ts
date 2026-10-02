@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, canWriteCompressionItemUpdate, createCompressionBatchReport, estimateFallback, filterCompressionFiles, formatCompressionBatchSummary, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionParameterSummary, formatCompressionItemResultStatus, formatCompressionError, formatCompressionReason, formatCompressionReplaceOriginalConfirmation, getCompressionAlphaHandling, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getCurrentStripSafeValidation, getSuccessfulCompressionOutputPath, isCompressionProgressCompleted, isCompressionSourcePathError, isCurrentCompressionEstimate, isCurrentCompressionItem, isCurrentStripSafeValidation, mergeCompressionEstimateResult, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, readCompressionDimensions, removeCompressionDimensionError, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize, waitForCompressionProgressTick } from "./imageCompressionLogic";
+import { COMPRESSION_DIMENSIONS_TIMEOUT_MS, COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, canWriteCompressionItemUpdate, createCompressionBatchReport, estimateFallback, filterCompressionFiles, formatCompressionBatchSummary, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionParameterSummary, formatCompressionItemResultStatus, formatCompressionError, formatCompressionReason, formatCompressionReplaceOriginalConfirmation, getCompressionAlphaHandling, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getCurrentStripSafeValidation, getSuccessfulCompressionOutputPath, isCompressionProgressCompleted, isCompressionSourcePathError, isCurrentCompressionEstimate, isCurrentCompressionItem, isCurrentStripSafeValidation, mergeCompressionEstimateResult, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, readCompressionDimensions, removeCompressionDimensionError, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize, waitForCompressionProgressTick } from "./imageCompressionLogic";
 import type { CompressionItem } from "./types";
 
 import { formatCompressionProgressSummary } from "./imageCompressionLogic";
@@ -48,6 +48,24 @@ describe("image compression logic", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it("times out a hanging bitmap read and closes a bitmap that resolves late", async () => {
+    vi.useFakeTimers();
+    let resolveBitmap: ((bitmap: { width: number; height: number; close: () => void }) => void) | undefined;
+    const pending = readCompressionDimensions(new Blob(), {
+      createImageBitmap: () => new Promise((resolve) => { resolveBitmap = resolve; }),
+      createImage: () => { throw new Error("unused"); },
+      createObjectURL: () => "unused",
+      revokeObjectURL: () => {},
+    });
+    vi.advanceTimersByTime(COMPRESSION_DIMENSIONS_TIMEOUT_MS);
+    await expect(pending).rejects.toThrow("读取图片尺寸超时");
+    const close = vi.fn();
+    resolveBitmap?.({ width: 10, height: 20, close });
+    await Promise.resolve();
+    expect(close).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
   it("revokes fallback URLs on load, load failure, and source assignment failure", async () => {
     const revoke = vi.fn();
     let image: { naturalWidth: number; naturalHeight: number; onload: ((event: Event) => void) | null; onerror: ((event: Event) => void) | null; src: string };
@@ -60,6 +78,19 @@ describe("image compression logic", () => {
     Object.defineProperty(image, "src", { set: () => { throw new Error("assign failed"); } });
     await expect(readCompressionDimensions(new Blob(), dependencies)).rejects.toThrow("assign failed");
     expect(revoke).toHaveBeenCalledTimes(3);
+  });
+
+  it("cleans a fallback image when its load never settles", async () => {
+    vi.useFakeTimers();
+    const revoke = vi.fn();
+    const image = { naturalWidth: 0, naturalHeight: 0, onload: null as ((event: Event) => void) | null, onerror: null as ((event: Event) => void) | null, src: "" };
+    const pending = readCompressionDimensions(new Blob(), { createImage: () => image, createObjectURL: () => "blob:timeout", revokeObjectURL: revoke });
+    vi.advanceTimersByTime(COMPRESSION_DIMENSIONS_TIMEOUT_MS);
+    await expect(pending).rejects.toThrow("读取图片尺寸超时");
+    expect(image.onload).toBeNull();
+    expect(image.onerror).toBeNull();
+    expect(revoke).toHaveBeenCalledOnce();
+    vi.useRealTimers();
   });
 
   it("only accepts dimension results for items still in the queue", () => {
