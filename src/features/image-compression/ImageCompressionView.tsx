@@ -49,6 +49,7 @@ import {
   normalizeCompressionOutputModes,
   removeCompressionItem,
   isCurrentCompressionEstimate,
+  shouldInvalidateCompressionResults,
   formatCompressionReason,
   formatCompressionError,
   isCompressionProgressCompleted,
@@ -244,6 +245,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const mountedRef = useRef(true);
   const progressPollControllerRef = useRef<AbortController | null>(null);
   const dimensionControllersRef = useRef(new Map<string, AbortController>());
+  const previousOptionsRef = useRef<CompressionOptions | null>(null);
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -318,6 +320,24 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     autoResizeToTarget: autoResizeActive,
     maxInputBytes,
   }), [autoResizeActive, deleteSource, format, quality, webpLossyActive, webpMethod, webpAlphaQuality, webpPass, pngOptimizeAlpha, webpNearLossless, webpLosslessMethod, jpegBackground, jpegProgressive, jpegOptimizeHuffman, lossless, pngOptimizationLevel, metadataPolicy, outputLocation, outputFileName, outputFileNameError, outputSubdirectory, outputDirectory, outputModes, skipIfLarger, maxOutputBytes, maxCandidates, maxRgbMaeError, maxRgbMaeValue, targetResizePercent, qualityEnabled, maxInputBytes]);
+
+  useEffect(() => {
+    const previous = previousOptionsRef.current;
+    previousOptionsRef.current = options;
+    if (!shouldInvalidateCompressionResults(previous, options, busy)) return;
+    setFailures([]);
+    setFailureDetails([]);
+    setItemResults([]);
+    setSkipReasons([]);
+    setLastSuccessfulOutputPath(null);
+    setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
+    setPreflightSpaceBytes(null);
+    setProgress({ current: 0, total: 0 });
+    setProgressBytes({ input: null, output: null });
+    setMessage("");
+    setStage("");
+    if (itemsRef.current.length > 0) setStatus("ready");
+  }, [busy, options]);
 
   const outputLocationError = useMemo(() => replaceOriginal ? null : getCompressionOutputLocationError(outputLocation, outputSubdirectory, outputDirectory, true), [outputDirectory, outputLocation, outputSubdirectory, replaceOriginal]);
   const actualSavedBytes = resultStats.savedBytes;

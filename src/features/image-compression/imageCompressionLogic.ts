@@ -126,6 +126,7 @@ export function getCurrentStripSafeValidation(snapshot: StripSafeValidationSnaps
   return isCurrentStripSafeValidation(snapshot, format, items) ? snapshot?.valid ?? null : null;
 }
 export function isCurrentCompressionItem<T extends { id: string; file: unknown }>(items: ReadonlyArray<T>, item: Pick<T, "id" | "file">): boolean { return items.some((candidate) => candidate.id === item.id && candidate.file === item.file); }
+export function shouldInvalidateCompressionResults(previous: CompressionOptions | null, current: CompressionOptions, busy: boolean): boolean { return previous !== null && previous !== current && !busy; }
 export function canWriteCompressionItemUpdate<T extends { id: string; file: unknown }>(mounted: boolean, items: ReadonlyArray<T>, item: Pick<T, "id" | "file">): boolean { return mounted && isCurrentCompressionItem(items, item); }
 export function removeCompressionDimensionError<T extends { id: string }>(errors: ReadonlyArray<T>, itemId: string): T[] { return errors.filter((error) => error.id !== `dimensions-${itemId}`); }
 export function formatCompressionReason(reason: string | undefined): string {

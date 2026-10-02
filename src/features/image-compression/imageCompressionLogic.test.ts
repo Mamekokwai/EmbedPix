@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { COMPRESSION_DIMENSIONS_TIMEOUT_MS, COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, canWriteCompressionItemUpdate, createCompressionBatchReport, estimateFallback, filterCompressionFiles, formatCompressionBatchSummary, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionParameterSummary, formatCompressionItemResultStatus, formatCompressionError, formatCompressionReason, formatCompressionReplaceOriginalConfirmation, getCompressionAlphaHandling, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getCurrentStripSafeValidation, getSuccessfulCompressionOutputPath, isCompressionProgressCompleted, isCompressionSourcePathError, isCurrentCompressionEstimate, isCurrentCompressionItem, isCurrentStripSafeValidation, mergeCompressionEstimateResult, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, readCompressionDimensions, removeCompressionDimensionError, removeCompressionItem, splitCompressionImportFiles, supportsCompressionTargetSize, waitForCompressionProgressTick } from "./imageCompressionLogic";
-import type { CompressionItem } from "./types";
+import { COMPRESSION_DIMENSIONS_TIMEOUT_MS, COMPRESSION_MAX_INPUT_BYTES, COMPRESSION_PRESETS, COMPRESSION_WEBP_METHOD_DEFAULT, COMPRESSION_WEBP_METHOD_MAX, COMPRESSION_WEBP_METHOD_MIN, canDeleteCompressionSource, canReplaceCompressionOriginal, canWriteCompressionItemUpdate, createCompressionBatchReport, estimateFallback, filterCompressionFiles, formatCompressionBatchSummary, formatCompressionDeleteSourceConfirmation, formatCompressionEstimateSource, formatCompressionFailureDetails, formatCompressionParameterSummary, formatCompressionItemResultStatus, formatCompressionError, formatCompressionReason, formatCompressionReplaceOriginalConfirmation, getCompressionAlphaHandling, getCompressionBatchFinalState, getCompressionCancelledItemResults, getCompressionItemResultMetrics, getCompressionOutputFileNameError, getCompressionOutputLocationError, getCompressionPreset, getCompressionRetryQueue, getCompressionSourcePathError, getCompressionSubdirectoryError, getCompressionTargetSizeError, getCurrentStripSafeValidation, getSuccessfulCompressionOutputPath, isCompressionProgressCompleted, isCompressionSourcePathError, isCurrentCompressionEstimate, isCurrentCompressionItem, isCurrentStripSafeValidation, mergeCompressionEstimateResult, mergeCompressionItems, normalizeCompressionOutputFileName, normalizeCompressionOutputModes, readCompressionDimensions, removeCompressionDimensionError, removeCompressionItem, shouldInvalidateCompressionResults, splitCompressionImportFiles, supportsCompressionTargetSize, waitForCompressionProgressTick } from "./imageCompressionLogic";
+import type { CompressionItem, CompressionOptions } from "./types";
 
 import { formatCompressionProgressSummary } from "./imageCompressionLogic";
 import { DEFAULT_COMPRESSION_PREFERENCES } from "./compressionPreferences";
 
 describe("image compression logic", () => {
+  it("invalidates old batch results only after idle parameter changes", () => {
+    const initial = {} as CompressionOptions;
+    expect(shouldInvalidateCompressionResults(null, initial, false)).toBe(false);
+    expect(shouldInvalidateCompressionResults(initial, { ...initial }, false)).toBe(true);
+    expect(shouldInvalidateCompressionResults(initial, { ...initial }, true)).toBe(false);
+  });
+
   it("describes alpha handling for each output format", () => {
     expect(getCompressionAlphaHandling("jpg", false).description).toContain("背景颜色合成");
     expect(getCompressionAlphaHandling("png", true).title).toContain("保留透明度");
