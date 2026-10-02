@@ -371,9 +371,9 @@ function formatGifTimelineTime(milliseconds: number): string {
   return seconds >= 60 ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}` : `${seconds.toFixed(2)} 秒`;
 }
 
-function readImageFrame(file: File, id: string): Promise<GifFrameModel> {
+function readImageFrame(file: File, id: string, signal?: AbortSignal): Promise<GifFrameModel> {
   const previewUrl = URL.createObjectURL(file);
-  return loadGifImage(previewUrl)
+  return loadGifImage(previewUrl, { signal })
     .then((image) => ({
       id,
       file,
@@ -1158,12 +1158,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setError(null);
     setStatus({ kind: "importing", text: `正在读取 ${filesToRead.length} 张图片…` });
     try {
-      await importQueueRef.current.run(async (isCurrent) => {
+      await importQueueRef.current.run(async (isCurrent, signal) => {
         const retained = replaceAll ? [] : replaceFrameId ? framesRef.current.filter((frame) => frame.id !== replaceFrameId) : framesRef.current;
         validateGifFiles([...retained.map((frame) => frame.file), ...filesToRead]);
         let pixels = retained.reduce((sum, frame) => sum + frame.width * frame.height, 0);
         const loadedFrames = await readGifBatch(filesToRead, async (file) => {
-          const frame = await readImageFrame(file, `gif-frame-${++frameIdRef.current}`);
+          const frame = await readImageFrame(file, `gif-frame-${++frameIdRef.current}`, signal);
           try {
             validateGifPixels(frame, 1);
             pixels += frame.width * frame.height;

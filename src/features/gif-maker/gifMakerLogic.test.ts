@@ -280,4 +280,21 @@ describe("GIF maker logic", () => {
     expect(await second).toBe("done");
     expect(order).toEqual(["second"]);
   });
+
+  it("aborts active and queued import work when cancelled", async () => {
+    const queue = new GifImportQueue();
+    let activeSignal: AbortSignal | undefined;
+    let releaseWork: (() => void) | undefined;
+    const first = queue.run(async (_isCurrent, signal) => {
+      activeSignal = signal;
+      await new Promise<void>((resolve) => { releaseWork = resolve; });
+      return signal.aborted ? "stale" : "done";
+    });
+    await Promise.resolve();
+    expect(activeSignal).toBeDefined();
+    queue.cancel();
+    expect(activeSignal?.aborted).toBe(true);
+    releaseWork?.();
+    expect(await first).toBe("stale");
+  });
 });

@@ -45,4 +45,14 @@ describe("gif image loader", () => {
     expect(image.onerror).toBeNull();
     vi.useRealTimers();
   });
+
+  it("aborts immediately and removes the abort listener", async () => {
+    const controller = new AbortController();
+    const image = createImage();
+    const pending = loadGifImage("blob:abort", { createImage: () => image as unknown as HTMLImageElement, signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(image.onload).toBeNull();
+    expect(image.onerror).toBeNull();
+  });
 });

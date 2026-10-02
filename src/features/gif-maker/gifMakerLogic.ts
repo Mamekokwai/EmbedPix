@@ -293,11 +293,20 @@ export function advanceGifPlayback(index: number, count: number, repeats: number
 export class GifImportQueue {
   private version = 0;
   private tail: Promise<unknown> = Promise.resolve();
-  cancel() { this.version += 1; }
-  run<T>(work: (isCurrent: () => boolean) => Promise<T>): Promise<T | null> {
+  private controllers = new Set<AbortController>();
+  cancel() {
+    this.version += 1;
+    this.controllers.forEach((controller) => controller.abort());
+    this.controllers.clear();
+  }
+  run<T>(work: (isCurrent: () => boolean, signal: AbortSignal) => Promise<T>): Promise<T | null> {
     const version = this.version;
-    const isCurrent = () => version === this.version;
-    const result = this.tail.then(() => isCurrent() ? work(isCurrent) : null);
+    const controller = new AbortController();
+    this.controllers.add(controller);
+    const isCurrent = () => version === this.version && !controller.signal.aborted;
+    const result = this.tail.then(() => isCurrent() ? work(isCurrent, controller.signal) : null).finally(() => {
+      this.controllers.delete(controller);
+    });
     this.tail = result.catch(() => undefined);
     return result;
   }
