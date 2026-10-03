@@ -289,6 +289,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-import-errors");
     expect(compressionCss).toContain(".compression-output-actions");
     expect(compressionCss).toContain(".compression-current-file");
+    expect(compressionView).toContain('className="compression-current-file" aria-live="polite" title={currentFileName ?? undefined}');
     expect(compressionCss).toContain(".compression-failure-details");
     expect(compressionCss).toContain(".compression-item-results");
     expect(compressionCss).toContain(".compression-item-result-actions");
