@@ -20,6 +20,7 @@ const defaultCapabilities = readSource(new URL("../../src-tauri/capabilities/def
 const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
 const updateCss = readSource(new URL("./features/update.css", import.meta.url));
 const updateView = readSource(new URL("../features/update/UpdateView.tsx", import.meta.url));
+const settingsView = readSource(new URL("../features/settings/SettingsView.tsx", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -37,6 +38,10 @@ describe("compact layout viewport contract", () => {
     expect(updateView).toContain('status === "error" && errorMessage');
     expect(updateCss).toContain(".update-error-message");
     expect(updateCss).toContain("overflow-wrap: anywhere");
+  });
+  it("exposes readable values for compact settings sliders", () => {
+    expect(settingsView).toContain('aria-label="JPEG 默认质量"');
+    expect(settingsView).toContain("aria-valuetext={`${preferences.defaultJpegQuality}% JPEG 默认质量`}");
   });
   it("keeps estimate target and selected-quality fields visible with native results", () => {
     expect(compressionView).toContain("setEstimate(mergeCompressionEstimateResult(result))");

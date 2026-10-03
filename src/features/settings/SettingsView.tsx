@@ -199,6 +199,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
                 max="100"
                 value={preferences.defaultJpegQuality}
                 aria-label="JPEG 默认质量"
+                aria-valuetext={`${preferences.defaultJpegQuality}% JPEG 默认质量`}
                 onChange={(event) => updateConverterDefaults({ defaultJpegQuality: Number(event.target.value) })}
               />
               <output>{preferences.defaultJpegQuality}</output>
