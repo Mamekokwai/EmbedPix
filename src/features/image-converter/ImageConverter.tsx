@@ -1813,11 +1813,13 @@ export default function ImageConverter({
             </div>
             <div className="setting-group">
               <label className="toggle-row">
-                <input type="checkbox" checked={metadataPolicy === "strip"} onChange={(event) => setMetadataPolicy(event.target.checked ? "strip" : "preserve")} />
+                <input type="checkbox" checked={metadataPolicy === "strip"} aria-describedby="converter-metadata-policy-help" onChange={(event) => setMetadataPolicy(event.target.checked ? "strip" : "preserve")} />
                 <span className="toggle-track" aria-hidden="true"><span /></span>
-                <span>清理 EXIF/ICC 元数据</span>
+                <span>清理元数据（推荐）</span>
               </label>
-              <p className="field-help">保留仅支持同格式、原尺寸、无裁剪旋转和无水印时的原始字节直通；其他情况会明确拒绝。关闭后默认清理 EXIF/ICC。</p>
+              <p className="field-help" id="converter-metadata-policy-help">
+                开启时导出会清理可识别元数据；关闭时仅尝试同格式、原尺寸、无裁剪旋转和无水印的原始字节直通，不满足条件会明确拒绝而不是伪装保留。
+              </p>
             </div>
                 </div>
               </details>

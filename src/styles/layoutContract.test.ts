@@ -70,6 +70,13 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("{lastExportPath ? <div className=\"gif-output-actions\"");
     expect(gifCss).toContain(".gif-output-actions { display: flex; flex-wrap: wrap;");
   });
+  it("describes image converter metadata preserve as a constrained passthrough", () => {
+    expect(converterView).toContain('aria-describedby="converter-metadata-policy-help"');
+    expect(converterView).toContain("清理元数据（推荐）");
+    expect(converterView).toContain('id="converter-metadata-policy-help"');
+    expect(converterView).toContain("关闭时仅尝试同格式、原尺寸、无裁剪旋转和无水印的原始字节直通");
+    expect(converterView).not.toContain("关闭后默认清理 EXIF/ICC");
+  });
   it("clears stale GIF export actions when export inputs change", () => {
     expect(gifView).toContain("setExportFrameSummary(null);\n    setLastExportPath(null);");
   });
