@@ -14,20 +14,31 @@ import { requestWindowClose } from "../platform/window/windowCloseCoordinator";
 import { retainWindowListener } from "../platform/window/windowListenerLifecycle";
 
 const APP_TITLE = "EmbedPix";
+const WINDOW_CLOSE_TIMEOUT_MS = 1200;
 const WINDOW_DESTROY_TIMEOUT_MS = 1500;
 
-async function destroyWindowWithTimeout(): Promise<void> {
+async function runWindowActionWithTimeout(action: () => Promise<void>, timeoutMs: number, timeoutMessage: string): Promise<void> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      destroyCurrentWindow(),
+      action(),
       new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error("destroy current window timed out")), WINDOW_DESTROY_TIMEOUT_MS);
+        timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
       }),
     ]);
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
+}
+
+async function closeWindowWithFallback(): Promise<void> {
+  try {
+    await runWindowActionWithTimeout(closeCurrentWindow, WINDOW_CLOSE_TIMEOUT_MS, "close current window timed out");
+    return;
+  } catch (closeError) {
+    console.warn("close current window failed, falling back to destroy", closeError);
+  }
+  await runWindowActionWithTimeout(destroyCurrentWindow, WINDOW_DESTROY_TIMEOUT_MS, "destroy current window timed out");
 }
 
 function runWindowAction(action: () => Promise<void>, actionName: string) {
@@ -45,13 +56,7 @@ export default function AppTitleBar() {
   const finishWindowClose = () => {
     nativeCloseHandledRef.current = true;
     void requestWindowClose().then(async () => {
-      try {
-        await destroyWindowWithTimeout();
-      } catch (destroyError) {
-        // Older installed builds may not have the destroy capability; close remains a safe fallback because the event is already acknowledged.
-        console.warn("destroy current window failed, falling back to close", destroyError);
-        await closeCurrentWindow();
-      }
+      await closeWindowWithFallback();
     }).catch((error) => {
       nativeCloseHandledRef.current = false;
       closeFlowStartedRef.current = false;
