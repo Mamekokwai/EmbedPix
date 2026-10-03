@@ -14,6 +14,21 @@ import { requestWindowClose } from "../platform/window/windowCloseCoordinator";
 import { retainWindowListener } from "../platform/window/windowListenerLifecycle";
 
 const APP_TITLE = "EmbedPix";
+const WINDOW_DESTROY_TIMEOUT_MS = 1500;
+
+async function destroyWindowWithTimeout(): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      destroyCurrentWindow(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("destroy current window timed out")), WINDOW_DESTROY_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
 
 function runWindowAction(action: () => Promise<void>, actionName: string) {
   void action().catch((error) => {
@@ -31,7 +46,7 @@ export default function AppTitleBar() {
     nativeCloseHandledRef.current = true;
     void requestWindowClose().then(async () => {
       try {
-        await destroyCurrentWindow();
+        await destroyWindowWithTimeout();
       } catch (destroyError) {
         // Older installed builds may not have the destroy capability; close remains a safe fallback because the event is already acknowledged.
         console.warn("destroy current window failed, falling back to close", destroyError);
