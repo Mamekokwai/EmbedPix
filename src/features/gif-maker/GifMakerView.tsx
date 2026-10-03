@@ -2477,7 +2477,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                       <button className="gif-frame-select" type="button" ref={(element) => { frameButtonRefs.current[frame.id] = element; }} onClick={(event) => selectFrame(index, event)} onKeyDown={(event) => handleFrameKeyDown(event, index)} aria-pressed={selectedFrameIndices.has(index)} aria-label={`选择第 ${index + 1} 帧：${frame.name}`}>
                         <span className="gif-frame-number">{String(index + 1).padStart(2, "0")}</span>
                         <img src={frame.previewUrl} alt="" />
-                        <span className="gif-frame-meta"><strong>{frame.name}</strong><small>{frame.width} × {frame.height} · {frame.durationMs} ms</small></span>
+                        <span className="gif-frame-meta"><strong title={frame.name}>{frame.name}</strong><small>{frame.width} × {frame.height} · {frame.durationMs} ms</small></span>
                       </button>
                       <div className="gif-frame-actions">
                         <button className="icon-button" type="button" aria-label={`第 ${index + 1} 帧上移`} title="上移" disabled={!canEditFrames || !canMoveLeft || selectedIndex !== index} onClick={() => moveFrame(index, -1)}><ArrowUp size={14} aria-hidden="true" /></button>

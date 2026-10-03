@@ -379,6 +379,7 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).not.toMatch(/\.gif-frame-list \{[^}]*overflow-x: auto;/s);
     expect(gifCss).toMatch(/\.gif-frame-list \{[^}]*overflow-x: hidden; overflow-y: auto;/s);
     expect(gifCss).toContain(".gif-frame-meta small { min-width: 0; overflow: hidden;");
+    expect(gifView).toContain('<strong title={frame.name}>{frame.name}</strong>');
     expect(gifCss).toContain(".gif-busy-cancel { width: 100%; margin-top: 4px; }");
     expect(gifCss).toContain(".gif-balanced-reset { justify-self: start; }");
     expect(gifView).toContain('className="quiet-button gif-busy-cancel"');
