@@ -613,7 +613,7 @@
 
 - [x] 设置页 JPEG 默认质量滑杆补充动态 `aria-valuetext`，明确当前质量百分比。
 - [x] GIF 制作素材拖放区在 locked/exporting/importing 状态下屏蔽点击、键盘打开和拖放激活，避免忙碌期间误导用户。
-- [ ] v0.7.28 发布源、签名、Windows 安装包、更新清单和资产验收。
+- [x] v0.7.28 发布源、签名、Windows 安装包、更新清单和资产验收：tag `v0.7.28` 已发布为稳定版；x64/ARM64 安装包及签名、`latest.json`、SHA256 和 provenance 在线可用，发布工作流的下载/安装 smoke 通过。
 
 - [!] pngquant 直接捆绑：需要 GPLv3/商业许可决策或替代算法。
 - [!] AVIF 默认启用：需要确认包体积、编码器依赖和构建时间。
