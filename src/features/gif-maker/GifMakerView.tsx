@@ -2442,12 +2442,12 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               role="button"
               tabIndex={locked ? -1 : 0}
               aria-disabled={locked}
-              onClick={() => openFileDialog()}
-              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openFileDialog(); } }}
-              onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
-              onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
+              onClick={() => { if (!locked) openFileDialog(); }}
+              onKeyDown={(event) => { if (!locked && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openFileDialog(); } }}
+              onDragEnter={(event) => { event.preventDefault(); if (!locked) setIsDragging(true); }}
+              onDragOver={(event) => { event.preventDefault(); if (!locked) setIsDragging(true); }}
+              onDragLeave={() => { if (!locked) setIsDragging(false); }}
+              onDrop={(event) => { if (locked) { event.preventDefault(); return; } handleDrop(event); }}
               aria-label={sourceMode === "video" ? "拖放视频或选择视频" : "拖放图片或选择图片"}
             >
               <Upload size={20} aria-hidden="true" />
