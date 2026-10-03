@@ -17,7 +17,7 @@
 - GIF 导入取消进一步收紧：导入队列为每批任务提供 `AbortSignal`，清空帧、组件卸载或新批次取消时会立即中止正在等待的图片解码，并保留旧版本校验防止过期帧写回。
 - 图片转换尺寸读取取消进一步收紧：替换图片或卸载工作区会主动中止旧的尺寸读取，清除事件监听并回收 Blob URL；新增 AbortError 生命周期回归。
 - 发布后校验增强：`prepare-release` 在上传后读取 `latest.json` 时增加 6 次有界传播重试，并输出实际版本/平台诊断，避免 GitHub 资产短暂传播延迟误判为发布失败；该契约由 `check:release-config` 固定检查。
-- 发布链路维护：跨平台检查 workflow 的 Linux runner 固定为 `ubuntu-24.04`，并将 build workflow 中 checkout/setup-node 的固定 SHA 对齐到发布链路已验证的 v6 版本，降低 Node 20 deprecated 与 `ubuntu-latest` 滚动迁移风险；发布 workflow 的签名、资产和 manifest 门禁不变。
+- 发布链路维护：跨平台检查 workflow 的 Linux runner 固定为 `ubuntu-24.04`，并将 build workflow 中 checkout/setup-node 的固定 SHA 对齐到发布链路已验证的 v6 版本，cache action 升级到 Node 24 的 v5 固定 SHA，降低 Node 20 deprecated 与 `ubuntu-latest` 滚动迁移风险；发布 workflow 的签名、资产和 manifest 门禁不变。
 - GIF 预览与导出读取接入取消信号：切换预览帧、卸载工作区或取消导出时立即停止当前图片解码，不再仅依赖超时回收。
 - 压缩工作区尺寸读取接入按项目取消信号：移除/清空/替换图片和卸载页面会立即取消对应 `createImageBitmap` 或回退图片读取，并确保迟到位图仍关闭、错误不回写到队列。
 - 最新门禁：前端 34 个测试文件 / 421 项测试通过；生产构建与桌面 smoke 通过，GIF Rust 35 项和图片导出/回滚 46 项通过。
