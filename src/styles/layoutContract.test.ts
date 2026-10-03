@@ -272,6 +272,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-preview-grid");
     expect(compressionView).toContain("compression-preview-compare");
     expect(compressionView).toContain("原图与压缩结果分界位置");
+    expect(compressionView).toContain("aria-valuetext={`${previewSplit}% 原图与压缩结果分界`}");
     expect(compressionCss).toContain(".compression-preview-compare-divider");
     expect(compressionCss).toContain(".compression-preview-compare-range input:focus-visible");
     expect(compressionView).toContain("同名目标会拒绝写入");
