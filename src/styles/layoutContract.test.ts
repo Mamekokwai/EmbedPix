@@ -265,6 +265,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("读取失败或被文件夹扫描跳过");
     expect(compressionView).toContain("pickCompressionDirectoryResult");
     expect(compressionView).toContain("compression-item-select");
+    expect(compressionView).toContain('<strong title={item.file.name}>{item.file.name}</strong>');
     expect(compressionView).toContain("event.preventDefault(); void chooseFiles()");
     expect(compressionView).toContain("setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0");
     expect(compressionView).toContain("setFailures([]);");

@@ -1183,7 +1183,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
               <div className="compression-item" key={item.id}>
                 <button type="button" className={`compression-item-select${selectedItemId === item.id ? " compression-item-selected" : ""}`} aria-pressed={selectedItemId === item.id} onClick={() => { if (!sourceBusy) setSelectedItemId(item.id); }} disabled={sourceBusy}>
                   <div className="compression-item-icon"><Images size={15} aria-hidden="true" /></div>
-                  <span className="compression-item-copy"><strong>{item.file.name}</strong><span>{item.dimensions ? `${item.dimensions.width} × ${item.dimensions.height} px` : "读取尺寸中"} · {getCompressionInputFormat(item.file)} · {formatCompressionBytes(item.size)}{item.sourcePath ? " · 桌面文件" : " · 浏览器文件"}</span></span>
+                  <span className="compression-item-copy"><strong title={item.file.name}>{item.file.name}</strong><span>{item.dimensions ? `${item.dimensions.width} × ${item.dimensions.height} px` : "读取尺寸中"} · {getCompressionInputFormat(item.file)} · {formatCompressionBytes(item.size)}{item.sourcePath ? " · 桌面文件" : " · 浏览器文件"}</span></span>
                 </button>
                 <button type="button" className="compression-icon-button" aria-label={`移除 ${item.file.name}`} onClick={() => removeItem(item.id)} disabled={sourceBusy}><Trash2 size={15} aria-hidden="true" /></button>
               </div>
