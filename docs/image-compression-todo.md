@@ -406,11 +406,11 @@
 ### 7.3 桌面 smoke
 
 - [~] Windows x64 构建：本地已生成 `EmbedPix.exe` 与 `EmbedPix_0.7.0_x64-setup.exe`，并通过 Windows GUI subsystem=2 检查；完整 Tauri 构建仍因本机缺少 `TAURI_SIGNING_PRIVATE_KEY` 未完成签名。
-- [ ] Windows ARM64 构建。
+- [x] Windows ARM64 构建：v0.7.25 发布工作流已完成签名构建并通过发布前校验。
 - [x] 压缩命令行输出、错误输出和退出码：`embedpix-cli` 使用 JSON/JSONL 事件输出成功与进度，错误事件写入 stdout、stderr 保留进程级诊断，退出码区分成功（0）、失败（1）和中断/部分失败（2）；CLI 现在支持 `jpegProgressive`、`jpegOptimizeHuffman` 与 `lossless + webpLosslessMethod=0..6`，并由 smoke 实际校验 JPEG SOF2 及 WebP 无损 method 0/6 输出；强制 CLI/OxiPNG smoke 已覆盖 PNG、JPEG、WebP、GIF 输出与二次解码。
 - [x] x64 安装、启动、压缩、卸载：`EmbedPix_0.7.0_x64-setup.exe` 隔离 NSIS smoke 安装退出码为 0，`EmbedPix.exe` 通过 GUI subsystem=2 检查，启动 8 秒仍运行，卸载退出码为 0 且临时安装目录清理完成。
-- [ ] ARM64 资产下载、SHA256、签名校验。
-- [~] `latest.json` 与签名文件一致性：本地 fixture 已覆盖清单、URL、签名、摘要与尺寸；真实线上资产待发布时验收。
+- [x] ARM64 资产下载、SHA256、签名校验：v0.7.25 线上资产已完成下载/安装 smoke、摘要与签名验证。
+- [x] `latest.json` 与签名文件一致性：本地 fixture 已覆盖清单、URL、签名、摘要与尺寸；v0.7.25 线上清单已核对 x64/ARM64 URL、版本和签名资产。
 - [x] 本地 release fixture 能拒绝平台数、URL、时间、大小和 PE 边界错误。
 - [x] release fixture 幂等校验：有效 `pub_date` 固定为 UTC 输入，重复执行契约校验产生一致的 manifest/asset summary。
 - [x] 发布门禁收尾：provenance `workflow_ref`/`release_commit` 篡改拒绝与固定 fixture 重复执行一致性均已验证。
@@ -596,6 +596,12 @@
 - [x] GIF 帧列表的长文件名在窄屏省略时保留完整悬停提示，并继续通过按钮 `aria-label` 支持无悬停设备和键盘用户。
 - [x] 增加布局契约测试，锁定帧文件名提示，不改变帧排序、预览、导出或 GIF 协议。
 - [x] v0.7.25 发布源、签名、Windows 安装包、更新清单和资产验收：tag `v0.7.25` 已发布为稳定版；x64/ARM64 安装包及签名、`latest.json`、SHA256 和 provenance 在线可用，发布工作流的下载/安装 smoke 通过。
+
+## 31. v0.7.26 压缩预览可访问性
+
+- [x] 压缩预览滑动对比补充动态 `aria-valuetext`，明确当前原图/结果图分界百分比，不改变视觉与 IPC 行为。
+- [x] 增加布局契约测试，覆盖键盘与读屏用户可获得分界位置描述。
+- [ ] v0.7.26 发布源、签名、Windows 安装包、更新清单和资产验收：待发布后补录。
 
 - [!] pngquant 直接捆绑：需要 GPLv3/商业许可决策或替代算法。
 - [!] AVIF 默认启用：需要确认包体积、编码器依赖和构建时间。
