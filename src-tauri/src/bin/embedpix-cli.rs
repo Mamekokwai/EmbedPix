@@ -38,6 +38,23 @@ struct Event<'a> {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.as_slice() {
+        [] => {}
+        [flag] if matches!(flag.as_str(), "--help" | "-h") => {
+            println!("{}", cli_help());
+            return;
+        }
+        [flag] if matches!(flag.as_str(), "--version" | "-V") => {
+            println!("embedpix-cli {}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
+        _ => {
+            eprintln!("{}", cli_argument_error(&args));
+            std::process::exit(2);
+        }
+    }
+
     let interrupted = Arc::new(AtomicBool::new(false));
     let signal_state = Arc::clone(&interrupted);
     if ctrlc::set_handler(move || signal_state.store(true, Ordering::SeqCst)).is_err() {
@@ -96,6 +113,17 @@ fn main() {
     if code != 0 {
         std::process::exit(code);
     }
+}
+
+fn cli_help() -> &'static str {
+    "embedpix-cli\n\n用法：将一个 JSON 请求或多行 JSONL 请求写入 stdin。\n示例：echo '{\"id\":\"job-1\",\"op\":\"compress\",\"inputPath\":\"in.png\",\"outputPath\":\"out.webp\"}' | embedpix-cli\n选项：\n  -h, --help       显示帮助\n  -V, --version    显示版本"
+}
+
+fn cli_argument_error(args: &[String]) -> String {
+    format!(
+        "embedpix-cli 不接受位置参数；请通过 stdin 传入 JSON/JSONL。收到参数：{}",
+        args.join(" ")
+    )
 }
 
 fn classify_exit_code(succeeded: usize, failed: usize, interrupted: bool) -> i32 {
@@ -524,5 +552,12 @@ mod tests {
         assert!(is_lossy_target_format("JPEG"));
         assert!(is_lossy_target_format("WebP"));
         assert!(!is_lossy_target_format("PNG"));
+    }
+
+    #[test]
+    fn cli_help_and_argument_contract_are_explicit() {
+        assert!(cli_help().contains("JSONL"));
+        assert!(cli_help().contains("compress"));
+        assert!(cli_argument_error(&["--input".into()]).contains("stdin"));
     }
 }

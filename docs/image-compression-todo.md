@@ -629,6 +629,11 @@
 - [x] 保留 Windows GUI subsystem 和独立 CLI binary 边界；未知 GUI 参数仍以退出码 2 结束，避免把 GUI 误当作图片处理 CLI。
 - [x] 已通过 Rust binary 单测、`cargo fmt --check`、release 配置检查和差异检查；未引入依赖、未改变压缩协议或版本号。
 
+## 36. 独立 CLI 诊断入口
+
+- [x] `embedpix-cli` 增加 `--help/-h` 与 `--version/-V`，明确 JSON/JSONL stdin 协议和示例；位置参数严格拒绝并保留退出码 2。
+- [x] 现有无参数 stdin 执行路径、机器可读事件输出和压缩协议不变；新增 CLI 参数契约测试并通过 Clippy。
+
 - [!] pngquant 直接捆绑：需要 GPLv3/商业许可决策或替代算法。
 - [!] AVIF 默认启用：需要确认包体积、编码器依赖和构建时间。
 - [!] JPEG XL：需要确认生态和发行收益。
