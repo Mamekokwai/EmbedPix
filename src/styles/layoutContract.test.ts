@@ -30,6 +30,7 @@ const imageExportGateway = readSource(new URL("../platform/image/imageExportGate
 const updateConfirmDialog = readSource(new URL("../features/update/UpdateConfirmDialog.tsx", import.meta.url));
 const updateProgressBar = readSource(new URL("../features/update/UpdateProgressBar.tsx", import.meta.url));
 const aboutView = readSource(new URL("../features/about/AboutView.tsx", import.meta.url));
+const formatMetadata = readSource(new URL("../shared/formatMetadata.ts", import.meta.url));
 const aboutCss = readSource(new URL("./features/about.css", import.meta.url));
 
 // 窗口最小宽度对齐 patina（900，见 tauri.conf.json 的 minWidth）：窄于 900 的断点已整批删除，矩阵不再覆盖更窄的视口。
@@ -616,10 +617,11 @@ describe("compact layout viewport contract", () => {
     expect(gifView).not.toContain("或点击选择视频文件");
   });
 
-  it("hides the BMP format description because the bit-depth control covers it", () => {
-    expect(converterView).toContain('const showsFormatDescription = outputFormat !== "bmp";');
-    expect(converterView).toContain('describedBy={showsFormatDescription ? "format-description" : undefined}');
-    expect(converterView).toContain('{showsFormatDescription ? <p className="format-description" id="format-description">');
+  it("shows the selected format description, BMP included", () => {
+    expect(converterView).not.toContain("showsFormatDescription");
+    expect(converterView).toContain('<FormatSelector value={outputFormat} onChange={handleFormatChange} describedBy="format-description" />');
+    expect(converterView).toContain('<p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>');
+    expect(formatMetadata).toContain("支持 1、4、8、16、24、32 位；仅 32 位保留透明度。");
   });
 
   it("offers transparent-color fill only for 32-bit output", () => {
@@ -693,7 +695,7 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toContain("justify-content: center; gap: var(--qp-stack-gap);");
     // 赞助弹窗照 patina 的两张卡结构
     expect(aboutView).toContain("about-support-card-heading");
-    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px)); height: auto; max-height: none;");
+    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(640px, calc(100vw - 40px)); height: auto; max-height: none;");
     expect(aboutCss).not.toContain("max-height: min(560px, calc(100vh - 32px))");
     // 赞赏码用原图整张放大，不做裁切；两个卡片图标都抄 patina（微信赞赏徽标 + Ko-fi 官方 mark）
     expect(aboutView).toContain('src={WECHAT_REWARD_IMAGE_URL}');

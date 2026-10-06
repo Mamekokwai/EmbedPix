@@ -444,8 +444,6 @@ export default function ImageConverter({
     return `${width} × ${height} · ${getOutputLabel(outputFormat)} · ${summaryBitDepth} 位`;
   }, [bitDepth, file, height, outputFormat, width]);
 
-  // BMP 的位深与透明度由下面的位深控件说明，格式描述再列一遍是重复信息。
-  const showsFormatDescription = outputFormat !== "bmp";
   const embeddedInspection = useMemo(() => {
     if (!file || !["bmp", "rgb565", "c-array"].includes(outputFormat)) return null;
     try {
@@ -1576,8 +1574,8 @@ export default function ImageConverter({
           <fieldset className="settings-stack" disabled={status.kind === "busy"} aria-busy={status.kind === "busy"}>
             <fieldset className="setting-group format-group">
               <legend className="field-label">输出格式</legend>
-              <FormatSelector value={outputFormat} onChange={handleFormatChange} describedBy={showsFormatDescription ? "format-description" : undefined} />
-              {showsFormatDescription ? <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p> : null}
+              <FormatSelector value={outputFormat} onChange={handleFormatChange} describedBy="format-description" />
+              <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>
             </fieldset>
 
             {embeddedInspection ? <section className="embedded-output-inspector" aria-labelledby="embedded-output-title">
