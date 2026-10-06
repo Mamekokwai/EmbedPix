@@ -63,9 +63,9 @@ function presetLabel(preset: ImagePresetId): string {
   return IMAGE_PRESET_OPTIONS.find((option) => option.value === preset)?.label ?? "自定义";
 }
 
-function SettingsRow({ title, hint, stacked, children }: { title: string; hint: string; stacked?: boolean; children: ReactNode }) {
+function SettingsRow({ title, hint, stacked, className, children }: { title: string; hint: string; stacked?: boolean; className?: string; children: ReactNode }) {
   return (
-    <div className={`settings-row${stacked ? " settings-row-stacked" : ""}`}>
+    <div className={`settings-row${stacked ? " settings-row-stacked" : ""}${className ? ` ${className}` : ""}`}>
       <div className="settings-row-copy">
         <div className="settings-row-title">
           <h3>{title}</h3>
@@ -335,7 +335,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               <p>预设会覆盖图片转换的默认格式、质量、位深、RAW 参数、透明色和比例设置；单独修改任一项后会变为自定义。</p>
             </div>
           </div>
-          <SettingsRow title={`当前预设：${presetLabel(preferences.imagePreset)}`} hint={activeImagePresetDescription ?? ""}>
+          <SettingsRow className="settings-preset-row" title={`当前预设：${presetLabel(preferences.imagePreset)}`} hint={activeImagePresetDescription ?? ""}>
             <ThemeSelect
               id="image-converter-preset"
               className="settings-select"
@@ -345,7 +345,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               onChange={(value) => applyPreset(value as ImagePresetId)}
             />
           </SettingsRow>
-          <SettingsRow stacked title="自定义图片预设" hint="只保存在本机，可保存当前图片转换默认参数。">
+          <SettingsRow stacked className="settings-preset-row" title="自定义图片预设" hint="只保存在本机，可保存当前图片转换默认参数。">
             <div className="settings-custom-preset-controls">
               <ThemeSelect id="custom-image-preset" className="settings-select" value={customPresetId} options={[{ value: "", label: "选择本地预设" }, ...customPresets.map((preset) => ({ value: preset.id, label: preset.name }))]} aria-label="自定义图片预设" onChange={(value) => applyCustomPreset(String(value))} />
               <input className="settings-text-input" value={customPresetName} placeholder="预设名称" aria-label="新预设名称" onChange={(event) => setCustomPresetName(event.target.value)} />
