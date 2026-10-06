@@ -2473,7 +2473,6 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <span className="gif-drop-label-full">{isDragging ? `松开以添加${sourceMode === "video" ? "视频" : "图片"}` : `拖放${sourceMode === "video" ? "视频" : "图片"}到这里`}</span>
                 <span className="gif-drop-label-compact">添加{sourceMode === "video" ? "视频" : "图片"}</span>
               </strong>
-              <span>{sourceMode === "video" ? "或点击选择视频文件" : "或点击选择多个文件"}</span>
             </div>
             {frames.length ? (
               <>

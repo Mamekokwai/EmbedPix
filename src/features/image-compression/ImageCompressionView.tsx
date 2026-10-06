@@ -1252,7 +1252,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       <section className="compression-intro" aria-labelledby="compression-title">
         <div>
           <p className="eyebrow">IMAGE COMPRESSION</p>
-          <h2 id="compression-title">压到目标体积，格式与画质可控</h2>
+          <h2 id="compression-title">图片压缩</h2>
           <p className="intro-copy">批量压缩图片体积，保留对嵌入式 UI 有用的格式与参数控制。</p>
         </div>
         <div className="intro-note"><FileDown size={17} aria-hidden="true" /> 桌面原生队列</div>
@@ -1278,7 +1278,6 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           >
             <span className="compression-drop-icon"><Download size={22} aria-hidden="true" /></span>
             <strong>拖放图片到这里</strong>
-            <span>或点击选择多个文件</span>
             <small className="compression-drop-hint"><span>支持格式：PNG / JPEG / WebP / BMP / GIF</span><span>单张输入上限：{COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB</span><span>输出格式：PNG / JPEG / WebP</span></small>
           </div>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={sourceBusy} tabIndex={-1} aria-hidden="true" />
