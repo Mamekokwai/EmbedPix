@@ -294,6 +294,8 @@
 .app-main {
   min-width: 0;
   min-height: 0;
+  /* 兼作溢出容器：开关类复选框等绝对定位控件若没有定位祖先，会以初始包含块为基准逃出这里、把文档撑高。 */
+  position: relative;
   overflow: auto;
   overscroll-behavior: contain;
   scroll-padding-block: 18px;

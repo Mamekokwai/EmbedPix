@@ -22,6 +22,8 @@ const themeSelectSource = readSource(new URL("../shared/components/ThemeSelect.t
 const updateCss = readSource(new URL("./features/update.css", import.meta.url));
 const updateView = readSource(new URL("../features/update/UpdateView.tsx", import.meta.url));
 const settingsView = readSource(new URL("../features/settings/SettingsView.tsx", import.meta.url));
+const appCss = readSource(new URL("../App.css", import.meta.url));
+const appShellCss = readSource(new URL("./app-shell.css", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -55,6 +57,14 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('import ThemeSelect from "../../shared/components/ThemeSelect";');
     expect(compressionCss).not.toContain(".compression-field select");
     expect(themeSelectCss).toContain(".theme-select-trigger");
+  });
+  it("keeps the document itself unscrollable so the shell cannot slide out of the window", () => {
+    expect(appCss).toMatch(/:root \{[^}]*overflow: hidden;/);
+    expect(appCss).toMatch(/:root \{[^}]*overflow: clip;/);
+    // 开关类复选框是绝对定位；没有定位祖先时会以初始包含块为基准逃出主滚动层，把文档撑高，一点就整页跑出窗口。
+    expect(appShellCss).toMatch(/\.app-main \{[^}]*position: relative;/);
+    expect(compressionCss).toMatch(/\.visually-hidden \{[^}]*top: 0;/);
+    expect(compressionCss).toMatch(/\.visually-hidden \{[^}]*left: 0;/);
   });
   it("wraps the compression import support hint inside narrow drop zones", () => {
     expect(compressionView).toContain('className="compression-drop-hint"');
