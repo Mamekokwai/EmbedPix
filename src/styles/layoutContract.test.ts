@@ -690,11 +690,13 @@ describe("compact layout viewport contract", () => {
   });
 
   it("puts every settings row hint on the help icon instead of an always-on paragraph", () => {
-    // 每行 = 标题 + ⓘ 提示 + 控件列，说明只挂在 ⓘ 上（aria-label + title），不再常显 <p>。
+    // 每行由 SettingsRow 渲染 = 标题 + ⓘ 提示 + 控件列；说明只进 aria-label/title，不再常显 <p>。
+    expect(settingsView).toContain("function SettingsRow({ title, hint, stacked, children }");
     expect(settingsView).toContain('className="settings-row-title"');
+    expect(settingsView).toContain("aria-label={hint}");
     expect(settingsView).toContain('className="settings-help-icon"');
-    expect(settingsView).toContain('aria-label="选择 EmbedPix 的显示方式。"');
     expect(settingsView).toContain('className="settings-row-control"');
+    expect(settingsView).toContain('hint="选择 EmbedPix 的显示方式。"');
     expect(settingsView).not.toContain("<p>选择 EmbedPix 的显示方式。</p>");
   });
 

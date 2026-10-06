@@ -1,5 +1,5 @@
 import { Info, Laptop, Moon, RotateCcw, Settings2, Sun, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getBitDepths, OUTPUT_FORMATS } from "../image-converter/imageConverterLogic";
 import type { BmpBitDepth, ByteOrder, ChannelOrder, RowAlignment, RowOrder } from "../image-converter/types";
 import {
@@ -11,9 +11,8 @@ import {
 } from "../../platform/preferences/appPreferences";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import {
-  DARK_COLOR_SCHEMES,
-  LIGHT_COLOR_SCHEMES,
   getSchemeLabel,
+  schemesForVariant,
   themeSwatches,
   type ColorScheme,
 } from "../../shared/theme/themePresets";
@@ -64,6 +63,22 @@ function presetLabel(preset: ImagePresetId): string {
   return IMAGE_PRESET_OPTIONS.find((option) => option.value === preset)?.label ?? "自定义";
 }
 
+function SettingsRow({ title, hint, stacked, children }: { title: string; hint: string; stacked?: boolean; children: ReactNode }) {
+  return (
+    <div className={`settings-row${stacked ? " settings-row-stacked" : ""}`}>
+      <div className="settings-row-copy">
+        <div className="settings-row-title">
+          <h3>{title}</h3>
+          <button type="button" className="settings-help-icon" aria-label={hint} title={hint}>
+            <Info size={13} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      <div className="settings-row-control">{children}</div>
+    </div>
+  );
+}
+
 function SchemeSwatches({ variant, scheme }: { variant: "light" | "dark"; scheme: ColorScheme }) {
   return (
     <span className="settings-color-scheme-swatches" aria-hidden="true">
@@ -82,7 +97,20 @@ function SchemePicker({ variant, label, value, onChange }: {
   onChange: (scheme: ColorScheme) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const schemes = variant === "dark" ? DARK_COLOR_SCHEMES : LIGHT_COLOR_SCHEMES;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const schemes = schemesForVariant(variant);
+
+  // 键盘用户点开弹窗后应能立即 Esc 关闭、Tab 进选项，不必先手动聚焦。
+  useEffect(() => {
+    if (!open) return;
+    dialogRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
   return (
     <>
       <div className="scheme-picker-row">
@@ -102,7 +130,7 @@ function SchemePicker({ variant, label, value, onChange }: {
             if (event.target === event.currentTarget) setOpen(false);
           }}
         >
-          <div className="settings-scheme-dialog" role="dialog" aria-modal="true" aria-label={label}>
+          <div className="settings-scheme-dialog" role="dialog" aria-modal="true" aria-label={label} ref={dialogRef} tabIndex={-1}>
             <header className="settings-scheme-header">
               <h4>{label}</h4>
               <button type="button" className="settings-scheme-close" aria-label="关闭" onClick={() => setOpen(false)}>
@@ -223,57 +251,37 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               <p>主题设置只影响本机界面，不会修改图片内容。</p>
             </div>
           </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>界面主题</h3>
-                <button type="button" className="settings-help-icon" aria-label="选择 EmbedPix 的显示方式。" title="选择 EmbedPix 的显示方式。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
+          <SettingsRow title="界面主题" hint="选择 EmbedPix 的显示方式。">
+            <div className="theme-options" role="radiogroup" aria-label="界面主题">
+              {THEME_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  className={`theme-option${preferences.themeMode === option.value ? " theme-option-active" : ""}`}
+                  title={option.hint}
+                >
+                  <input type="radio" name="theme-mode" value={option.value} checked={preferences.themeMode === option.value} onChange={() => onChange({ themeMode: option.value })} />
+                  <ThemeModeIcon mode={option.value} />
+                  <span>{option.label}</span>
+                </label>
+              ))}
             </div>
-            <div className="settings-row-control">
-              <div className="theme-options" role="radiogroup" aria-label="界面主题">
-                {THEME_OPTIONS.map((option) => (
-                  <label
-                    key={option.value}
-                    className={`theme-option${preferences.themeMode === option.value ? " theme-option-active" : ""}`}
-                    title={option.hint}
-                  >
-                    <input type="radio" name="theme-mode" value={option.value} checked={preferences.themeMode === option.value} onChange={() => onChange({ themeMode: option.value })} />
-                    <ThemeModeIcon mode={option.value} />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
+          </SettingsRow>
+          <SettingsRow stacked title="配色方案" hint="浅色与深色各选一套；跟随系统时按当前明暗分别生效。">
+            <div className="scheme-picker-grid">
+              <SchemePicker
+                variant="light"
+                label="浅色主题"
+                value={preferences.colorSchemeLight}
+                onChange={(scheme) => onChange({ colorSchemeLight: scheme })}
+              />
+              <SchemePicker
+                variant="dark"
+                label="深色主题"
+                value={preferences.colorSchemeDark}
+                onChange={(scheme) => onChange({ colorSchemeDark: scheme })}
+              />
             </div>
-          </div>
-          <div className="settings-row settings-row-stacked">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>配色方案</h3>
-                <button type="button" className="settings-help-icon" aria-label="浅色与深色各选一套；跟随系统时按当前明暗分别生效。" title="浅色与深色各选一套；跟随系统时按当前明暗分别生效。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <div className="scheme-picker-grid">
-                <SchemePicker
-                  variant="light"
-                  label="浅色主题"
-                  value={preferences.colorSchemeLight}
-                  onChange={(scheme) => onChange({ colorSchemeLight: scheme })}
-                />
-                <SchemePicker
-                  variant="dark"
-                  label="深色主题"
-                  value={preferences.colorSchemeDark}
-                  onChange={(scheme) => onChange({ colorSchemeDark: scheme })}
-                />
-              </div>
-            </div>
-          </div>
+          </SettingsRow>
         </section>
 
         <section className="settings-card" aria-labelledby="export-defaults-title">
@@ -283,50 +291,30 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               <p>新打开转换页时使用这些参数，单次调整不会覆盖默认值。</p>
             </div>
           </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>默认输出格式</h3>
-                <button type="button" className="settings-help-icon" aria-label="适合嵌入式资源的常用格式也可以直接设为默认。" title="适合嵌入式资源的常用格式也可以直接设为默认。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <ThemeSelect
-                id="default-output-format"
-                className="settings-select"
-                value={preferences.defaultOutputFormat}
-                options={OUTPUT_FORMATS.map((format) => ({ value: format.value, label: `${format.label} · ${format.hint}` }))}
-                aria-label="默认输出格式"
-                onChange={handleDefaultOutputFormat}
+          <SettingsRow title="默认输出格式" hint="适合嵌入式资源的常用格式也可以直接设为默认。">
+            <ThemeSelect
+              id="default-output-format"
+              className="settings-select"
+              value={preferences.defaultOutputFormat}
+              options={OUTPUT_FORMATS.map((format) => ({ value: format.value, label: `${format.label} · ${format.hint}` }))}
+              aria-label="默认输出格式"
+              onChange={handleDefaultOutputFormat}
+            />
+          </SettingsRow>
+          <SettingsRow title="JPEG 默认质量" hint="仅在选择 JPG 时生效，范围为 1–100。">
+            <div className="settings-range-control">
+              <input
+                type="range"
+                min="1"
+                max="100"
+                value={preferences.defaultJpegQuality}
+                aria-label="JPEG 默认质量"
+                aria-valuetext={`${preferences.defaultJpegQuality}% JPEG 默认质量`}
+                onChange={(event) => updateConverterDefaults({ defaultJpegQuality: Number(event.target.value) })}
               />
+              <output>{preferences.defaultJpegQuality}</output>
             </div>
-          </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>JPEG 默认质量</h3>
-                <button type="button" className="settings-help-icon" aria-label="仅在选择 JPG 时生效，范围为 1–100。" title="仅在选择 JPG 时生效，范围为 1–100。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <div className="settings-range-control">
-                <input
-                  type="range"
-                  min="1"
-                  max="100"
-                  value={preferences.defaultJpegQuality}
-                  aria-label="JPEG 默认质量"
-                  aria-valuetext={`${preferences.defaultJpegQuality}% JPEG 默认质量`}
-                  onChange={(event) => updateConverterDefaults({ defaultJpegQuality: Number(event.target.value) })}
-                />
-                <output>{preferences.defaultJpegQuality}</output>
-              </div>
-            </div>
-          </div>
+          </SettingsRow>
           <label className="settings-check-row">
             <input
               type="checkbox"
@@ -347,47 +335,27 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               <p>预设会覆盖图片转换的默认格式、质量、位深、RAW 参数、透明色和比例设置；单独修改任一项后会变为自定义。</p>
             </div>
           </div>
-          <div className="settings-row settings-preset-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>当前预设：{presetLabel(preferences.imagePreset)}</h3>
-                <button type="button" className="settings-help-icon" aria-label={activeImagePresetDescription} title={activeImagePresetDescription}>
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
+          <SettingsRow title={`当前预设：${presetLabel(preferences.imagePreset)}`} hint={activeImagePresetDescription ?? ""}>
+            <ThemeSelect
+              id="image-converter-preset"
+              className="settings-select"
+              value={preferences.imagePreset}
+              options={IMAGE_PRESET_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+              aria-label="图片转换预设"
+              onChange={(value) => applyPreset(value as ImagePresetId)}
+            />
+          </SettingsRow>
+          <SettingsRow stacked title="自定义图片预设" hint="只保存在本机，可保存当前图片转换默认参数。">
+            <div className="settings-custom-preset-controls">
+              <ThemeSelect id="custom-image-preset" className="settings-select" value={customPresetId} options={[{ value: "", label: "选择本地预设" }, ...customPresets.map((preset) => ({ value: preset.id, label: preset.name }))]} aria-label="自定义图片预设" onChange={(value) => applyCustomPreset(String(value))} />
+              <input className="settings-text-input" value={customPresetName} placeholder="预设名称" aria-label="新预设名称" onChange={(event) => setCustomPresetName(event.target.value)} />
+              <button className="quiet-button" type="button" disabled={!customPresetName.trim()} onClick={saveCustomPreset}>保存</button>
+              <button className="quiet-button" type="button" disabled={!customPresetId} onClick={deleteCustomPreset}>删除</button>
+              <button className="quiet-button" type="button" onClick={downloadImagePresets}>导出 JSON</button>
+              <button className="quiet-button" type="button" onClick={() => presetInputRef.current?.click()}>导入 JSON</button>
+              <input ref={presetInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => { void importImagePresetFile(event.target.files?.[0]); event.target.value = ""; }} />
             </div>
-            <div className="settings-row-control">
-              <ThemeSelect
-                id="image-converter-preset"
-                className="settings-select"
-                value={preferences.imagePreset}
-                options={IMAGE_PRESET_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
-                aria-label="图片转换预设"
-                onChange={(value) => applyPreset(value as ImagePresetId)}
-              />
-            </div>
-          </div>
-          <div className="settings-row settings-preset-row settings-row-stacked">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>自定义图片预设</h3>
-                <button type="button" className="settings-help-icon" aria-label="只保存在本机，可保存当前图片转换默认参数。" title="只保存在本机，可保存当前图片转换默认参数。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <div className="settings-custom-preset-controls">
-                <ThemeSelect id="custom-image-preset" className="settings-select" value={customPresetId} options={[{ value: "", label: "选择本地预设" }, ...customPresets.map((preset) => ({ value: preset.id, label: preset.name }))]} aria-label="自定义图片预设" onChange={(value) => applyCustomPreset(String(value))} />
-                <input className="settings-text-input" value={customPresetName} placeholder="预设名称" aria-label="新预设名称" onChange={(event) => setCustomPresetName(event.target.value)} />
-                <button className="quiet-button" type="button" disabled={!customPresetName.trim()} onClick={saveCustomPreset}>保存</button>
-                <button className="quiet-button" type="button" disabled={!customPresetId} onClick={deleteCustomPreset}>删除</button>
-                <button className="quiet-button" type="button" onClick={downloadImagePresets}>导出 JSON</button>
-                <button className="quiet-button" type="button" onClick={() => presetInputRef.current?.click()}>导入 JSON</button>
-                <input ref={presetInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => { void importImagePresetFile(event.target.files?.[0]); event.target.value = ""; }} />
-              </div>
-            </div>
-          </div>
+          </SettingsRow>
           {presetMessage ? <p className="settings-preset-message" role="status">{presetMessage}</p> : null}
         </section>
 
@@ -398,107 +366,37 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               <p>用于 BMP、RGB565 BIN 和 C 数组等嵌入式资源输出；切换预设会覆盖这些值。</p>
             </div>
           </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>默认位深</h3>
-                <button type="button" className="settings-help-icon" aria-label="具体格式可能固定或限制可用位深。" title="具体格式可能固定或限制可用位深。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <ThemeSelect
-                id="default-bit-depth"
-                className="settings-select"
-                value={preferences.defaultBitDepth}
-                options={getBitDepths(preferences.defaultOutputFormat).map((depth) => ({ value: depth, label: `${depth} 位` }))}
-                aria-label="默认位深"
-                onChange={(value) => updateConverterDefaults({ defaultBitDepth: value as BmpBitDepth })}
-              />
-            </div>
-          </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>默认字节序</h3>
-                <button type="button" className="settings-help-icon" aria-label="RGB565 BIN 与 C 数组的字节排列方式。" title="RGB565 BIN 与 C 数组的字节排列方式。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <ThemeSelect id="default-byte-order" className="settings-select" value={preferences.defaultByteOrder} options={BYTE_ORDER_OPTIONS} aria-label="默认字节序" onChange={(value) => updateConverterDefaults({ defaultByteOrder: value as ByteOrder })} />
-            </div>
-          </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>默认通道顺序</h3>
-                <button type="button" className="settings-help-icon" aria-label="适配 RGB/BGR 屏幕控制器。" title="适配 RGB/BGR 屏幕控制器。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <ThemeSelect id="default-channel-order" className="settings-select" value={preferences.defaultChannelOrder} options={CHANNEL_ORDER_OPTIONS} aria-label="默认通道顺序" onChange={(value) => updateConverterDefaults({ defaultChannelOrder: value as ChannelOrder })} />
-            </div>
-          </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>默认行顺序</h3>
-                <button type="button" className="settings-help-icon" aria-label="适配从上到下或从下到上的帧缓冲。" title="适配从上到下或从下到上的帧缓冲。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <ThemeSelect id="default-row-order" className="settings-select" value={preferences.defaultRowOrder} options={ROW_ORDER_OPTIONS} aria-label="默认行顺序" onChange={(value) => updateConverterDefaults({ defaultRowOrder: value as RowOrder })} />
-            </div>
-          </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>默认行对齐</h3>
-                <button type="button" className="settings-help-icon" aria-label="原始像素数据的每行补齐字节数。" title="原始像素数据的每行补齐字节数。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <ThemeSelect id="default-row-alignment" className="settings-select" value={preferences.defaultRowAlignment} options={ROW_ALIGNMENT_OPTIONS} aria-label="默认行对齐" onChange={(value) => updateConverterDefaults({ defaultRowAlignment: value as RowAlignment })} />
-            </div>
-          </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>默认 C 数组变量名</h3>
-                <button type="button" className="settings-help-icon" aria-label="生成 C 数组源码时使用的标识符。" title="生成 C 数组源码时使用的标识符。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <input className="settings-text-input" value={preferences.defaultCArrayName} aria-label="默认 C 数组变量名" spellCheck={false} onChange={(event) => updateConverterDefaults({ defaultCArrayName: event.target.value })} />
-            </div>
-          </div>
-          <div className="settings-row">
-            <div className="settings-row-copy">
-              <div className="settings-row-title">
-                <h3>默认透明色</h3>
-                <button type="button" className="settings-help-icon" aria-label="非透明输出或留白区域使用的颜色。" title="非透明输出或留白区域使用的颜色。">
-                  <Info size={13} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="settings-row-control">
-              <label className="settings-color-control" htmlFor="default-background-color">
-                <input id="default-background-color" type="color" value={preferences.defaultBackgroundColor} aria-label="默认透明色" onChange={(event) => updateConverterDefaults({ defaultBackgroundColor: event.target.value.toUpperCase() })} />
-                <span>{preferences.defaultBackgroundColor}</span>
-              </label>
-            </div>
-          </div>
+          <SettingsRow title="默认位深" hint="具体格式可能固定或限制可用位深。">
+            <ThemeSelect
+              id="default-bit-depth"
+              className="settings-select"
+              value={preferences.defaultBitDepth}
+              options={getBitDepths(preferences.defaultOutputFormat).map((depth) => ({ value: depth, label: `${depth} 位` }))}
+              aria-label="默认位深"
+              onChange={(value) => updateConverterDefaults({ defaultBitDepth: value as BmpBitDepth })}
+            />
+          </SettingsRow>
+          <SettingsRow title="默认字节序" hint="RGB565 BIN 与 C 数组的字节排列方式。">
+            <ThemeSelect id="default-byte-order" className="settings-select" value={preferences.defaultByteOrder} options={BYTE_ORDER_OPTIONS} aria-label="默认字节序" onChange={(value) => updateConverterDefaults({ defaultByteOrder: value as ByteOrder })} />
+          </SettingsRow>
+          <SettingsRow title="默认通道顺序" hint="适配 RGB/BGR 屏幕控制器。">
+            <ThemeSelect id="default-channel-order" className="settings-select" value={preferences.defaultChannelOrder} options={CHANNEL_ORDER_OPTIONS} aria-label="默认通道顺序" onChange={(value) => updateConverterDefaults({ defaultChannelOrder: value as ChannelOrder })} />
+          </SettingsRow>
+          <SettingsRow title="默认行顺序" hint="适配从上到下或从下到上的帧缓冲。">
+            <ThemeSelect id="default-row-order" className="settings-select" value={preferences.defaultRowOrder} options={ROW_ORDER_OPTIONS} aria-label="默认行顺序" onChange={(value) => updateConverterDefaults({ defaultRowOrder: value as RowOrder })} />
+          </SettingsRow>
+          <SettingsRow title="默认行对齐" hint="原始像素数据的每行补齐字节数。">
+            <ThemeSelect id="default-row-alignment" className="settings-select" value={preferences.defaultRowAlignment} options={ROW_ALIGNMENT_OPTIONS} aria-label="默认行对齐" onChange={(value) => updateConverterDefaults({ defaultRowAlignment: value as RowAlignment })} />
+          </SettingsRow>
+          <SettingsRow title="默认 C 数组变量名" hint="生成 C 数组源码时使用的标识符。">
+            <input className="settings-text-input" value={preferences.defaultCArrayName} aria-label="默认 C 数组变量名" spellCheck={false} onChange={(event) => updateConverterDefaults({ defaultCArrayName: event.target.value })} />
+          </SettingsRow>
+          <SettingsRow title="默认透明色" hint="非透明输出或留白区域使用的颜色。">
+            <label className="settings-color-control" htmlFor="default-background-color">
+              <input id="default-background-color" type="color" value={preferences.defaultBackgroundColor} aria-label="默认透明色" onChange={(event) => updateConverterDefaults({ defaultBackgroundColor: event.target.value.toUpperCase() })} />
+              <span>{preferences.defaultBackgroundColor}</span>
+            </label>
+          </SettingsRow>
         </section>
 
         <div className="settings-actions">
