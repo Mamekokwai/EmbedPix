@@ -687,7 +687,7 @@ describe("compact layout viewport contract", () => {
 
   it("centers the about profile and groups the format tags", () => {
     // 11 个格式铺满一排太碎，按类别收成三块
-    expect(aboutView).toContain("FORMAT_GROUPS");
+    expect(aboutView).toContain("FEATURE_GROUPS");
     expect(aboutView).not.toContain("FORMAT_METADATA.map((format) => <span key={format.id}");
     expect(aboutCss).toContain(".about-hero { display: grid; width: 100%; justify-items: center;");
     expect(aboutCss).toContain("justify-content: center; gap: var(--qp-stack-gap);");

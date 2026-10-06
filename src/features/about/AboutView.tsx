@@ -4,7 +4,6 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
 import packageJson from "../../../package.json";
 import UpdateView, { type UpdateViewProps } from "../update/UpdateView";
-import { FORMAT_METADATA } from "../../shared/formatMetadata";
 import { RELEASES_PAGE_URL } from "../../platform/update/updateGateway";
 
 const PROJECT_REPOSITORY_URL = "https://github.com/Mamekokwai/EmbedPix";
@@ -15,15 +14,12 @@ const WECHAT_REWARD_IMAGE_URL = "/wechat-reward.png";
 const WECHAT_REWARD_MARK_URL = "/wechat-mark.png";
 const KOFI_MARK_URL = "/kofi-mark.avif";
 
-// 11 个格式铺成一排太碎：按格式元数据的类别收成三块，细节留给悬停提示。
-const FORMAT_GROUPS = (["静态图片", "嵌入式像素", "动画输出"] as const).map((category) => {
-  const formats = FORMAT_METADATA.filter((format) => format.category === category);
-  return {
-    category,
-    label: `${category} · ${formats.map((format) => format.label.replace(/ (动图|BIN)$/u, "")).join(" / ")}`,
-    detail: formats.map((format) => `${format.label}：${format.description}`).join("\n"),
-  };
-});
+// 标签只讲功能，具体支持的格式收进悬停提示——简介里不再摊格式清单。
+const FEATURE_GROUPS = [
+  { label: "图片转换", detail: "BMP / PNG / JPG / TIFF / ICO · RGB565 / C 数组" },
+  { label: "图片压缩", detail: "在目标体积与画质之间取舍，输出 WebP / PNG / JPEG" },
+  { label: "GIF 制作", detail: "视频或 PNG 帧序列合成 GIF / WebP / APNG 动图" },
+];
 
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined"
@@ -65,7 +61,7 @@ export default function AboutView(updateProps: UpdateViewProps) {
           <div className="about-title-line"><h2 id="about-app-name">嵌图匠</h2><span>v{packageJson.version}</span></div>
           <p className="about-hero-copy">EmbedPix 把常见图片处理和单片机资源导出集中在一个轻量工作区里。</p>
           <div className="about-output-list" aria-label="支持的输出格式">
-            {FORMAT_GROUPS.map((group) => <span key={group.category} title={group.detail}>{group.label}</span>)}
+            {FEATURE_GROUPS.map((group) => <span key={group.label} title={group.detail}>{group.label}</span>)}
           </div>
 
           <div className="about-pill-row" aria-label="项目与支持">
