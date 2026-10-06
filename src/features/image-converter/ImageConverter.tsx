@@ -87,7 +87,8 @@ import ThemeSelect from "../../shared/components/ThemeSelect";
 import { formatExportFailureDetails, formatExportOutputPaths, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
 import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueue";
 import type { ExportPreflightResult } from "./imageConverterLogic";
-import { formatBatchConversionPlanError, planBatchConversions } from "./batchConversionPlan";
+import { DEFAULT_FILE_NAME_TEMPLATE, formatBatchConversionPlanError, planBatchConversions } from "./batchConversionPlan";
+import type { BatchConversionPlan } from "./batchConversionPlan";
 import { exportWorkspace, formatWorkspaceTransferError, importWorkspace } from "../../shared/workspaceTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
 import { readImageDimensions } from "./imageDimensions";
@@ -221,8 +222,6 @@ function SelectField<T extends string | number>({
     </label>
   );
 }
-
-const DEFAULT_FILE_NAME_TEMPLATE = "{name}.{ext}";
 
 export default function ImageConverter({
   defaultOutputFormat = "bmp",
@@ -406,14 +405,17 @@ export default function ImageConverter({
       ? `“${missingPathFileName}”没有可用的源文件路径，请改用“指定目录”。`
       : null;
   }, [file, loadedImages, outputLocation, outputLocationError]);
-  const batchPlan = useMemo(() => {
-    if (!loadedImages.length) return null;
+  // 规划失败要把原因露出来：模板/子文件夹的校验（Windows 非法字符、结尾点或空格、过长…）不能让用户对着空白猜。
+  const batchPlanResult = useMemo(() => {
+    if (!loadedImages.length) return { plan: null, error: null } as { plan: BatchConversionPlan | null; error: string | null };
     try {
-      return planBatchConversions(loadedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory });
-    } catch {
-      return null;
+      const plan = planBatchConversions(loadedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory });
+      return { plan, error: null };
+    } catch (error) {
+      return { plan: null, error: formatBatchConversionPlanError(error) };
     }
   }, [fileNameTemplate, loadedImages, outputDirectory, outputFormat, outputLocation, outputSubdirectory]);
+  const batchPlan = batchPlanResult.plan;
 
   const setSettingStatus = (nextWidthInput = widthInput, nextHeightInput = heightInput) => {
     if (!file) {
@@ -1812,6 +1814,7 @@ export default function ImageConverter({
                 </label>
                 <p className="field-help field-help-hover" id="file-name-template-help"><strong>可用变量</strong><br /><strong>&#123;name&#125;</strong> 源图片文件名，不含扩展名<br /><strong>&#123;ext&#125;</strong> 输出扩展名，不带点：bmp / png / jpg / webp / tiff / ico，RGB565 为 bin，C 数组为 h<br /><strong>&#123;width&#125; / &#123;height&#125;</strong> 源图片的像素宽 / 高<br /><strong>&#123;index&#125;</strong> 批次内序号，按导入顺序从 1 开始<br />不支持其它 &#123;…&#125; 占位符，模板里也不能写路径分隔符；没写扩展名时会按输出格式自动补上。</p>
               </div> : null}
+              {batchPlanResult.error ? <p className="field-help output-location-error" role="alert">{batchPlanResult.error}</p> : null}
               {batchPlan ? <p className={`field-help${batchPlan.duplicateTargets.length > 0 ? " output-location-error" : ""}`} role={batchPlan.duplicateTargets.length > 0 ? "alert" : undefined}>
                 示例目标：{batchPlan.targetPaths[0] ?? "暂无"}{batchPlan.duplicateTargets.length > 0 ? ` · 检测到 ${batchPlan.duplicateTargets.length} 个重复目标` : ""}
               </p> : null}

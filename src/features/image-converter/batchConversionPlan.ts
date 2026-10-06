@@ -2,6 +2,9 @@ import type { OutputFormat, OutputLocation } from "./types";
 
 export type BatchNameToken = "name" | "ext" | "width" | "height" | "index";
 
+/** 关掉「重命名」时用的模板：输出名就是源图片的文件名，只把扩展名换成输出格式。 */
+export const DEFAULT_FILE_NAME_TEMPLATE = "{name}.{ext}";
+
 export interface BatchConversionItem {
   name: string;
   width: number;
@@ -33,10 +36,23 @@ export function formatBatchConversionPlanError(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
   const mappings: ReadonlyArray<[string, string]> = [
     ["template contains empty or control characters", "模板包含空内容或控制字符"],
+    ["outputSubdirectory contains empty or control characters", "子文件夹为空或包含控制字符"],
     ["contains empty or control characters", "包含空内容或控制字符"],
+    ["outputSubdirectory cannot contain traversal", "子文件夹不能出现 . 或 .. 路径段"],
+    ["outputSubdirectory cannot end with a dot or space", "子文件夹每一段不能以点或空格结尾"],
+    ["generated file name cannot contain traversal", "生成的文件名不能出现 .. 路径段"],
+    ["generated file name cannot contain path separators", "生成的文件名不能包含路径分隔符"],
     ["cannot contain path separators or traversal", "不能包含路径分隔符或目录穿越"],
     ["cannot contain path separators", "不能包含路径分隔符"],
     ["generated file name uses a reserved device name", "生成的文件名使用了系统保留设备名"],
+    ["outputSubdirectory uses a reserved device name", "子文件夹使用了系统保留设备名"],
+    ["uses a reserved device name", "使用了系统保留设备名"],
+    ["generated file name contains characters Windows does not allow", "生成的文件名包含 Windows 不允许的字符"],
+    ["outputSubdirectory contains characters Windows does not allow", "子文件夹包含 Windows 不允许的字符"],
+    ["contains characters Windows does not allow", "包含 Windows 不允许的字符"],
+    ["generated file name cannot end with a dot or space", "生成的文件名不能以点或空格结尾"],
+    ["cannot end with a dot or space", "不能以点或空格结尾"],
+    ["generated file name is too long", "生成的文件名过长"],
     ["unsupported template token", "模板包含不支持的占位符"],
     ["outputDirectory is required", "指定目录输出需要填写输出目录"],
     ["duplicate target path", "目标路径重复"],
@@ -52,6 +68,8 @@ export function formatBatchConversionPlanError(error: unknown): string {
 const TOKEN_PATTERN = /\{(name|ext|width|height|index)\}/gu;
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f]/u;
 const RESERVED_DEVICE_PATTERN = /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
+const WINDOWS_INVALID_PATTERN = /[<>:"|?*]/u;
+const MAX_FILE_NAME_LENGTH = 255;
 
 function extension(format: OutputFormat): string {
   if (format === "rgb565") return "bin";
@@ -63,16 +81,43 @@ function separator(path: string): "/" | "\\" {
   return path.includes("\\") && !path.includes("/") ? "\\" : "/";
 }
 
-function rejectUnsafe(value: string, label: string): void {
-  if (!value || CONTROL_PATTERN.test(value)) throw new Error(`${label} contains empty or control characters`);
-  if (/[\\/]/u.test(value) || value === "." || value === ".." || value.includes("..")) {
-    throw new Error(`${label} cannot contain path separators or traversal`);
-  }
+/** 输出名一律换成输出格式的扩展名（与 Rust 侧 set_extension 行为一致），否则示例目标和真实文件名会对不上。 */
+function withExpectedExtension(fileName: string, format: OutputFormat): string {
+  const suffix = extension(format);
+  const dot = fileName.lastIndexOf(".");
+  const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+  return `${stem}.${suffix}`;
 }
 
-function validateFileName(fileName: string): void {
-  rejectUnsafe(fileName, "generated file name");
-  if (RESERVED_DEVICE_PATTERN.test(fileName)) throw new Error(`generated file name uses a reserved device name: ${fileName}`);
+function assertNameSegment(segment: string, label: string): void {
+  if (WINDOWS_INVALID_PATTERN.test(segment)) throw new Error(`${label} contains characters Windows does not allow: ${segment}`);
+  if (segment.endsWith(".") || segment.endsWith(" ")) throw new Error(`${label} cannot end with a dot or space: ${segment}`);
+  if (RESERVED_DEVICE_PATTERN.test(segment)) throw new Error(`${label} uses a reserved device name: ${segment}`);
+}
+
+function validateGeneratedName(fileName: string): string {
+  if (!fileName || CONTROL_PATTERN.test(fileName)) throw new Error("generated file name contains empty or control characters");
+  if (/[\\/]/u.test(fileName)) throw new Error("generated file name cannot contain path separators");
+  if (fileName.includes("..")) throw new Error("generated file name cannot contain traversal");
+  assertNameSegment(fileName, "generated file name");
+  if (fileName.length > MAX_FILE_NAME_LENGTH) throw new Error(`generated file name is too long: ${fileName}`);
+  return fileName;
+}
+
+/**
+ * 子文件夹是相对源文件夹的路径（`out/A` 之类）：分隔符与首尾斜杠等价，逐段按 Windows 规则校验。
+ * 返回归一化后的相对路径（用 `/`），与 Rust 侧 normalize_subdirectory 保持一致。
+ */
+function validateSubdirectory(value: string): string {
+  const path = value.trim();
+  if (!path || CONTROL_PATTERN.test(path)) throw new Error("outputSubdirectory contains empty or control characters");
+  const segments = path.split(/[\\/]+/u).filter((segment) => segment.length > 0);
+  if (!segments.length) throw new Error("outputSubdirectory contains empty or control characters");
+  for (const segment of segments) {
+    if (segment === "." || segment === "..") throw new Error(`outputSubdirectory cannot contain traversal: ${value}`);
+    assertNameSegment(segment, "outputSubdirectory");
+  }
+  return segments.join("/");
 }
 
 function sourceStem(name: string): string {
@@ -84,7 +129,10 @@ function sourceStem(name: string): string {
 function joinPath(directory: string, child: string): string {
   const trimmed = directory.trim().replace(/[\\/]+$/u, "");
   if (!trimmed) return child;
-  return `${trimmed}${separator(directory)}${child}`;
+  const target = separator(directory);
+  // 子文件夹可以是相对路径（out/A）；按父目录的分隔符统一，免得出现 C:\pics\out/A\board.bmp。
+  const normalizedChild = target === "\\" ? child.replace(/[\\/]+/gu, "\\") : child;
+  return `${trimmed}${target}${normalizedChild}`;
 }
 
 function sourceDirectory(path: string | null | undefined): string {
@@ -104,14 +152,15 @@ function renderTemplate(template: string, item: BatchConversionItem, index: numb
     return String(index);
   });
   if (rendered.includes("{")) throw new Error(`unsupported template token in ${template}`);
-  validateFileName(rendered);
-  return rendered;
+  const fileName = withExpectedExtension(validateGeneratedName(rendered), format);
+  if (fileName.length > MAX_FILE_NAME_LENGTH) throw new Error(`generated file name is too long: ${fileName}`);
+  return fileName;
 }
 
 export function planBatchConversions(items: ReadonlyArray<BatchConversionItem>, options: BatchConversionPlanOptions): BatchConversionPlan {
   if (!items.length) return { items: [], targetPaths: [], duplicateTargets: [] };
   if (options.outputLocation === "directory" && !options.outputDirectory?.trim()) throw new Error("outputDirectory is required for directory output");
-  if (options.outputLocation === "subfolder") rejectUnsafe(options.outputSubdirectory?.trim() ?? "", "outputSubdirectory");
+  const subdirectory = options.outputLocation === "subfolder" ? validateSubdirectory(options.outputSubdirectory ?? "") : null;
   const used = new Map<string, number>();
   const planned: BatchConversionPlanItem[] = [];
   for (const [position, item] of items.entries()) {
@@ -122,8 +171,8 @@ export function planBatchConversions(items: ReadonlyArray<BatchConversionItem>, 
     const sourceDir = sourceDirectory(item.sourcePath);
     const targetDirectory = options.outputLocation === "directory"
       ? options.outputDirectory!.trim()
-      : options.outputLocation === "subfolder"
-        ? joinPath(sourceDir, options.outputSubdirectory!.trim())
+      : subdirectory !== null
+        ? joinPath(sourceDir, subdirectory)
         : sourceDir;
     let target = joinPath(targetDirectory, fileName);
     const key = target.replace(/[\\/]+/gu, "/").toLocaleLowerCase();
@@ -133,8 +182,7 @@ export function planBatchConversions(items: ReadonlyArray<BatchConversionItem>, 
       const dot = fileName.lastIndexOf(".");
       const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
       const suffix = dot > 0 ? fileName.slice(dot) : "";
-      fileName = `${stem}_${count + 1}${suffix}`;
-      validateFileName(fileName);
+      fileName = validateGeneratedName(`${stem}_${count + 1}${suffix}`);
       target = joinPath(targetDirectory, fileName);
     }
     used.set(target.replace(/[\\/]+/gu, "/").toLocaleLowerCase(), count + 1);
