@@ -1198,13 +1198,27 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   return (
     <section className="compression-app" aria-label="图片压缩工作台" aria-busy={busy}>
       <header className="compression-header">
-        <div>
-          <p className="compression-kicker">IMAGE COMPRESSION</p>
-          <h1>图片压缩</h1>
-          <p>批量压缩图片体积，保留对嵌入式 UI 有用的格式与参数控制。</p>
+        <div className="brand-lockup">
+          <img className="brand-mark" src="/embedpix-icon.png" alt="" aria-hidden="true" />
+          <div>
+            <p className="eyebrow">EMBEDPIX</p>
+            <h1>图片压缩工作台</h1>
+          </div>
         </div>
-        <div className="compression-header-note"><FileDown size={17} aria-hidden="true" /> 桌面原生队列</div>
+        <div className="header-context">
+          <span className="status-dot" aria-hidden="true" />
+          本地处理
+        </div>
       </header>
+
+      <section className="compression-intro" aria-labelledby="compression-title">
+        <div>
+          <p className="eyebrow">IMAGE COMPRESSION</p>
+          <h2 id="compression-title">压到目标体积，格式与画质可控</h2>
+          <p className="intro-copy">批量压缩图片体积，保留对嵌入式 UI 有用的格式与参数控制。</p>
+        </div>
+        <div className="intro-note"><FileDown size={17} aria-hidden="true" /> 桌面原生队列</div>
+      </section>
 
       <div className="compression-grid">
         <div className="compression-card compression-input-card">
@@ -1383,6 +1397,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         ><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
           <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError) || Boolean(outputFileNameError) || Boolean(targetSizeError) || Boolean(maxRgbMaeError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
       </footer>
+
+      <p className="compression-brand-line">EmbedPix · 嵌图匠</p>
     </section>
   );
 }
