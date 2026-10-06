@@ -459,6 +459,7 @@ describe("compact layout viewport contract", () => {
   it("keeps GIF settings dropdowns outside the short-window card clip", () => {
     expect(gifCss).toContain("@media (max-height: 760px)");
     expect(gifCss).toContain(".gif-maker-content > .gif-settings-card { max-height: none; overflow: visible; }");
+    expect(gifCss).toContain("@media (max-width: 500px) and (min-height: 621px) and (max-height: 760px) {\n  .gif-maker-content > .gif-settings-card { max-height: none; overflow: visible; }");
   });
 
   it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {
