@@ -326,6 +326,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("successfulOutputPaths.length > 1");
     expect(compressionView).toContain("copyAllOutputPaths");
     expect(compressionView).toContain("setSuccessfulOutputPaths([])");
+    expect(compressionView).toContain("没有可导入的图片；请检查格式");
     expect(compressionCss).toContain(".compression-current-file");
     expect(compressionView).toContain('className="compression-current-file" aria-live="polite" title={currentFileName ?? undefined}');
     expect(compressionCss).toContain(".compression-failure-details");

@@ -613,6 +613,9 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     ];
     if (next.length === 0) {
       setImportErrors(importErrorsForFiles);
+      setLastSuccessfulOutputPath(null);
+      setSuccessfulOutputPaths([]);
+      setItemResults([]);
       setMessage(importErrorsForFiles.length > 0 ? `没有可导入的图片；请检查格式和 ${maxInputMiB} MiB 输入限制。` : "没有找到支持的图片格式（PNG、JPEG、WebP、BMP、GIF）。");
       setStatus("error");
       return;
@@ -668,6 +671,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setFailures([]);
       setFailureDetails([]);
       setItemResults([]);
+      setLastSuccessfulOutputPath(null);
+      setSuccessfulOutputPaths([]);
       setStatus(imported.length > 0 ? "ready" : "error");
     }
   };
