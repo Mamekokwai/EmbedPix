@@ -573,13 +573,13 @@ export default function ImageConverter({
     if (!isImageFile(nextFile)) {
       setStatus({ kind: "error", text: "文件格式不支持" });
       setError(`请选择 ${SUPPORTED_IMAGE_FORMAT_LABEL} 文件。`);
-      return;
+      return false;
     }
 
     if (nextFile.size > MAX_INPUT_BYTES) {
       setStatus({ kind: "error", text: "文件过大，无法读取" });
       setError(`图片文件不能超过 32 MiB，当前为 ${formatMebibytes(nextFile.size)}。`);
-      return;
+      return false;
     }
 
     const dimensionController = new AbortController();
@@ -639,17 +639,23 @@ export default function ImageConverter({
     const replacingExistingImage = replaceImageId !== null
       && loadedImagesRef.current.some((image) => image.id === replaceImageId);
     let loadedCount = 0;
+    let failedCount = 0;
     for (const [index, nextFile] of files.entries()) {
       if (await loadFile(nextFile, index === 0 ? replaceImageId : null)) {
         loadedCount += 1;
+      } else {
+        failedCount += 1;
       }
     }
     replaceImageIdRef.current = null;
     if (loadedCount > 0) {
-      setStatus({
-        kind: "ready",
-        text: `${initialCount + loadedCount - (replacingExistingImage ? 1 : 0)} 张图片已载入，可以导出`,
-      });
+      const totalLoaded = initialCount + loadedCount - (replacingExistingImage ? 1 : 0);
+      if (failedCount > 0) {
+        setError(`${failedCount} 张图片导入失败；已载入 ${loadedCount} 张，可检查文件格式、大小或读取错误后重试。`);
+        setStatus({ kind: "error", text: `部分导入完成：${totalLoaded} 张图片可导出` });
+      } else {
+        setStatus({ kind: "ready", text: `${totalLoaded} 张图片已载入，可以导出` });
+      }
     }
   };
 
