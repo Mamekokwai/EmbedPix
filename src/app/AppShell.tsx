@@ -102,7 +102,10 @@ export default function AppShell() {
     // 配色方案按当前明暗各取一套；派生结果写成内联变量，覆盖 tokens.css 的静态色值。
     applyThemeColors(activeTheme, activeTheme === "dark" ? preferences.colorSchemeDark : preferences.colorSchemeLight);
     saveAppPreferences(preferences);
-  }, [activeTheme, preferences]);
+    // 依赖只收影响主题的字段，避免设置页里改其它字段就重跑 deriveTheme、重写全部内联色变量（拖滑杆的掉帧源）。
+    // saveAppPreferences 仍在此落盘、需读整个 preferences，故这一处按需忽略依赖检查。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTheme, preferences.colorSchemeLight, preferences.colorSchemeDark]);
 
   useEffect(() => {
     if (view !== "gif" && view !== "compression") return;
