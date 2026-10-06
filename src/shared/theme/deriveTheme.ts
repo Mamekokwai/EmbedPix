@@ -1,7 +1,7 @@
 // 移植自 patina 的 `src/shared/theme/deriveTheme.ts`：常量、派生顺序与 token 值逐行照搬，只把 import 指向本仓库的预设表；
 // 额外输出 `--qp-accent-contrast`（与 patina 的 `--qp-text-on-accent` 同值），供本项目既有样式沿用。
 import type { ColorScheme } from "./themePresets";
-import { effectiveThemeContrast, getThemePreset, type ThemeVariant } from "./themePresets";
+import { getThemePreset, type ThemePreset, type ThemeVariant } from "./themePresets";
 
 type RGB = [number, number, number];
 const WHITE: RGB = [255, 255, 255];
@@ -92,9 +92,8 @@ const DEFAULT_CONTROLS: Record<ThemeVariant, Record<string, string>> = {
   }
 };
 
-function controlColors(variant: ThemeVariant, scheme: ColorScheme): Record<string, string> {
+function controlColors(variant: ThemeVariant, scheme: ColorScheme, p: ThemePreset): Record<string, string> {
   if (scheme === "default") return DEFAULT_CONTROLS[variant];
-  const p = getThemePreset(variant, scheme);
   return variant === "dark" ? {
     "--qp-text-primary": `${p.ink}`,
     "--qp-text-secondary": `color-mix(in srgb, ${p.ink} 78%, ${p.surface})`,
@@ -137,15 +136,15 @@ function controlColors(variant: ThemeVariant, scheme: ColorScheme): Record<strin
 }
 
 /** Corrected theme surfaces with Patina control colors and interaction hierarchy. */
-export function deriveTheme(variant: ThemeVariant, scheme: ColorScheme, override: number | null = null): Record<string, string> {
+export function deriveTheme(variant: ThemeVariant, scheme: ColorScheme): Record<string, string> {
   const p = getThemePreset(variant, scheme);
   const dark = variant === "dark";
-  const value = effectiveThemeContrast(variant, scheme, override);
+  const value = p.contrast;
   const c = shapeContrast(value, dark);
   const surface = parse(p.surface), ink = parse(p.ink);
   const under = hex(mix(surface, dark ? BLACK : ink, dark ? 0.16 + (value - 60) * 0.0015 : 0.04 + (value - 45) * 0.0012));
   const panel = hex(mix(surface, dark ? ink : WHITE, dark ? 0.03 + c * 0.03 : 0.18 + c * 0.008));
-  const controls = controlColors(variant, scheme);
+  const controls = controlColors(variant, scheme, p);
   return {
     "--qp-bg-app": under,
     "--qp-bg-canvas": p.surface,

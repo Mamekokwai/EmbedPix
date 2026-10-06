@@ -128,11 +128,3 @@ export function themeSwatches(variant: ThemeVariant, scheme: ColorScheme): [stri
   const preset = getThemePreset(variant, scheme);
   return [preset.surface, preset.ink, preset.accent, preset.semanticColors.diffAdded, preset.semanticColors.diffRemoved, preset.semanticColors.skill];
 }
-
-export function normalizeThemeContrast(value: unknown): number | null {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 100 ? value : null;
-}
-
-export function effectiveThemeContrast(variant: ThemeVariant, scheme: ColorScheme, override: unknown): number {
-  return normalizeThemeContrast(override) ?? getThemePreset(variant, scheme).contrast;
-}
