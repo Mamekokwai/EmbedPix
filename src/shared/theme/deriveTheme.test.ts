@@ -68,7 +68,7 @@ describe("theme derivation", () => {
     expect(getSchemeLabel("vscode-plus")).toBe("VS Code Plus");
     expect(getSchemeLabel("default")).toBe("默认");
     expect(getSchemeLabel("gruvbox")).toBe("Gruvbox");
-    expect(themeSwatches("light", "github")).toHaveLength(3);
+    expect(themeSwatches("light", "github")).toHaveLength(6);
   });
 
   it("writes the derived tokens onto the theme root", () => {

@@ -1,4 +1,4 @@
-import { Info, Laptop, Moon, RotateCcw, Settings2, Sun } from "lucide-react";
+import { Info, Laptop, Moon, RotateCcw, Settings2, Sun, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { getBitDepths, OUTPUT_FORMATS } from "../image-converter/imageConverterLogic";
 import type { BmpBitDepth, ByteOrder, ChannelOrder, RowAlignment, RowOrder } from "../image-converter/types";
@@ -66,11 +66,73 @@ function presetLabel(preset: ImagePresetId): string {
 
 function SchemeSwatches({ variant, scheme }: { variant: "light" | "dark"; scheme: ColorScheme }) {
   return (
-    <span className="scheme-swatches" aria-hidden="true">
+    <span className="settings-color-scheme-swatches" aria-hidden="true">
       {themeSwatches(variant, scheme).map((color, index) => (
-        <span key={`${color}-${index}`} className="scheme-swatch" style={{ backgroundColor: color }} />
+        <span key={`${color}-${index}`} className="settings-color-scheme-swatch" style={{ backgroundColor: color }} />
       ))}
     </span>
+  );
+}
+
+// patina 的配色方案是「当前方案一行 + 色卡网格弹窗」，不是下拉。
+function SchemePicker({ variant, label, value, onChange }: {
+  variant: "light" | "dark";
+  label: string;
+  value: ColorScheme;
+  onChange: (scheme: ColorScheme) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const schemes = variant === "dark" ? DARK_COLOR_SCHEMES : LIGHT_COLOR_SCHEMES;
+  return (
+    <>
+      <div className="scheme-picker-row">
+        <span className="scheme-picker-label">{label}</span>
+        <span className="scheme-picker-current">
+          <SchemeSwatches variant={variant} scheme={value} />
+          <span>{getSchemeLabel(value)}</span>
+        </span>
+        <button type="button" className="scheme-picker-change" onClick={() => setOpen(true)}>
+          更改
+        </button>
+      </div>
+      {open ? (
+        <div
+          className="settings-scheme-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
+          <div className="settings-scheme-dialog" role="dialog" aria-modal="true" aria-label={label}>
+            <header className="settings-scheme-header">
+              <h4>{label}</h4>
+              <button type="button" className="settings-scheme-close" aria-label="关闭" onClick={() => setOpen(false)}>
+                <X size={14} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="settings-color-scheme-list" role="group" aria-label={label}>
+              {schemes.map((scheme) => {
+                const selected = scheme === value;
+                return (
+                  <button
+                    key={scheme}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      onChange(scheme);
+                      setOpen(false);
+                    }}
+                    className={`settings-color-scheme-option${selected ? " settings-color-scheme-option-selected" : ""}`}
+                  >
+                    <SchemeSwatches variant={variant} scheme={scheme} />
+                    <span>{getSchemeLabel(scheme)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -197,30 +259,18 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
             </div>
             <div className="settings-row-control">
               <div className="scheme-picker-grid">
-                <div className="scheme-picker">
-                  <span className="scheme-picker-label">浅色方案</span>
-                  <ThemeSelect
-                    id="color-scheme-light"
-                    className="settings-select"
-                    value={preferences.colorSchemeLight}
-                    options={LIGHT_COLOR_SCHEMES.map((scheme) => ({ value: scheme, label: getSchemeLabel(scheme) }))}
-                    aria-label="浅色配色方案"
-                    onChange={(value) => onChange({ colorSchemeLight: value })}
-                  />
-                  <SchemeSwatches variant="light" scheme={preferences.colorSchemeLight} />
-                </div>
-                <div className="scheme-picker">
-                  <span className="scheme-picker-label">深色方案</span>
-                  <ThemeSelect
-                    id="color-scheme-dark"
-                    className="settings-select"
-                    value={preferences.colorSchemeDark}
-                    options={DARK_COLOR_SCHEMES.map((scheme) => ({ value: scheme, label: getSchemeLabel(scheme) }))}
-                    aria-label="深色配色方案"
-                    onChange={(value) => onChange({ colorSchemeDark: value })}
-                  />
-                  <SchemeSwatches variant="dark" scheme={preferences.colorSchemeDark} />
-                </div>
+                <SchemePicker
+                  variant="light"
+                  label="浅色主题"
+                  value={preferences.colorSchemeLight}
+                  onChange={(scheme) => onChange({ colorSchemeLight: scheme })}
+                />
+                <SchemePicker
+                  variant="dark"
+                  label="深色主题"
+                  value={preferences.colorSchemeDark}
+                  onChange={(scheme) => onChange({ colorSchemeDark: scheme })}
+                />
               </div>
             </div>
           </div>

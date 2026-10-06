@@ -665,11 +665,13 @@ describe("compact layout viewport contract", () => {
   });
 
   it("exposes light and dark color schemes and applies the derived tokens", () => {
-    expect(settingsView).toContain('id="color-scheme-light"');
-    expect(settingsView).toContain('id="color-scheme-dark"');
-    expect(settingsView).toContain("colorSchemeLight: value");
-    expect(settingsView).toContain("colorSchemeDark: value");
+    // 配色方案是折起的色卡选择器，不是下拉
+    expect(settingsView).toContain("<SchemePicker");
+    expect(settingsView).toContain("settings-color-scheme-list");
+    expect(settingsView).toContain("colorSchemeLight: scheme");
+    expect(settingsView).toContain("colorSchemeDark: scheme");
     expect(settingsView).toContain("配色方案");
+    expect(settingsView).not.toContain('id="color-scheme-light"');
     expect(appShell).toContain('applyThemeColors(activeTheme, activeTheme === "dark" ? preferences.colorSchemeDark : preferences.colorSchemeLight);');
     expect(tokensCss).toContain("--qp-accent-contrast");
   });
@@ -691,7 +693,7 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toContain("justify-content: center; gap: var(--qp-stack-gap);");
     // 赞助弹窗照 patina 的两张卡结构
     expect(aboutView).toContain("about-support-card-heading");
-    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px)); align-content: start;");
+    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px)); height: auto; max-height: none;");
     expect(aboutCss).not.toContain("max-height: min(560px, calc(100vh - 32px))");
     // 赞赏码用原图整张放大，不做裁切；两个卡片图标都抄 patina（微信赞赏徽标 + Ko-fi 官方 mark）
     expect(aboutView).toContain('src={WECHAT_REWARD_IMAGE_URL}');

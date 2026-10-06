@@ -123,9 +123,10 @@ export function getSchemeLabel(scheme: ColorScheme): string {
   return scheme.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
-export function themeSwatches(variant: ThemeVariant, scheme: ColorScheme): [string, string, string] {
+// 与 patina 同序的六格色样：底色 / 文字 / 主色 / 增 / 删 / 技能色。
+export function themeSwatches(variant: ThemeVariant, scheme: ColorScheme): [string, string, string, string, string, string] {
   const preset = getThemePreset(variant, scheme);
-  return [preset.surface, preset.ink, preset.accent];
+  return [preset.surface, preset.ink, preset.accent, preset.semanticColors.diffAdded, preset.semanticColors.diffRemoved, preset.semanticColors.skill];
 }
 
 export function normalizeThemeContrast(value: unknown): number | null {
