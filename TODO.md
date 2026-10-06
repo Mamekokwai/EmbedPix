@@ -484,6 +484,8 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 修复开关（如「导出成功后删除源图片」）点击后整页被顶出窗口：文档锁死不可滚动（`html { overflow: clip }`）+ 主滚动层兼作定位祖先（`.app-main { position: relative }`），并加契约测试断言这两条不变量
 - [x] 说明文字宽度与左起点跟同页一致：设置组通栏 + 删掉 `.output-action-help` 的 38px 左缩进
 - [x] 转换页开关说明改为悬停/聚焦浮出（`.field-help-hover`，停约 0.4s 出现、移开立即收起，仍在 DOM 里保证 `aria-describedby` 不断）
+- [x] 把该机制提成共享样式 `src/styles/components/field-hint.css`（`App.css` 引入），并写进 `AGENTS.md`：以后设置项的说明都按「默认收起、悬停/聚焦浮出」做
+- [ ] 压缩页的 `compression-field-hint`（15 处）仍是常显，按新规则迁到 `.field-help-hover`；危险项与错误提示（如参数问题、覆盖原图/删除源文件）是否常显需单独判断
 - [ ] GIF 时间轴工具栏的「缩放」仍是原生 `<select>`（`GifMakerView.tsx` 时间轴头部），迁移 GIF 页外壳时一并换 `ThemeSelect`——它是个紧凑行内控件，直接换 36px 盒子会挤坏时间轴布局，需要单独量一次
 
 契约变更（覆盖 0.2.2 的 B5「统一隐藏滚动条」）：主视图 `.app-main` 由完全隐藏滚动条改为 6px 细滚动条，列表内部滚动条同步收细。隐藏滚动条让长页面不可发现，因此该条契约作废；键盘/滚轮可达全部内容的要求不变。后续新增页面按“可见细滚动条”验收，不要再写 `scrollbar-width: none`。
