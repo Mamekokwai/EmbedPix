@@ -32,19 +32,8 @@
 .quiet-button { display: inline-flex; min-height: 34px; align-items: center; gap: 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: var(--qp-bg-panel); padding: 0 11px; color: var(--qp-text-secondary); font-size: 11px; font-weight: 600; }
 .quiet-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
 .quiet-button:disabled { opacity: .5; }
-@media (max-width: 620px) {
-  .settings-row { align-items: stretch; flex-direction: column; gap: 12px; }
-  .theme-options { width: 100%; }
-  .theme-option { flex: 1; justify-content: center; }
-  .settings-range-control { flex-basis: auto; }
-  .settings-range-control input { flex: 1; }
-  .settings-select, .settings-text-input { width: 100%; flex-basis: auto; }
-  .settings-actions { align-items: flex-start; flex-direction: column; }
-  .settings-custom-preset-controls { min-width: 0; justify-content: flex-start; }
-}
-@media (max-width: 500px) {
-  .settings-custom-preset-controls .quiet-button, .settings-actions .quiet-button { width: 100%; justify-content: center; }
-}
+
+
 
 /* 配色方案：浅色/深色各一个下拉，旁边跟三格色样（surface / ink / accent）。 */
 .scheme-picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--qp-stack-gap); min-width: 0; }
@@ -52,6 +41,4 @@
 .scheme-picker-label { color: var(--qp-text-tertiary); font-size: 11px; }
 .scheme-swatches { display: inline-flex; gap: 6px; }
 .scheme-swatch { display: block; width: 22px; height: 22px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-chip); }
-@media (max-width: 620px) {
-  .scheme-picker-grid { grid-template-columns: 1fr; }
-}
+

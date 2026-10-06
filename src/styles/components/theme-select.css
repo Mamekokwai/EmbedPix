@@ -105,8 +105,4 @@
   width: min(275px, 100%);
 }
 
-@media (max-width: 620px) {
-  .settings-select {
-    width: 100%;
-  }
-}
+

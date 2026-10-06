@@ -17,7 +17,7 @@
         "title": "EmbedPix",
         "width": 1100,
         "height": 760,
-        "minWidth": 480,
+        "minWidth": 900,
         "minHeight": 560,
         "resizable": true,
         "decorations": false

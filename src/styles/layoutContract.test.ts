@@ -32,14 +32,12 @@ const updateProgressBar = readSource(new URL("../features/update/UpdateProgressB
 const aboutView = readSource(new URL("../features/about/AboutView.tsx", import.meta.url));
 const aboutCss = readSource(new URL("./features/about.css", import.meta.url));
 
+// 窗口最小宽度对齐 patina（900，见 tauri.conf.json 的 minWidth）：窄于 900 的断点已整批删除，矩阵不再覆盖更窄的视口。
 const VIEWPORT_MATRIX = [
-  { name: "compact portrait", width: 320, height: 480 },
-  { name: "small portrait", width: 360, height: 500 },
-  { name: "tablet portrait", width: 480, height: 640 },
-  { name: "narrow tall", width: 700, height: 1100 },
-  { name: "wide short", width: 900, height: 700 },
+  { name: "minimum window", width: 900, height: 636 },
+  { name: "narrow tall", width: 900, height: 1100 },
+  { name: "default window", width: 1100, height: 760 },
   { name: "desktop short", width: 1280, height: 720 },
-  { name: "landscape narrow", width: 560, height: 420 },
   { name: "regular desktop", width: 1280, height: 800 },
 ] as const;
 
@@ -188,27 +186,29 @@ describe("compact layout viewport contract", () => {
     expect(width).toBeGreaterThan(0);
     expect(height).toBeGreaterThan(0);
     expect(gifCss).toContain("overflow-x: hidden");
-    expect(gifCss).toMatch(/\.gif-frame-list \{[^}]*flex-direction: column;[^}]*overflow-x: hidden;[^}]*overflow-y: auto;/s);
     expect(gifCss).toContain(".gif-canvas-stage { min-height: 132px;");
     expect(converterCss).toContain(".converter-app {\n  width: min(1180px, 100%);");
     expect(converterCss).toContain("overflow-x: hidden;");
     expect(converterCss).toContain(".preview-content { min-height: 210px; }");
     expect(compressionCss).toContain(".compression-app {\n  width: min(1180px, 100%);");
     expect(compressionCss).toContain("overflow-x: hidden;");
-    expect(compressionCss).toContain("@media (max-width: 560px)");
+    // 窗口最小宽度 900（对齐 patina）：窄于 900 的 max-width 断点已整批删除，样式里不该再出现
+    for (const css of [compressionCss, gifCss, converterCss, appCss, appShellCss, updateCss]) {
+      expect(css).not.toMatch(/@media[^{]*max-width:\s*[1-8]\d\dpx/u);
+    }
     expect(themeSelectCss).toContain(".theme-select-option:focus-visible");
   });
 
   it("covers the requested portrait and narrow-tall viewport safeguards", () => {
     expect(VIEWPORT_MATRIX).toEqual(expect.arrayContaining([
-      { name: "compact portrait", width: 320, height: 480 },
-      { name: "small portrait", width: 360, height: 500 },
-      { name: "narrow tall", width: 700, height: 1100 },
+      { name: "minimum window", width: 900, height: 636 },
+      { name: "narrow tall", width: 900, height: 1100 },
+      { name: "regular desktop", width: 1280, height: 800 },
     ]));
-    expect(gifCss).toContain("@media (max-width: 500px) and (max-height: 620px)");
+    // 短窗规则保留，窄窗条件已被最小宽度取代
+    expect(gifCss).toContain("@media (max-height: 620px)");
+    expect(gifCss).toContain("@media (min-height: 621px) and (max-height: 760px)");
     expect(gifCss).toContain(".gif-maker-view > .gif-export-footer { position: sticky;");
-    expect(gifCss).toContain(".gif-busy-cancel { width: 100%; margin-top: 4px; }");
-    expect(compressionCss).toContain(".compression-settings-card { display: grid; grid-template-columns: minmax(0, 1fr); }");
     expect(compressionCss).toContain("overflow-wrap: anywhere;");
   });
 
@@ -226,8 +226,6 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".drop-zone-actions");
     expect(gifView).toContain("保存工作区");
     expect(converterView).toContain("打开工作区");
-    expect(gifCss).toContain(".gif-header-note { display: flex; flex-wrap: wrap;");
-    expect(converterCss).toContain(".workspace-transfer-actions > * { flex: 1 1 0;");
     expect(gifView).toContain("gif-status-${status.kind}");
     expect(gifView).toContain("formatGifExportProgress");
     expect(gifView).toContain("aria-valuetext={`第 ${selectedIndex + 1} / ${frames.length} 帧`}");
@@ -495,10 +493,8 @@ describe("compact layout viewport contract", () => {
 
   it("does not reintroduce a horizontal scrolling frame list", () => {
     expect(gifCss).not.toMatch(/\.gif-frame-list \{[^}]*overflow-x: auto;/s);
-    expect(gifCss).toMatch(/\.gif-frame-list \{[^}]*overflow-x: hidden; overflow-y: auto;/s);
     expect(gifCss).toContain(".gif-frame-meta small { min-width: 0; overflow: hidden;");
     expect(gifView).toContain('<strong title={frame.name}>{frame.name}</strong>');
-    expect(gifCss).toContain(".gif-busy-cancel { width: 100%; margin-top: 4px; }");
     expect(gifCss).toMatch(/\.gif-balanced-reset \{[^}]*align-self: start;[^}]*justify-self: start;/s);
     expect(gifView).toContain('className="quiet-button gif-busy-cancel"');
   });
@@ -507,7 +503,6 @@ describe("compact layout viewport contract", () => {
     expect((gifView.match(/<span>目标文件大小<\/span>/g) ?? []).length).toBe(3);
     expect((gifView.match(/<span>最大文件大小<\/span>/g) ?? []).length).toBe(3);
     expect((gifView.match(/<strong>自动压缩到目标大小<\/strong>/g) ?? []).length).toBe(3);
-    expect(gifCss).toContain(".gif-export-grid { grid-template-columns: minmax(0, 1fr); }");
     expect(gifView).toContain("WebP/APNG 动图使用当前画布和帧时长导出");
     expect(gifView).toContain("PNG 帧序列按当前画布逐帧输出 PNG");
     expect(gifView).toContain("仅调用原生规划，不会修改参数或自动压缩正式导出");
@@ -561,13 +556,10 @@ describe("compact layout viewport contract", () => {
 
   it("preserves preview space when expanded settings exceed the window height", () => {
     expect(gifCss).toMatch(/\.gif-maker-view\.gif-settings-expanded \.gif-workspace-grid \{\s*flex: 0 0 auto;\s*min-height: 300px;/s);
-    expect(gifCss).toContain("grid-template-rows: minmax(128px, auto) minmax(300px, auto);");
     expect(gifView).toContain('gif-settings-expanded');
     expect(gifCss).toContain('.gif-maker-view.gif-settings-expanded > .gif-export-footer { position: static; }');
   });
   it("keeps GIF header workspace actions visible on narrow windows", () => {
-    expect(gifCss).toContain(".gif-header-note { width: 100%; margin-left: 0; flex-wrap: wrap; white-space: normal; }");
-    expect(gifCss).toContain(".gif-header-note .workspace-file-button, .gif-header-note > .quiet-button { flex: 1 1 auto; }");
     expect(gifView).toContain("title={`${videoSource.name} · ${videoSource.width} × ${videoSource.height} px`}");
   });
 
@@ -579,8 +571,6 @@ describe("compact layout viewport contract", () => {
   });
 
   it("does not compress narrow short GIF cards below readable content height", () => {
-    expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 621px) and (max-height: 760px)");
-    expect(gifCss).toContain(".gif-workspace-grid { grid-template-rows: minmax(128px, auto) minmax(220px, auto); }");
     expect(gifCss).not.toContain("grid-template-rows: minmax(96px, .85fr) minmax(96px, 1.15fr)");
     expect(gifCss).toContain(".gif-assets-card,");
     expect(gifCss).toContain(".gif-preview-card,");
@@ -692,9 +682,11 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toContain("justify-content: center; gap: var(--qp-stack-gap);");
     // 赞助弹窗照 patina 的两张卡结构
     expect(aboutView).toContain("about-support-card-heading");
-    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px));");
-    // 赞赏码用原图整张放大，不做裁切；Ko-fi 卡片图标抄 patina 的官方 mark
+    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px)); align-content: start;");
+    expect(aboutCss).not.toContain("max-height: min(560px, calc(100vh - 32px))");
+    // 赞赏码用原图整张放大，不做裁切；两个卡片图标都抄 patina（微信赞赏徽标 + Ko-fi 官方 mark）
     expect(aboutView).toContain('src={WECHAT_REWARD_IMAGE_URL}');
+    expect(aboutView).toContain('src={WECHAT_REWARD_MARK_URL}');
     expect(aboutView).toContain('src={KOFI_MARK_URL}');
     expect(aboutCss).toContain(".about-support-qr { display: block; width: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }");
     expect(aboutCss).not.toContain("width: 200px; height: 200px");

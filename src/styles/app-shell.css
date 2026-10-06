@@ -328,23 +328,6 @@
   .page-content { gap: 8px; padding-top: 14px; }
 }
 
-@media (max-width: 760px) {
-  .app-shell { grid-template-columns: 68px minmax(0, 1fr); gap: 10px; padding: 10px; }
-  .app-sidebar { padding: 16px 7px 12px; }
-  .sidebar-brand { width: 36px; height: 36px; }
-  .sidebar-nav { gap: 6px; }
-  .sidebar-nav-item { height: 38px; min-height: 38px; }
-  .sidebar-nav-item-active::before { top: 8px; height: 20px; }
-  .page-view { padding: 24px 22px 30px; }
-}
 
-@media (max-width: 500px) {
-  .app-shell { gap: 8px; padding: 8px; }
-  .app-titlebar-brand { padding-inline: 9px; }
-  .app-titlebar-name { display: none; }
-  .app-titlebar-author { margin-right: 4px; font-size: 9px; }
-  .app-titlebar-button { width: 34px; }
-  .page-view { padding: 20px 16px 26px; }
-  .page-header { align-items: flex-start; }
-  .page-header h1 { font-size: 19px; }
-}
+
+
