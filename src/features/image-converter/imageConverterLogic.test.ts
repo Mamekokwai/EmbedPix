@@ -17,6 +17,7 @@ import {
   getBatchExportStatus,
   getCropInputError,
   getCropInputValidation,
+  getCropPreviewLayout,
   getSubdirectoryError,
   normalizeSubdirectoryPath,
   getBitDepthNote,
@@ -343,5 +344,36 @@ describe("image converter subdirectory paths", () => {
     );
 
     expect(plan.targetPaths).toEqual(["C:\\Images\\out\\A\\screen.png"]);
+  });
+
+  it("maps a crop rect to a preview window that shows exactly that region", () => {
+    const source = { width: 800, height: 600 };
+    const full = getCropPreviewLayout({ x: "0", y: "0", width: "800", height: "600" }, source);
+    expect(full?.aspectRatio).toBe("800 / 600");
+    expect(full?.imageWidthPercent).toBe(100);
+    // 原点在 0 时偏移是 -0，与 0 等价
+    expect(full?.imageLeftPercent === 0).toBe(true);
+    expect(full?.imageTopPercent === 0).toBe(true);
+
+    // 裁右半：图放大到 200%，左移 50%
+    const rightHalf = getCropPreviewLayout({ x: "400", y: "0", width: "400", height: "600" }, source);
+    expect(rightHalf?.aspectRatio).toBe("400 / 600");
+    expect(rightHalf?.imageWidthPercent).toBe(200);
+    expect(rightHalf?.imageLeftPercent).toBe(-100);
+
+    // 裁下方四分之一：窗口变成宽扁比例，图按高度放大 4 倍、上移 300%
+    const bottomQuarter = getCropPreviewLayout({ x: "0", y: "450", width: "800", height: "150" }, source);
+    expect(bottomQuarter?.aspectRatio).toBe("800 / 150");
+    expect(bottomQuarter?.imageTopPercent).toBe(-300);
+    expect(bottomQuarter?.imageWidthPercent).toBe(100);
+  });
+
+  it("refuses to build a crop preview from an invalid rect", () => {
+    const source = { width: 800, height: 600 };
+    expect(getCropPreviewLayout({ x: "0", y: "0", width: "0", height: "600" }, source)).toBeNull();
+    expect(getCropPreviewLayout({ x: "400", y: "0", width: "500", height: "600" }, source)).toBeNull();
+    expect(getCropPreviewLayout({ x: "0", y: "", width: "10", height: "10" }, source)).toBeNull();
+    expect(getCropPreviewLayout({ x: "-5", y: "0", width: "10", height: "10" }, source)).toBeNull();
+    expect(getCropPreviewLayout({ x: "0", y: "0", width: "10", height: "10" }, null)).toBeNull();
   });
 });

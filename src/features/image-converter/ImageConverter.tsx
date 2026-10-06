@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
+import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   Check,
@@ -45,6 +45,7 @@ import {
   formatMebibytes,
   getImagePreviewComparison,
   estimateImageExportBytesForDimensions,
+  getCropPreviewLayout,
   getBitDepthNote,
   getBitDepths,
   getDimensionError,
@@ -368,7 +369,12 @@ export default function ImageConverter({
     ? getTransformedSourceDimensions(dimensions, imageTransform)
     : null;
   const hasImageTransform = rotation !== 0 || flipHorizontal || flipVertical || cropEnabled;
+  const cropPreview = useMemo(
+    () => (cropEnabled ? getCropPreviewLayout(cropInputs, dimensions) : null),
+    [cropEnabled, cropInputs, dimensions],
+  );
   const previewAppliedTransforms = [
+    cropEnabled && cropPreview ? "裁剪" : null,
     rotation !== 0 ? `旋转 ${rotation}°` : null,
     flipHorizontal ? "水平翻转" : null,
     flipVertical ? "垂直翻转" : null,
@@ -1434,18 +1440,52 @@ export default function ImageConverter({
           ) : (
             <div className="preview-content">
               <div className="preview-frame" style={{ backgroundColor }}>
-                {previewUrl ? <img
+                {previewUrl ? (cropPreview ? (
+                  <div
+                    className="preview-crop-window"
+                    data-crop-window="true"
+                    style={{ "--crop-w": cropPreview.cropWidth, "--crop-h": cropPreview.cropHeight } as CSSProperties}
+                  >
+                    <img
+                      src={previewUrl}
+                      alt={`预览（裁剪 ${cropPreview.aspectRatio}）：${file.name}`}
+                      style={{
+                        left: `${cropPreview.imageLeftPercent}%`,
+                        top: `${cropPreview.imageTopPercent}%`,
+                        width: `${cropPreview.imageWidthPercent}%`,
+                        transform: `scaleY(${flipVertical ? -1 : 1}) scaleX(${flipHorizontal ? -1 : 1}) rotate(${rotation}deg)`,
+                      }}
+                    />
+                  </div>
+                ) : <img
                   src={previewUrl}
                   alt={`预览：${file.name}`}
                   style={{
                     transform: `rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`,
                   }}
-                /> : null}
+                />) : null}
               </div>
               <div className="preview-comparison" aria-label="输出预览对比">
                 <div className="preview-comparison-heading"><strong>输出预览</strong><span>参数模拟，非已导出文件</span></div>
                 <div className="preview-frame preview-frame-output" style={{ backgroundColor }}>
-                  {previewUrl ? <img src={previewUrl} alt={`输出预览：${file.name}`} style={{ transform: `rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})` }} /> : null}
+                  {previewUrl ? (cropPreview ? (
+                    <div
+                      className="preview-crop-window"
+                      data-crop-window="true"
+                      style={{ "--crop-w": cropPreview.cropWidth, "--crop-h": cropPreview.cropHeight } as CSSProperties}
+                    >
+                      <img
+                        src={previewUrl}
+                        alt={`输出预览（裁剪 ${cropPreview.aspectRatio}）：${file.name}`}
+                        style={{
+                          left: `${cropPreview.imageLeftPercent}%`,
+                          top: `${cropPreview.imageTopPercent}%`,
+                          width: `${cropPreview.imageWidthPercent}%`,
+                          transform: `scaleY(${flipVertical ? -1 : 1}) scaleX(${flipHorizontal ? -1 : 1}) rotate(${rotation}deg)`,
+                        }}
+                      />
+                    </div>
+                  ) : <img src={previewUrl} alt={`输出预览：${file.name}`} style={{ transform: `rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})` }} />) : null}
                 </div>
                 <div className="preview-comparison-meta">
                   <span>{outputPreviewComparison.dimensions}</span>
@@ -1462,7 +1502,7 @@ export default function ImageConverter({
               </div>
               {hasImageTransform ? <p className="preview-edit-note">
                 {previewAppliedTransforms.length > 0 ? `预览已应用${previewAppliedTransforms.join("、")}；` : "裁剪预览受限；"}
-                {cropEnabled ? "裁剪将在导出时按原图像素坐标执行。" : "当前没有启用裁剪。"}
+                {cropEnabled ? (cropPreview ? "裁剪按原图像素坐标实时预览。" : "裁剪区域无效，暂不预览。") : "当前没有启用裁剪。"}
               </p> : null}
               <div className="file-summary">
                 <div className="file-icon"><ImageIcon size={18} aria-hidden="true" /></div>

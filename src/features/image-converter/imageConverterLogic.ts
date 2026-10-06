@@ -331,6 +331,38 @@ export function getCropInputValidation(
   return getImageTransformError({ rotation: 0, flipHorizontal: false, flipVertical: false, crop: parsedCrop }, source);
 }
 
+export interface CropPreviewLayout {
+  aspectRatio: string;
+  cropWidth: number;
+  cropHeight: number;
+  imageLeftPercent: number;
+  imageTopPercent: number;
+  imageWidthPercent: number;
+}
+
+// 预览只露出裁切区域：把源图放大到「裁切框宽 = 100%」，再按裁切原点反向平移。
+// 与 Rust 的 apply_image_transform 同序——先裁切，窗口之外再叠加旋转与翻转。
+export function getCropPreviewLayout(
+  crop: Readonly<Record<keyof CropRect, string>>,
+  source: ImageDimensions | null,
+): CropPreviewLayout | null {
+  if (!source) return null;
+  const x = parseCropInput(crop.x);
+  const y = parseCropInput(crop.y);
+  const width = parseCropInput(crop.width);
+  const height = parseCropInput(crop.height);
+  if (x === null || y === null || width === null || height === null) return null;
+  if (width < 1 || height < 1 || x + width > source.width || y + height > source.height) return null;
+  return {
+    aspectRatio: `${width} / ${height}`,
+    cropWidth: width,
+    cropHeight: height,
+    imageLeftPercent: (-x / width) * 100,
+    imageTopPercent: (-y / height) * 100,
+    imageWidthPercent: (source.width / width) * 100,
+  };
+}
+
 export function getBitDepths(format: OutputFormat): ReadonlyArray<BmpBitDepth> {
   if (format === "png") {
     return PNG_BIT_DEPTHS;

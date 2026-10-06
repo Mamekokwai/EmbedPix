@@ -287,6 +287,10 @@
 .preview-comparison-heading span { color: var(--qp-text-tertiary); font-size: 10px; }
 .preview-frame-output { min-height: 120px; }
 .preview-frame-output img { max-height: 120px; }
+/* 裁剪预览：窗口按裁切比例定形，图放大到「裁切框宽 = 100%」再按裁切原点反向平移。 */
+.preview-crop-window { position: relative; width: min(100%, calc(290px * var(--crop-w, 1) / var(--crop-h, 1))); aspect-ratio: var(--crop-w, 1) / var(--crop-h, 1); overflow: hidden; border-radius: 4px; }
+.preview-crop-window img { position: absolute; max-width: none; max-height: none; object-fit: fill; }
+.preview-frame-output .preview-crop-window { width: min(100%, calc(120px * var(--crop-w, 1) / var(--crop-h, 1))); }
 .preview-comparison-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--qp-text-tertiary); font-size: 10px; }
 
 .preview-edit-note {

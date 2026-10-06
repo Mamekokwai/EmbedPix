@@ -496,7 +496,11 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 设置面板层级拉开：模块标题 13.5px / 700、组标题正文主色 + 650 字重（原来和正文糊在一起）
 - [x] 更新流程按 patina 的交互重做：查到新版本弹确认框（版本对比 + 进度 + 发布说明预览 + 稍后/查看发布页/下载并安装），下载完成转「关闭并安装」，卡片保留入口；进度条抽成 `UpdateProgressBar`，与弹窗共用
 - [ ] 安装包构建模式与 patina 的差异待定：`bundle.targets` 目前是 `nsis`，patina 用 `all`（Windows 上会多出 MSI）；`createUpdaterArtifacts`、nsis `currentUser` 与签名密钥两边已一致。更新运行时嵌图匠走自建 Rust 更新器（GitHub API + minisign-verify），patina 走 `tauri-plugin-updater` + `latest.json` 端点（含 R2 镜像）、`dialog: false`——是否整段换成插件需单独决定
-- [ ] 裁剪仍只在导出时执行，预览不裁切；可用裁切矩形 + `overflow: hidden` 偏移做成实时预览，待定
+- [x] 裁剪实时预览：预览窗口按裁切比例定形 + 源图反向平移（`getCropPreviewLayout`），顺序对齐原生 crop → rotate → flip，源图与输出预览两处生效，附 3 条单测
+- [x] 与 patina 的构建模式核对结论：patina 的 workflow 用 `tauri build --bundles nsis` 覆盖配置里的 `targets: all`，实际两边都只出 NSIS → `bundle.targets` 保持 `nsis` 不改为宜（改 `all` 会多出 MSI、与仓库既定发布范围冲突）
+- [ ] 更新运行时是否换 `tauri-plugin-updater`：自建 Rust 更新器与插件同为「签名校验 + GitHub Release」，且自建侧有取消/进度/安装健康检查；换插件属机制层面的等价替换，收益为与 patina 完全同构，代价是删掉 `commands/update.rs` 及其测试。定为不换，若坚持同构再动
+- [ ] patina 配色整套移植（25+ 套预设 + 派生 + 明暗各选一套 + 持久化 + 两个选择器）——已确认要做，未开始
+- [ ] 「关于」页改为 patina 那种居中留白形式（`about-center-*`：profile 居中、胶囊居中、图标 62px、面板 padding 34/28）——未开始
 - [ ] 压缩页的 `compression-field-hint`（15 处）仍是常显，按新规则迁到 `.field-help-hover`；危险项与错误提示（如参数问题、覆盖原图/删除源文件）是否常显需单独判断
 - [ ] GIF 时间轴工具栏的「缩放」仍是原生 `<select>`（`GifMakerView.tsx` 时间轴头部），迁移 GIF 页外壳时一并换 `ThemeSelect`——它是个紧凑行内控件，直接换 36px 盒子会挤坏时间轴布局，需要单独量一次
 

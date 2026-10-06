@@ -659,4 +659,14 @@ describe("compact layout viewport contract", () => {
     expect(updateConfirmDialog).toContain("稍后");
     expect(updateProgressBar).toContain('role="progressbar"');
   });
+
+  it("crops the preview window in the same order the native transform runs", () => {
+    expect(converterView).toContain("getCropPreviewLayout(cropInputs, dimensions)");
+    expect((converterView.match(/data-crop-window="true"/gu) ?? [])).toHaveLength(2);
+    // 窗口承载裁切，旋转与翻转叠加在窗口上（等价 Rust 的 crop → rotate → fliph/flipv）
+    expect(converterView).toContain("transform: `scaleY(${flipVertical ? -1 : 1}) scaleX(${flipHorizontal ? -1 : 1}) rotate(${rotation}deg)`");
+    expect(converterCss).toContain(".preview-crop-window");
+    expect(converterCss).toContain("aspect-ratio: var(--crop-w, 1) / var(--crop-h, 1)");
+    expect(converterView).not.toContain("裁剪将在导出时按原图像素坐标执行");
+  });
 });
