@@ -25,6 +25,7 @@ const settingsView = readSource(new URL("../features/settings/SettingsView.tsx",
 const appCss = readSource(new URL("../App.css", import.meta.url));
 const appShellCss = readSource(new URL("./app-shell.css", import.meta.url));
 const fieldHintCss = readSource(new URL("./components/field-hint.css", import.meta.url));
+const tokensCss = readSource(new URL("./tokens.css", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -70,6 +71,21 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain('className="field-help output-action-help output-action-danger field-help-hover" id="delete-source-help"');
     // 说明只是视觉收起，仍要在 DOM 里，否则 aria-describedby 断掉、读屏也拿不到。
     expect(converterView).toContain('aria-describedby="delete-source-help"');
+  });
+  it("uses one stack gap for every vertically stacked control group", () => {
+    expect(tokensCss).toContain("--qp-stack-gap:");
+    expect(converterCss).toMatch(/\.settings-module-body \{[^}]*gap: var\(--qp-stack-gap\)/);
+    expect(converterCss).toMatch(/\.setting-group \{[^}]*gap: var\(--qp-stack-gap\)/);
+    expect(converterCss).toMatch(/\.output-actions \{[^}]*gap: var\(--qp-stack-gap\)/);
+    expect(converterCss).toMatch(/\.output-action \{[^}]*gap: var\(--qp-stack-gap\)/);
+    // 短窗媒体查询里也不许再写死数字间距（曾出现 5px/6px/8px 三套，同一屏里对不齐）。
+    expect(converterCss).not.toMatch(/\.(settings-module-body|setting-group|output-actions|output-action) \{[^}]*gap: \d/);
+  });
+  it("states the subfolder auto-create rule in the field instead of a separate note", () => {
+    expect(converterView).toContain('placeholder="子文件夹不存在时会自动创建。"');
+    expect(converterView).toContain('{outputLocationHelp ? <p className="field-help" id="output-location-help">{outputLocationHelp}</p> : null}');
+    // 注释按需渲染后，describedby 不能还指着不存在的元素。
+    expect(converterView).toContain('outputLocationHelp ? "output-location-help" : null');
   });
   it("keeps converter helper text flush to the same left edge", () => {
     // 说明按开关宽度缩进会让它看起来属于勾选框、读起来割裂；一律与其它说明同一起点。

@@ -604,14 +604,14 @@
 .settings-module-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--qp-stack-gap);
   padding: 10px;
 }
 
 .setting-group {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--qp-stack-gap);
   min-width: 0;
   min-inline-size: 0;
   /* 收起式说明的定位基准，必须在就近容器上：.app-main 现在也是定位祖先，浮层会跑到整页底部。 */
@@ -770,13 +770,13 @@
 .output-actions {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--qp-stack-gap);
 }
 
 .output-action {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--qp-stack-gap);
   /* 收起式说明的定位祖先，必须在就近容器上（见 styles/components/field-hint.css）。 */
   position: relative;
 }
@@ -1235,8 +1235,8 @@
   .preview-panel, .settings-panel { padding: 12px; }
   .settings-stack { gap: 10px; margin-top: 12px; }
   .settings-module > summary { min-height: 34px; }
-  .settings-module-body { gap: 8px; padding: 8px; }
-  .setting-group { gap: 5px; padding: 9px; }
+  .settings-module-body { gap: var(--qp-stack-gap); padding: 8px; }
+  .setting-group { gap: var(--qp-stack-gap); padding: 9px; }
   .drop-zone { min-height: 250px; margin-top: 12px; }
   .preview-content { min-height: 260px; }
   .preview-frame { min-height: 210px; }
@@ -1346,6 +1346,6 @@
   .format-description { min-height: 0; font-size: 10px; }
   .settings-stack { gap: 6px; margin-top: 8px; }
   .settings-module > summary { min-height: 30px; padding-inline: 9px; }
-  .settings-module-body { gap: 6px; padding: 7px; }
+  .settings-module-body { gap: var(--qp-stack-gap); padding: 7px; }
   .panel-footer { margin-top: 7px; padding-top: 7px; }
 }

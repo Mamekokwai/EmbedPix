@@ -402,8 +402,16 @@ export default function ImageConverter({
     }
     return null;
   }, [file, loadedImages, outputDirectory, outputLocation, outputSubdirectory]);
+  // 子文件夹那句写进输入框占位符，不再单独占一行注释。
+  const outputLocationHelp = outputLocation === "source"
+    ? "直接保存到源图片所在文件夹。"
+    : outputLocation === "directory"
+      ? "目录不存在时会自动创建，支持绝对路径。"
+      : outputLocation === "original"
+        ? "替换源图片并保留旧文件备份。"
+        : null;
   const outputLocationDescription = [
-    "output-location-help",
+    outputLocationHelp ? "output-location-help" : null,
     outputLocation === "original" ? "output-original-help" : null,
     outputLocationError ? "output-location-error" : null,
   ].filter(Boolean).join(" ");
@@ -1778,7 +1786,7 @@ export default function ImageConverter({
                     aria-describedby={outputLocationDescription}
                     aria-invalid={Boolean(outputLocationError)}
                     onChange={(event) => { setOutputSubdirectory(event.target.value); setError(null); }}
-                    placeholder="例如 export"
+                    placeholder="子文件夹不存在时会自动创建。"
                     spellCheck={false}
                   />
                 </label>
@@ -1808,15 +1816,7 @@ export default function ImageConverter({
                   </div>
                 </label>
               ) : null}
-              <p className="field-help" id="output-location-help">
-                {outputLocation === "source"
-                  ? "直接保存到源图片所在文件夹。"
-                  : outputLocation === "subfolder"
-                    ? "子文件夹不存在时会自动创建。"
-                    : outputLocation === "directory"
-                      ? "目录不存在时会自动创建，支持绝对路径。"
-                      : "替换源图片并保留旧文件备份。"}
-              </p>
+              {outputLocationHelp ? <p className="field-help" id="output-location-help">{outputLocationHelp}</p> : null}
               {outputLocationError ? <p className="error-message output-location-error" id="output-location-error" role="alert">{outputLocationError}</p> : null}
               <label className="text-field" htmlFor="file-name-template">
                 <span>文件名模板</span>
