@@ -55,6 +55,20 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 - 以 `src-tauri/tauri.conf.json` 的 `minWidth`/`minHeight` 为最低验收窗口；当前窗口下页面必须可访问、可滚动、可操作，不得把最小尺寸当作正常桌面尺寸。
 - 新增样式优先使用现有设计 token，保持紧凑卡片、清晰层级、克制间距和键盘焦点可见；布局验收需同时覆盖正常窗口、最小窗口和窄高窗口。
 
+## GUI 规则
+
+页面外壳、折叠模块与控件语义按这套做；新页面照抄现有类，不要另造视觉语言。样板：`src/features/image-converter/ImageConverter.tsx` 的 `converter-*`、`src/features/image-compression/ImageCompressionView.tsx` 的 `compression-*`。
+
+适用范围：主工作区页面（图片转换、图片压缩）已按此执行；**GIF 制作、设置、关于尚未迁移**，改动这三个页面时按本规则收敛外壳与折叠模块，不要另立一套（2026-10-06 核实现状：三页均无品牌头带与品牌行）。
+
+- **页面外壳 = 品牌头带 + 介绍带 + 底部边界**：头带是「图标 + `EMBEDPIX` + 工作区名 + `● 本地处理`」并带底边线（`brand-lockup` / `brand-mark` / `eyebrow` / `header-context` / `status-dot`，样式在 `image-converter.css`，全局可用）；介绍带是「英文 eyebrow + 标语 + 说明」，可按需在右侧放一条注释（`intro-copy` / `intro-note`）；页面动作栏加顶边线，页尾以品牌行 `EmbedPix · 嵌图匠` 收尾。
+- **折叠模块 = 独立边框卡片**：1px `--qp-border-subtle` 边框、`--qp-radius-control` 圆角、`--qp-bg-elevated` 底色，标题栏 38px、左右 12px 内边距，展开时标题栏下方补 1px 分隔线，收起/展开标记用等宽字体的 `+` / `−`。样板见 `.settings-module` 与 `.compression-advanced-settings`。
+- **主控件平铺，其余收纳**：每页只把最常改的 2–4 个控件留在外面（如压缩页的格式、质量、输出缩放），其余按主题分组折叠；折叠组的标题必须带当前状态摘要（如「目标体积 · 未启用（不限制输出体积）」），危险项（覆盖原图、删除源文件）与无效参数用 `--qp-danger` 标红。
+- **阻断性错误要有始终可见的出口**：字段被折叠时，按钮禁用必须配一个折叠组之外的说明块（如 `compression-parameter-issues`），不能让用户对着灰按钮猜原因。
+- **滚动条可见但细**：主滚动层用 6px 细滚动条，不要再写 `scrollbar-width: none`（0.2.2 的隐藏滚动条契约已作废）。
+- **控件用真语义**：导入类操作用真 `<button>` + ref 触发隐藏 `<input type="file">`（不要 `label` 包 input），单选组用真 `<input type="radio">`，列表用 `list` / `listitem`，忙碌时用 `<fieldset disabled>` 或 `aria-busy` 禁用整组。
+- 能机器检查的部分写在 `src/styles/layoutContract.test.ts`：新增页面时同步补断言，改样式前先改契约。
+
 ## 陷阱
 
 - 前端测试只收集 `src/**/*.test.ts`（见 `vitest.config.ts`），写成 `.test.tsx` 不会被运行；测试文件与被测代码同目录，`testTimeout` 为 15 s。
