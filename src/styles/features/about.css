@@ -22,19 +22,20 @@
 .about-pill-label { white-space: nowrap; }
 .about-support-backdrop { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--qp-bg-app) 62%, transparent); padding: 20px; }
 /* 结构照搬 patina 的赞助弹窗：标题 + 说明 + 两张卡（微信赞赏 / Ko-fi），卡片头是图标 + 小标题。 */
-.about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px)); align-content: start; gap: 10px; overflow: hidden; border: 1px solid var(--qp-border-strong); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); box-shadow: var(--qp-shadow-overlay); padding: 20px; }
+/* 弹窗与内部盒子都按内容定形：不留任何随视口高度变化的尺寸，窗口拉高拉矮都不该影响它。 */
+.about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px)); height: auto; max-height: none; align-content: start; justify-self: center; align-self: center; gap: 10px; overflow: hidden; border: 1px solid var(--qp-border-strong); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); box-shadow: var(--qp-shadow-overlay); padding: 20px; }
 .about-support-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .about-support-head h2 { margin: 0; color: var(--qp-text-primary); font-size: 16px; font-weight: 700; }
 .about-support-close { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-secondary); cursor: pointer; }
 .about-support-close:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
 .about-support-copy { margin: 0; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.65; }
-.about-support-body { display: grid; min-width: 0; gap: 10px; }
+.about-support-body { display: grid; min-width: 0; align-content: start; gap: 10px; }
 .about-support-card { display: grid; min-width: 0; align-content: start; gap: 10px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); padding: 14px; }
 .about-support-card-heading { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--qp-text-primary); }
 .about-support-card-heading h4 { margin: 0; font-size: 13px; font-weight: 650; }
 .about-support-mark { display: block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; }
 .about-support-card-copy { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.55; }
-.about-support-qr-frame { display: flex; align-items: center; justify-content: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); padding: 10px; }
+.about-support-qr-frame { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); padding: 10px; }
 /* 整张赞赏码放满卡片宽度，靠图本身变大让中间二维码好扫；图不设圆角，边框与圆角留给外层框。 */
 .about-support-qr { display: block; width: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }
 .about-support-kofi { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; border: 1px solid var(--qp-button-primary-bg, var(--qp-accent-default)); border-radius: var(--qp-radius-control); background: var(--qp-button-primary-bg, var(--qp-accent-default)); color: var(--qp-text-on-accent, var(--qp-accent-contrast)); font-size: 12px; font-weight: 600; text-decoration: none; }
