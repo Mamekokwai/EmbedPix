@@ -537,6 +537,8 @@ export default function ImageConverter({
     setExportOutputPaths([]);
     setExportFailures([]);
     setFailedExportIds([]);
+    setExportPreflight(null);
+    setNativePreflightStatus(null);
     setFailureDetailsOpen(false);
     setExportProgress(null);
   };

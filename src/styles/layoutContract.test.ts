@@ -180,6 +180,8 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain("const clearExportResults = () =>");
     expect(converterView).toContain("clearExportResults();");
     expect(converterView).toContain("setExportOutputPaths([]);");
+    expect(converterView).toContain("setExportPreflight(null);");
+    expect(converterView).toContain("setNativePreflightStatus(null);");
     expect(converterView).toContain('if (status.kind === "busy") return;');
   });
 
