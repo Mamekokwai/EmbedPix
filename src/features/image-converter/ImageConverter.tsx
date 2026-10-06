@@ -1832,7 +1832,7 @@ export default function ImageConverter({
                 示例目标：{batchPlan.targetPaths[0] ?? "暂无"}{batchPlan.duplicateTargets.length > 0 ? ` · 检测到 ${batchPlan.duplicateTargets.length} 个重复目标` : ""}
               </p> : null}
               {outputLocation === "original" ? (
-                <p className="field-help output-action-help output-action-info" id="output-original-help">导出前会列出将被覆盖的目标和待备份源文件并要求确认；旧图片会先移入同目录的 bak 文件夹，再将新文件写回原图位置。</p>
+                <p className="field-help output-action-help output-action-info field-help-hover" id="output-original-help">导出前会列出将被覆盖的目标和待备份源文件并要求确认；旧图片会先移入同目录的 bak 文件夹，再将新文件写回原图位置。</p>
               ) : (
                 <div className="output-actions">
                   <div className="output-action">
@@ -1841,7 +1841,7 @@ export default function ImageConverter({
                       <span className="toggle-track" aria-hidden="true"><span /></span>
                       <span>覆盖同名输出文件</span>
                     </label>
-                    <p className="field-help output-action-help" id="overwrite-same-name-help">导出前会列出目标文件并要求确认；已有同名输出会直接覆盖，不移动到 bak 文件夹。</p>
+                    <p className="field-help output-action-help field-help-hover" id="overwrite-same-name-help">导出前会列出目标文件并要求确认；已有同名输出会直接覆盖，不移动到 bak 文件夹。</p>
                   </div>
                   <div className="output-action">
                     <label className="toggle-row output-action-toggle">
@@ -1849,7 +1849,7 @@ export default function ImageConverter({
                       <span className="toggle-track" aria-hidden="true"><span /></span>
                       <span>导出成功后删除源图片</span>
                     </label>
-                    <p className="field-help output-action-help output-action-danger" id="delete-source-help">导出前会列出待删除源文件并要求确认；只有对应输出成功后才会删除。</p>
+                    <p className="field-help output-action-help output-action-danger field-help-hover" id="delete-source-help">导出前会列出待删除源文件并要求确认；只有对应输出成功后才会删除。</p>
                   </div>
                 </div>
               )}
@@ -1860,7 +1860,7 @@ export default function ImageConverter({
                 <span className="toggle-track" aria-hidden="true"><span /></span>
                 <span>清理元数据（推荐）</span>
               </label>
-              <p className="field-help" id="converter-metadata-policy-help">
+              <p className="field-help field-help-hover" id="converter-metadata-policy-help">
                 开启时导出会清理可识别元数据；关闭时仅尝试同格式、原尺寸、无裁剪旋转和无水印的原始字节直通，不满足条件会明确拒绝而不是伪装保留。
               </p>
             </div>

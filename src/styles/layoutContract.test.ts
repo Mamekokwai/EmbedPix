@@ -61,6 +61,20 @@ describe("compact layout viewport contract", () => {
   it("keeps helper text on one width by spanning groups that carry explanations", () => {
     expect(converterCss).toContain(".settings-module-body > .setting-group:has(> .field-help, > .format-description) { grid-column: 1 / -1; }");
   });
+  it("reveals converter explanations on hover instead of always showing them", () => {
+    expect(converterCss).toContain(".field-help-hover {");
+    expect(converterCss).toContain("*:has(+ .field-help-hover):hover + .field-help-hover,");
+    expect(converterView).toContain('className="field-help field-help-hover" id="converter-metadata-policy-help"');
+    expect(converterView).toContain('className="field-help output-action-help field-help-hover" id="overwrite-same-name-help"');
+    expect(converterView).toContain('className="field-help output-action-help output-action-danger field-help-hover" id="delete-source-help"');
+    // 说明只是视觉收起，仍要在 DOM 里，否则 aria-describedby 断掉、读屏也拿不到。
+    expect(converterView).toContain('aria-describedby="delete-source-help"');
+  });
+  it("keeps converter helper text flush to the same left edge", () => {
+    // 说明按开关宽度缩进会让它看起来属于勾选框、读起来割裂；一律与其它说明同一起点。
+    expect(converterCss).toContain(".output-action-help {\n  line-height: 1.45;\n}");
+    expect(converterCss).not.toContain("margin-left: 38px");
+  });
   it("keeps the document itself unscrollable so the shell cannot slide out of the window", () => {
     expect(appCss).toMatch(/:root \{[^}]*overflow: hidden;/);
     expect(appCss).toMatch(/:root \{[^}]*overflow: clip;/);
