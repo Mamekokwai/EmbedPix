@@ -10,6 +10,13 @@ import {
   type ThemeMode,
 } from "../../platform/preferences/appPreferences";
 import ThemeSelect from "../../shared/components/ThemeSelect";
+import {
+  DARK_COLOR_SCHEMES,
+  LIGHT_COLOR_SCHEMES,
+  getSchemeLabel,
+  themeSwatches,
+  type ColorScheme,
+} from "../../shared/theme/themePresets";
 import { exportPresetBundle, formatPresetTransferError, importPresetBundle, mergeImportedPresets } from "../../shared/presetTransfer";
 import { downloadBlob } from "../../shared/downloadBlob";
 import { createImageCustomPreset, loadImageCustomPresets, saveImageCustomPresets, type ImageCustomPreset } from "../image-converter/imagePresets";
@@ -55,6 +62,16 @@ const ROW_ALIGNMENT_OPTIONS: ReadonlyArray<{ value: RowAlignment; label: string 
 
 function presetLabel(preset: ImagePresetId): string {
   return IMAGE_PRESET_OPTIONS.find((option) => option.value === preset)?.label ?? "自定义";
+}
+
+function SchemeSwatches({ variant, scheme }: { variant: "light" | "dark"; scheme: ColorScheme }) {
+  return (
+    <span className="scheme-swatches" aria-hidden="true">
+      {themeSwatches(variant, scheme).map((color, index) => (
+        <span key={`${color}-${index}`} className="scheme-swatch" style={{ backgroundColor: color }} />
+      ))}
+    </span>
+  );
 }
 
 export default function SettingsView({ preferences, onChange, onReset }: SettingsViewProps) {
@@ -160,6 +177,38 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
                   <span>{option.label}</span>
                 </label>
               ))}
+            </div>
+          </div>
+          <div className="settings-row">
+            <div>
+              <h3>配色方案</h3>
+              <p>浅色与深色各选一套；跟随系统时按当前明暗分别生效。</p>
+            </div>
+            <div className="scheme-picker-grid">
+              <div className="scheme-picker">
+                <span className="scheme-picker-label">浅色方案</span>
+                <ThemeSelect
+                  id="color-scheme-light"
+                  className="settings-select"
+                  value={preferences.colorSchemeLight}
+                  options={LIGHT_COLOR_SCHEMES.map((scheme) => ({ value: scheme, label: getSchemeLabel(scheme) }))}
+                  aria-label="浅色配色方案"
+                  onChange={(value) => onChange({ colorSchemeLight: value })}
+                />
+                <SchemeSwatches variant="light" scheme={preferences.colorSchemeLight} />
+              </div>
+              <div className="scheme-picker">
+                <span className="scheme-picker-label">深色方案</span>
+                <ThemeSelect
+                  id="color-scheme-dark"
+                  className="settings-select"
+                  value={preferences.colorSchemeDark}
+                  options={DARK_COLOR_SCHEMES.map((scheme) => ({ value: scheme, label: getSchemeLabel(scheme) }))}
+                  aria-label="深色配色方案"
+                  onChange={(value) => onChange({ colorSchemeDark: value })}
+                />
+                <SchemeSwatches variant="dark" scheme={preferences.colorSchemeDark} />
+              </div>
             </div>
           </div>
         </section>

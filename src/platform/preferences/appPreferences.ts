@@ -6,6 +6,7 @@ import type {
   RowAlignment,
   RowOrder,
 } from "../../features/image-converter/types";
+import { DARK_COLOR_SCHEMES, LIGHT_COLOR_SCHEMES, type ColorScheme } from "../../shared/theme/themePresets";
 
 export type ThemeMode = "system" | "light" | "dark";
 export type SidebarMode = "icon" | "labeled";
@@ -26,12 +27,16 @@ export interface ImageConverterDefaults {
 
 export interface AppPreferences extends ImageConverterDefaults {
   themeMode: ThemeMode;
+  colorSchemeLight: ColorScheme;
+  colorSchemeDark: ColorScheme;
   sidebarMode: SidebarMode;
   imagePreset: ImagePresetId;
 }
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   themeMode: "system",
+  colorSchemeLight: "default",
+  colorSchemeDark: "default",
   sidebarMode: "icon",
   defaultOutputFormat: "bmp",
   defaultJpegQuality: 85,
@@ -104,6 +109,16 @@ const BYTE_ORDERS = new Set<ByteOrder>(["little", "big"]);
 const CHANNEL_ORDERS = new Set<ChannelOrder>(["rgb", "bgr"]);
 const ROW_ORDERS = new Set<RowOrder>(["top-down", "bottom-up"]);
 const ROW_ALIGNMENTS = new Set<RowAlignment>([1, 2, 4]);
+const LIGHT_SCHEMES = new Set<string>(LIGHT_COLOR_SCHEMES);
+const DARK_SCHEMES = new Set<string>(DARK_COLOR_SCHEMES);
+
+function isLightColorScheme(value: unknown): value is ColorScheme {
+  return typeof value === "string" && LIGHT_SCHEMES.has(value);
+}
+
+function isDarkColorScheme(value: unknown): value is ColorScheme {
+  return typeof value === "string" && DARK_SCHEMES.has(value);
+}
 
 function isThemeMode(value: unknown): value is ThemeMode {
   return value === "system" || value === "light" || value === "dark";
@@ -130,6 +145,8 @@ function parseStoredPreferences(value: string | null): Partial<AppPreferences> {
     const record = parsed as Record<string, unknown>;
     return {
       ...(isThemeMode(record.themeMode) ? { themeMode: record.themeMode } : {}),
+      ...(isLightColorScheme(record.colorSchemeLight) ? { colorSchemeLight: record.colorSchemeLight } : {}),
+      ...(isDarkColorScheme(record.colorSchemeDark) ? { colorSchemeDark: record.colorSchemeDark } : {}),
       ...(isSidebarMode(record.sidebarMode) ? { sidebarMode: record.sidebarMode } : {}),
       ...(typeof record.defaultOutputFormat === "string" && OUTPUT_FORMATS.has(record.defaultOutputFormat as OutputFormat)
         ? { defaultOutputFormat: record.defaultOutputFormat as OutputFormat }

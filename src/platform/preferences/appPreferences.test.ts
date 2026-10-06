@@ -35,6 +35,8 @@ describe("app preferences", () => {
 
     expect(loadAppPreferences(storage)).toEqual({
       themeMode: "dark",
+      colorSchemeLight: "default",
+      colorSchemeDark: "default",
       sidebarMode: "icon",
       defaultOutputFormat: "rgb565",
       defaultJpegQuality: 92,
@@ -48,6 +50,24 @@ describe("app preferences", () => {
       keepAspectRatio: false,
       imagePreset: "balanced",
     });
+  });
+
+  it("keeps stored color schemes and rejects unknown or wrong-variant ones", () => {
+    const stored = createStorage({
+      "embedpix.app-preferences.v1": JSON.stringify({ colorSchemeLight: "catppuccin", colorSchemeDark: "nord" }),
+    });
+    expect(loadAppPreferences(stored)).toMatchObject({ colorSchemeLight: "catppuccin", colorSchemeDark: "nord" });
+
+    const bogus = createStorage({
+      "embedpix.app-preferences.v1": JSON.stringify({ colorSchemeLight: "nope", colorSchemeDark: 7 }),
+    });
+    expect(loadAppPreferences(bogus)).toMatchObject({ colorSchemeLight: "default", colorSchemeDark: "default" });
+
+    // nord / tokyo-night 这些只存在于深色表，不能用浅色方案的身份读回来
+    const wrongVariant = createStorage({
+      "embedpix.app-preferences.v1": JSON.stringify({ colorSchemeLight: "nord", colorSchemeDark: "proof" }),
+    });
+    expect(loadAppPreferences(wrongVariant)).toMatchObject({ colorSchemeLight: "default", colorSchemeDark: "default" });
   });
 
   it("falls back to safe defaults for invalid stored JSON", () => {

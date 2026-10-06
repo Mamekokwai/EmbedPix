@@ -45,3 +45,13 @@
 @media (max-width: 500px) {
   .settings-custom-preset-controls .quiet-button, .settings-actions .quiet-button { width: 100%; justify-content: center; }
 }
+
+/* 配色方案：浅色/深色各一个下拉，旁边跟三格色样（surface / ink / accent）。 */
+.scheme-picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--qp-stack-gap); min-width: 0; }
+.scheme-picker { display: flex; min-width: 0; flex-direction: column; gap: var(--qp-stack-gap); }
+.scheme-picker-label { color: var(--qp-text-tertiary); font-size: 11px; }
+.scheme-swatches { display: inline-flex; gap: 6px; }
+.scheme-swatch { display: block; width: 22px; height: 22px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-chip); }
+@media (max-width: 620px) {
+  .scheme-picker-grid { grid-template-columns: 1fr; }
+}

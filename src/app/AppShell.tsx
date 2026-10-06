@@ -22,6 +22,7 @@ import {
   type SidebarMode,
   type ThemeMode,
 } from "../platform/preferences/appPreferences";
+import { applyThemeColors } from "../shared/theme/deriveTheme";
 
 type AppView = "converter" | "compression" | "gif" | "settings" | "about";
 
@@ -98,6 +99,8 @@ export default function AppShell() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = activeTheme;
+    // 配色方案按当前明暗各取一套；派生结果写成内联变量，覆盖 tokens.css 的静态色值。
+    applyThemeColors(activeTheme, activeTheme === "dark" ? preferences.colorSchemeDark : preferences.colorSchemeLight);
     saveAppPreferences(preferences);
   }, [activeTheme, preferences]);
 
