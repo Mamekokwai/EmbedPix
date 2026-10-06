@@ -1258,6 +1258,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         <div className="intro-note"><FileDown size={17} aria-hidden="true" /> 桌面原生队列</div>
       </section>
 
+      <div className="compression-content">
       <div className="compression-grid">
         <div className="compression-card compression-input-card">
           <div className="compression-card-heading">
@@ -1516,6 +1517,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       </footer>
 
       <p className="compression-brand-line">EmbedPix · 嵌图匠</p>
+      </div>
     </section>
   );
 }

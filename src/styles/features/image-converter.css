@@ -1,11 +1,39 @@
+/* 外壳把页面包在自动高度的 .app-kept-view 里；要撑满主区就先让这层等高、变成弹性列，页面根才有确定高度可用。 */
+.app-kept-view:has(> .converter-app) { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* 页面根是撑满主区高度的弹性列：品牌头带 + 介绍带固定在列首，滚动下沉到 .converter-content。 */
 .converter-app {
   width: min(1180px, 100%);
+  display: flex;
   min-width: 0;
-  min-height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  height: 100%;
   overflow-x: hidden;
   margin: 0 auto;
   padding: 20px 28px 18px;
 }
+
+.converter-header,
+.converter-intro {
+  flex: 0 0 auto;
+}
+
+/* 双栏工作区撑满内容区；内容更高时由这里整体滚动，工作区本身不再被压扁。 */
+.converter-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--qp-border-strong) transparent;
+}
+.converter-content::-webkit-scrollbar { width: 6px; height: 6px; }
+.converter-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
+
+.workspace-grid { flex: 1 0 auto; }
 
 .converter-app,
 .workspace-grid,

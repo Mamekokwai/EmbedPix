@@ -162,6 +162,17 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toMatch(/\.about-content \{[^}]*overflow-y: auto;/);
     // 设置卡片的列表类内容（配色方案色卡网格）在卡片内部滚，不下放给页面外层。
     expect(settingsCss).toMatch(/\.settings-color-scheme-list \{[^}]*overflow-y: auto;/);
+    // 转换 / 压缩 / GIF 三页同套挤占式布局：外壳只裁剪，滚动下沉到各页内容区。
+    expect(converterCss).toMatch(/\.converter-content \{[^}]*overflow-y: auto;/);
+    expect(compressionCss).toMatch(/\.compression-content \{[^}]*overflow-y: auto;/);
+    expect(gifCss).toMatch(/\.gif-maker-content\.page-content \{[^}]*overflow-y: auto;/);
+    // 品牌头带 / 介绍带固定在弹性列首，不随内容滚动。
+    expect(converterCss).toMatch(/\.converter-intro \{[^}]*flex: 0 0 auto;/);
+    expect(compressionCss).toMatch(/\.compression-intro \{[^}]*flex: 0 0 auto;/);
+    expect(gifCss).toMatch(/\.gif-maker-header\.page-header \{[^}]*flex: 0 0 auto;/);
+    // 这三页不在 .app-main 下（外壳包了一层自动高度的 .app-kept-view），由页面 CSS 让这层等高、页面根才撑满主区。
+    expect(converterCss).toMatch(/\.app-kept-view:has\(> \.converter-app\) \{[^}]*height: 100%;/);
+    expect(compressionCss).toMatch(/\.app-kept-view\.app-kept-compression \{[^}]*height: 100%;/);
   });
   it("wraps the compression import support hint inside narrow drop zones", () => {
     expect(compressionView).toContain('className="compression-drop-hint"');
@@ -602,7 +613,9 @@ describe("compact layout viewport contract", () => {
   });
   it("keeps expanded GIF settings in the page scroll flow", () => {
     expect(gifCss).toMatch(/\.gif-maker-view\.gif-settings-expanded \.gif-settings-card \{\s*max-height: none;\s*overflow: visible;/s);
-    expect(gifCss).toMatch(/\.gif-maker-view\.gif-settings-expanded \.gif-maker-content\.page-content \{\s*flex: 0 0 auto;\s*overflow: visible;/s);
+    // 展开设置时内容区仍是滚动容器：只让工作区按内容自然撑高，不再把整页改回滚动。
+    expect(gifCss).toMatch(/\.gif-maker-view\.gif-settings-expanded \.gif-workspace-grid \{\s*flex: 0 0 auto;\s*min-height: 300px;/s);
+    expect(gifCss).not.toMatch(/\.gif-maker-view\.gif-settings-expanded \.gif-maker-content\.page-content \{\s*flex: 0 0 auto;/s);
   });
   it("raises the expanded GIF settings card above the frame workspace", () => {
     expect(gifCss).toContain(".gif-maker-view.gif-settings-expanded > .gif-settings-card { position: relative; z-index: 4; }");

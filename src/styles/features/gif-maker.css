@@ -1,3 +1,4 @@
+/* 页面根是撑满主区高度的弹性列：品牌头带固定在列首，滚动下沉到 .gif-maker-content，导出页脚固定在列尾。 */
 .gif-maker-view.page-view {
   display: flex;
   flex: 1 1 auto;
@@ -9,17 +10,13 @@
   padding: 10px;
   gap: 10px;
   overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scroll-padding-block: 18px;
-  scrollbar-width: none;
+  overflow-y: hidden;
   font-size: 12px;
 }
 
 .gif-maker-view :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
   scroll-margin-block: 18px;
 }
-.gif-maker-view.page-view::-webkit-scrollbar { display: none; }
 .gif-maker-header.page-header { flex: 0 0 auto; padding-bottom: 10px; gap: 10px; }
 .gif-maker-header h1 { font-size: 19px; }
 .gif-maker-header .page-header-copy { min-width: 0; }
@@ -30,8 +27,9 @@
 .gif-source-tab { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); padding: 3px 8px; background: var(--qp-bg-panel); color: var(--qp-text-secondary); font-size: 11px; }
 .gif-source-tab:hover { border-color: var(--qp-border-strong); background: var(--qp-bg-elevated); }
 .gif-source-tab-active { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); color: var(--qp-accent-default); }
-.gif-maker-content.page-content { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; min-inline-size: 0; min-block-size: 0; flex-direction: column; gap: 10px; padding: 0; margin: 0; border: 0; overflow: hidden; }
-.gif-maker-content { overflow: hidden; }
+.gif-maker-content.page-content { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; min-inline-size: 0; min-block-size: 0; flex-direction: column; gap: 10px; padding: 0; margin: 0; border: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 18px; scrollbar-width: thin; scrollbar-color: var(--qp-border-strong) transparent; }
+.gif-maker-content.page-content::-webkit-scrollbar { width: 6px; height: 6px; }
+.gif-maker-content.page-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 .gif-coming-soon { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; flex-direction: column; gap: 8px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-text-secondary); text-align: center; }
 .gif-coming-soon-icon { display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-accent-default); }
 .gif-coming-soon h2 { margin: 2px 0 0; color: var(--qp-text-primary); font-size: 16px; }
@@ -275,9 +273,6 @@
 
 
 @media (max-height: 620px) {
-  .gif-maker-view.page-view { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
-  .gif-maker-view.page-view::-webkit-scrollbar { display: none; }
-  .gif-maker-content.page-content { flex: 0 0 auto; min-height: 0; overflow: visible; }
   .gif-workspace-grid { grid-template-rows: 112px minmax(190px, auto); overflow: visible; }
   .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(150px, auto) minmax(190px, auto); }
   .gif-preview-card { min-height: 190px; }
@@ -297,11 +292,7 @@
   .gif-settings-card::-webkit-scrollbar { display: none; }
 }
 
-/* Expanded settings use the page scroll so the preview and export actions remain reachable. */
-.gif-maker-view.gif-settings-expanded .gif-maker-content.page-content {
-  flex: 0 0 auto;
-  overflow: visible;
-}
+/* 展开设置时内容区仍是滚动容器：只让工作区按内容自然撑高，预览和导出操作在内容区里滚得到。 */
 .gif-maker-view.gif-settings-expanded .gif-workspace-grid {
   flex: 0 0 auto;
   min-height: 300px;
@@ -312,9 +303,6 @@
   overflow: visible;
 }
 .gif-maker-view.gif-settings-expanded > .gif-export-footer { position: static; }
-.gif-maker-view.gif-settings-expanded { scrollbar-width: thin; }
-.gif-maker-view.gif-settings-expanded::-webkit-scrollbar { display: block; width: 6px; }
-.gif-maker-view.gif-settings-expanded::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 
 
 

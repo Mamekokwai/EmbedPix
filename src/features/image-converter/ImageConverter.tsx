@@ -1389,6 +1389,7 @@ export default function ImageConverter({
         </div>
       </section>
 
+      <div className="converter-content">
       <section className="workspace-grid" aria-label="图片转换工作区">
         <div className="panel preview-panel">
           <div className="panel-heading">
@@ -2009,6 +2010,7 @@ export default function ImageConverter({
       <footer className="converter-footer">
         <span>EmbedPix · 嵌图匠</span>
       </footer>
+      </div>
     </main>
   );
 }
