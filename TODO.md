@@ -495,7 +495,6 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] BMP 32 位新增「填充透明色」：勾选后透明区域按透明色合成、输出不再保留透明度，预览与导出走同一逻辑，Rust 侧补两条单测（保留 alpha / 填充后不透明）
 - [x] 设置面板层级拉开：模块标题 13.5px / 700、组标题正文主色 + 650 字重（原来和正文糊在一起）
 - [x] 更新流程按 patina 的交互重做：查到新版本弹确认框（版本对比 + 进度 + 发布说明预览 + 稍后/查看发布页/下载并安装），下载完成转「关闭并安装」，卡片保留入口；进度条抽成 `UpdateProgressBar`，与弹窗共用
-- [ ] 安装包构建模式与 patina 的差异待定：`bundle.targets` 目前是 `nsis`，patina 用 `all`（Windows 上会多出 MSI）；`createUpdaterArtifacts`、nsis `currentUser` 与签名密钥两边已一致。更新运行时嵌图匠走自建 Rust 更新器（GitHub API + minisign-verify），patina 走 `tauri-plugin-updater` + `latest.json` 端点（含 R2 镜像）、`dialog: false`——是否整段换成插件需单独决定
 - [x] 裁剪实时预览：预览窗口按裁切比例定形 + 源图反向平移（`getCropPreviewLayout`），顺序对齐原生 crop → rotate → flip，源图与输出预览两处生效，附 3 条单测
 - [x] 与 patina 的构建模式核对结论：patina 的 workflow 用 `tauri build --bundles nsis` 覆盖配置里的 `targets: all`，实际两边都只出 NSIS → `bundle.targets` 保持 `nsis` 不改为宜（改 `all` 会多出 MSI、与仓库既定发布范围冲突）
 - [ ] 更新运行时是否换 `tauri-plugin-updater`：自建 Rust 更新器与插件同为「签名校验 + GitHub Release」，且自建侧有取消/进度/安装健康检查；换插件属机制层面的等价替换，收益为与 patina 完全同构，代价是删掉 `commands/update.rs` 及其测试。定为不换，若坚持同构再动
