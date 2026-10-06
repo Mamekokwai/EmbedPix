@@ -1,4 +1,7 @@
-.about-content { width: 100%; }
+/* 内容区自带纵向滚动并撑满可用高度：外壳不滚，卡片列在这里滚、跟着窗口长高。 */
+.about-content { flex: 1 1 auto; width: 100%; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--qp-border-strong) transparent; }
+.about-content::-webkit-scrollbar { width: 6px; height: 6px; }
+.about-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 /* 居中留白：整块 profile 居中、内容限宽 560，图标壳只做定位不画框（对齐 patina 的 about-center-*）。 */
 .about-hero { display: grid; width: 100%; justify-items: center; gap: 10px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); padding: 34px 28px; text-align: center; }
 .about-logo-shell { display: inline-flex; width: 62px; height: 62px; align-items: center; justify-content: center; }

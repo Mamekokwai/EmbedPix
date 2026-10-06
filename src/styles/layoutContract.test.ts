@@ -56,8 +56,8 @@ describe("compact layout viewport contract", () => {
     expect(settingsView).toContain('aria-label="JPEG 默认质量"');
     expect(settingsView).toContain("aria-valuetext={`${draft.defaultJpegQuality}% JPEG 默认质量`}");
   });
-  it("floats a sticky settings toolbar over the draft with a bottom divider", () => {
-    // 顶栏：左侧标题不动，右侧状态提示 + 取消 + 保存；底部 1px 分隔线，滚动时吸顶。
+  it("pins a non-scrolling settings toolbar above the scrolling settings list", () => {
+    // 顶栏：左侧标题不动，右侧状态提示 + 取消 + 保存；底部 1px 分隔线，是页面弹性列首的固定块（不随内容滚动）。
     expect(settingsView).toContain('className="page-header settings-toolbar"');
     expect(settingsView).toContain('className="settings-toolbar-actions"');
     expect(settingsView).toContain("有未保存更改");
@@ -68,7 +68,9 @@ describe("compact layout viewport contract", () => {
     expect(settingsView).toContain("onClick={handleCancel}");
     expect(settingsView).toContain("onClick={handleSave}");
     expect(settingsView).toContain(">取消</button>");
-    expect(settingsCss).toMatch(/\.settings-toolbar \{[^}]*position: sticky;[^}]*top: 0;/);
+    // 顶栏不再吸顶，而是页面弹性列里固定不缩的列首块；粘滞滚动已下沉到 .settings-content。
+    expect(settingsCss).toMatch(/\.settings-toolbar \{[^}]*flex: 0 0 auto;/);
+    expect(settingsCss).not.toMatch(/\.settings-toolbar \{[^}]*position: sticky;/);
     expect(settingsCss).toContain("background: var(--qp-bg-app)");
     expect(settingsCss).toContain("border-bottom: 1px solid var(--qp-border-subtle)");
   });
@@ -143,6 +145,23 @@ describe("compact layout viewport contract", () => {
     expect(appShellCss).toMatch(/\.app-main \{[^}]*position: relative;/);
     expect(compressionCss).toMatch(/\.visually-hidden \{[^}]*top: 0;/);
     expect(compressionCss).toMatch(/\.visually-hidden \{[^}]*left: 0;/);
+  });
+  it("moves scrolling out of the shell into each page's content region", () => {
+    // 外壳不再滚动：.app-main 只保留定位祖先与溢出裁剪，滚动下沉到页面内部。
+    expect(appShellCss).toMatch(/\.app-main \{[^}]*position: relative;/);
+    expect(appShellCss).toMatch(/\.app-main \{[^}]*overflow: hidden;/);
+    expect(appShellCss).not.toMatch(/\.app-main \{[^}]*overflow: auto;/);
+    // 页面根是撑满主区高度的弹性列：固定头部 + 可滚内容区。
+    expect(appShellCss).toMatch(/\.page-view \{[^}]*display: flex;/);
+    expect(appShellCss).toMatch(/\.page-view \{[^}]*flex-direction: column;/);
+    expect(appShellCss).toMatch(/\.page-view \{[^}]*height: 100%;/);
+    expect(appShellCss).toMatch(/\.page-view \{[^}]*min-height: 0;/);
+    expect(appShellCss).toMatch(/\.page-header \{[^}]*flex: 0 0 auto;/);
+    // 两页的内容区各自纵向滚动，不再把高度交给外层。
+    expect(settingsCss).toMatch(/\.settings-content \{[^}]*overflow-y: auto;/);
+    expect(aboutCss).toMatch(/\.about-content \{[^}]*overflow-y: auto;/);
+    // 设置卡片的列表类内容（配色方案色卡网格）在卡片内部滚，不下放给页面外层。
+    expect(settingsCss).toMatch(/\.settings-color-scheme-list \{[^}]*overflow-y: auto;/);
   });
   it("wraps the compression import support hint inside narrow drop zones", () => {
     expect(compressionView).toContain('className="compression-drop-hint"');
