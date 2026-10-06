@@ -289,11 +289,17 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('format === "webp" ? "WebP" : "PNG"');
     expect(compressionView).toContain("保留结构合法且有界的 ICC payload");
     expect(compressionView).toContain('<details className="compression-advanced-settings">');
-    expect(compressionView).toContain("高级输出选项");
-    expect(compressionView).toContain("元数据、路径与覆盖策略");
+    expect(compressionView).toContain("<strong>预设管理</strong>");
+    expect(compressionView).toContain("<strong>编码细节</strong>");
+    expect(compressionView).toContain("<strong>目标体积</strong>");
+    expect(compressionView).toContain("<strong>输入与跳过</strong>");
+    expect(compressionView).toContain("<strong>输出与元数据</strong>");
     expect(compressionView).toContain("compression-advanced-settings-body");
-    expect(compressionView.indexOf("启用目标体积控制")).toBeLessThan(compressionView.indexOf('<details className="compression-advanced-settings">'));
-    expect(compressionView.slice(compressionView.indexOf('<details className="compression-advanced-settings">')).indexOf("允许覆盖同名文件")).toBeGreaterThan(-1);
+    expect(compressionView).toContain('className="compression-parameter-issues"');
+    // 可见区只保留预设、格式、质量与缩放，其余参数收进对应分组。
+    expect(compressionView.indexOf("质量（JPEG/WebP 有损）")).toBeLessThan(compressionView.indexOf("<strong>编码细节</strong>"));
+    expect(compressionView.indexOf("启用目标体积控制")).toBeGreaterThan(compressionView.indexOf("<strong>目标体积</strong>"));
+    expect(compressionView.indexOf("允许覆盖同名文件")).toBeGreaterThan(compressionView.indexOf("<strong>输出与元数据</strong>"));
     expect(compressionView).toContain("PNG 始终无损");
     expect(compressionView).toContain("formatCompressionProgressError");
     expect(compressionView).toContain("const progressError = formatCompressionProgressError(next);");

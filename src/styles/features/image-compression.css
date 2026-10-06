@@ -90,7 +90,7 @@
 .compression-empty { margin: 14px 0 0; color: var(--qp-text-tertiary); font-size: 12px; line-height: 1.6; }
 .compression-settings-card { display: grid; align-content: start; gap: 15px; }
 .compression-advanced-settings { min-width: 0; grid-column: 1 / -1; border-top: 1px solid var(--qp-border-subtle); }
-.compression-advanced-settings summary { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; padding-top: 13px; color: var(--qp-text-secondary); cursor: pointer; list-style: none; }
+.compression-advanced-settings summary { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; color: var(--qp-text-secondary); cursor: pointer; list-style: none; }
 .compression-advanced-settings summary::-webkit-details-marker { display: none; }
 .compression-advanced-settings summary::after { flex: 0 0 auto; color: var(--qp-text-tertiary); content: "＋"; font-size: 16px; line-height: 1; }
 .compression-advanced-settings[open] summary::after { content: "−"; }
@@ -98,6 +98,11 @@
 .compression-advanced-settings summary strong { color: var(--qp-text-primary); font-size: 12px; }
 .compression-advanced-settings summary span { min-width: 0; color: var(--qp-text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
 .compression-advanced-settings-body { display: grid; min-width: 0; gap: 15px; padding-top: 15px; }
+/* 分组收起后，危险项或无效参数必须还在标题上看得见，否则看起来像一切正常。 */
+.compression-advanced-settings summary .compression-group-alert { color: var(--qp-danger, #df6a6a); }
+.compression-parameter-issues { display: grid; min-width: 0; gap: 4px; grid-column: 1 / -1; border: 1px solid color-mix(in srgb, var(--qp-danger, #df6a6a) 45%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); padding: 10px 12px; }
+.compression-parameter-issues strong { color: var(--qp-danger, #df6a6a); font-size: 11px; }
+.compression-parameter-issues span { min-width: 0; color: var(--qp-text-secondary); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .compression-custom-presets { display: grid; min-width: 0; gap: 8px; padding-top: 10px; border-top: 1px solid var(--qp-border-subtle); }
 .compression-preset-save-row, .compression-preset-actions { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
 .compression-preset-name { min-width: 0; flex: 1 1 150px; min-height: 32px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-primary); font: inherit; font-size: 12px; padding: 0 10px; }
