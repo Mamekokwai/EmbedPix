@@ -177,6 +177,9 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain("setSourceMode(\"video\")");
     expect(gifView).toContain("选择视频");
     expect(converterView).toContain("export-progress-panel");
+    expect(converterView).toContain("const clearExportResults = () =>");
+    expect(converterView).toContain("clearExportResults();");
+    expect(converterView).toContain("setExportOutputPaths([]);");
   });
 
   it("keeps the compression workbench wired into navigation and busy guards", () => {

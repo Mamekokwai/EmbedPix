@@ -532,7 +532,17 @@ export default function ImageConverter({
     setStatus(nextError ? { kind: "error", text: "请检查编辑参数" } : { kind: "ready", text: "参数已更新，可以导出" });
   };
 
+  const clearExportResults = () => {
+    setActualExportResult(null);
+    setExportOutputPaths([]);
+    setExportFailures([]);
+    setFailedExportIds([]);
+    setFailureDetailsOpen(false);
+    setExportProgress(null);
+  };
+
   const activateLoadedImage = (image: LoadedImage, resetDeleteSource = true) => {
+    clearExportResults();
     setFile(image.file);
     setPreviewUrl(image.previewUrl);
     setDimensions(image.dimensions);
@@ -554,6 +564,7 @@ export default function ImageConverter({
     loadIdRef.current = loadId;
     dimensionControllerRef.current?.abort();
     dimensionControllerRef.current = null;
+    clearExportResults();
     setError(null);
     setStatus({ kind: "busy", text: "正在读取图片…" });
 
@@ -793,6 +804,7 @@ export default function ImageConverter({
     }
 
     URL.revokeObjectURL(removedImage.previewUrl);
+    clearExportResults();
     const remainingImages = loadedImages.filter((image) => image.id !== imageId);
     setLoadedImages(remainingImages);
 
@@ -834,6 +846,7 @@ export default function ImageConverter({
 
   const clearAllImages = () => {
     loadIdRef.current += 1;
+    clearExportResults();
     loadedImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     setLoadedImages([]);
     setSelectedImageId(null);
