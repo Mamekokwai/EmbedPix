@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Github, HeartHandshake, Info, MessageSquare, QrCode, X } from "lucide-react";
+import { FileText, Github, HeartHandshake, Info, MessageSquare, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
 import packageJson from "../../../package.json";
@@ -14,8 +14,9 @@ const AUTHOR_GITHUB_URL = "https://github.com/Mamekokwai";
 const PROJECT_REPOSITORY_URL = "https://github.com/Mamekokwai/EmbedPix";
 const PROJECT_ISSUES_URL = "https://github.com/Mamekokwai/EmbedPix/issues/new/choose";
 const KOFI_SUPPORT_URL = "https://ko-fi.com/nywerya";
-// 赞赏码用原图（不裁切）；Ko-fi 卡片图标抄 patina 的官方 mark。
+// 赞赏码用原图（不裁切）；两个卡片图标都抄 patina：微信赞赏徽标、Ko-fi 官方 mark。
 const WECHAT_REWARD_IMAGE_URL = "/wechat-reward.png";
+const WECHAT_REWARD_MARK_URL = "/wechat-mark.png";
 const KOFI_MARK_URL = "/kofi-mark.avif";
 
 // 11 个格式铺成一排太碎：按格式元数据的类别收成三块，细节留给悬停提示。
@@ -132,7 +133,7 @@ export default function AboutView(updateProps: UpdateViewProps) {
               <div className="about-support-body">
                 <section className="about-support-card">
                   <div className="about-support-card-heading">
-                    <QrCode size={16} aria-hidden="true" />
+                    <img className="about-support-mark" src={WECHAT_REWARD_MARK_URL} alt="" aria-hidden="true" draggable={false} />
                     <h4>微信赞赏</h4>
                   </div>
                   <div className="about-support-qr-frame">
