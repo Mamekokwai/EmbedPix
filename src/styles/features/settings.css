@@ -64,3 +64,18 @@
 .settings-color-scheme-swatches { display: grid; grid-template-columns: repeat(6, 10px); gap: 4px; }
 .settings-color-scheme-swatch { width: 10px; height: 10px; border: 1px solid color-mix(in srgb, var(--qp-border-strong) 58%, transparent); border-radius: 2px; }
 
+/* 设置页顶栏：吸顶工具条。祖先链 .settings-view(.page-view) → .app-main 上没有 overflow: hidden，.app-main 就是唯一主滚动层。 */
+.settings-toolbar { position: sticky; top: 0; z-index: 5; background: var(--qp-bg-app); border-bottom: 1px solid var(--qp-border-subtle); }
+.settings-toolbar-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
+.settings-save-status { display: inline-flex; align-items: center; gap: 5px; border-radius: var(--qp-radius-chip); padding: 4px 9px; color: var(--qp-text-tertiary); font-size: 11px; font-weight: 600; }
+.settings-save-status-danger { background: color-mix(in srgb, var(--qp-danger) 12%, transparent); color: var(--qp-danger); }
+.settings-save-status-saving { color: var(--qp-accent-default); }
+.settings-save-status-saved { color: var(--qp-success); }
+.settings-save-spinner { animation: settings-save-spin 900ms linear infinite; }
+@keyframes settings-save-spin { to { transform: rotate(360deg); } }
+.settings-primary-button { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--qp-accent-default); border-radius: var(--qp-radius-button); background: var(--qp-accent-default); padding: 0 12px; color: var(--qp-accent-contrast); font-size: 11px; font-weight: 650; }
+.settings-primary-button:hover:not(:disabled) { filter: brightness(1.06); }
+.settings-primary-button:disabled { opacity: .5; }
+.settings-toolbar-cancel:focus-visible, .settings-primary-button:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .settings-save-spinner { animation: none; } }
+

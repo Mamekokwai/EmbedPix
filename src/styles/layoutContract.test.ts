@@ -22,6 +22,7 @@ const themeSelectSource = readSource(new URL("../shared/components/ThemeSelect.t
 const updateCss = readSource(new URL("./features/update.css", import.meta.url));
 const updateView = readSource(new URL("../features/update/UpdateView.tsx", import.meta.url));
 const settingsView = readSource(new URL("../features/settings/SettingsView.tsx", import.meta.url));
+const settingsCss = readSource(new URL("./features/settings.css", import.meta.url));
 const appCss = readSource(new URL("../App.css", import.meta.url));
 const appShellCss = readSource(new URL("./app-shell.css", import.meta.url));
 const fieldHintCss = readSource(new URL("./components/field-hint.css", import.meta.url));
@@ -53,7 +54,37 @@ describe("compact layout viewport contract", () => {
   });
   it("exposes readable values for compact settings sliders", () => {
     expect(settingsView).toContain('aria-label="JPEG 默认质量"');
-    expect(settingsView).toContain("aria-valuetext={`${preferences.defaultJpegQuality}% JPEG 默认质量`}");
+    expect(settingsView).toContain("aria-valuetext={`${draft.defaultJpegQuality}% JPEG 默认质量`}");
+  });
+  it("floats a sticky settings toolbar over the draft with a bottom divider", () => {
+    // 顶栏：左侧标题不动，右侧状态提示 + 取消 + 保存；底部 1px 分隔线，滚动时吸顶。
+    expect(settingsView).toContain('className="page-header settings-toolbar"');
+    expect(settingsView).toContain('className="settings-toolbar-actions"');
+    expect(settingsView).toContain("有未保存更改");
+    expect(settingsView).toContain("正在保存...");
+    expect(settingsView).toContain("配置已更新");
+    expect(settingsView).toContain('className="quiet-button settings-toolbar-cancel"');
+    expect(settingsView).toContain('className="settings-primary-button settings-toolbar-save"');
+    expect(settingsView).toContain("onClick={handleCancel}");
+    expect(settingsView).toContain("onClick={handleSave}");
+    expect(settingsView).toContain(">取消</button>");
+    expect(settingsCss).toMatch(/\.settings-toolbar \{[^}]*position: sticky;[^}]*top: 0;/);
+    expect(settingsCss).toContain("background: var(--qp-bg-app)");
+    expect(settingsCss).toContain("border-bottom: 1px solid var(--qp-border-subtle)");
+  });
+  it("keeps every settings control bound to a local draft until save", () => {
+    // 控件读写 draft，只有「保存」通过 onChange(draft) 一次性提交；脏 = draft 与 props 不等。
+    expect(settingsView).toContain("const [draft, setDraft] = useState<AppPreferences>(preferences)");
+    expect(settingsView).toContain("setDraft(preferences);");
+    expect(settingsView).toContain("arePreferencesEqual");
+    expect(settingsView).toContain("onChange(draft)");
+    expect(settingsView).toContain('disabled={!hasUnsavedChanges || saveStatus === "saving"}');
+    expect(settingsView).toContain("value={draft.defaultOutputFormat}");
+    expect(settingsView).toContain("value={draft.defaultJpegQuality}");
+    expect(settingsView).toContain("checked={draft.keepAspectRatio}");
+    expect(settingsView).toContain("value={draft.colorSchemeLight}");
+    expect(settingsView).toContain("value={draft.defaultCArrayName}");
+    expect(settingsView).toContain("presetLabel(draft.imagePreset)");
   });
   it("keeps estimate target and selected-quality fields visible with native results", () => {
     expect(compressionView).toContain("setEstimate(mergeCompressionEstimateResult(result))");
