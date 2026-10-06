@@ -84,3 +84,7 @@ export function formatExportQueueSummary(result: Pick<ExportQueueResult<unknown>
 export function formatExportFailureDetails(failures: ReadonlyArray<ExportFailureDetail>): string {
   return failures.map(({ fileName, message }) => `${fileName}：${message}`).join("\n");
 }
+
+export function formatExportOutputPaths(paths: ReadonlyArray<string>): string {
+  return paths.filter((path) => path.trim().length > 0).join("\n");
+}

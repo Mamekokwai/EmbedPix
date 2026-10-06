@@ -83,7 +83,7 @@ import type {
   RowOrder,
 } from "./types";
 import ThemeSelect from "../../shared/components/ThemeSelect";
-import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
+import { formatExportFailureDetails, formatExportOutputPaths, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
 import type { ExportFailureDetail, ExportQueueProgress } from "./imageExportQueue";
 import type { ExportPreflightResult } from "./imageConverterLogic";
 import { formatBatchConversionPlanError, planBatchConversions } from "./batchConversionPlan";
@@ -290,6 +290,7 @@ export default function ImageConverter({
   const [exportPreflight, setExportPreflight] = useState<ExportPreflightResult | null>(null);
   const [nativePreflightStatus, setNativePreflightStatus] = useState<string | null>(null);
   const [actualExportResult, setActualExportResult] = useState<ExportImageResponse | null>(null);
+  const [exportOutputPaths, setExportOutputPaths] = useState<string[]>([]);
   const [realPreview, setRealPreview] = useState<ImagePreviewResponse | null>(null);
   const [realPreviewUrl, setRealPreviewUrl] = useState<string | null>(null);
   const [realPreviewError, setRealPreviewError] = useState<string | null>(null);
@@ -1192,7 +1193,9 @@ export default function ImageConverter({
     setExportFailures([]);
     setFailureDetailsOpen(false);
     setExportProgress(null);
+    setExportOutputPaths([]);
     let lastOutputPath: string | null = null;
+    const exportedOutputPaths: string[] = [];
     const result = await runExportQueue(requestedImages, async (image, queueIndex) => {
         const imageTransformError = cropEnabled ? getCropInputValidation(cropInputs, image.dimensions) : null;
         if (imageTransformError) {
@@ -1228,6 +1231,7 @@ export default function ImageConverter({
         };
         const exportResult = await exportImage(request);
         lastOutputPath = exportResult?.outputPath ?? null;
+        if (exportResult?.outputPath) exportedOutputPaths.push(exportResult.outputPath);
         setActualExportResult(exportResult);
       }, {
         shouldCancel: () => exportCancelRef.current,
@@ -1254,6 +1258,7 @@ export default function ImageConverter({
       return { fileName: item.file.name, message };
     });
     setFailedExportIds(result.failed.map(({ item }) => item.id));
+    setExportOutputPaths(exportedOutputPaths);
     setExportFailures(failures);
     if (failures.length > 0) {
       setError(formatExportFailureDetails(failures));
@@ -1298,6 +1303,19 @@ export default function ImageConverter({
       if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择输出路径。 ");
       await navigator.clipboard.writeText(outputPath);
       setStatus({ kind: "ready", text: "输出路径已复制" });
+    } catch (copyError) {
+      setError(copyError instanceof Error ? copyError.message : "复制失败，请手动选择输出路径。 ");
+      setStatus({ kind: "error", text: "复制失败" });
+    }
+  };
+
+  const copyExportPaths = async () => {
+    const paths = formatExportOutputPaths(exportOutputPaths);
+    if (!paths) return;
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择输出路径。 ");
+      await navigator.clipboard.writeText(paths);
+      setStatus({ kind: "ready", text: `已复制 ${exportOutputPaths.length} 个输出路径` });
     } catch (copyError) {
       setError(copyError instanceof Error ? copyError.message : "复制失败，请手动选择输出路径。 ");
       setStatus({ kind: "error", text: "复制失败" });
@@ -1888,9 +1906,10 @@ export default function ImageConverter({
               {actualExportResult?.outputPath && status.kind === "success" ? <p className="export-progress-summary export-actual-result" role="status">
                 实际导出：{actualExportResult.outputPath} · {actualExportResult.width && actualExportResult.height ? `${actualExportResult.width} × ${actualExportResult.height} px` : "尺寸由桌面端返回"} · {actualExportResult.format?.toUpperCase() ?? "格式由桌面端返回"} · {actualExportResult.bitDepth ? `${actualExportResult.bitDepth} 位` : "位深由桌面端返回"} · {typeof actualExportResult.outputBytes === "number" ? `实际体积 ${formatFileSize(actualExportResult.outputBytes)}` : "文件体积由桌面端返回"}
               </p> : null}
-              {actualExportResult?.outputPath && status.kind === "success" ? <div className="export-output-actions">
+              {actualExportResult?.outputPath && status.kind !== "busy" ? <div className="export-output-actions">
                 <button className="quiet-button" type="button" onClick={() => void revealExportFolder()}>打开所在文件夹</button>
                 <button className="quiet-button" type="button" onClick={() => void copyExportPath()}>复制输出路径</button>
+                {exportOutputPaths.length > 1 ? <button className="quiet-button" type="button" onClick={() => void copyExportPaths()}>复制全部路径</button> : null}
               </div> : null}
             </div>
             <div className="footer-actions">

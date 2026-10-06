@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { formatExportFailureDetails, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
+import { formatExportFailureDetails, formatExportOutputPaths, formatExportQueueProgress, formatExportQueueSummary, runExportQueue } from "./imageExportQueue";
 
 describe("image export queue", () => {
+  it("formats batch output paths one per line", () => {
+    expect(formatExportOutputPaths([" E:\\out\\a.png ", "", "E:\\out\\b.png"])).toBe(" E:\\out\\a.png \nE:\\out\\b.png");
+  });
+
   it("continues after a failed item and records retryable failures", async () => {
     const exportItem = vi.fn(async (item: { file: { name: string } }) => {
       if (item.file.name === "bad.png") throw new Error("编码失败");
