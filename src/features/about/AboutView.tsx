@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Github, HeartHandshake, Info, MessageSquare, X, Coffee, QrCode } from "lucide-react";
+import { FileText, Github, HeartHandshake, Info, MessageSquare, QrCode, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
 import packageJson from "../../../package.json";
@@ -14,7 +14,9 @@ const AUTHOR_GITHUB_URL = "https://github.com/Mamekokwai";
 const PROJECT_REPOSITORY_URL = "https://github.com/Mamekokwai/EmbedPix";
 const PROJECT_ISSUES_URL = "https://github.com/Mamekokwai/EmbedPix/issues/new/choose";
 const KOFI_SUPPORT_URL = "https://ko-fi.com/nywerya";
+// 赞赏码用原图（不裁切）；Ko-fi 卡片图标抄 patina 的官方 mark。
 const WECHAT_REWARD_IMAGE_URL = "/wechat-reward.png";
+const KOFI_MARK_URL = "/kofi-mark.avif";
 
 // 11 个格式铺成一排太碎：按格式元数据的类别收成三块，细节留给悬停提示。
 const FORMAT_GROUPS = (["静态图片", "嵌入式像素", "动画输出"] as const).map((category) => {
@@ -139,7 +141,7 @@ export default function AboutView(updateProps: UpdateViewProps) {
                 </section>
                 <section className="about-support-card">
                   <div className="about-support-card-heading">
-                    <Coffee size={16} aria-hidden="true" />
+                    <img className="about-support-mark" src={KOFI_MARK_URL} alt="" aria-hidden="true" draggable={false} />
                     <h4>Ko-fi</h4>
                   </div>
                   <p className="about-support-card-copy">喜欢嵌图匠的话，也可以在 Ko-fi 上请我喝一杯咖啡。</p>

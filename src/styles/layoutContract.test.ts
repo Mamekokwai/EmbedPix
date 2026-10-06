@@ -693,5 +693,11 @@ describe("compact layout viewport contract", () => {
     // 赞助弹窗照 patina 的两张卡结构
     expect(aboutView).toContain("about-support-card-heading");
     expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px));");
+    // 赞赏码用原图整张放大，不做裁切；Ko-fi 卡片图标抄 patina 的官方 mark
+    expect(aboutView).toContain('src={WECHAT_REWARD_IMAGE_URL}');
+    expect(aboutView).toContain('src={KOFI_MARK_URL}');
+    expect(aboutCss).toContain(".about-support-qr { display: block; width: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }");
+    expect(aboutCss).not.toContain("width: 200px; height: 200px");
+    expect(aboutView).not.toContain("wechat-qr.png");
   });
 });

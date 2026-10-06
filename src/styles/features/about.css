@@ -41,9 +41,11 @@
 .about-support-card { display: grid; min-width: 0; align-content: start; gap: 10px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); padding: 14px; }
 .about-support-card-heading { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--qp-text-primary); }
 .about-support-card-heading h4 { margin: 0; font-size: 13px; font-weight: 650; }
+.about-support-mark { display: block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; }
 .about-support-card-copy { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.55; }
-.about-support-qr-frame { display: grid; place-items: center; }
-.about-support-qr { display: block; width: 200px; height: 200px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: #fff; }
+.about-support-qr-frame { display: flex; align-items: center; justify-content: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); padding: 10px; }
+/* 整张赞赏码放满卡片宽度，靠图本身变大让中间二维码好扫；图不设圆角，边框与圆角留给外层框。 */
+.about-support-qr { display: block; width: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }
 .about-support-kofi { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; border: 1px solid var(--qp-accent-default); border-radius: var(--qp-radius-control); background: var(--qp-accent-default); color: var(--qp-accent-contrast); font-size: 12px; font-weight: 600; text-decoration: none; }
 .about-support-kofi:hover { opacity: 0.86; }
 @media (max-width: 680px) {
