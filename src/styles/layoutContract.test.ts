@@ -48,6 +48,12 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("typeof estimate.targetMet === \"boolean\"");
     expect(compressionView).toContain("typeof estimate.selectedQuality === \"number\"");
   });
+  it("keeps compression selects aligned with the shared themed control", () => {
+    expect(compressionCss).toContain(".compression-field select { appearance: none;");
+    expect(compressionCss).toContain("min-height: 36px");
+    expect(compressionCss).toContain("background: var(--qp-bg-panel)");
+    expect(themeSelectCss).toContain(".theme-select-trigger");
+  });
   it("exposes a copyable compression batch summary without changing native wiring", () => {
     expect(compressionView).toContain("formatCompressionBatchSummary");
     expect(compressionView).toContain("复制批处理摘要");
