@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, Info, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, FileDown, FolderOpen, Images, Info, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import "../../styles/features/image-compression.css";
 import { cancelCompression, compressImage, createCompressionRequest, estimateImageCompression, formatCompressionProgressError, formatCompressionProgressStage, getCompressionProgress, MAX_COMPRESSION_RESIZE_PERCENT, MIN_COMPRESSION_RESIZE_PERCENT, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
@@ -1276,7 +1276,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             onKeyDown={(event) => { if (!sourceBusy && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); void chooseFiles(); } }}
             onClick={() => { void chooseFiles(); }}
           >
-            <span className="compression-drop-icon"><Upload size={22} aria-hidden="true" /></span>
+            <span className="compression-drop-icon"><Download size={22} aria-hidden="true" /></span>
             <strong>拖放图片到这里</strong>
             <span>或点击选择多个文件</span>
             <small className="compression-drop-hint"><span>支持格式：PNG / JPEG / WebP / BMP / GIF</span><span>单张输入上限：{COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB</span><span>输出格式：PNG / JPEG / WebP</span></small>

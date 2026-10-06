@@ -8,6 +8,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Copy,
+  Download,
   Film,
   FolderOpen,
   ImagePlus,
@@ -17,7 +18,6 @@ import {
   Plus,
   RotateCcw,
   Trash2,
-  Upload,
   Video,
   X,
 } from "lucide-react";
@@ -497,7 +497,7 @@ function EmptyFrames({ onImport, sourceMode }: { onImport: () => void; sourceMod
       <strong>还没有动画帧</strong>
       <span>{sourceMode === "video" ? "先导入视频并提取时间范围内的帧。" : "导入多张图片，按顺序组成 GIF。"}</span>
       <button className="quiet-button" type="button" onClick={onImport}>
-        <Upload size={15} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片"}
+        <Download size={15} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片"}
       </button>
     </div>
   );
@@ -2402,7 +2402,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
         <>
         <div className="gif-maker-toolbar">
           <button className="primary-button" type="button" onClick={() => openFileDialog()}>
-            <Upload size={16} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片序列"}
+            <Download size={16} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片序列"}
           </button>
           <span>{sourceMode === "video" ? "支持 MP4 / WebM / OGG · 最多提取 200 帧" : "多选 / 拖放追加 · 最多 200 帧，32 MiB / 帧，总计 128 MiB"}</span>
           <input ref={fileInputRef} className="gif-hidden-input" type="file" accept={sourceMode === "video" ? VIDEO_ACCEPT : IMAGE_ACCEPT} multiple={sourceMode === "image"} onChange={handleInputChange} />
@@ -2468,7 +2468,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               onDrop={(event) => { if (locked) { event.preventDefault(); return; } handleDrop(event); }}
               aria-label={sourceMode === "video" ? "拖放视频或选择视频" : "拖放图片或选择图片"}
             >
-              <Upload size={20} aria-hidden="true" />
+              <Download size={20} aria-hidden="true" />
               <strong>
                 <span className="gif-drop-label-full">{isDragging ? `松开以添加${sourceMode === "video" ? "视频" : "图片"}` : `拖放${sourceMode === "video" ? "视频" : "图片"}到这里`}</span>
                 <span className="gif-drop-label-compact">添加{sourceMode === "video" ? "视频" : "图片"}</span>

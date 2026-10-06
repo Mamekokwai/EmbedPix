@@ -1419,7 +1419,7 @@ export default function ImageConverter({
               }}
               aria-label="拖拽图片到这里，或按 Enter 选择本地文件"
             >
-              <div className="drop-icon"><Upload size={22} aria-hidden="true" /></div>
+              <div className="drop-icon"><Download size={22} aria-hidden="true" /></div>
               <strong>拖拽图片到这里</strong>
               <span>或点击选择一个或多个本地文件</span>
               <small>支持 {SUPPORTED_IMAGE_FORMAT_LABEL}</small>
@@ -1933,7 +1933,7 @@ export default function ImageConverter({
                 aria-busy={status.kind === "busy"}
                 onClick={() => status.kind === "busy" ? requestExportCancel() : void handleExport()}
               >
-                {status.kind === "busy" ? <X size={17} aria-hidden="true" /> : <Download size={17} aria-hidden="true" />}
+                {status.kind === "busy" ? <X size={17} aria-hidden="true" /> : <Upload size={17} aria-hidden="true" />}
                 {status.kind === "busy" ? "取消导出" : `导出 ${getOutputLabel(outputFormat)}`}
               </button>
             </div>
