@@ -69,6 +69,7 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 - **文档永远不可滚动，定位祖先必须落在主滚动层**：壳层是固定尺寸，`.app-main` 是唯一主滚动层；`html` 用 `overflow: clip`（`overflow: hidden` 仍能被 `scrollIntoView`/焦点滚动编程滚动——曾导致点开关时整页含标题栏被顶出窗口）。任何 `position: absolute` 的隐藏控件（开关复选框、`.visually-hidden`）都必须有定位祖先，否则以初始包含块为基准逃出主滚动层裁剪、把文档撑高；`.app-main` 已设 `position: relative`，新页面不要把它改回 static。
 - **说明文字宽度要一致**：折叠模块体是两列网格，任何带说明段落（`.field-help` / `.format-description`）的设置组都要通栏（`grid-column: 1 / -1`，见 `.settings-module-body > .setting-group:has(...)` 那条），否则解释被挤成半栏、和同页其它说明对不齐。半栏只留给纯输入并排。
 - **说明默认收起，悬停 / 聚焦后才浮出**：设置项的说明统一用 `.field-help-hover`（`src/styles/components/field-hint.css`，`App.css` 已引入），不要常显在面板里——逐条解释会把控件本身盖掉。用法：说明元素加这个类、紧邻触发它的那一行，容器必须是它的定位祖先（见 `.setting-group` / `.output-action` 上的 `position: relative`；`.app-main` 也是定位祖先，漏了会以整页为基准跑到底部）。说明只做视觉收起（`opacity`），必须留在 DOM 里，`aria-describedby` 不能断；出现延迟写在浮出态那一侧的 `transition` 上，写在隐藏态会被覆盖导致秒出。
+- **同类组件的间距必须相同**：竖向堆叠的控件行与设置组统一用 `--qp-stack-gap`（`src/styles/tokens.css`，当前 7px）——模块体（`.settings-module-body`）、设置组（`.setting-group`）、勾选组（`.output-actions` / `.output-action`），连同它们的短窗媒体查询覆盖，都只用这一个 token；不要再各自写 4px / 5px / 7px / 8px / 10px，同一屏里相邻选项的间距差一点就看得出。卡片之间的间距属于另一层（`.settings-stack`），不在这一条里。
 - **阻断性错误要有始终可见的出口**：字段被折叠时，按钮禁用必须配一个折叠组之外的说明块（如 `compression-parameter-issues`），不能让用户对着灰按钮猜原因。
 - **滚动条可见但细**：主滚动层用 6px 细滚动条，不要再写 `scrollbar-width: none`（0.2.2 的隐藏滚动条契约已作废）。
 - **控件用真语义**：导入类操作用真 `<button>` + ref 触发隐藏 `<input type="file">`（不要 `label` 包 input），单选组用真 `<input type="radio">`，列表用 `list` / `listitem`，忙碌时用 `<fieldset disabled>` 或 `aria-busy` 禁用整组。

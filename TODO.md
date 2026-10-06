@@ -485,6 +485,8 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 说明文字宽度与左起点跟同页一致：设置组通栏 + 删掉 `.output-action-help` 的 38px 左缩进
 - [x] 转换页开关说明改为悬停/聚焦浮出（`.field-help-hover`，停约 0.4s 出现、移开立即收起，仍在 DOM 里保证 `aria-describedby` 不断）
 - [x] 把该机制提成共享样式 `src/styles/components/field-hint.css`（`App.css` 引入），并写进 `AGENTS.md`：以后设置项的说明都按「默认收起、悬停/聚焦浮出」做
+- [x] 竖向组件间距统一为 `--qp-stack-gap`（7px）：模块体 / 设置组 / 勾选组及短窗媒体查询都改用 token（实测四个开关 7.0 / 7.0 / 7.0px），契约测试禁止这些容器再写死数字间距
+- [x] 「子文件夹不存在时会自动创建。」移进子文件夹名称输入框占位符，删掉下面重复的一行注释；`output-location-help` 改为按需渲染，`aria-describedby` 不再指向不存在的元素
 - [ ] 压缩页的 `compression-field-hint`（15 处）仍是常显，按新规则迁到 `.field-help-hover`；危险项与错误提示（如参数问题、覆盖原图/删除源文件）是否常显需单独判断
 - [ ] GIF 时间轴工具栏的「缩放」仍是原生 `<select>`（`GifMakerView.tsx` 时间轴头部），迁移 GIF 页外壳时一并换 `ThemeSelect`——它是个紧凑行内控件，直接换 36px 盒子会挤坏时间轴布局，需要单独量一次
 
