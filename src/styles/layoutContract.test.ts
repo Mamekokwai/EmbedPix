@@ -67,8 +67,10 @@ describe("compact layout viewport contract", () => {
     expect(fieldHintCss).toContain(".field-help-hover {");
     expect(fieldHintCss).toContain("*:has(+ .field-help-hover):hover + .field-help-hover,");
     // 只能用 :focus-visible：鼠标点一下开关也带焦点，:focus-within 会让浮出框在鼠标移开后一直挂着。
-    expect(fieldHintCss).toContain(":has(:focus-visible)");
-    expect(fieldHintCss).not.toContain(":focus-within");
+    expect(fieldHintCss).toContain("*:has(+ .field-help-hover):has(:focus-visible) + .field-help-hover,");
+    expect(fieldHintCss).toContain(".field-help-hover-parent:has(:focus-visible) > .field-help-hover {");
+    expect(fieldHintCss).not.toContain("):focus-within +");
+    expect(fieldHintCss).not.toContain(":focus-within >");
     expect(converterView).toContain('className="field-help field-help-hover" id="converter-metadata-policy-help"');
     expect(converterView).toContain('className="field-help output-action-help field-help-hover" id="overwrite-same-name-help"');
     expect(converterView).toContain('className="field-help output-action-help output-action-danger field-help-hover" id="delete-source-help"');
