@@ -88,9 +88,10 @@ describe("compact layout viewport contract", () => {
   });
   it("states the subfolder auto-create rule in the field instead of a separate note", () => {
     expect(converterView).toContain('placeholder="子文件夹不存在时会自动创建。"');
-    expect(converterView).toContain('{outputLocationHelp ? <p className="field-help" id="output-location-help">{outputLocationHelp}</p> : null}');
-    // 注释按需渲染后，describedby 不能还指着不存在的元素。
-    expect(converterView).toContain('outputLocationHelp ? "output-location-help" : null');
+    expect(converterView).toContain('placeholder="目录不存在时会自动创建，支持绝对路径。"');
+    // 输出位置不再挂常显说明（子文件夹/输出目录的规则都在占位符里），只剩错误提示参与 describedby。
+    expect(converterView).not.toContain("output-location-help");
+    expect(converterView).not.toContain("直接保存到源图片所在文件夹");
   });
   it("keeps converter helper text flush to the same left edge", () => {
     // 说明按开关宽度缩进会让它看起来属于勾选框、读起来割裂；一律与其它说明同一起点。

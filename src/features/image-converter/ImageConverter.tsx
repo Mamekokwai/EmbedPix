@@ -391,10 +391,7 @@ export default function ImageConverter({
     }
     return null;
   }, [file, loadedImages, outputDirectory, outputLocation, outputSubdirectory]);
-  // 子文件夹那句写进输入框占位符，不再单独占一行注释。
-  const outputLocationHelp = outputLocation === "source" ? "直接保存到源图片所在文件夹。" : null;
   const outputLocationDescription = [
-    outputLocationHelp ? "output-location-help" : null,
     outputLocationError ? "output-location-error" : null,
   ].filter(Boolean).join(" ");
   const batchOutputLocationError = useMemo(() => {
@@ -1802,7 +1799,6 @@ export default function ImageConverter({
                   </div>
                 </label>
               ) : null}
-              {outputLocationHelp ? <p className="field-help" id="output-location-help">{outputLocationHelp}</p> : null}
               {outputLocationError ? <p className="error-message output-location-error" id="output-location-error" role="alert">{outputLocationError}</p> : null}
               <label className="toggle-row output-action-toggle">
                 <input type="checkbox" checked={renameEnabled} onChange={(event) => handleRenameChange(event.target.checked)} />
