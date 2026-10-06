@@ -53,6 +53,7 @@ import {
   shouldInvalidateCompressionResults,
   formatCompressionReason,
   formatCompressionError,
+  formatCompressionOutputPaths,
   isCompressionProgressCompleted,
   canWriteCompressionItemUpdate,
   removeCompressionDimensionError,
@@ -240,6 +241,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     if (!originalPreviewUrl || !previewUrl) setPreviewCompareMode(false);
   }, [originalPreviewUrl, previewUrl]);
   const [lastSuccessfulOutputPath, setLastSuccessfulOutputPath] = useState<string | null>(null);
+  const [successfulOutputPaths, setSuccessfulOutputPaths] = useState<string[]>([]);
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
   const [resultStats, setResultStats] = useState<CompressionResultStats>({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
   const activeJobIdRef = useRef<string | null>(null);
@@ -334,6 +336,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setItemResults([]);
     setSkipReasons([]);
     setLastSuccessfulOutputPath(null);
+    setSuccessfulOutputPaths([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setPreflightSpaceBytes(null);
     setProgress({ current: 0, total: 0 });
@@ -841,6 +844,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setFailureDetails([]);
     setItemResults([]);
     setSkipReasons([]);
+    setSuccessfulOutputPaths([]);
     cancelRequestedRef.current = false;
     setResultStats({ total: queue.length, succeeded: 0, skipped: 0, failed: 0, inputBytes: queue.reduce((sum, item) => sum + item.size, 0), processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setPreflightSpaceBytes(null);
@@ -848,6 +852,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setProgressBytes({ input: null, output: null });
     const failedNames: string[] = [];
     const failedItemIds: string[] = [];
+    const exportedOutputPaths: string[] = [];
     let lastError = "";
     for (const [index, item] of queue.entries()) {
       setCurrentFileName(item.file.name);
@@ -894,7 +899,10 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         } else {
           const successfulOutputPath = getSuccessfulCompressionOutputPath(result.status, result.outputPath);
           const itemMetrics = getCompressionItemResultMetrics(result, item.size);
-          if (successfulOutputPath) setLastSuccessfulOutputPath(successfulOutputPath);
+          if (successfulOutputPath) {
+            exportedOutputPaths.push(successfulOutputPath);
+            setLastSuccessfulOutputPath(successfulOutputPath);
+          }
           setItemResults((current) => [...current, { itemId: item.id, fileName: item.file.name, status: "completed", outputPath: successfulOutputPath ?? undefined, reason: successfulOutputPath ? undefined : "原生结果未返回输出路径", sourceDeleted: result.sourceDeleted === true, qualityMetrics: result.qualityMetrics, width: result.width, height: result.height, selectedResizePercent: result.selectedResizePercent, autoResizeToTarget: result.autoResizeToTarget, candidateSearchMs: result.candidateSearchMs, candidateCount: result.candidateCount, ...itemMetrics }]);
           const targetMet = result.targetMet ?? (options.maxOutputBytes === undefined ? null : result.outputBytes <= options.maxOutputBytes);
           setResultStats((current) => ({ ...current, succeeded: current.succeeded + 1, processedInputBytes: current.processedInputBytes + result.inputBytes, outputBytes: current.outputBytes + result.outputBytes, savedBytes: current.savedBytes + result.savedBytes, targetMet: targetMet === null ? current.targetMet : current.targetMet === false || targetMet === false ? false : true, selectedQualities: typeof result.selectedQuality === "number" ? [...current.selectedQualities, result.selectedQuality] : current.selectedQualities }));
@@ -930,6 +938,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     }
     stopCompressionProgressPolling();
     activeJobIdRef.current = null;
+    setSuccessfulOutputPaths(exportedOutputPaths);
     setCurrentFileName(null);
     const finalState = getCompressionBatchFinalState(failedNames, cancelRequestedRef.current);
     if (finalState.status === "error" || finalState.status === "cancelled") {
@@ -1090,6 +1099,19 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择输出路径。");
       await navigator.clipboard.writeText(outputPath);
       setMessage("输出路径已复制");
+      setStatus("ready");
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setStatus("error");
+    }
+  };
+  const copyAllOutputPaths = async () => {
+    const formattedPaths = formatCompressionOutputPaths(successfulOutputPaths);
+    if (!formattedPaths) return;
+    try {
+      if (!navigator.clipboard) throw new Error("当前环境不支持复制，请手动选择输出路径。");
+      await navigator.clipboard.writeText(formattedPaths);
+      setMessage(`已复制 ${successfulOutputPaths.length} 个输出路径`);
       setStatus("ready");
     } catch (error) {
       setMessage(errorMessage(error));
@@ -1281,7 +1303,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         {maxOutputBytes ? <div className="compression-summary-stat"><span>目标体积</span><strong className={resultStats.targetMet === false ? "compression-failure" : "compression-saving"}>{resultStats.targetMet === null ? "待处理" : resultStats.targetMet ? "已达成" : "未达成"}</strong></div> : null}
         {resultStats.selectedQualities.length > 0 ? <div className="compression-summary-stat"><span>实际质量</span><strong>{resultStats.selectedQualities.join(" / ")}</strong></div> : null}
         <span className="compression-estimate-note" aria-live="polite">{formatCompressionProgressSummary({ current: progress.current, total: progress.total, processedInputBytes: resultStats.processedInputBytes, totalInputBytes: resultStats.inputBytes, outputBytes: resultStats.outputBytes, status })}{deleteSource ? " · 成功项源文件已按设置删除" : ""}</span>
-        {lastSuccessfulOutputPath ? <div className="compression-output-actions" aria-label="最近成功输出"><div className="compression-output-path"><span>最近成功输出</span><code>{lastSuccessfulOutputPath}</code></div><div className="compression-output-buttons"><button type="button" className="compression-secondary-button" onClick={() => { void copyOutputPath(lastSuccessfulOutputPath); }}>复制输出路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openOutputFolder(lastSuccessfulOutputPath); }}>打开输出文件夹</button></div></div> : null}
+        {lastSuccessfulOutputPath ? <div className="compression-output-actions" aria-label="最近成功输出"><div className="compression-output-path"><span>最近成功输出</span><code>{lastSuccessfulOutputPath}</code></div><div className="compression-output-buttons"><button type="button" className="compression-secondary-button" onClick={() => { void copyOutputPath(lastSuccessfulOutputPath); }}>复制输出路径</button>{successfulOutputPaths.length > 1 ? <button type="button" className="compression-secondary-button" onClick={() => { void copyAllOutputPaths(); }}>复制全部路径</button> : null}<button type="button" className="compression-secondary-button" onClick={() => { void openOutputFolder(lastSuccessfulOutputPath); }}>打开输出文件夹</button></div></div> : null}
         {itemResults.length > 0 ? <div className="compression-item-results" aria-label="逐项压缩结果"><div className="compression-item-results-heading"><strong>逐项结果（{itemResults.length}）</strong></div><ul>{itemResults.map((result, index) => { const sourceItem = items.find((item) => item.id === result.itemId) ?? items.find((item) => item.file.name === result.fileName); const metrics = getCompressionItemResultMetrics(result, sourceItem?.size ?? 0); const sizeSummary = [`原图 ${formatCompressionBytes(metrics.inputBytes)}`, result.width !== undefined && result.height !== undefined ? `尺寸 ${result.width} × ${result.height}` : null, result.selectedResizePercent !== undefined ? `${result.autoResizeToTarget ? "自动缩放" : "输出缩放"} ${result.selectedResizePercent}%` : null, metrics.outputBytes === undefined ? null : `${result.status === "skipped" ? "候选" : "输出"} ${formatCompressionBytes(metrics.outputBytes)}`, metrics.savedBytes === undefined || metrics.savingsPercent === undefined ? null : `${metrics.savedBytes >= 0 ? "节省" : "增加"} ${formatCompressionBytes(Math.abs(metrics.savedBytes))}（${Math.abs(metrics.savingsPercent).toFixed(1)}%）`, result.qualityMetrics ? `MAE ${result.qualityMetrics.rgbMae.toFixed(2)} · PSNR ${result.qualityMetrics.psnrDb === null ? "无误差" : `${result.qualityMetrics.psnrDb.toFixed(1)} dB`} · Alpha 差异 ${result.qualityMetrics.alphaMismatchPixels} 像素` : null, result.candidateCount === undefined ? null : `尝试候选 ${result.candidateCount}`, result.candidateSearchMs === undefined ? null : `候选搜索 ${result.candidateSearchMs} ms`, result.sourceDeleted ? "源文件已删除" : null].filter((entry): entry is string => Boolean(entry)).join(" · "); return <li className={`compression-item-result compression-item-result-${result.status}`} key={`${result.itemId ?? result.fileName}:${index}`}><div className="compression-item-result-copy"><strong>{result.fileName}</strong><span title={result.nativeReason ?? result.reason}>{formatCompressionItemResultStatus(result.status)} · {sizeSummary}{result.outputPath || result.reason ? ` · ${result.outputPath || formatCompressionReason(result.reason)}` : ""}{result.nativeReason ? <span className="visually-hidden">原生原因：{result.nativeReason}</span> : null}</span></div>{result.itemId && (result.status === "failed" || result.status === "skipped") ? <div className="compression-item-result-actions"><button type="button" className="compression-secondary-button" onClick={() => { void runCompression([result.itemId as string]); }} disabled={busy}>仅重试此项</button></div> : null}{result.status === "completed" && result.outputPath ? <div className="compression-item-result-actions"><button type="button" className="compression-secondary-button" onClick={() => { void copyOutputPath(result.outputPath as string); }}>复制路径</button><button type="button" className="compression-secondary-button" onClick={() => { void openOutputFolder(result.outputPath as string); }}>打开文件夹</button></div> : null}</li>; })}</ul></div> : null}
         {failureDetails.length > 0 ? <div className="compression-failure-details" role="alert" aria-label="失败详情"><div className="compression-failure-heading"><strong>失败详情（{failureDetails.length}）</strong><button type="button" className="compression-secondary-button" onClick={() => { void copyFailureDetails(); }}>复制失败详情</button></div><ul>{failureDetails.map((detail) => <li key={`${detail.itemId ?? detail.fileName}:${detail.message}`}><strong>{detail.fileName}</strong><span>{detail.message}</span></li>)}</ul></div> : null}
         {skipReasons.length > 0 ? <div className="compression-skip-details"><strong>跳过原因</strong>{skipReasons.map((reason) => <span key={reason}>{formatCompressionReason(reason)}</span>)}</div> : null}

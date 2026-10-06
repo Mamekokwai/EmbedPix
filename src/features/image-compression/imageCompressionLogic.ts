@@ -225,6 +225,7 @@ export function getCompressionTargetSizeError(enabled: boolean, value: string, m
   return Number.isFinite(parsed) && parsed >= 1 && parsed <= maxKiB ? null : `目标体积需为 1–${maxKiB.toLocaleString()} KiB。`;
 }
 export function getSuccessfulCompressionOutputPath(status: "completed" | "skipped", outputPath: string): string | null { const normalizedPath = outputPath.trim(); return status === "completed" && normalizedPath ? normalizedPath : null; }
+export function formatCompressionOutputPaths(paths: ReadonlyArray<string>): string { return paths.map((path) => path.trim()).filter(Boolean).join("\n"); }
 export function formatCompressionFailureDetails(details: ReadonlyArray<{ fileName: string; message: string }>): string { return details.map(({ fileName, message }) => `${fileName}：${message}`).join("\n"); }
 export function formatCompressionParameterSummary(entries: ReadonlyArray<string>): string {
   const safeEntries = entries.map((entry) => entry.startsWith("输出到指定目录 ") ? "输出到指定目录（路径未复制）" : entry);
