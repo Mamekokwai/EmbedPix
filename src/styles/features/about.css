@@ -27,7 +27,7 @@
   .about-hero { align-items: flex-start; flex-direction: column; }
   .about-info-grid { grid-template-columns: 1fr; }
   .about-author-card { align-items: flex-start; flex-wrap: wrap; }
-  .about-author-links { width: 100%; margin-left: 51px; }
+  .about-author-links { flex: 1 1 100%; min-width: 0; flex-wrap: wrap; padding-left: 51px; }
 }
 
 @media (max-height: 760px) {

@@ -209,6 +209,16 @@
   background: var(--qp-accent-muted);
 }
 
+.drop-zone[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+.drop-zone[aria-disabled="true"]:hover {
+  border-color: var(--qp-border-strong);
+  background: var(--qp-bg-elevated);
+}
+
 .drop-icon,
 .file-icon {
   display: grid;
@@ -317,6 +327,7 @@
 
 .transform-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -390,6 +401,7 @@
 
 .file-list-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -403,6 +415,7 @@
 
 .file-list-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
@@ -472,6 +485,21 @@
   outline-offset: 1px;
 }
 
+.file-list-select:disabled,
+.file-remove-button:disabled,
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.file-list-select:disabled:hover,
+.file-remove-button:disabled:hover,
+.icon-button:disabled:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--qp-text-tertiary);
+}
+
 .file-list-icon {
   display: grid;
   width: 24px;
@@ -531,6 +559,20 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-top: 20px;
+  min-inline-size: 0;
+  border: 0;
+  margin-inline: 0;
+  margin-block-end: 0;
+  padding: 0;
+  color: inherit;
+}
+
+.settings-stack:disabled .format-option,
+.settings-stack:disabled .toggle-row,
+.settings-stack:disabled .color-control,
+.settings-stack:disabled .text-field,
+.settings-stack:disabled .dimension-input {
+  opacity: .58;
 }
 
 .settings-module {
@@ -920,12 +962,13 @@
 }
 
 .embedded-output-inspector {
+  grid-column: 1 / -1;
   display: grid;
   gap: 8px;
   border: 1px solid var(--qp-border-subtle);
   border-radius: var(--qp-radius-control);
   padding: 10px 12px;
-  background: color-mix(in srgb, var(--qp-bg-panel) 88%, var(--qp-accent) 12%);
+  background: color-mix(in srgb, var(--qp-bg-panel) 88%, var(--qp-accent-default) 12%);
 }
 
 .embedded-output-grid {
@@ -1019,6 +1062,7 @@
 }
 
 .export-progress-summary {
+  flex-wrap: wrap;
   justify-content: flex-start;
   color: var(--qp-text-tertiary);
 }
@@ -1045,6 +1089,8 @@
   color: var(--qp-danger);
   font-size: 11px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .export-failure-panel {

@@ -1,9 +1,11 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 
 export interface ThemeSelectOption<T extends string | number> {
@@ -47,7 +49,9 @@ export default function ThemeSelect<T extends string | number>({
   const listboxId = `${id || generatedId}-options`;
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 0, top: 0, width: 0, maxHeight: 240 });
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
   const [highlightedIndex, setHighlightedIndex] = useState(selectedIndex);
   const selectedOption = options[selectedIndex];
@@ -55,13 +59,53 @@ export default function ThemeSelect<T extends string | number>({
   useEffect(() => {
     if (!open) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      if (!rootRef.current?.contains(event.target as Node) && !listRef.current?.contains(event.target as Node)) {
         setOpen(false);
       }
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
   }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || disabled) return;
+    const placeList = () => {
+      const trigger = triggerRef.current;
+      if (!trigger || !trigger.getClientRects().length) { setOpen(false); return; }
+      const rect = trigger.getBoundingClientRect();
+      const below = window.innerHeight - rect.bottom - 13;
+      const above = rect.top - 13;
+      const upward = below < 240 && above > below;
+      const maxHeight = Math.max(0, Math.min(240, upward ? above : below));
+      const height = Math.min(listRef.current?.scrollHeight ?? maxHeight, maxHeight);
+      setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8)), top: upward ? rect.top - height - 5 : rect.bottom + 5, width: Math.min(rect.width, window.innerWidth - 16), maxHeight });
+    };
+    placeList();
+    const onScroll = (event: Event) => {
+      if (!listRef.current?.contains(event.target as Node)) placeList();
+    };
+    window.addEventListener("resize", placeList);
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", placeList);
+      document.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open, disabled, options.length]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const list = listRef.current;
+    const option = list?.children[highlightedIndex] as HTMLElement | undefined;
+    if (!list || !option) return;
+    if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop;
+    else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight;
+    }
+  }, [open, highlightedIndex, position.maxHeight]);
 
   useEffect(() => {
     if (!open) {
@@ -75,6 +119,7 @@ export default function ThemeSelect<T extends string | number>({
   };
 
   const chooseOption = (index: number) => {
+    if (triggerRef.current?.matches(":disabled")) { setOpen(false); return; }
     const option = options[index];
     if (!option) return;
     onChange(option.value);
@@ -93,6 +138,7 @@ export default function ThemeSelect<T extends string | number>({
       setOpen(false);
       return;
     }
+    if (options.length === 0) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       if (open) {
@@ -127,11 +173,13 @@ export default function ThemeSelect<T extends string | number>({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
-        aria-activedescendant={open ? `${listboxId}-option-${highlightedIndex}` : undefined}
+        aria-activedescendant={open && options.length ? `${listboxId}-option-${highlightedIndex}` : undefined}
         aria-label={ariaLabel}
         aria-describedby={ariaDescribedBy}
         aria-invalid={ariaInvalid}
-        disabled={disabled}
+        disabled={disabled || options.length === 0}
+        title={selectedLabel}
+        onBlur={() => setOpen(false)}
         onClick={() => {
           setHighlightedIndex(selectedIndex);
           setOpen((current) => !current);
@@ -141,8 +189,8 @@ export default function ThemeSelect<T extends string | number>({
         <span className="theme-select-value">{selectedLabel}</span>
         <ChevronDown className={`theme-select-chevron${open ? " theme-select-chevron-open" : ""}`} size={15} aria-hidden="true" />
       </button>
-      {open ? (
-        <div id={listboxId} className="theme-select-list" role="listbox" aria-label={ariaLabel}>
+      {open && !disabled ? createPortal(
+        <div ref={listRef} id={listboxId} className="theme-select-list" style={position} role="listbox" aria-label={ariaLabel} onMouseDown={(event) => event.preventDefault()}>
           {options.map((option, index) => (
             <button
               key={String(option.value)}
@@ -150,6 +198,7 @@ export default function ThemeSelect<T extends string | number>({
               id={`${listboxId}-option-${index}`}
               className={`theme-select-option${index === selectedIndex ? " theme-select-option-selected" : ""}${index === highlightedIndex ? " theme-select-option-highlighted" : ""}`}
               role="option"
+              tabIndex={-1}
               aria-selected={index === selectedIndex}
               onMouseEnter={() => setHighlightedIndex(index)}
               onClick={() => chooseOption(index)}
@@ -157,7 +206,7 @@ export default function ThemeSelect<T extends string | number>({
               {option.label}
             </button>
           ))}
-        </div>
+        </div>, document.body
       ) : null}
     </div>
   );

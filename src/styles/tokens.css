@@ -7,7 +7,10 @@
   --qp-border-strong: #b9bec7;
   --qp-text-primary: #1d232c;
   --qp-text-secondary: #596273;
-  --qp-text-tertiary: #8992a1;
+  --qp-text-tertiary: #606b7b;
+  --qp-text-disabled: #8992a1;
+  --qp-control-off: #dfe2e6;
+  --qp-accent-contrast: #ffffff;
   --qp-accent-default: #356ca8;
   --qp-accent-muted: #e5eef8;
   --qp-success: #2f7d49;
@@ -16,6 +19,9 @@
   --qp-radius-panel: 14px;
   --qp-radius-control: 10px;
   --qp-radius-button: 8px;
+  --qp-radius-chip: 6px;
+  --qp-motion-fast: 140ms;
+  --qp-motion-ease: ease-out;
   --qp-shadow-overlay: 0 10px 24px rgb(17 24 39 / 8%);
   --qp-titlebar-height: 36px;
   --qp-window-corner-radius: 8px;
@@ -33,7 +39,10 @@
   --qp-border-strong: #656e7b;
   --qp-text-primary: #e7eaf0;
   --qp-text-secondary: #b7beca;
-  --qp-text-tertiary: #8b95a3;
+  --qp-text-tertiary: #a3adba;
+  --qp-text-disabled: #7b8593;
+  --qp-control-off: #444b55;
+  --qp-accent-contrast: #202328;
   --qp-accent-default: #8db4df;
   --qp-accent-muted: #334353;
   --qp-success: #84bc93;

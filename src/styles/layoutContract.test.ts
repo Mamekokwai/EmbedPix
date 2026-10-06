@@ -138,7 +138,7 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".preview-content { min-height: 210px; }");
     expect(compressionCss).toContain(".compression-app {\n  width: min(1180px, 100%);");
     expect(compressionCss).toContain("overflow-x: hidden;");
-    expect(compressionCss).toContain("@media (max-width: 520px)");
+    expect(compressionCss).toContain("@media (max-width: 560px)");
     expect(themeSelectCss).toContain(".theme-select-option:focus-visible");
   });
 
@@ -428,7 +428,7 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toContain(".gif-frame-meta small { min-width: 0; overflow: hidden;");
     expect(gifView).toContain('<strong title={frame.name}>{frame.name}</strong>');
     expect(gifCss).toContain(".gif-busy-cancel { width: 100%; margin-top: 4px; }");
-    expect(gifCss).toContain(".gif-balanced-reset { justify-self: start; }");
+    expect(gifCss).toMatch(/\.gif-balanced-reset \{[^}]*align-self: start;[^}]*justify-self: start;/s);
     expect(gifView).toContain('className="quiet-button gif-busy-cancel"');
   });
 
@@ -465,24 +465,22 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain("if (!active || !file || !dimensions");
   });
 
-  it("flips custom dropdowns above the trigger in short windows", () => {
-    expect(themeSelectCss).toContain("@media (max-height: 620px)");
-    expect(themeSelectCss).toContain("bottom: calc(100% + 5px);");
+  it("keeps custom dropdowns in a viewport overlay independent of card clipping", () => {
+    expect(themeSelectCss).toContain("position: fixed;");
+    expect(themeSelectCss).toContain("max-height: 240px;");
+    expect(themeSelectCss).toContain("overflow-y: auto;");
   });
-  it("keeps GIF settings dropdowns outside the short-window card clip", () => {
-    expect(gifCss).toContain("@media (max-height: 760px)");
-    expect(gifCss).toContain(".gif-maker-content > .gif-settings-card { max-height: none; overflow: visible; }");
-    expect(gifCss).toContain("@media (max-width: 500px) and (min-height: 621px) and (max-height: 760px) {\n  .gif-maker-content > .gif-settings-card { max-height: none; overflow: visible; }");
+  it("keeps expanded GIF settings in the page scroll flow", () => {
+    expect(gifCss).toMatch(/\.gif-maker-view\.gif-settings-expanded \.gif-settings-card \{\s*max-height: none;\s*overflow: visible;/s);
+    expect(gifCss).toMatch(/\.gif-maker-view\.gif-settings-expanded \.gif-maker-content\.page-content \{\s*flex: 0 0 auto;\s*overflow: visible;/s);
   });
   it("raises the expanded GIF settings card above the frame workspace", () => {
     expect(gifCss).toContain(".gif-maker-view.gif-settings-expanded > .gif-settings-card { position: relative; z-index: 4; }");
   });
 
-  it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {
-    expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 621px)");
-    expect(gifCss).toContain(".gif-workspace-grid { flex: 0 0 auto; grid-template-rows: 128px minmax(220px, auto); overflow: visible; }");
-    expect(gifCss).toContain(".gif-main-column, .gif-preview-card { min-height: 220px; }");
-    expect(gifCss).toContain(".gif-settings-card { max-height: none; overflow: visible; }");
+  it("preserves preview space when expanded settings exceed the window height", () => {
+    expect(gifCss).toMatch(/\.gif-maker-view\.gif-settings-expanded \.gif-workspace-grid \{\s*flex: 0 0 auto;\s*min-height: 300px;/s);
+    expect(gifCss).toContain("grid-template-rows: minmax(128px, auto) minmax(300px, auto);");
     expect(gifView).toContain('gif-settings-expanded');
     expect(gifCss).toContain('.gif-maker-view.gif-settings-expanded > .gif-export-footer { position: static; }');
   });

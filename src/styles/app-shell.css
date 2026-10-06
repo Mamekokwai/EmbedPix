@@ -11,6 +11,7 @@
 
 .app-titlebar {
   display: flex;
+  min-height: 0;
   flex: 0 0 var(--qp-titlebar-height);
   height: var(--qp-titlebar-height);
   align-items: center;
@@ -130,6 +131,7 @@
 
 .app-sidebar {
   display: flex;
+  min-height: 0;
   min-width: 0;
   flex-direction: column;
   align-items: center;
@@ -295,11 +297,13 @@
   overflow: auto;
   overscroll-behavior: contain;
   scroll-padding-block: 18px;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--qp-border-strong) transparent;
   background: var(--qp-bg-app);
 }
 
-.app-main::-webkit-scrollbar { display: none; }
+.app-main::-webkit-scrollbar { width: 6px; height: 6px; }
+.app-main::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 
 .app-main :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
   scroll-margin-block: 18px;
