@@ -17,13 +17,15 @@ pub(super) fn encode(
     image: &RgbaImage,
     bit_depth: u16,
     background_color: Rgba<u8>,
+    fill_transparent: bool,
 ) -> Result<(Vec<u8>, u16), String> {
     validate_bit_depth(bit_depth)?;
     validate_dimensions(image.width(), image.height())?;
     let width = i32::try_from(image.width()).map_err(|_| "BMP width is too large".to_string())?;
     let height =
         i32::try_from(image.height()).map_err(|_| "BMP height is too large".to_string())?;
-    let image = if bit_depth <= 24 {
+    // 32 位默认保留 alpha；勾了填充透明色就按背景色合成，输出不再有透明像素。
+    let image = if bit_depth <= 24 || fill_transparent {
         composite_over_background(image.clone(), background_color)
     } else {
         image.clone()
@@ -199,7 +201,8 @@ mod tests {
 
     #[test]
     fn bmp_24_header_and_bottom_up_pixels_are_little_endian() {
-        let (bytes, bit_depth) = encode(&sample_image(), 24, Rgba([255, 255, 255, 255])).unwrap();
+        let (bytes, bit_depth) =
+            encode(&sample_image(), 24, Rgba([255, 255, 255, 255]), false).unwrap();
 
         assert_eq!(bit_depth, 24);
         assert_eq!(&bytes[0..2], b"BM");
@@ -218,14 +221,15 @@ mod tests {
         let mut image = RgbaImage::new(1, 1);
         image.put_pixel(0, 0, Rgba([255, 0, 0, 0]));
 
-        let (bytes, _) = encode(&image, 24, Rgba([0, 255, 0, 255])).unwrap();
+        let (bytes, _) = encode(&image, 24, Rgba([0, 255, 0, 255]), false).unwrap();
 
         assert_eq!(&bytes[54..58], &[0, 255, 0, 0]);
     }
 
     #[test]
     fn bmp_32_uses_bgra_bitfields_and_matching_pixel_layout() {
-        let (bytes, bit_depth) = encode(&sample_image(), 32, Rgba([255, 255, 255, 255])).unwrap();
+        let (bytes, bit_depth) =
+            encode(&sample_image(), 32, Rgba([255, 255, 255, 255]), false).unwrap();
 
         assert_eq!(bit_depth, 32);
         assert_eq!(u32::from_le_bytes(bytes[2..6].try_into().unwrap()), 78);
@@ -242,8 +246,13 @@ mod tests {
     #[test]
     fn bmp_supported_bit_depths_have_standard_headers() {
         for bit_depth in [1, 4, 8, 16, 24, 32] {
-            let (bytes, actual_bit_depth) =
-                encode(&sample_image(), bit_depth, Rgba([255, 255, 255, 255])).unwrap();
+            let (bytes, actual_bit_depth) = encode(
+                &sample_image(),
+                bit_depth,
+                Rgba([255, 255, 255, 255]),
+                false,
+            )
+            .unwrap();
             let palette_bytes = if bit_depth <= 8 {
                 (1_u32 << bit_depth) * 4
             } else {
@@ -282,7 +291,7 @@ mod tests {
         let mut image = RgbaImage::new(9, 1);
         image.put_pixel(8, 0, Rgba([255, 255, 255, 255]));
 
-        let (bytes, _) = encode(&image, 1, Rgba([0, 0, 0, 255])).unwrap();
+        let (bytes, _) = encode(&image, 1, Rgba([0, 0, 0, 255]), false).unwrap();
 
         assert_eq!(&bytes[62..66], &[0, 128, 0, 0]);
     }
@@ -293,7 +302,7 @@ mod tests {
         image.put_pixel(0, 0, Rgba([0, 0, 0, 255]));
         image.put_pixel(1, 0, Rgba([255, 255, 255, 255]));
 
-        let (bytes, _) = encode(&image, 4, Rgba([0, 0, 0, 255])).unwrap();
+        let (bytes, _) = encode(&image, 4, Rgba([0, 0, 0, 255]), false).unwrap();
 
         assert_eq!(u32::from_le_bytes(bytes[10..14].try_into().unwrap()), 118);
         assert_eq!(&bytes[54..58], &[0, 0, 0, 0]);
@@ -303,7 +312,7 @@ mod tests {
 
     #[test]
     fn bmp_8_bit_palette_and_rgb332_indices_are_encoded() {
-        let (bytes, _) = encode(&sample_image(), 8, Rgba([255, 255, 255, 255])).unwrap();
+        let (bytes, _) = encode(&sample_image(), 8, Rgba([255, 255, 255, 255]), false).unwrap();
         let pixel_offset = u32::from_le_bytes(bytes[10..14].try_into().unwrap()) as usize;
         let red_palette_offset = 54 + 224 * 4;
         let green_palette_offset = 54 + 28 * 4;
@@ -323,7 +332,7 @@ mod tests {
 
     #[test]
     fn bmp_16_bit_pixels_use_rgb565_masks_and_values() {
-        let (bytes, _) = encode(&sample_image(), 16, Rgba([255, 255, 255, 255])).unwrap();
+        let (bytes, _) = encode(&sample_image(), 16, Rgba([255, 255, 255, 255]), false).unwrap();
         let pixel_offset = u32::from_le_bytes(bytes[10..14].try_into().unwrap()) as usize;
 
         assert_eq!(&bytes[54..66], &[0, 248, 0, 0, 224, 7, 0, 0, 31, 0, 0, 0]);
@@ -335,9 +344,27 @@ mod tests {
         let mut image = RgbaImage::new(1, 1);
         image.put_pixel(0, 0, Rgba([1, 2, 3, 255]));
 
-        let (bytes, _) = encode(&image, 24, Rgba([0, 0, 0, 255])).unwrap();
+        let (bytes, _) = encode(&image, 24, Rgba([0, 0, 0, 255]), false).unwrap();
 
         assert_eq!(u32::from_le_bytes(bytes[34..38].try_into().unwrap()), 4);
         assert_eq!(&bytes[54..58], &[3, 2, 1, 0]);
+    }
+    #[test]
+    fn bmp_32_keeps_alpha_by_default_and_fills_transparent_when_asked() {
+        let mut image = RgbaImage::new(2, 1);
+        image.put_pixel(0, 0, Rgba([0, 0, 0, 0]));
+        image.put_pixel(1, 0, Rgba([0, 255, 0, 255]));
+
+        let (bytes, _) = encode(&image, 32, Rgba([255, 0, 0, 255]), false).unwrap();
+        // 32 位保留 alpha：第一个像素仍是全透明，BGRA 顺序
+        let pixels = &bytes[bytes.len() - 8..];
+        assert_eq!(&pixels[0..4], &[0, 0, 0, 0]);
+        assert_eq!(&pixels[4..8], &[0, 255, 0, 255]);
+
+        let (filled, _) = encode(&image, 32, Rgba([255, 0, 0, 255]), true).unwrap();
+        // 勾了填充透明色：透明像素被背景色顶替，alpha 变 255
+        let pixels = &filled[filled.len() - 8..];
+        assert_eq!(&pixels[0..4], &[0, 0, 255, 255]);
+        assert_eq!(&pixels[4..8], &[0, 255, 0, 255]);
     }
 }

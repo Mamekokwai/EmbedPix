@@ -26,6 +26,7 @@ const appCss = readSource(new URL("../App.css", import.meta.url));
 const appShellCss = readSource(new URL("./app-shell.css", import.meta.url));
 const fieldHintCss = readSource(new URL("./components/field-hint.css", import.meta.url));
 const tokensCss = readSource(new URL("./tokens.css", import.meta.url));
+const imageExportGateway = readSource(new URL("../platform/image/imageExportGateway.ts", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -606,5 +607,34 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("formatCompressionSizeDelta(previewSavedBytes, previewSavingsPercent)");
     expect(compressionView).toContain("预计体积变化");
     expect(compressionView).toContain("formatCompressionSizeDelta(estimate.inputBytes - estimate.estimatedBytes, estimate.savingsPercent)");
+  });
+
+  it("keeps page intros and drop zones free of repeated helper copy", () => {
+    expect(converterView).toContain('<h2 id="workspace-title">转换图片</h2>');
+    expect(converterView).not.toContain("转换图片，适配你的嵌入式界面");
+    expect(converterView).not.toContain("或点击选择一个或多个本地文件");
+    expect(converterView).not.toContain("导入图片后开始设置输出参数");
+    // 位深候选由下拉列表给出，标签行不再复述一遍
+    expect(converterView).not.toContain("位可选");
+    expect(compressionView).toContain('<h2 id="compression-title">图片压缩</h2>');
+    expect(compressionView).not.toContain("压到目标体积，格式与画质可控");
+    expect(compressionView).not.toContain("或点击选择多个文件");
+    expect(gifView).not.toContain("或点击选择视频文件");
+  });
+
+  it("hides the BMP format description because the bit-depth control covers it", () => {
+    expect(converterView).toContain('const showsFormatDescription = outputFormat !== "bmp";');
+    expect(converterView).toContain('describedBy={showsFormatDescription ? "format-description" : undefined}');
+    expect(converterView).toContain('{showsFormatDescription ? <p className="format-description" id="format-description">');
+  });
+
+  it("offers transparent-color fill only for 32-bit output", () => {
+    expect(converterView).toContain('{outputFormat === "bmp" && getEffectiveBitDepth(outputFormat, bitDepth) === 32 ? (');
+    expect(converterView).toContain('<span>填充透明色</span>');
+    expect(converterView).toContain('className="field-help field-help-hover" id="fill-transparent-help"');
+    expect(converterView).toContain('aria-describedby="fill-transparent-help"');
+    // 预览与导出两条请求都要带上这个参数
+    expect(converterView.match(/^ {10}fillTransparent,$/gmu) ?? []).toHaveLength(2);
+    expect(imageExportGateway).toContain("...(request.fillTransparent ? { fillTransparent: true } : {})");
   });
 });

@@ -34,6 +34,7 @@ export interface ExportImageRequest {
   keepAspectRatio: boolean;
   bitDepth: BmpBitDepth | null;
   backgroundColor: string;
+  fillTransparent?: boolean;
   jpegQuality: number;
   byteOrder: ByteOrder;
   channelOrder: ChannelOrder;

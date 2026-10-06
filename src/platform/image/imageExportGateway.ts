@@ -82,6 +82,7 @@ function getExportMetadata(request: ExportImageRequest) {
       watermarkFontSize: request.watermarkFontSize ?? 16,
     } : {}),
     ...(request.deleteSource ? { deleteSource: true } : {}),
+    ...(request.fillTransparent ? { fillTransparent: true } : {}),
     ...(request.transform ? { transform: request.transform } : {}),
     ...(request.metadataPolicy ? { metadataPolicy: request.metadataPolicy } : {}),
   };

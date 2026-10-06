@@ -126,6 +126,7 @@ struct ExportRequest {
     height: u32,
     keep_aspect_ratio: bool,
     background_color: Rgba<u8>,
+    fill_transparent: bool,
     bit_depth: u16,
     jpeg_quality: u8,
     raw_options: raw::RawOptions,
@@ -255,6 +256,8 @@ struct ExportMetadata {
     height: u32,
     keep_aspect_ratio: bool,
     background_color: Option<String>,
+    #[serde(default)]
+    fill_transparent: bool,
     bit_depth: Option<u16>,
     #[serde(default)]
     jpeg_quality: Option<u8>,
@@ -332,6 +335,7 @@ impl ExportMetadata {
             height: self.height,
             keep_aspect_ratio: self.keep_aspect_ratio,
             background_color: parse_background_color(self.background_color.as_deref())?,
+            fill_transparent: self.fill_transparent,
             bit_depth,
             jpeg_quality,
             raw_options: raw::RawOptions::parse(
@@ -811,7 +815,12 @@ fn convert_image(request: &ExportRequest) -> Result<(Vec<u8>, u16), String> {
         OutputFormat::Tiff => encode_tiff(image, request.bit_depth, request.background_color),
         OutputFormat::Ico => encode_ico(image, request.background_color),
         OutputFormat::Jpg => encode_jpg(image, request.background_color, request.jpeg_quality),
-        OutputFormat::Bmp => bmp::encode(&image, request.bit_depth, request.background_color),
+        OutputFormat::Bmp => bmp::encode(
+            &image,
+            request.bit_depth,
+            request.background_color,
+            request.fill_transparent,
+        ),
         OutputFormat::Rgb565 => {
             raw::encode_rgb565(&image, request.background_color, request.raw_options)
         }
@@ -2002,6 +2011,7 @@ mod tests {
             height: 1,
             keep_aspect_ratio: false,
             background_color: Rgba([255, 255, 255, 255]),
+            fill_transparent: false,
             bit_depth,
             jpeg_quality: 90,
             raw_options: raw::RawOptions::parse(None, None, None, None).unwrap(),
@@ -2511,6 +2521,7 @@ mod tests {
             height: 1,
             keep_aspect_ratio: false,
             background_color: None,
+            fill_transparent: false,
             bit_depth: None,
             jpeg_quality: None,
             byte_order: None,
@@ -2548,6 +2559,7 @@ mod tests {
             height: 1,
             keep_aspect_ratio: false,
             background_color: Some("#102030".to_string()),
+            fill_transparent: false,
             bit_depth: Some(16),
             jpeg_quality: None,
             byte_order: None,
@@ -2623,6 +2635,7 @@ mod tests {
             height: 1,
             keep_aspect_ratio: false,
             background_color: None,
+            fill_transparent: false,
             bit_depth: None,
             jpeg_quality: None,
             byte_order: None,
@@ -2661,6 +2674,7 @@ mod tests {
             height: 1,
             keep_aspect_ratio: false,
             background_color: None,
+            fill_transparent: false,
             bit_depth: None,
             jpeg_quality: None,
             byte_order: None,
@@ -2788,6 +2802,7 @@ mod tests {
             height: 1,
             keep_aspect_ratio: false,
             background_color: Rgba([255, 255, 255, 255]),
+            fill_transparent: false,
             bit_depth: 24,
             jpeg_quality: 85,
             raw_options: raw::RawOptions::parse(None, None, None, None).unwrap(),

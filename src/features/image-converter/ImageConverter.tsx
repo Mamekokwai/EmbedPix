@@ -161,14 +161,16 @@ function getFullImageCropInputs(source: ImageDimensions | null): CropInputs {
 function FormatSelector({
   value,
   onChange,
+  describedBy,
 }: {
   value: OutputFormat;
   onChange: (value: OutputFormat) => void;
+  describedBy?: string;
 }) {
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   return (
-    <div className="format-selector" role="radiogroup" aria-label="输出格式" aria-describedby="format-description">
+    <div className="format-selector" role="radiogroup" aria-label="输出格式" aria-describedby={describedBy}>
       {OUTPUT_FORMATS.map((format, index) => (
         <button
           key={format.value}
@@ -255,6 +257,7 @@ export default function ImageConverter({
   const [cArrayName, setCArrayName] = useState(defaultCArrayName);
   const [keepAspectRatio, setKeepAspectRatio] = useState(defaultKeepAspectRatio);
   const [backgroundColor, setBackgroundColor] = useState(defaultBackgroundColor.toUpperCase());
+  const [fillTransparent, setFillTransparent] = useState(false);
   const [rotation, setRotation] = useState<ImageRotation>(0);
   const [flipHorizontal, setFlipHorizontal] = useState(false);
   const [flipVertical, setFlipVertical] = useState(false);
@@ -428,12 +431,15 @@ export default function ImageConverter({
 
   const outputSummary = useMemo(() => {
     if (!file) {
-      return "导入图片后开始设置输出参数";
+      return "";
     }
 
     const summaryBitDepth = getEffectiveBitDepth(outputFormat, bitDepth);
     return `${width} × ${height} · ${getOutputLabel(outputFormat)} · ${summaryBitDepth} 位`;
   }, [bitDepth, file, height, outputFormat, width]);
+
+  // BMP 的位深与透明度由下面的位深控件说明，格式描述再列一遍是重复信息。
+  const showsFormatDescription = outputFormat !== "bmp";
   const embeddedInspection = useMemo(() => {
     if (!file || !["bmp", "rgb565", "c-array"].includes(outputFormat)) return null;
     try {
@@ -478,6 +484,7 @@ export default function ImageConverter({
           keepAspectRatio,
           bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
           backgroundColor,
+          fillTransparent,
           jpegQuality,
           byteOrder,
           channelOrder,
@@ -506,7 +513,7 @@ export default function ImageConverter({
     };
     void requestPreview();
     return () => { cancelled = true; };
-  }, [active, backgroundColor, bitDepth, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, height, imageTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
+  }, [active, backgroundColor, bitDepth, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, fillTransparent, height, imageTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
 
   const resetImageTransform = (source: ImageDimensions | null = dimensions) => {
     setRotation(0);
@@ -1233,6 +1240,7 @@ export default function ImageConverter({
           keepAspectRatio,
           bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
           backgroundColor,
+          fillTransparent,
           jpegQuality,
           byteOrder,
           channelOrder,
@@ -1372,7 +1380,7 @@ export default function ImageConverter({
       <section className="converter-intro" aria-labelledby="workspace-title">
         <div>
           <p className="eyebrow">IMAGE WORKSPACE</p>
-          <h2 id="workspace-title">转换图片，适配你的嵌入式界面</h2>
+          <h2 id="workspace-title">转换图片</h2>
           <p className="intro-copy">导入一张或多张图片，统一调整尺寸与输出规格，然后导出到本地文件。</p>
         </div>
       </section>
@@ -1421,7 +1429,6 @@ export default function ImageConverter({
             >
               <div className="drop-icon"><Download size={22} aria-hidden="true" /></div>
               <strong>拖拽图片到这里</strong>
-              <span>或点击选择一个或多个本地文件</span>
               <small>支持 {SUPPORTED_IMAGE_FORMAT_LABEL}</small>
             </div>
           ) : (
@@ -1529,8 +1536,8 @@ export default function ImageConverter({
           <fieldset className="settings-stack" disabled={status.kind === "busy"} aria-busy={status.kind === "busy"}>
             <fieldset className="setting-group format-group">
               <legend className="field-label">输出格式</legend>
-              <FormatSelector value={outputFormat} onChange={handleFormatChange} />
-              <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>
+              <FormatSelector value={outputFormat} onChange={handleFormatChange} describedBy={showsFormatDescription ? "format-description" : undefined} />
+              {showsFormatDescription ? <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p> : null}
             </fieldset>
 
             {embeddedInspection ? <section className="embedded-output-inspector" aria-labelledby="embedded-output-title">
@@ -1609,7 +1616,7 @@ export default function ImageConverter({
             <div className="setting-group">
               <div className="label-row">
                 <span className="field-label">位深</span>
-                <span className="field-note">{outputFormat === "jpg" ? "JPG 固定 24 位" : isRawPixelFormat(outputFormat) ? "RGB565 固定 16 位" : `${getBitDepths(outputFormat).join(" / ")} 位可选`}</span>
+                {outputFormat === "jpg" ? <span className="field-note">JPG 固定 24 位</span> : isRawPixelFormat(outputFormat) ? <span className="field-note">RGB565 固定 16 位</span> : null}
               </div>
               {outputFormat === "jpg" || isRawPixelFormat(outputFormat) ? null : (
                 <ThemeSelect
@@ -1738,6 +1745,24 @@ export default function ImageConverter({
                 <span>{backgroundColor}</span>
               </label>
             </div>
+
+            {outputFormat === "bmp" && getEffectiveBitDepth(outputFormat, bitDepth) === 32 ? (
+              <div className="setting-group">
+                <div className="field-hint-anchor">
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={fillTransparent}
+                      aria-describedby="fill-transparent-help"
+                      onChange={(event) => setFillTransparent(event.target.checked)}
+                    />
+                    <span className="toggle-track" aria-hidden="true"><span /></span>
+                    <span>填充透明色</span>
+                  </label>
+                  <p className="field-help field-help-hover" id="fill-transparent-help">勾选后透明区域按上面的透明色填充，输出不再保留透明度。</p>
+                </div>
+              </div>
+            ) : null}
 
                 </div>
               </details>
