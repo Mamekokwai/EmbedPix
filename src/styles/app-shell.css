@@ -311,7 +311,7 @@
   scroll-margin-block: 18px;
 }
 
-.page-view { width: min(920px, 100%); min-height: 100%; margin: 0 auto; padding: 34px 40px 42px; }
+.page-view { width: min(1820px, 100%); min-height: 100%; margin: 0 auto; padding: 34px 40px 42px; }
 .page-header { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--qp-border-subtle); padding-bottom: 24px; }
 .page-header-icon { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-accent-default); }
 .page-eyebrow { margin: 0 0 5px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
