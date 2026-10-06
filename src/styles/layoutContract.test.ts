@@ -58,6 +58,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).not.toContain(".compression-field select");
     expect(themeSelectCss).toContain(".theme-select-trigger");
   });
+  it("keeps helper text on one width by spanning groups that carry explanations", () => {
+    expect(converterCss).toContain(".settings-module-body > .setting-group:has(> .field-help, > .format-description) { grid-column: 1 / -1; }");
+  });
   it("keeps the document itself unscrollable so the shell cannot slide out of the window", () => {
     expect(appCss).toMatch(/:root \{[^}]*overflow: hidden;/);
     expect(appCss).toMatch(/:root \{[^}]*overflow: clip;/);
