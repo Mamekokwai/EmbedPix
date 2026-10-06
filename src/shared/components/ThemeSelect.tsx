@@ -7,6 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import { computeSelectPlacement, SELECT_LIST_MAX_HEIGHT } from "./themeSelectPlacement";
 
 export interface ThemeSelectOption<T extends string | number> {
   value: T;
@@ -51,7 +52,7 @@ export default function ThemeSelect<T extends string | number>({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ left: 0, top: 0, width: 0, maxHeight: 240 });
+  const [position, setPosition] = useState({ left: 0, top: 0, width: 0, maxHeight: SELECT_LIST_MAX_HEIGHT });
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
   const [highlightedIndex, setHighlightedIndex] = useState(selectedIndex);
   const selectedOption = options[selectedIndex];
@@ -71,22 +72,23 @@ export default function ThemeSelect<T extends string | number>({
     if (!open || disabled) return;
     const placeList = () => {
       const trigger = triggerRef.current;
+      const list = listRef.current;
       if (!trigger || !trigger.getClientRects().length) { setOpen(false); return; }
-      const rect = trigger.getBoundingClientRect();
-      const below = window.innerHeight - rect.bottom - 13;
-      const above = rect.top - 13;
-      const upward = below < 240 && above > below;
-      const maxHeight = Math.max(0, Math.min(240, upward ? above : below));
-      const height = Math.min(listRef.current?.scrollHeight ?? maxHeight, maxHeight);
-      setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8)), top: upward ? rect.top - height - 5 : rect.bottom + 5, width: Math.min(rect.width, window.innerWidth - 16), maxHeight });
+      const next = computeSelectPlacement(trigger.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }, list?.offsetHeight ?? SELECT_LIST_MAX_HEIGHT);
+      // 位置没变就别写 state，否则观察器会因为自己触发的重排反复回调。
+      setPosition((current) => (current.left === next.left && current.top === next.top && current.width === next.width && current.maxHeight === next.maxHeight ? current : next));
     };
     placeList();
+    // 首次落位时浮层还是 0 宽度，量到的高度是折行后的结果；等它按真实宽度排完版必须再量一次。
+    const observer = new ResizeObserver(placeList);
+    if (listRef.current) observer.observe(listRef.current);
     const onScroll = (event: Event) => {
       if (!listRef.current?.contains(event.target as Node)) placeList();
     };
     window.addEventListener("resize", placeList);
     document.addEventListener("scroll", onScroll, true);
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", placeList);
       document.removeEventListener("scroll", onScroll, true);
     };

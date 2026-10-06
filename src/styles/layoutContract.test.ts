@@ -18,6 +18,7 @@ const compressionPreferences = readSource(new URL("../features/image-compression
 const windowControlGateway = readSource(new URL("../platform/window/windowControlGateway.ts", import.meta.url));
 const defaultCapabilities = readSource(new URL("../../src-tauri/capabilities/default.json", import.meta.url));
 const themeSelectCss = readSource(new URL("./components/theme-select.css", import.meta.url));
+const themeSelectSource = readSource(new URL("../shared/components/ThemeSelect.tsx", import.meta.url));
 const updateCss = readSource(new URL("./features/update.css", import.meta.url));
 const updateView = readSource(new URL("../features/update/UpdateView.tsx", import.meta.url));
 const settingsView = readSource(new URL("../features/settings/SettingsView.tsx", import.meta.url));
@@ -465,6 +466,16 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain("if (!active || !file || !dimensions");
   });
 
+  it("does not rely on undefined utility classes for visible GIF labels", () => {
+    // 仓库里没有定义 .sr-only：挂在标签上只会让标签照常显示，而下次谁补一个全局工具类就会让标签凭空消失。
+    expect(gifView).not.toContain("sr-only");
+    expect(gifCss).toContain(".gif-dimensions-row label > span { white-space: nowrap; }");
+  });
+  it("re-measures the dropdown after it has a real width", () => {
+    // 首次落位时浮层宽度为 0，量到的高度是折行后的结果，必须靠观察器在真实排版后再量一次，否则上翻会浮空。
+    expect(themeSelectSource).toContain("new ResizeObserver(placeList)");
+    expect(themeSelectSource).toContain("list?.offsetHeight");
+  });
   it("keeps custom dropdowns in a viewport overlay independent of card clipping", () => {
     expect(themeSelectCss).toContain("position: fixed;");
     expect(themeSelectCss).toContain("max-height: 240px;");
