@@ -498,8 +498,8 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 裁剪实时预览：预览窗口按裁切比例定形 + 源图反向平移（`getCropPreviewLayout`），顺序对齐原生 crop → rotate → flip，源图与输出预览两处生效，附 3 条单测
 - [x] 与 patina 的构建模式核对结论：patina 的 workflow 用 `tauri build --bundles nsis` 覆盖配置里的 `targets: all`，实际两边都只出 NSIS → `bundle.targets` 保持 `nsis` 不改为宜（改 `all` 会多出 MSI、与仓库既定发布范围冲突）
 - [ ] 更新运行时是否换 `tauri-plugin-updater`：自建 Rust 更新器与插件同为「签名校验 + GitHub Release」，且自建侧有取消/进度/安装健康检查；换插件属机制层面的等价替换，收益为与 patina 完全同构，代价是删掉 `commands/update.rs` 及其测试。定为不换，若坚持同构再动
-- [ ] patina 配色整套移植（25+ 套预设 + 派生 + 明暗各选一套 + 持久化 + 两个选择器）——已确认要做，未开始
-- [ ] 「关于」页改为 patina 那种居中留白形式（`about-center-*`：profile 居中、胶囊居中、图标 62px、面板 padding 34/28）——未开始
+- [x] patina 配色整套移植：`src/shared/theme/themePresets.ts`（浅色 16 / 深色 27 套）+ `deriveTheme.ts` 派生 + 明暗各选一套 + 写进偏好 + 设置页两个选择器（含色样）
+- [x] 「关于」页改成 patina 的居中留白（图标壳 62/42、面板 34×28、简介与按钮排限宽 560 居中，作者卡片居中）；格式标签按类别收成三块；四个按钮移进简介卡；赞助弹窗照 patina 的两张卡结构重做
 - [ ] 压缩页的 `compression-field-hint`（15 处）仍是常显，按新规则迁到 `.field-help-hover`；危险项与错误提示（如参数问题、覆盖原图/删除源文件）是否常显需单独判断
 - [ ] GIF 时间轴工具栏的「缩放」仍是原生 `<select>`（`GifMakerView.tsx` 时间轴头部），迁移 GIF 页外壳时一并换 `ThemeSelect`——它是个紧凑行内控件，直接换 36px 盒子会挤坏时间轴布局，需要单独量一次
 

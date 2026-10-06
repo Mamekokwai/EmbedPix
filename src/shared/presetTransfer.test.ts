@@ -3,7 +3,7 @@ import { DEFAULT_APP_PREFERENCES } from "../platform/preferences/appPreferences"
 import { DEFAULT_GIF_MAKER_PREFERENCES } from "../features/gif-maker/gifMakerPreferences";
 import { exportPresetBundle, formatPresetTransferError, importPresetBundle, mergeImportedPresets } from "./presetTransfer";
 
-const { themeMode: _themeMode, sidebarMode: _sidebarMode, imagePreset: _imagePreset, ...imageValues } = DEFAULT_APP_PREFERENCES;
+const { themeMode: _themeMode, sidebarMode: _sidebarMode, imagePreset: _imagePreset, colorSchemeLight: _schemeLight, colorSchemeDark: _schemeDark, ...imageValues } = DEFAULT_APP_PREFERENCES;
 const image = { id: "i1", name: "图标", createdAt: "2026-01-01T00:00:00Z", values: imageValues };
 const gif = { id: "g1", name: "动画", createdAt: "2026-01-01T00:00:00Z", values: DEFAULT_GIF_MAKER_PREFERENCES };
 

@@ -29,6 +29,8 @@ const tokensCss = readSource(new URL("./tokens.css", import.meta.url));
 const imageExportGateway = readSource(new URL("../platform/image/imageExportGateway.ts", import.meta.url));
 const updateConfirmDialog = readSource(new URL("../features/update/UpdateConfirmDialog.tsx", import.meta.url));
 const updateProgressBar = readSource(new URL("../features/update/UpdateProgressBar.tsx", import.meta.url));
+const aboutView = readSource(new URL("../features/about/AboutView.tsx", import.meta.url));
+const aboutCss = readSource(new URL("./features/about.css", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -668,5 +670,28 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".preview-crop-window");
     expect(converterCss).toContain("aspect-ratio: var(--crop-w, 1) / var(--crop-h, 1)");
     expect(converterView).not.toContain("裁剪将在导出时按原图像素坐标执行");
+    expect(converterView).toContain("旋转、翻转和裁剪都会实时反映在预览。");
+    expect(converterView).not.toContain("裁剪按原图像素坐标于导出时执行");
+  });
+
+  it("exposes light and dark color schemes and applies the derived tokens", () => {
+    expect(settingsView).toContain('id="color-scheme-light"');
+    expect(settingsView).toContain('id="color-scheme-dark"');
+    expect(settingsView).toContain("colorSchemeLight: value");
+    expect(settingsView).toContain("colorSchemeDark: value");
+    expect(settingsView).toContain("配色方案");
+    expect(appShell).toContain('applyThemeColors(activeTheme, activeTheme === "dark" ? preferences.colorSchemeDark : preferences.colorSchemeLight);');
+    expect(tokensCss).toContain("--qp-accent-contrast");
+  });
+
+  it("centers the about profile and groups the format tags", () => {
+    // 11 个格式铺满一排太碎，按类别收成三块
+    expect(aboutView).toContain("FORMAT_GROUPS");
+    expect(aboutView).not.toContain("FORMAT_METADATA.map((format) => <span key={format.id}");
+    expect(aboutCss).toContain(".about-hero { display: grid; width: 100%; justify-items: center;");
+    expect(aboutCss).toContain("justify-content: center; gap: var(--qp-stack-gap);");
+    // 赞助弹窗照 patina 的两张卡结构
+    expect(aboutView).toContain("about-support-card-heading");
+    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(500px, calc(100vw - 32px));");
   });
 });

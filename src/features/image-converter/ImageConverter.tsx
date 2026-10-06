@@ -1649,7 +1649,7 @@ export default function ImageConverter({
               </div> : null}
               {cropValidationError ? <p className="error-message transform-error" role="alert">{cropValidationError}</p> : null}
               <div className="transform-footer">
-                <p className="field-help">旋转和翻转会实时反映在预览；裁剪按原图像素坐标于导出时执行。</p>
+                <p className="field-help">旋转、翻转和裁剪都会实时反映在预览。</p>
                 <button className="quiet-button" type="button" onClick={handleResetImageTransform} disabled={!hasImageTransform}>重置编辑</button>
               </div>
             </div>
