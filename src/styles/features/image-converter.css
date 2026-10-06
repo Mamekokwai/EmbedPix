@@ -777,35 +777,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* 收起式说明的定位祖先，必须在就近容器上（见 styles/components/field-hint.css）。 */
   position: relative;
-}
-
-/* 说明默认收起，鼠标停在对应控件上（或键盘聚焦）一会才浮出：折叠面板里每条解释都常显会盖过控件本身。 */
-.field-help-hover {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 6;
-  margin-top: 6px;
-  border: 1px solid var(--qp-border-subtle);
-  border-radius: var(--qp-radius-control);
-  background: var(--qp-bg-elevated);
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--qp-bg-app) 75%, transparent);
-  padding: 8px 10px;
-  opacity: 0;
-  pointer-events: none;
-  /* 收起要立刻（不然鼠标走了还在闪），出现延迟写在下面浮出态里：过渡用的是变化后那一侧的 transition 属性。 */
-  transition: opacity var(--qp-motion-fast) var(--qp-motion-ease);
-}
-
-/* 悬停/聚焦紧邻说明的那个控件，停一会才浮出；说明本身不吃指针事件，避免与悬停判定互相打断。 */
-*:has(+ .field-help-hover):hover + .field-help-hover,
-*:has(+ .field-help-hover):focus-within + .field-help-hover,
-.output-action:hover > .field-help-hover,
-.output-action:focus-within > .field-help-hover {
-  opacity: 1;
-  transition: opacity var(--qp-motion-fast) var(--qp-motion-ease) 420ms;
 }
 
 .output-action-help {

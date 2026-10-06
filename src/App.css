@@ -4,6 +4,7 @@
 @import url("./styles/features/image-compression.css");
 @import url("./styles/features/settings.css");
 @import url("./styles/components/theme-select.css");
+@import url("./styles/components/field-hint.css");
 @import url("./styles/features/about.css");
 
 :root {

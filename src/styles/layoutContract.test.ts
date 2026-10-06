@@ -24,6 +24,7 @@ const updateView = readSource(new URL("../features/update/UpdateView.tsx", impor
 const settingsView = readSource(new URL("../features/settings/SettingsView.tsx", import.meta.url));
 const appCss = readSource(new URL("../App.css", import.meta.url));
 const appShellCss = readSource(new URL("./app-shell.css", import.meta.url));
+const fieldHintCss = readSource(new URL("./components/field-hint.css", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -62,8 +63,8 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".settings-module-body > .setting-group:has(> .field-help, > .format-description) { grid-column: 1 / -1; }");
   });
   it("reveals converter explanations on hover instead of always showing them", () => {
-    expect(converterCss).toContain(".field-help-hover {");
-    expect(converterCss).toContain("*:has(+ .field-help-hover):hover + .field-help-hover,");
+    expect(fieldHintCss).toContain(".field-help-hover {");
+    expect(fieldHintCss).toContain("*:has(+ .field-help-hover):hover + .field-help-hover,");
     expect(converterView).toContain('className="field-help field-help-hover" id="converter-metadata-policy-help"');
     expect(converterView).toContain('className="field-help output-action-help field-help-hover" id="overwrite-same-name-help"');
     expect(converterView).toContain('className="field-help output-action-help output-action-danger field-help-hover" id="delete-source-help"');

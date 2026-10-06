@@ -1,0 +1,29 @@
+/* 说明默认收起，鼠标停在对应控件上（或键盘聚焦）一会才浮出：
+   设置面板里每条解释都常显会盖过控件本身。用法 = 给说明元素加 .field-help-hover，
+   并让它紧邻触发它的那一行；容器必须是它的定位祖先（否则会以更外层、甚至整页为基准定位）。 */
+.field-help-hover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  margin-top: 6px;
+  border: 1px solid var(--qp-border-subtle);
+  border-radius: var(--qp-radius-control);
+  background: var(--qp-bg-elevated);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--qp-bg-app) 75%, transparent);
+  padding: 8px 10px;
+  opacity: 0;
+  pointer-events: none;
+  /* 收起要立刻（不然鼠标走了还在闪），出现延迟写在下面浮出态里：过渡用的是变化后那一侧的 transition 属性。 */
+  transition: opacity var(--qp-motion-fast) var(--qp-motion-ease);
+}
+
+/* 悬停/聚焦紧邻说明的那个控件，停一会才浮出；说明本身不吃指针事件，避免与悬停判定互相打断。 */
+*:has(+ .field-help-hover):hover + .field-help-hover,
+*:has(+ .field-help-hover):focus-within + .field-help-hover,
+.field-help-hover-parent:hover > .field-help-hover,
+.field-help-hover-parent:focus-within > .field-help-hover {
+  opacity: 1;
+  transition: opacity var(--qp-motion-fast) var(--qp-motion-ease) 420ms;
+}
