@@ -55,24 +55,35 @@ pub(crate) fn normalize_subdirectory(
         return Ok(None);
     }
     if value.len() > MAX_OUTPUT_SUBDIRECTORY_BYTES
-        || value == "."
-        || value == ".."
-        || value.ends_with('.')
-        || value.ends_with(' ')
-        || value.chars().any(|character| {
-            character.is_control()
-                || matches!(
-                    character,
-                    '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
-                )
-        })
+        || value.chars().any(|character| character.is_control())
     {
         return Err(PathSecurityError::InvalidSubdirectory);
     }
-    if is_reserved_windows_name(value) {
-        return Err(PathSecurityError::ReservedName);
+    // 允许 out/A 这类相对路径：逐段校验后丢掉空段，于是 out/A/ 与 out//A 都等价于 out/A。
+    let mut segments = Vec::new();
+    for segment in value.split(['/', '\\']) {
+        if segment.is_empty() {
+            continue;
+        }
+        if segment == "."
+            || segment == ".."
+            || segment.ends_with('.')
+            || segment.ends_with(' ')
+            || segment
+                .chars()
+                .any(|character| matches!(character, '<' | '>' | ':' | '"' | '|' | '?' | '*'))
+        {
+            return Err(PathSecurityError::InvalidSubdirectory);
+        }
+        if is_reserved_windows_name(segment) {
+            return Err(PathSecurityError::ReservedName);
+        }
+        segments.push(segment);
     }
-    Ok(Some(value.to_string()))
+    if segments.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(segments.join("/")))
 }
 
 pub(crate) fn is_reserved_windows_name(value: &str) -> bool {
@@ -226,4 +237,42 @@ pub(crate) fn has_reparse_point(metadata: &fs::Metadata) -> bool {
 #[cfg(not(windows))]
 pub(crate) fn has_reparse_point(_metadata: &fs::Metadata) -> bool {
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_subdirectory;
+
+    fn subdirectory(value: &str) -> Option<String> {
+        normalize_subdirectory(Some(value)).expect("should normalize")
+    }
+
+    #[test]
+    fn keeps_relative_subdirectory_paths_and_drops_empty_segments() {
+        assert_eq!(subdirectory("out"), Some("out".to_string()));
+        assert_eq!(subdirectory("out/A"), Some("out/A".to_string()));
+        assert_eq!(subdirectory("out/A/"), Some("out/A".to_string()));
+        assert_eq!(subdirectory("out//A"), Some("out/A".to_string()));
+        assert_eq!(subdirectory("out\\A"), Some("out/A".to_string()));
+        assert_eq!(subdirectory("\\out\\A\\"), Some("out/A".to_string()));
+        assert_eq!(subdirectory("  out/A  "), Some("out/A".to_string()));
+        assert_eq!(subdirectory(""), None);
+        assert_eq!(subdirectory("   "), None);
+        assert_eq!(
+            normalize_subdirectory(None).expect("none passes through"),
+            None
+        );
+    }
+
+    #[test]
+    fn rejects_traversal_absolute_and_reserved_subdirectories() {
+        assert!(normalize_subdirectory(Some("../x")).is_err());
+        assert!(normalize_subdirectory(Some("out/../x")).is_err());
+        assert!(normalize_subdirectory(Some("out/./x")).is_err());
+        assert!(normalize_subdirectory(Some("C:\\abs")).is_err());
+        assert!(normalize_subdirectory(Some("out/aux")).is_err());
+        assert!(normalize_subdirectory(Some("out/A.")).is_err());
+        assert!(normalize_subdirectory(Some("out/pad /x")).is_err());
+        assert!(normalize_subdirectory(Some(&"a".repeat(300))).is_err());
+    }
 }

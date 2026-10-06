@@ -2760,11 +2760,18 @@ mod tests {
     }
 
     #[test]
-    fn output_subdirectories_reject_path_escape_characters() {
+    fn output_subdirectories_allow_nested_paths_but_reject_escapes() {
         assert!(normalize_optional_subdirectory(Some("..".to_string())).is_err());
-        assert!(normalize_optional_subdirectory(Some(r"nested\folder".to_string())).is_err());
+        assert!(normalize_optional_subdirectory(Some("../escape".to_string())).is_err());
         assert!(normalize_optional_subdirectory(Some("CON".to_string())).is_err());
+        assert!(normalize_optional_subdirectory(Some(r"nested\CON".to_string())).is_err());
         assert!(normalize_optional_subdirectory(Some("export".to_string())).is_ok());
+        assert_eq!(
+            normalize_optional_subdirectory(Some(r"nested\folder".to_string()))
+                .unwrap()
+                .as_deref(),
+            Some("nested/folder")
+        );
     }
 
     fn output_path_test_request(

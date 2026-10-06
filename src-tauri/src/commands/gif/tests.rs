@@ -270,9 +270,13 @@ fn rejects_unsafe_gif_output_location_inputs() {
     req.output_location = Some("subfolder".into());
     req.source_path = Some(source.to_string_lossy().into_owned());
 
-    for subdirectory in ["..", ".", "nested\\folder", "nested/folder"] {
+    for subdirectory in ["..", "."] {
         req.output_subdirectory = Some(subdirectory.to_string());
         assert!(resolve_output_path(&req).is_err(), "{subdirectory}");
+    }
+    for subdirectory in ["nested\\folder", "nested/folder"] {
+        req.output_subdirectory = Some(subdirectory.to_string());
+        assert!(resolve_output_path(&req).is_ok(), "{subdirectory}");
     }
     req.output_subdirectory = Some("exports".into());
     req.source_path = Some(dir.0.to_string_lossy().into_owned());
