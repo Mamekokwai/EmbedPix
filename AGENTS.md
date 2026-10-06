@@ -64,6 +64,8 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 - **页面外壳 = 品牌头带 + 介绍带 + 底部边界**：头带是「图标 + `EMBEDPIX` + 工作区名 + `● 本地处理`」并带底边线（`brand-lockup` / `brand-mark` / `eyebrow` / `header-context` / `status-dot`，样式在 `image-converter.css`，全局可用）；介绍带是「英文 eyebrow + 标语 + 说明」，可按需在右侧放一条注释（`intro-copy` / `intro-note`）；页面动作栏加顶边线，页尾以品牌行 `EmbedPix · 嵌图匠` 收尾。
 - **折叠模块 = 独立边框卡片**：1px `--qp-border-subtle` 边框、`--qp-radius-control` 圆角、`--qp-bg-elevated` 底色，标题栏 38px、左右 12px 内边距，展开时标题栏下方补 1px 分隔线，收起/展开标记用等宽字体的 `+` / `−`。样板见 `.settings-module` 与 `.compression-advanced-settings`。
 - **主控件平铺，其余收纳**：每页只把最常改的 2–4 个控件留在外面（如压缩页的格式、质量、输出缩放），其余按主题分组折叠；折叠组的标题必须带当前状态摘要（如「目标体积 · 未启用（不限制输出体积）」），危险项（覆盖原图、删除源文件）与无效参数用 `--qp-danger` 标红。
+- **下拉一律用共享的 `ThemeSelect`**（`src/shared/components/ThemeSelect.tsx`，样式 `src/styles/components/theme-select.css`）：不要写原生 `<select>`（系统弹出层跟主题脱节），也不要另造一套下拉（浮层落位在 `themeSelectPlacement.ts`，重复实现会得到不同位置）。字段外层用各页的包装组件（压缩页 `CompressionSelectField`、转换页 `SelectField`），标签在控件上方、说明在控件下方。
+- **用不上的参数直接隐藏，不要留成灰控件**：按当前格式 / 模式 / 环境不生效的字段整块不渲染（PNG 下没有质量与输出缩放、JPEG 下没有 WebP 编码参数、浏览器环境没有目录选择按钮）；只有「暂时不可用」才用 `disabled`——导出中、队列为空、尚未选目标这类状态控件要留在原位，否则导出时面板会闪空。纯信息文案可以留（如「JPG 固定 24 位」）。
 - **阻断性错误要有始终可见的出口**：字段被折叠时，按钮禁用必须配一个折叠组之外的说明块（如 `compression-parameter-issues`），不能让用户对着灰按钮猜原因。
 - **滚动条可见但细**：主滚动层用 6px 细滚动条，不要再写 `scrollbar-width: none`（0.2.2 的隐藏滚动条契约已作废）。
 - **控件用真语义**：导入类操作用真 `<button>` + ref 触发隐藏 `<input type="file">`（不要 `label` 包 input），单选组用真 `<input type="radio">`，列表用 `list` / `listitem`，忙碌时用 `<fieldset disabled>` 或 `aria-busy` 禁用整组。
