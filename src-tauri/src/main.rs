@@ -36,22 +36,6 @@ fn cli_help() -> &'static str {
     "EmbedPix GUI\n\n用法：直接启动 EmbedPix.exe 打开图形界面。\n命令行处理：使用同目录的 embedpix-cli，将 JSON 或 JSONL 请求写入 stdin。\n选项：\n  -h, --help       显示帮助\n  -V, --version    显示版本"
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{cli_help, has_explicit_arguments};
-
-    #[test]
-    fn gui_argument_contract_is_explicit() {
-        assert!(!has_explicit_arguments(&["embedpix".into()]));
-        assert!(has_explicit_arguments(&[
-            "embedpix".into(),
-            "--help".into()
-        ]));
-        assert!(cli_help().contains("embedpix-cli"));
-        assert!(cli_help().contains("JSONL"));
-    }
-}
-
 #[cfg(windows)]
 fn prepare_cli_console() -> bool {
     const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
@@ -71,4 +55,20 @@ fn prepare_cli_console() -> bool {
 unsafe extern "system" {
     fn AllocConsole() -> i32;
     fn AttachConsole(process_id: u32) -> i32;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cli_help, has_explicit_arguments};
+
+    #[test]
+    fn gui_argument_contract_is_explicit() {
+        assert!(!has_explicit_arguments(&["embedpix".into()]));
+        assert!(has_explicit_arguments(&[
+            "embedpix".into(),
+            "--help".into()
+        ]));
+        assert!(cli_help().contains("embedpix-cli"));
+        assert!(cli_help().contains("JSONL"));
+    }
 }
