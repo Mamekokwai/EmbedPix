@@ -120,7 +120,7 @@ export default function AboutView(updateProps: UpdateViewProps) {
                   </div>
                   <p className="about-support-card-copy">喜欢嵌图匠的话，也可以在 Ko-fi 上请我喝一杯咖啡。</p>
                   <a className="about-support-kofi" href={KOFI_SUPPORT_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, KOFI_SUPPORT_URL)}>
-                    在 Ko-fi 上请我喝咖啡
+                    Open Ko-fi
                   </a>
                 </section>
               </div>

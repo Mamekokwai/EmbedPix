@@ -23,7 +23,7 @@
 .about-support-backdrop { position: fixed; z-index: 30; inset: 0; display: grid; overflow-y: auto; align-items: start; justify-items: center; background: color-mix(in srgb, var(--qp-bg-app) 62%, transparent); padding: 20px; }
 /* 结构照搬 patina 的赞助弹窗：标题 + 说明 + 两张卡（微信赞赏 / Ko-fi），卡片头是图标 + 小标题。 */
 /* 弹窗与内部盒子都按内容定形：不留任何随视口高度变化的尺寸，窗口拉高拉矮都不该影响它。 */
-.about-support-dialog { display: grid; width: min(640px, calc(100vw - 40px)); height: auto; max-height: none; align-content: start; justify-self: center; align-self: center; gap: 10px; overflow: hidden; border: 1px solid var(--qp-border-strong); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); box-shadow: var(--qp-shadow-overlay); padding: 20px; }
+.about-support-dialog { display: grid; width: min(580px, calc(100vw - 40px)); height: auto; max-height: none; align-content: start; justify-self: center; align-self: center; gap: 10px; overflow: hidden; border: 1px solid var(--qp-border-strong); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); box-shadow: var(--qp-shadow-overlay); padding: 20px; }
 .about-support-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .about-support-head h2 { margin: 0; color: var(--qp-text-primary); font-size: 16px; font-weight: 700; }
 .about-support-close { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-secondary); cursor: pointer; }
@@ -53,6 +53,5 @@
   .about-info-card { gap: 8px; padding: 10px; }
   .about-info-card p { margin-top: 4px; font-size: 10px; }
   .about-pill-action { min-height: 28px; padding: 0 10px; font-size: 11px; }
-  .about-support-qr { width: 96px; height: 96px; }
   .update-view-embedded { margin-top: 8px; }
 }

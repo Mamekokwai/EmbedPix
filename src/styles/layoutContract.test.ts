@@ -706,7 +706,7 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toContain("justify-content: center; gap: var(--qp-stack-gap);");
     // 赞助弹窗照 patina 的两张卡结构
     expect(aboutView).toContain("about-support-card-heading");
-    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(640px, calc(100vw - 40px)); height: auto; max-height: none;");
+    expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(580px, calc(100vw - 40px)); height: auto; max-height: none;");
     expect(aboutCss).not.toContain("max-height: min(560px, calc(100vh - 32px))");
     // 赞赏码用原图整张放大，不做裁切；两个卡片图标都抄 patina（微信赞赏徽标 + Ko-fi 官方 mark）
     expect(aboutView).toContain('src={WECHAT_REWARD_IMAGE_URL}');
