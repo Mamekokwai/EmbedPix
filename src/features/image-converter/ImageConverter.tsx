@@ -632,6 +632,7 @@ export default function ImageConverter({
   };
 
   const loadFiles = async (files: File[], replaceImageId: string | null = null) => {
+    if (status.kind === "busy") return;
     const initialCount = loadedImagesRef.current.length;
     const replacingExistingImage = replaceImageId !== null
       && loadedImagesRef.current.some((image) => image.id === replaceImageId);
