@@ -144,7 +144,7 @@ export default function AppShell() {
                   aria-current={active ? "page" : undefined}
                   aria-label={label}
                   onClick={() => setView(id)}
-                  title={hint}
+                  title={`${label} · ${hint}`}
                 >
                   <Icon size={18} strokeWidth={2.1} aria-hidden="true" />
                   <span>{label}</span>

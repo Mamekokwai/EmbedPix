@@ -302,6 +302,7 @@ export default function ImageConverter({
   const exportResumeRef = useRef<(() => void) | null>(null);
   const exportCancelWaitRef = useRef<(() => void) | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const workspaceInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const realPreviewUrlRef = useRef<string | null>(null);
   const loadIdRef = useRef(0);
@@ -1388,7 +1389,7 @@ export default function ImageConverter({
               <h3>源图片</h3>
             </div>
             {file ? (
-              <button className="icon-button" type="button" onClick={clearFile} aria-label="移除当前图片" title="移除当前图片">
+              <button className="icon-button" type="button" onClick={clearFile} disabled={status.kind === "busy"} aria-label="移除当前图片" title="移除当前图片">
                 <X size={16} aria-hidden="true" />
               </button>
             ) : null}
@@ -1472,6 +1473,7 @@ export default function ImageConverter({
                     className="quiet-button file-replace-button"
                     type="button"
                     onClick={() => handleSelectImage(selectedImageId)}
+                    disabled={status.kind === "busy"}
                   >
                     更换
                   </button>
@@ -1480,26 +1482,26 @@ export default function ImageConverter({
               <div className="file-list-toolbar">
                 <span className="file-count">已导入 {loadedImages.length} 张</span>
                 <div className="file-list-actions">
-                  <button className="quiet-button file-add-button" type="button" onClick={() => handleSelectImage()}>
+                  <button className="quiet-button file-add-button" type="button" onClick={() => handleSelectImage()} disabled={status.kind === "busy"}>
                     <Plus size={14} aria-hidden="true" />
                     继续添加
                   </button>
-                  <button className="quiet-button file-add-button" type="button" onClick={() => void handleImportImageDirectory()}>导入文件夹</button>
+                  <button className="quiet-button file-add-button" type="button" onClick={() => void handleImportImageDirectory()} disabled={status.kind === "busy"}>导入文件夹</button>
                   {loadedImages.length > 1 ? (
-                    <button className="quiet-button file-clear-button" type="button" onClick={clearAllImages}>清空列表</button>
+                    <button className="quiet-button file-clear-button" type="button" onClick={clearAllImages} disabled={status.kind === "busy"}>清空列表</button>
                   ) : null}
                 </div>
               </div>
               {loadedImages.length > 1 ? (
-                <div className="file-list" role="listbox" aria-label="已导入图片列表">
+                <div className="file-list" role="list" aria-label="已导入图片列表">
                   {loadedImages.map((image) => (
-                    <div className={`file-list-item${image.id === selectedImageId ? " file-list-item-selected" : ""}`} key={image.id}>
+                    <div className={`file-list-item${image.id === selectedImageId ? " file-list-item-selected" : ""}`} key={image.id} role="listitem">
                       <button
                         className="file-list-select"
                         type="button"
-                        role="option"
-                        aria-selected={image.id === selectedImageId}
+                        aria-pressed={image.id === selectedImageId}
                         onClick={() => selectImage(image.id)}
+                        disabled={status.kind === "busy"}
                       >
                         <span className="file-list-icon"><ImageIcon size={14} aria-hidden="true" /></span>
                         <span className="file-list-copy">
@@ -1507,7 +1509,7 @@ export default function ImageConverter({
                           <small>{image.dimensions.width} × {image.dimensions.height} px · {formatFileSize(image.file.size)}</small>
                         </span>
                       </button>
-                      <button className="icon-button file-remove-button" type="button" onClick={() => removeImage(image.id)} aria-label={`移除 ${image.file.name}`} title="移除这张图片">
+                      <button className="icon-button file-remove-button" type="button" onClick={() => removeImage(image.id)} disabled={status.kind === "busy"} aria-label={`移除 ${image.file.name}`} title="移除这张图片">
                         <X size={14} aria-hidden="true" />
                       </button>
                     </div>
@@ -1516,7 +1518,7 @@ export default function ImageConverter({
               ) : null}
             </div>
           )}
-          {!file ? <div className="drop-zone-actions"><button className="quiet-button directory-import-button" type="button" onClick={() => void handleImportImageDirectory()}>导入图片文件夹</button></div> : null}
+          {!file ? <div className="drop-zone-actions"><button className="quiet-button directory-import-button" type="button" onClick={() => void handleImportImageDirectory()} disabled={status.kind === "busy"}>导入图片文件夹</button></div> : null}
         </div>
 
         <div className="panel settings-panel">
@@ -1528,7 +1530,7 @@ export default function ImageConverter({
             <span className="output-summary">{outputSummary}</span>
           </div>
 
-          <div className="settings-stack">
+          <fieldset className="settings-stack" disabled={status.kind === "busy"} aria-busy={status.kind === "busy"}>
             <fieldset className="setting-group format-group">
               <legend className="field-label">输出格式</legend>
               <FormatSelector value={outputFormat} onChange={handleFormatChange} />
@@ -1864,7 +1866,7 @@ export default function ImageConverter({
                 </div>
               </details>
 
-          </div>
+          </fieldset>
 
           <div className="panel-footer">
             <div className="footer-status">
@@ -1951,7 +1953,8 @@ export default function ImageConverter({
                 {status.kind === "busy" ? "取消导出" : `导出 ${getOutputLabel(outputFormat)}`}
               </button>
             </div>
-            <div className="workspace-transfer-actions"><button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><label className="quiet-button workspace-file-button">打开工作区<input type="file" accept="application/json,.json" hidden onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} /></label></div>
+            <input ref={workspaceInputRef} type="file" accept="application/json,.json" hidden disabled={status.kind === "busy"} onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} />
+            <div className="workspace-transfer-actions"><button className="quiet-button" type="button" onClick={saveWorkspace} disabled={status.kind === "busy"}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceInputRef.current?.click()} disabled={status.kind === "busy"}>打开工作区</button></div>
           </div>
         </div>
       </section>

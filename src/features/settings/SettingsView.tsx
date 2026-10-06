@@ -1,5 +1,5 @@
 import { Laptop, Moon, RotateCcw, Settings2, Sun } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { getBitDepths, OUTPUT_FORMATS } from "../image-converter/imageConverterLogic";
 import type { BmpBitDepth, ByteOrder, ChannelOrder, RowAlignment, RowOrder } from "../image-converter/types";
 import {
@@ -62,6 +62,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
   const [customPresetId, setCustomPresetId] = useState("");
   const [customPresetName, setCustomPresetName] = useState("");
   const [presetMessage, setPresetMessage] = useState<string | null>(null);
+  const presetInputRef = useRef<HTMLInputElement>(null);
   const updateConverterDefaults = (next: Partial<AppPreferences>) => {
     onChange({ ...next, imagePreset: "custom" });
   };
@@ -149,18 +150,15 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
             </div>
             <div className="theme-options" role="radiogroup" aria-label="界面主题">
               {THEME_OPTIONS.map((option) => (
-                <button
+                <label
                   key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={preferences.themeMode === option.value}
                   className={`theme-option${preferences.themeMode === option.value ? " theme-option-active" : ""}`}
-                  onClick={() => onChange({ themeMode: option.value })}
                   title={option.hint}
                 >
+                  <input type="radio" name="theme-mode" value={option.value} checked={preferences.themeMode === option.value} onChange={() => onChange({ themeMode: option.value })} />
                   <ThemeModeIcon mode={option.value} />
                   <span>{option.label}</span>
-                </button>
+                </label>
               ))}
             </div>
           </div>
@@ -247,7 +245,8 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
               <button className="quiet-button" type="button" disabled={!customPresetName.trim()} onClick={saveCustomPreset}>保存</button>
               <button className="quiet-button" type="button" disabled={!customPresetId} onClick={deleteCustomPreset}>删除</button>
               <button className="quiet-button" type="button" onClick={downloadImagePresets}>导出 JSON</button>
-              <label className="quiet-button settings-file-button">导入 JSON<input type="file" accept="application/json,.json" hidden onChange={(event) => { void importImagePresetFile(event.target.files?.[0]); event.target.value = ""; }} /></label>
+              <button className="quiet-button" type="button" onClick={() => presetInputRef.current?.click()}>导入 JSON</button>
+              <input ref={presetInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => { void importImagePresetFile(event.target.files?.[0]); event.target.value = ""; }} />
             </div>
           </div>
           {presetMessage ? <p className="settings-preset-message" role="status">{presetMessage}</p> : null}

@@ -580,6 +580,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [locked, setLocked] = useState(false);
   const [pendingImports, setPendingImports] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const presetFileInputRef = useRef<HTMLInputElement>(null);
+  const workspaceFileInputRef = useRef<HTMLInputElement>(null);
   const replaceFrameIdRef = useRef<string | null>(null);
   const insertFrameAtRef = useRef<number | null>(null);
   const draggedFrameIndicesRef = useRef<number[]>([]);
@@ -1238,6 +1240,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
+    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
     const droppedFiles = Array.from(event.dataTransfer.files);
     if (sourceMode === "video") {
       if (droppedFiles[0]) void importVideo(droppedFiles[0]);
@@ -2392,7 +2395,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           </div>
           <p>{sourceMode === "image" ? "把图片序列整理成适合界面演示和嵌入式资源预览的轻量动画。" : "截取视频片段并按指定帧率生成轻量 GIF。"}</p>
         </div>
-        <div className="gif-header-note"><span className="status-dot" />支持图片序列与视频 <button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><label className="quiet-button workspace-file-button">打开工作区<input type="file" accept="application/json,.json" hidden onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} /></label></div>
+        <div className="gif-header-note"><span className="status-dot" />支持图片序列与视频 <button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceFileInputRef.current?.click()}>打开工作区</button><input ref={workspaceFileInputRef} className="gif-hidden-input" type="file" accept="application/json,.json" onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} /></div>
       </header>
 
       <fieldset className="page-content gif-maker-content" disabled={!canEditFrames} aria-label="GIF 制作工作区" aria-busy={!canEditFrames}>
@@ -2455,13 +2458,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <div
               className={`gif-drop-zone${isDragging ? " gif-drop-zone-active" : ""}`}
               role="button"
-              tabIndex={locked ? -1 : 0}
-              aria-disabled={locked}
-              onClick={() => { if (!locked) openFileDialog(); }}
-              onKeyDown={(event) => { if (!locked && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openFileDialog(); } }}
-              onDragEnter={(event) => { event.preventDefault(); if (!locked) setIsDragging(true); }}
-              onDragOver={(event) => { event.preventDefault(); if (!locked) setIsDragging(true); }}
-              onDragLeave={() => { if (!locked) setIsDragging(false); }}
+              tabIndex={canEditFrames ? 0 : -1}
+              aria-disabled={!canEditFrames}
+              onClick={() => { if (canEditFrames) openFileDialog(); }}
+              onKeyDown={(event) => { if (canEditFrames && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openFileDialog(); } }}
+              onDragEnter={(event) => { event.preventDefault(); if (canEditFrames) setIsDragging(true); }}
+              onDragOver={(event) => { event.preventDefault(); if (canEditFrames) setIsDragging(true); }}
+              onDragLeave={() => { if (canEditFrames) setIsDragging(false); }}
               onDrop={(event) => { if (locked) { event.preventDefault(); return; } handleDrop(event); }}
               aria-label={sourceMode === "video" ? "拖放视频或选择视频" : "拖放图片或选择图片"}
             >
@@ -2564,7 +2567,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <SelectField id="gif-background" label="背景" value={background} options={[{ value: "transparent" as const, label: "透明" }, { value: "white" as const, label: "白色" }, { value: "black" as const, label: "黑色" }, { value: "custom" as const, label: "自定义颜色" }]} onChange={(value) => { setBackground(value); setGifPreset("custom"); setMeasuredSizeBytes(null); }} />
                 {background === "custom" ? <label className="gif-field"><span>自定义背景色</span><input aria-label="自定义背景色" type="color" value={customBackgroundColor} onChange={(event) => { setCustomBackgroundColor(event.target.value); setMeasuredSizeBytes(null); }} /></label> : null}
                 <div className="gif-field gif-margin-field"><span>自定义边距 · 上 / 右 / 下 / 左</span><div className="gif-margin-grid">
-                  {([['top', '上'], ['right', '右'], ['bottom', '下'], ['left', '左']] as const).map(([side, label]) => <label key={side}><span className="sr-only">{label}边距</span><input aria-label={`${label}边距`} type="number" min="0" max="4096" step="1" value={contentMargins[side]} onChange={(event) => updateContentMargin(side, Number(event.target.value))} /><small>{label}</small></label>)}
+                  {([['top', '上'], ['right', '右'], ['bottom', '下'], ['left', '左']] as const).map(([side, label]) => <label key={side}><span className="gif-margin-label">{label}</span><input aria-label={`${label}边距`} type="number" min="0" max="4096" step="1" value={contentMargins[side]} onChange={(event) => updateContentMargin(side, Number(event.target.value))} /><small>px</small></label>)}
                 </div></div>
               </div>
               <p className="gif-help-text">{fitMode === "contain" ? "等比缩放并在内容区内留白，按所选背景补边。" : fitMode === "cover" ? "等比放大铺满内容区，超出部分按上/下对齐裁剪。" : "拉伸图片填满内容区；边距区域保留所选背景。"} 预览和导出使用相同规则。</p>
@@ -2603,7 +2606,8 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                   <button className="quiet-button" type="button" disabled={!customPresetName.trim() || locked} onClick={saveCustomGifPreset}>保存</button>
                   <button className="quiet-button" type="button" disabled={!customPresetId || locked} onClick={deleteCustomGifPreset}>删除</button>
                   <button className="quiet-button" type="button" disabled={locked} onClick={downloadGifPresets}>导出 JSON</button>
-                  <label className="quiet-button gif-file-button">导入 JSON<input type="file" accept="application/json,.json" hidden onChange={(event) => { void importGifPresetFile(event.target.files?.[0]); event.target.value = ""; }} /></label>
+                  <button className="quiet-button gif-file-button" type="button" disabled={locked} onClick={() => presetFileInputRef.current?.click()}>导入 JSON</button>
+                  <input ref={presetFileInputRef} className="gif-hidden-input" type="file" accept="application/json,.json" onChange={(event) => { void importGifPresetFile(event.target.files?.[0]); event.target.value = ""; }} />
                 </div>
                 {customPresetMessage ? <p className="gif-format-note" role="status">{customPresetMessage}</p> : null}
                 {gifPreset !== "custom" ? <p className="gif-format-note">当前预设：{GIF_PRESETS[gifPreset].description}。单独修改颜色、抖动、画布或视频采样参数后自动转为“自定义”。</p> : null}
