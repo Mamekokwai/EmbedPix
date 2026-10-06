@@ -14,10 +14,11 @@ import {
   formatFileSize,
   formatImageConverterError,
   formatExportSafetyConfirmation,
-  getBackgroundNote,
   getBatchExportStatus,
   getCropInputError,
   getCropInputValidation,
+  getSubdirectoryError,
+  normalizeSubdirectoryPath,
   getBitDepthNote,
   getBitDepths,
   getDimensionError,
@@ -142,12 +143,7 @@ describe("image converter output rules", () => {
     expect(normalizeCArrayName("  ")).toBe(DEFAULT_C_ARRAY_NAME);
   });
 
-  it("explains transparency and background behavior at the bit-depth boundary", () => {
-    expect(getBackgroundNote("bmp", 32)).toContain("源图透明度保留");
-    expect(getBackgroundNote("png", 32)).toContain("源图透明度保留");
-    expect(getBackgroundNote("bmp", 24)).toBe("透明区域使用此颜色");
-    expect(getBackgroundNote("png", 24)).toBe("透明区域使用此颜色");
-    expect(getBackgroundNote("jpg", 24)).toBe("透明区域使用此颜色");
+  it("explains transparency behavior at the bit-depth boundary", () => {
     expect(getBitDepthNote("jpg", 32)).toBe("JPG 始终输出 24 位。");
     expect(getBitDepthNote("png", 32)).toBe("32 位输出保留透明度。");
     expect(getBitDepthNote("bmp", 4)).toContain("4 位输出不含透明度");
@@ -309,5 +305,43 @@ describe("batch image export helpers", () => {
 
     expect(plan.targetPaths).toEqual(["C:\\Images\\export\\screen.png"]);
     expect(formatExportSafetyConfirmation(plan)).toBeNull();
+  });
+});
+
+describe("image converter subdirectory paths", () => {
+  it("normalizes relative subdirectory paths the same way the native side does", () => {
+    expect(normalizeSubdirectoryPath("out/A")).toBe("out/A");
+    expect(normalizeSubdirectoryPath("out/A/")).toBe("out/A");
+    expect(normalizeSubdirectoryPath("out//A")).toBe("out/A");
+    expect(normalizeSubdirectoryPath("out\\A")).toBe("out/A");
+    expect(normalizeSubdirectoryPath("  out/A  ")).toBe("out/A");
+    expect(normalizeSubdirectoryPath("   ")).toBe("");
+  });
+
+  it("accepts nested paths and rejects traversal, absolute paths and reserved segments", () => {
+    expect(getSubdirectoryError("out/A")).toBeNull();
+    expect(getSubdirectoryError("out/A/")).toBeNull();
+    expect(getSubdirectoryError("")).toContain("请输入");
+    expect(getSubdirectoryError("../x")).toContain(".. 路径段");
+    expect(getSubdirectoryError("out/./x")).toContain(".. 路径段");
+    expect(getSubdirectoryError("C:\\abs")).toContain("保留字符");
+    expect(getSubdirectoryError("out/aux")).toContain("保留字符");
+    expect(getSubdirectoryError("out/A.")).toContain("结尾");
+  });
+
+  it("plans nested subdirectory targets under the source folder", () => {
+    const plan = getExportSafetyPlan(
+      [{ file: { name: "screen.png" }, sourcePath: "C:\\Images\\screen.png" }],
+      {
+        outputFormat: "png",
+        outputLocation: "subfolder",
+        outputSubdirectory: normalizeSubdirectoryPath("out/A/"),
+        outputDirectory: "",
+        overwriteSameName: false,
+        deleteSource: false,
+      },
+    );
+
+    expect(plan.targetPaths).toEqual(["C:\\Images\\out\\A\\screen.png"]);
   });
 });

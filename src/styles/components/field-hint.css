@@ -19,6 +19,12 @@
   transition: opacity var(--qp-motion-fast) var(--qp-motion-ease);
 }
 
+/* 说明紧贴控件：把控件和说明一起放进这个锚点。锚点必须是说明的定位祖先，
+   否则 top: 100% 会以更大的容器（整个设置组、甚至 .app-main）为基准，说明会跑到组底或窗口底部。 */
+.field-hint-anchor {
+  position: relative;
+}
+
 /* 悬停/聚焦紧邻说明的那个控件，停一会才浮出；说明本身不吃指针事件，避免与悬停判定互相打断。
    用 :focus-visible 而不是 :focus-within——鼠标点一下开关也会给它焦点，那样鼠标移开浮出框会一直挂着。 */
 *:has(+ .field-help-hover):hover + .field-help-hover,

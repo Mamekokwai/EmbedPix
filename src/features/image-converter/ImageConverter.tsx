@@ -45,7 +45,6 @@ import {
   formatMebibytes,
   getImagePreviewComparison,
   estimateImageExportBytesForDimensions,
-  getBackgroundNote,
   getBitDepthNote,
   getBitDepths,
   getDimensionError,
@@ -60,6 +59,8 @@ import {
   formatExportSafetyConfirmation,
   getMissingSourcePathFileName,
   getPixelError,
+  getSubdirectoryError,
+  normalizeSubdirectoryPath,
   isCArrayFormat,
   isImageFile,
   isRawPixelFormat,
@@ -133,20 +134,6 @@ function createNativeFile(source: NativeImageFile): File {
   const file = new File([new Uint8Array(source.data)], source.fileName);
   Object.defineProperty(file, "path", { configurable: false, enumerable: false, value: source.path });
   return file;
-}
-
-function getSubdirectoryError(value: string): string | null {
-  const name = value.trim();
-  if (!name) {
-    return "请输入子文件夹名称。";
-  }
-  if (name === "." || name === "..") {
-    return "子文件夹名称不能是 . 或 ..。";
-  }
-  if (/[\\/:*?"<>|\u0000-\u001f]/u.test(name)) {
-    return "子文件夹名称不能包含路径分隔符或 Windows 保留字符。";
-  }
-  return null;
 }
 
 function resolveDefaultBitDepth(format: OutputFormat, requested: BmpBitDepth): BmpBitDepth {
@@ -235,6 +222,8 @@ function SelectField<T extends string | number>({
   );
 }
 
+const DEFAULT_FILE_NAME_TEMPLATE = "{name}.{ext}";
+
 export default function ImageConverter({
   defaultOutputFormat = "bmp",
   defaultJpegQuality = DEFAULT_JPEG_QUALITY,
@@ -277,8 +266,8 @@ export default function ImageConverter({
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
-  const [fileNameTemplate, setFileNameTemplate] = useState("{name}.{ext}");
-  const [autoSequence, setAutoSequence] = useState(false);
+  const [fileNameTemplate, setFileNameTemplate] = useState(DEFAULT_FILE_NAME_TEMPLATE);
+  const [renameEnabled, setRenameEnabled] = useState(false);
   const [overwriteSameName, setOverwriteSameName] = useState(false);
   const [deleteSource, setDeleteSource] = useState(false);
   const [metadataPolicy, setMetadataPolicy] = useState<"strip" | "preserve">("strip");
@@ -403,11 +392,7 @@ export default function ImageConverter({
     return null;
   }, [file, loadedImages, outputDirectory, outputLocation, outputSubdirectory]);
   // 子文件夹那句写进输入框占位符，不再单独占一行注释。
-  const outputLocationHelp = outputLocation === "source"
-    ? "直接保存到源图片所在文件夹。"
-    : outputLocation === "directory"
-      ? "目录不存在时会自动创建，支持绝对路径。"
-      : null;
+  const outputLocationHelp = outputLocation === "source" ? "直接保存到源图片所在文件夹。" : null;
   const outputLocationDescription = [
     outputLocationHelp ? "output-location-help" : null,
     outputLocationError ? "output-location-error" : null,
@@ -427,11 +412,11 @@ export default function ImageConverter({
   const batchPlan = useMemo(() => {
     if (!loadedImages.length) return null;
     try {
-      return planBatchConversions(loadedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory, autoSequence });
+      return planBatchConversions(loadedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory });
     } catch {
       return null;
     }
-  }, [autoSequence, fileNameTemplate, loadedImages, outputDirectory, outputFormat, outputLocation, outputSubdirectory]);
+  }, [fileNameTemplate, loadedImages, outputDirectory, outputFormat, outputLocation, outputSubdirectory]);
 
   const setSettingStatus = (nextWidthInput = widthInput, nextHeightInput = heightInput) => {
     if (!file) {
@@ -466,7 +451,7 @@ export default function ImageConverter({
   useEffect(() => {
     setExportPreflight(null);
     setNativePreflightStatus(null);
-  }, [autoSequence, bitDepth, deleteSource, file, fileNameTemplate, height, imageTransform, keepAspectRatio, loadedImages, outputDirectory, outputLocation, outputSubdirectory, outputFormat, overwriteSameName, width]);
+  }, [bitDepth, deleteSource, file, fileNameTemplate, height, imageTransform, keepAspectRatio, loadedImages, outputDirectory, outputLocation, outputSubdirectory, outputFormat, overwriteSameName, width]);
 
   useEffect(() => {
     let cancelled = false;
@@ -782,7 +767,7 @@ export default function ImageConverter({
   };
 
   const saveWorkspace = () => {
-    const data = exportWorkspace({ kind: "image", outputLocation, outputDirectory, outputSubdirectory, namingTemplate: fileNameTemplate, sourcePaths: loadedImages.map((image) => image.sourcePath).filter((path): path is string => Boolean(path)), parameters: { outputFormat, bitDepth, jpegQuality, byteOrder, channelOrder, rowOrder, rowAlignment, cArrayName, keepAspectRatio, backgroundColor, width, height, fileNameTemplate, autoSequence } });
+    const data = exportWorkspace({ kind: "image", outputLocation, outputDirectory, outputSubdirectory, namingTemplate: fileNameTemplate, sourcePaths: loadedImages.map((image) => image.sourcePath).filter((path): path is string => Boolean(path)), parameters: { outputFormat, bitDepth, jpegQuality, byteOrder, channelOrder, rowOrder, rowAlignment, cArrayName, keepAspectRatio, backgroundColor, width, height, fileNameTemplate } });
     downloadBlob(new Blob([data], { type: "application/json" }), "embedpix-workspace.json");
     setStatus({ kind: "ready", text: "工作区已保存" });
   };
@@ -791,7 +776,7 @@ export default function ImageConverter({
     try {
       const bundle = importWorkspace(await file.text(), "image"); const p = bundle.parameters;
       setError(bundle.issues.length ? bundle.issues.map((issue) => issue.path ? `${formatWorkspaceTransferError(issue.message)}：${issue.path}` : formatWorkspaceTransferError(issue.message)).join("；") : null);
-      if (bundle.outputLocation === "source" || bundle.outputLocation === "subfolder" || bundle.outputLocation === "directory") setOutputLocation(bundle.outputLocation); if (typeof bundle.outputDirectory === "string") setOutputDirectory(bundle.outputDirectory); if (typeof bundle.outputSubdirectory === "string") setOutputSubdirectory(bundle.outputSubdirectory); if (typeof bundle.namingTemplate === "string") setFileNameTemplate(bundle.namingTemplate);
+      if (bundle.outputLocation === "source" || bundle.outputLocation === "subfolder" || bundle.outputLocation === "directory") setOutputLocation(bundle.outputLocation); if (typeof bundle.outputDirectory === "string") setOutputDirectory(bundle.outputDirectory); if (typeof bundle.outputSubdirectory === "string") setOutputSubdirectory(bundle.outputSubdirectory); if (typeof bundle.namingTemplate === "string") { setFileNameTemplate(bundle.namingTemplate); setRenameEnabled(bundle.namingTemplate !== DEFAULT_FILE_NAME_TEMPLATE); }
       if (typeof p.defaultOutputFormat === "string") setOutputFormat(p.defaultOutputFormat as OutputFormat); if (typeof p.defaultBitDepth === "number") setBitDepth(p.defaultBitDepth as BmpBitDepth); if (typeof p.defaultJpegQuality === "number") setJpegQuality(p.defaultJpegQuality); if (p.defaultByteOrder === "little" || p.defaultByteOrder === "big") setByteOrder(p.defaultByteOrder); if (p.defaultChannelOrder === "rgb" || p.defaultChannelOrder === "bgr") setChannelOrder(p.defaultChannelOrder); if (p.defaultRowOrder === "top-down" || p.defaultRowOrder === "bottom-up") setRowOrder(p.defaultRowOrder); if (p.defaultRowAlignment === 1 || p.defaultRowAlignment === 2 || p.defaultRowAlignment === 4) setRowAlignment(p.defaultRowAlignment); if (typeof p.defaultCArrayName === "string") setCArrayName(p.defaultCArrayName); if (typeof p.keepAspectRatio === "boolean") setKeepAspectRatio(p.keepAspectRatio); if (typeof p.defaultBackgroundColor === "string") setBackgroundColor(p.defaultBackgroundColor);
       if (isTauriEnvironment() && bundle.sourcePaths.length) {
         const restored = await loadNativeImages(bundle.sourcePaths);
@@ -1045,6 +1030,13 @@ export default function ImageConverter({
     setError(null);
   };
 
+  // 关掉重命名就回到源图名，免得看不见的模板继续生效。
+  const handleRenameChange = (checked: boolean) => {
+    setRenameEnabled(checked);
+    if (!checked) setFileNameTemplate(DEFAULT_FILE_NAME_TEMPLATE);
+    setError(null);
+  };
+
   const handleKeepAspectRatioChange = (checked: boolean) => {
     setKeepAspectRatio(checked);
     let nextWidthInput = widthInput;
@@ -1132,7 +1124,7 @@ export default function ImageConverter({
 
     let requestedPlan;
     try {
-      requestedPlan = planBatchConversions(requestedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory, autoSequence });
+      requestedPlan = planBatchConversions(requestedImages.map((image) => ({ name: image.file.name, width: image.dimensions.width, height: image.dimensions.height, sourcePath: image.sourcePath })), { template: fileNameTemplate, outputFormat, outputLocation, outputDirectory, outputSubdirectory });
     } catch (planError) {
       setError(formatBatchConversionPlanError(planError));
       setStatus({ kind: "error", text: "请检查文件名模板" });
@@ -1142,7 +1134,7 @@ export default function ImageConverter({
     const safetyPlan = getExportSafetyPlan(requestedImages, {
       outputFormat,
       outputLocation,
-      outputSubdirectory,
+      outputSubdirectory: normalizeSubdirectoryPath(outputSubdirectory),
       outputDirectory,
       overwriteSameName,
       deleteSource,
@@ -1250,7 +1242,7 @@ export default function ImageConverter({
           cArrayName: normalizeCArrayName(cArrayName),
           outputLocation,
           sourcePath: image.sourcePath,
-          outputSubdirectory: outputSubdirectory.trim() || undefined,
+          outputSubdirectory: normalizeSubdirectoryPath(outputSubdirectory) || undefined,
           outputDirectory: outputDirectory.trim() || undefined,
           overwriteSameName,
           deleteSource,
@@ -1740,8 +1732,7 @@ export default function ImageConverter({
 
             <div className="setting-group">
               <div className="label-row">
-                <label className="field-label" htmlFor="background-color">背景色</label>
-                <span className="field-note">{getBackgroundNote(outputFormat, bitDepth)}</span>
+                <label className="field-label" htmlFor="background-color">透明色</label>
               </div>
               <label className="color-control" htmlFor="background-color">
                 <input id="background-color" type="color" value={backgroundColor} onChange={(event) => handleBackgroundColorChange(event.target.value)} />
@@ -1758,14 +1749,13 @@ export default function ImageConverter({
             <div className="setting-group output-location-group">
               <div className="label-row">
                 <label className="field-label" htmlFor="output-location">输出位置</label>
-                <span className="field-note">导出后自动使用对应目录</span>
               </div>
               <ThemeSelect
                 id="output-location"
                 value={outputLocation}
                 options={[
                   { value: "source" as const, label: "源文件夹" },
-                  { value: "subfolder" as const, label: "源文件夹 / 子文件夹" },
+                  { value: "subfolder" as const, label: "子文件夹" },
                   { value: "directory" as const, label: "指定目录" },
                 ]}
                 aria-label="输出位置"
@@ -1775,7 +1765,7 @@ export default function ImageConverter({
               />
               {outputLocation === "subfolder" ? (
                 <label className="text-field" htmlFor="output-subdirectory">
-                  <span>子文件夹名称</span>
+                  <span>子文件夹</span>
                   <input
                     id="output-subdirectory"
                     value={outputSubdirectory}
@@ -1797,7 +1787,7 @@ export default function ImageConverter({
                       aria-describedby={outputLocationDescription}
                       aria-invalid={Boolean(outputLocationError)}
                       onChange={(event) => { setOutputDirectory(event.target.value); setError(null); }}
-                      placeholder="例如 D:\\Images\\Export"
+                      placeholder="目录不存在时会自动创建，支持绝对路径。"
                       spellCheck={false}
                     />
                     {isTauriEnvironment() ? <button
@@ -1814,16 +1804,18 @@ export default function ImageConverter({
               ) : null}
               {outputLocationHelp ? <p className="field-help" id="output-location-help">{outputLocationHelp}</p> : null}
               {outputLocationError ? <p className="error-message output-location-error" id="output-location-error" role="alert">{outputLocationError}</p> : null}
-              <label className="text-field" htmlFor="file-name-template">
-                <span>文件名模板</span>
-                <input id="file-name-template" value={fileNameTemplate} onChange={(event) => { setFileNameTemplate(event.target.value); setError(null); }} placeholder="{name}.{ext}" spellCheck={false} />
-              </label>
-              <p className="field-help">可用变量：&#123;name&#125;、&#123;ext&#125;、&#123;width&#125;、&#123;height&#125;、&#123;index&#125;。</p>
               <label className="toggle-row output-action-toggle">
-                <input type="checkbox" checked={autoSequence} onChange={(event) => setAutoSequence(event.target.checked)} />
+                <input type="checkbox" checked={renameEnabled} onChange={(event) => handleRenameChange(event.target.checked)} />
                 <span className="toggle-track" aria-hidden="true"><span /></span>
-                <span>重复目标自动编号</span>
+                <span>重命名</span>
               </label>
+              {renameEnabled ? <div className="field-hint-anchor">
+                <label className="text-field" htmlFor="file-name-template">
+                  <span>文件名模板</span>
+                  <input id="file-name-template" value={fileNameTemplate} onChange={(event) => { setFileNameTemplate(event.target.value); setError(null); }} placeholder="{name}.{ext}" spellCheck={false} aria-describedby="file-name-template-help" />
+                </label>
+                <p className="field-help field-help-hover" id="file-name-template-help">可用变量：&#123;name&#125;、&#123;ext&#125;、&#123;width&#125;、&#123;height&#125;、&#123;index&#125;。</p>
+              </div> : null}
               {batchPlan ? <p className={`field-help${batchPlan.duplicateTargets.length > 0 ? " output-location-error" : ""}`} role={batchPlan.duplicateTargets.length > 0 ? "alert" : undefined}>
                 示例目标：{batchPlan.targetPaths[0] ?? "暂无"}{batchPlan.duplicateTargets.length > 0 ? ` · 检测到 ${batchPlan.duplicateTargets.length} 个重复目标` : ""}
               </p> : null}
@@ -1832,7 +1824,7 @@ export default function ImageConverter({
                   <label className="toggle-row output-action-toggle">
                     <input type="checkbox" checked={overwriteSameName} aria-describedby="overwrite-same-name-help" onChange={(event) => { setOverwriteSameName(event.target.checked); setError(null); }} />
                     <span className="toggle-track" aria-hidden="true"><span /></span>
-                    <span>覆盖同名输出文件</span>
+                    <span>覆盖同名文件</span>
                   </label>
                   <p className="field-help output-action-help field-help-hover" id="overwrite-same-name-help">导出前会列出目标文件并要求确认；已有同名输出会直接覆盖，不移动到 bak 文件夹。</p>
                 </div>

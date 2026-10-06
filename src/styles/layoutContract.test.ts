@@ -467,7 +467,10 @@ describe("compact layout viewport contract", () => {
   it("invalidates stale image export preflight when request parameters change", () => {
     expect(converterView).toContain("setExportPreflight(null);");
     expect(converterView).toContain("setNativePreflightStatus(null);");
-    expect(converterView).toMatch(/\[autoSequence, bitDepth, deleteSource, file, fileNameTemplate, height, imageTransform, keepAspectRatio, loadedImages, outputDirectory, outputLocation, outputSubdirectory, outputFormat, overwriteSameName, width\]/);
+    expect(converterView).toMatch(/\[bitDepth, deleteSource, file, fileNameTemplate, height, imageTransform, keepAspectRatio, loadedImages, outputDirectory, outputLocation, outputSubdirectory, outputFormat, overwriteSameName, width\]/);
+    // 重复目标自动编号已下线：不要再出现开关或状态（重复目标改为在示例目标行直接报出来）。
+    expect(converterView).not.toContain("重复目标自动编号");
+    expect(converterView).not.toContain("setAutoSequence");
     expect(converterView).toContain("setActualExportResult(null);");
   });
 

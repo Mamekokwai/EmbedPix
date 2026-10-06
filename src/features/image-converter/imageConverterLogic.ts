@@ -21,7 +21,7 @@ export const OUTPUT_FORMATS: ReadonlyArray<{
       value: id as OutputFormat,
       label: id === "webp" ? "WebP" : format?.label ?? id,
       hint: id === "webp" ? "24 / 32 位" : format?.hint ?? "",
-      description: id === "webp" ? "静态 WebP；24 位使用背景色合成，32 位保留透明度。" : format?.description ?? "",
+      description: id === "webp" ? "静态 WebP；24 位使用透明色合成，32 位保留透明度。" : format?.description ?? "",
     };
   }),
 ];
@@ -187,6 +187,36 @@ export function parseDimension(value: string) {
   return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= MAX_DIMENSION ? parsed : null;
 }
 
+export const RESERVED_DEVICE_NAME_PATTERN = /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
+
+/** 子文件夹是相对源文件夹的路径（out/A 之类）：逐段按 Windows 命名规则校验，不允许 . / .. 逃逸。 */
+export function getSubdirectoryError(value: string): string | null {
+  const path = value.trim();
+  const segments = path.split(/[\\/]+/u).filter((segment) => segment.length > 0);
+  if (segments.length === 0) {
+    return "请输入子文件夹。";
+  }
+  if (segments.some((segment) => segment === "." || segment === "..")) {
+    return "子文件夹不能出现 . 或 .. 路径段。";
+  }
+  if (segments.some((segment) => segment.endsWith(".") || segment.endsWith(" "))) {
+    return "子文件夹每一段不能以 . 或空格结尾。";
+  }
+  if (/[:*?"<>|\u0000-\u001f]/u.test(path) || segments.some((segment) => RESERVED_DEVICE_NAME_PATTERN.test(segment))) {
+    return "子文件夹不能包含 : * ? \" < > | 或 CON、PRN、AUX、NUL、COM1-9、LPT1-9 等系统保留字符 / 名称。";
+  }
+  return null;
+}
+
+/** 首尾与重复分隔符等价（out/A/ 与 out/A 同义），统一按 / 归一化后再交给后端。 */
+export function normalizeSubdirectoryPath(value: string): string {
+  return value
+    .trim()
+    .split(/[\\/]+/u)
+    .filter((segment) => segment.length > 0)
+    .join("/");
+}
+
 export function getDimensionError(value: string, label: string) {
   if (value.length === 0) {
     return `${label}不能为空。`;
@@ -343,22 +373,17 @@ export function getFormatInfo(format: OutputFormat) {
   return OUTPUT_FORMATS.find((item) => item.value === format) ?? OUTPUT_FORMATS[0];
 }
 
-export function getBackgroundNote(format: OutputFormat, bitDepth: BmpBitDepth) {
-  const keepsTransparency = ((format === "png" || format === "webp" || format === "tiff" || format === "ico") && bitDepth === 32) || (format === "bmp" && bitDepth === 32);
-  return keepsTransparency ? "留白区域使用此颜色；源图透明度保留" : "透明区域使用此颜色";
-}
-
 export function getBitDepthNote(format: OutputFormat, bitDepth: BmpBitDepth) {
   if (format === "jpg") {
     return "JPG 始终输出 24 位。";
   }
 
   if (format === "webp") {
-    return bitDepth === 32 ? "32 位 WebP 保留透明度。" : "24 位 WebP 不含透明度，透明区域使用背景色。";
+    return bitDepth === 32 ? "32 位 WebP 保留透明度。" : "24 位 WebP 不含透明度，透明区域使用透明色。";
   }
 
   if (format === "tiff") {
-    return bitDepth === 32 ? "32 位 TIFF 保留透明度；输入元数据不保留。" : "24 位 TIFF 不含透明度，透明区域使用背景色。";
+    return bitDepth === 32 ? "32 位 TIFF 保留透明度；输入元数据不保留。" : "24 位 TIFF 不含透明度，透明区域使用透明色。";
   }
 
   if (format === "ico") {
@@ -369,7 +394,7 @@ export function getBitDepthNote(format: OutputFormat, bitDepth: BmpBitDepth) {
     return "32 位输出保留透明度。";
   }
 
-  return `${bitDepth} 位输出不含透明度，透明区域使用背景色。`;
+  return `${bitDepth} 位输出不含透明度，透明区域使用透明色。`;
 }
 
 export function isRawPixelFormat(format: OutputFormat) {
@@ -530,7 +555,10 @@ function replacePathExtension(path: string, extension: string): string {
 function joinPath(directory: string, child: string): string {
   const trimmedDirectory = directory.trim().replace(/[\\/]+$/u, "");
   if (!trimmedDirectory) return child;
-  return `${trimmedDirectory}${getPathSeparator(directory)}${child}`;
+  const separator = getPathSeparator(directory);
+  // 子文件夹可以是相对路径（out/A）；按父目录的分隔符统一，免得显示成 C:\Images\out/A/screen.png。
+  const normalizedChild = separator === "\\" ? child.replace(/[\\/]+/gu, "\\") : child;
+  return `${trimmedDirectory}${separator}${normalizedChild}`;
 }
 
 function pathsMatch(left: string, right: string): boolean {

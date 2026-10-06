@@ -74,7 +74,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
     }
     if (value === preferences.imagePreset) return;
     const preset = IMAGE_PRESETS[value];
-    if (!window.confirm(`切换到“${presetLabel(value)}”会覆盖图片转换默认格式、JPEG 质量、位深、RAW 参数、背景色和比例设置。是否继续？`)) {
+    if (!window.confirm(`切换到“${presetLabel(value)}”会覆盖图片转换默认格式、JPEG 质量、位深、RAW 参数、透明色和比例设置。是否继续？`)) {
       return;
     }
     onChange({ ...preset, imagePreset: value });
@@ -220,7 +220,7 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
           <div className="settings-card-header">
             <div>
               <h2 id="converter-preset-title">图片转换预设</h2>
-              <p>预设会覆盖图片转换的默认格式、质量、位深、RAW 参数、背景色和比例设置；单独修改任一项后会变为自定义。</p>
+              <p>预设会覆盖图片转换的默认格式、质量、位深、RAW 参数、透明色和比例设置；单独修改任一项后会变为自定义。</p>
             </div>
           </div>
           <div className="settings-row settings-preset-row">
@@ -310,11 +310,11 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
           </div>
           <div className="settings-row">
             <div>
-              <h3>默认背景色</h3>
+              <h3>默认透明色</h3>
               <p>非透明输出或留白区域使用的颜色。</p>
             </div>
             <label className="settings-color-control" htmlFor="default-background-color">
-              <input id="default-background-color" type="color" value={preferences.defaultBackgroundColor} aria-label="默认背景色" onChange={(event) => updateConverterDefaults({ defaultBackgroundColor: event.target.value.toUpperCase() })} />
+              <input id="default-background-color" type="color" value={preferences.defaultBackgroundColor} aria-label="默认透明色" onChange={(event) => updateConverterDefaults({ defaultBackgroundColor: event.target.value.toUpperCase() })} />
               <span>{preferences.defaultBackgroundColor}</span>
             </label>
           </div>
