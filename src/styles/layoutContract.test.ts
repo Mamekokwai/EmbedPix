@@ -355,8 +355,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-check span { display: grid; min-width: 0;");
     expect(compressionCss).toContain(".compression-webp-method-hint");
     expect(compressionCss).toContain(".compression-output-file-name-hint");
-    expect(compressionCss).toContain(".compression-advanced-settings { min-width: 0; grid-column: 1 / -1;");
-    expect(compressionCss).toContain(".compression-advanced-settings summary:focus-visible");
+    expect(compressionCss).toContain(".compression-advanced-settings {\n  min-width: 0;\n  grid-column: 1 / -1;\n  border: 1px solid var(--qp-border-subtle);\n  border-radius: var(--qp-radius-control);\n  background: var(--qp-bg-elevated);\n}");
+    expect(compressionCss).toContain(".compression-advanced-settings > summary:focus-visible");
+    expect(compressionCss).toContain('.compression-advanced-settings > summary::after { flex: 0 0 auto; color: var(--qp-text-tertiary); content: "+";');
     expect(compressionCss).toContain(".compression-advanced-settings-body { display: grid; min-width: 0;");
     expect(compressionCss).toContain(".compression-skip-larger-warning");
   });
