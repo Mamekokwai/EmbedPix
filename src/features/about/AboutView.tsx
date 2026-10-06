@@ -7,10 +7,6 @@ import UpdateView, { type UpdateViewProps } from "../update/UpdateView";
 import { FORMAT_METADATA } from "../../shared/formatMetadata";
 import { RELEASES_PAGE_URL } from "../../platform/update/updateGateway";
 
-const AUTHOR_BLOG_URL = "https://blog.nywerya.xyz/";
-const AUTHOR_AVATAR_URL = "https://photo.nywerya.xyz/Obsidian/%E5%A4%B4%E5%83%8F2.jpg";
-const AUTHOR_AVATAR_FALLBACK_URL = "/embedpix-icon.png";
-const AUTHOR_GITHUB_URL = "https://github.com/Mamekokwai";
 const PROJECT_REPOSITORY_URL = "https://github.com/Mamekokwai/EmbedPix";
 const PROJECT_ISSUES_URL = "https://github.com/Mamekokwai/EmbedPix/issues/new/choose";
 const KOFI_SUPPORT_URL = "https://ko-fi.com/nywerya";
@@ -41,7 +37,6 @@ function handleExternalLink(event: MouseEvent<HTMLAnchorElement>, url: string): 
 }
 
 export default function AboutView(updateProps: UpdateViewProps) {
-  const [authorAvatarUrl, setAuthorAvatarUrl] = useState(AUTHOR_AVATAR_URL);
   const [supportDialogOpen, setSupportDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -90,24 +85,6 @@ export default function AboutView(updateProps: UpdateViewProps) {
             <span className="about-pill-icon" aria-hidden="true"><HeartHandshake size={14} /></span>
             <span className="about-pill-label">赞助项目</span>
           </button>
-          </div>
-        </section>
-
-        <section className="about-author-card" aria-label="作者信息">
-          <img className="about-author-avatar" src={authorAvatarUrl} alt="Nywerya头像" onError={() => setAuthorAvatarUrl((current) => current === AUTHOR_AVATAR_URL ? AUTHOR_AVATAR_FALLBACK_URL : current)} />
-          <div className="about-author-copy">
-            <p className="about-section-eyebrow">MADE BY NYWERYA</p>
-            <h2>Nywerya · XUNCHANG WANG</h2>
-            <p>EmbedPix 的作者与维护者，专注于嵌入式界面和本地工具。</p>
-          </div>
-          <div className="about-author-links">
-            <a className="about-author-link" href={AUTHOR_BLOG_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, AUTHOR_BLOG_URL)}>
-              博客
-            </a>
-            <a className="about-author-link" href={AUTHOR_GITHUB_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, AUTHOR_GITHUB_URL)}>
-              <Github size={15} aria-hidden="true" />
-              @Mamekokwai
-            </a>
           </div>
         </section>
 
