@@ -6,11 +6,23 @@ fn main() {
         if !prepare_cli_console() {
             std::process::exit(2);
         }
-        eprintln!(
-            "EmbedPix CLI mode is not implemented yet; received arguments: {}",
-            args.iter().skip(1).cloned().collect::<Vec<_>>().join(" ")
-        );
-        std::process::exit(2);
+        match args.get(1).map(String::as_str) {
+            Some("--help" | "-h") => {
+                println!("{}", cli_help());
+                std::process::exit(0);
+            }
+            Some("--version" | "-V") => {
+                println!("EmbedPix {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            _ => {
+                eprintln!(
+                    "EmbedPix GUI 不接收图片处理参数；请使用同目录的 embedpix-cli，通过 JSON/JSONL stdin 调用。收到参数：{}",
+                    args.iter().skip(1).cloned().collect::<Vec<_>>().join(" ")
+                );
+                std::process::exit(2);
+            }
+        }
     }
 
     embedpix_lib::run();
@@ -18,6 +30,26 @@ fn main() {
 
 fn has_explicit_arguments(args: &[String]) -> bool {
     args.len() > 1
+}
+
+fn cli_help() -> &'static str {
+    "EmbedPix GUI\n\n用法：直接启动 EmbedPix.exe 打开图形界面。\n命令行处理：使用同目录的 embedpix-cli，将 JSON 或 JSONL 请求写入 stdin。\n选项：\n  -h, --help       显示帮助\n  -V, --version    显示版本"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cli_help, has_explicit_arguments};
+
+    #[test]
+    fn gui_argument_contract_is_explicit() {
+        assert!(!has_explicit_arguments(&["embedpix".into()]));
+        assert!(has_explicit_arguments(&[
+            "embedpix".into(),
+            "--help".into()
+        ]));
+        assert!(cli_help().contains("embedpix-cli"));
+        assert!(cli_help().contains("JSONL"));
+    }
 }
 
 #[cfg(windows)]
