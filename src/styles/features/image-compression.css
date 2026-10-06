@@ -70,7 +70,7 @@
 .compression-drop-zone { display: flex; min-height: 214px; flex-direction: column; align-items: center; justify-content: center; margin-top: 16px; border: 1px dashed var(--qp-border-strong); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); cursor: pointer; color: var(--qp-text-secondary); transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease); }
 .compression-drop-zone:hover, .compression-drop-zone-dragging { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }
 .compression-drop-zone-disabled { cursor: not-allowed; opacity: .58; }
-.compression-drop-zone:focus-visible, .compression-secondary-button:focus-visible, .compression-primary-button:focus-visible, .compression-retry-button:focus-visible, .compression-clear-button:focus-visible, .compression-icon-button:focus-visible, .compression-field input:focus-visible, .compression-field select:focus-visible, .compression-check input:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
+.compression-drop-zone:focus-visible, .compression-secondary-button:focus-visible, .compression-primary-button:focus-visible, .compression-retry-button:focus-visible, .compression-clear-button:focus-visible, .compression-icon-button:focus-visible, .compression-field input:focus-visible, .compression-check input:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
 .compression-drop-icon, .compression-item-icon { display: grid; place-items: center; color: var(--qp-accent-default); }
 .compression-drop-icon { width: 44px; height: 44px; margin-bottom: 13px; border: 1px solid color-mix(in srgb, var(--qp-accent-default) 40%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); }
 .compression-drop-zone strong { color: var(--qp-text-primary); font-size: 14px; }
@@ -158,10 +158,9 @@
 .compression-preview-stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
 .compression-field { display: grid; gap: 7px; color: var(--qp-text-secondary); font-size: 12px; }
 .compression-balanced-reset { align-self: start; justify-self: start; }
-.compression-field select, .compression-field input:not([type="range"]) { width: 100%; min-height: 36px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-text-primary); font: inherit; font-size: 11px; padding: 0 10px; }
-.compression-field select { appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--qp-text-tertiary) 50%), linear-gradient(135deg, var(--qp-text-tertiary) 50%, transparent 50%); background-position: calc(100% - 14px) 16px, calc(100% - 10px) 16px; background-size: 4px 4px, 4px 4px; background-repeat: no-repeat; }
+.compression-field input:not([type="range"]) { width: 100%; min-height: 36px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-text-primary); font: inherit; font-size: 11px; padding: 0 10px; }
 .compression-field input[type="color"] { width: 56px; min-height: 36px; padding: 4px; cursor: pointer; }
-.compression-field input:not([type="range"]):focus, .compression-field select:focus { border-color: var(--qp-accent-default); }
+.compression-field input:not([type="range"]):focus { border-color: var(--qp-accent-default); }
 .compression-label-row { justify-content: space-between; }
 .compression-label-row strong { color: var(--qp-accent-default); font-family: var(--font-mono); font-size: 12px; }
 .compression-field input[type="range"] { width: 100%; accent-color: var(--qp-accent-default); }

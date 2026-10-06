@@ -50,9 +50,10 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("typeof estimate.selectedQuality === \"number\"");
   });
   it("keeps compression selects aligned with the shared themed control", () => {
-    expect(compressionCss).toContain(".compression-field select { appearance: none;");
-    expect(compressionCss).toContain("min-height: 36px");
-    expect(compressionCss).toContain("background: var(--qp-bg-panel)");
+    expect(compressionView).toContain("<CompressionSelectField");
+    expect(compressionView).not.toContain("<select");
+    expect(compressionView).toContain('import ThemeSelect from "../../shared/components/ThemeSelect";');
+    expect(compressionCss).not.toContain(".compression-field select");
     expect(themeSelectCss).toContain(".theme-select-trigger");
   });
   it("wraps the compression import support hint inside narrow drop zones", () => {
@@ -94,7 +95,7 @@ describe("compact layout viewport contract", () => {
     expect(converterView).not.toContain("关闭后默认清理 EXIF/ICC");
   });
   it("associates compression metadata policy with its constraints", () => {
-    expect(compressionView).toContain('aria-describedby="compression-metadata-policy-help"');
+    expect(compressionView).toContain('describedBy="compression-metadata-policy-help"');
     expect(compressionView).toContain('id="compression-metadata-policy-help"');
     expect(compressionView).toContain("仅允许同格式静态 PNG/JPEG/WebP；输出原字节，不应用压缩、缩放或目标体积参数。");
   });
@@ -303,7 +304,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView.indexOf("允许覆盖同名文件")).toBeGreaterThan(compressionView.indexOf("<strong>输出与元数据</strong>"));
     expect(compressionView).toContain("{lossyQualityVisible ?");
     expect(compressionView).toContain('{targetSizeVisible ? <details className="compression-advanced-settings">');
-    expect(compressionView).toContain("{replaceOriginal ? null : <label className=\"compression-field\"><span>输出位置</span>");
+    expect(compressionView).toContain("{replaceOriginal ? null : <CompressionSelectField");
+    expect(compressionView).toContain('id="compression-output-location"');
     expect(compressionView).toContain("formatCompressionProgressError");
     expect(compressionView).toContain("const progressError = formatCompressionProgressError(next);");
     expect(compressionView).toContain("const sourceBusy = busy || importBusy;");

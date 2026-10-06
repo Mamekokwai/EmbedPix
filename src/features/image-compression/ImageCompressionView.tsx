@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2, FileDown, FolderOpen, Images, Info, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react";
+import ThemeSelect from "../../shared/components/ThemeSelect";
 import "../../styles/features/image-compression.css";
 import { cancelCompression, compressImage, createCompressionRequest, estimateImageCompression, formatCompressionProgressError, formatCompressionProgressStage, getCompressionProgress, MAX_COMPRESSION_RESIZE_PERCENT, MIN_COMPRESSION_RESIZE_PERCENT, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
 import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
@@ -165,6 +166,39 @@ function errorMessage(error: unknown): string {
 
 function previewMimeType(format: string): string {
   return format === "jpeg" || format === "jpg" ? "image/jpeg" : format === "png" ? "image/png" : "image/webp";
+}
+
+// 下拉统一用共享的 ThemeSelect（与转换页同一套外观与键盘行为），不要再用原生 select。
+function CompressionSelectField<T extends string | number>({
+  id,
+  label,
+  ariaLabel,
+  value,
+  options,
+  onChange,
+  disabled,
+  hint,
+  describedBy,
+  invalid,
+}: {
+  id: string;
+  label: ReactNode;
+  ariaLabel: string;
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+  disabled?: boolean;
+  hint?: ReactNode;
+  describedBy?: string;
+  invalid?: boolean;
+}) {
+  return (
+    <div className="compression-field">
+      <span>{label}</span>
+      <ThemeSelect id={id} value={value} options={options} onChange={onChange} aria-label={ariaLabel} aria-describedby={describedBy} aria-invalid={invalid} disabled={disabled} />
+      {hint}
+    </div>
+  );
 }
 
 export default function ImageCompressionView({ active = true }: ImageCompressionViewProps) {
@@ -1269,26 +1303,70 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
         <aside className="compression-card compression-settings-card">
           <div className="compression-card-heading"><div><span className="compression-card-kicker">02 / OPTIONS</span><h2>压缩参数</h2></div></div>
-          <label className="compression-field"><span>内置预设</span><select value={preset} onChange={(event) => applyPreset(event.target.value as CompressionPreset)} disabled={busy}><option value="custom">自定义</option>{COMPRESSION_PRESETS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><small className="compression-field-hint">{preset === "custom" ? "手动参数；JPEG/WebP 有损质量、PNG 优化和 WebP 无损语义分别生效" : getCompressionPreset(preset).description}</small></label><button type="button" className="compression-secondary-button compression-balanced-reset" onClick={restoreBalancedDefaults} disabled={busy}>恢复平衡默认</button>
+          <CompressionSelectField
+            id="compression-preset"
+            label="内置预设"
+            ariaLabel="内置预设"
+            value={preset}
+            options={[{ value: "custom" as CompressionPreset, label: "自定义" }, ...COMPRESSION_PRESETS.map((option) => ({ value: option.value, label: option.label }))]}
+            onChange={applyPreset}
+            disabled={busy}
+            hint={<small className="compression-field-hint">{preset === "custom" ? "手动参数；JPEG/WebP 有损质量、PNG 优化和 WebP 无损语义分别生效" : getCompressionPreset(preset).description}</small>}
+          /><button type="button" className="compression-secondary-button compression-balanced-reset" onClick={restoreBalancedDefaults} disabled={busy}>恢复平衡默认</button>
           <details className="compression-advanced-settings">
             <summary><strong>预设管理</strong><span>已保存 {customPresets.length} 个自定义预设 · 导入 / 导出 JSON</span></summary>
             <div className="compression-advanced-settings-body">
           <div className="compression-custom-presets" aria-label="自定义压缩预设">
-            <label className="compression-field"><span>自定义预设</span><select value={customPresetId} onChange={(event) => applyCustomPreset(event.target.value)} disabled={busy}><option value="">选择已保存预设</option>{customPresets.map((customPreset) => <option key={customPreset.id} value={customPreset.id}>{customPreset.name}</option>)}</select></label>
+            <CompressionSelectField
+              id="compression-custom-preset"
+              label="自定义预设"
+              ariaLabel="自定义预设"
+              value={customPresetId}
+              options={[{ value: "", label: "选择已保存预设" }, ...customPresets.map((customPreset) => ({ value: customPreset.id, label: customPreset.name }))]}
+              onChange={applyCustomPreset}
+              disabled={busy}
+            />
             <div className="compression-preset-save-row"><input className="compression-preset-name" value={customPresetName} placeholder="预设名称" aria-label="压缩预设名称" onChange={(event) => setCustomPresetName(event.target.value)} disabled={busy} /><button type="button" className="compression-secondary-button" disabled={busy || !customPresetName.trim()} onClick={saveCurrentAsCustomPreset}>保存当前参数</button></div>
             <div className="compression-preset-actions"><button type="button" className="compression-secondary-button" onClick={downloadCustomPresets} disabled={busy}>导出 JSON</button><button type="button" className="compression-secondary-button" onClick={() => presetFileInputRef.current?.click()} disabled={busy}>导入 JSON</button><input ref={presetFileInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={(event) => { void importCustomPresets(event); }} disabled={busy} tabIndex={-1} aria-hidden="true" /></div>
             {customPresetMessage ? <p className="compression-preset-message" role="status">{customPresetMessage}</p> : null}
           </div>
             </div>
           </details>
-          <label className="compression-field"><span>输出格式</span><select value={format} onChange={(event) => { const nextFormat = event.target.value as CompressionFormat; setFormat(nextFormat); setLossless(nextFormat !== "jpg"); setCustomResizeActive(false); if (nextFormat !== "jpg") setTargetSizeEnabled(false); }} disabled={busy}>{COMPRESSION_FORMATS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><div className="compression-alpha-status" aria-label="透明度处理说明"><strong className="compression-alpha-status-title">{getCompressionAlphaHandling(format, lossless).title}</strong><span className="compression-alpha-status-copy">{getCompressionAlphaHandling(format, lossless).description}</span></div></label>
+          <CompressionSelectField
+            id="compression-format"
+            label="输出格式"
+            ariaLabel="输出格式"
+            value={format}
+            options={COMPRESSION_FORMATS.map((option) => ({ value: option.value, label: option.label }))}
+            onChange={(nextFormat) => { setFormat(nextFormat); setLossless(nextFormat !== "jpg"); setCustomResizeActive(false); if (nextFormat !== "jpg") setTargetSizeEnabled(false); }}
+            disabled={busy}
+            hint={<div className="compression-alpha-status" aria-label="透明度处理说明"><strong className="compression-alpha-status-title">{getCompressionAlphaHandling(format, lossless).title}</strong><span className="compression-alpha-status-copy">{getCompressionAlphaHandling(format, lossless).description}</span></div>}
+          />
           {lossyQualityVisible ? <label className="compression-field"><span className="compression-label-row"><span>质量（JPEG/WebP 有损）</span><strong>{quality}</strong></span><input type="range" min="1" max="100" value={quality} onChange={(event) => { setQuality(Number(event.target.value)); setPreset("custom"); }} disabled={busy} /></label> : null}
-          {lossyQualityVisible ? <label className="compression-field"><span className="compression-label-row"><span>输出尺寸缩放</span><strong>{autoResizeActive ? "自动" : `${targetResizePercent ?? 100}%`}</strong></span><select value={customResizeActive ? "custom" : targetResizePercent ?? ""} onChange={(event) => { const value = event.target.value; if (value === "custom") { setAutoResizeToTarget(false); setCustomResizeActive(true); if (targetResizePercent === null || COMPRESSION_RESIZE_PRESETS.includes(targetResizePercent as typeof COMPRESSION_RESIZE_PRESETS[number])) setTargetResizePercent(50); } else { setAutoResizeToTarget(false); setCustomResizeActive(false); setTargetResizePercent(value === "" ? null : Number(value)); } setPreset("custom"); }} disabled={busy || autoResizeActive}><option value="">原始尺寸（100%）</option><option value="75">75%</option><option value="50">50%</option><option value="25">25%</option><option value="10">10%</option><option value="custom">自定义百分比</option></select>{customResizeActive ? <input type="number" min={MIN_COMPRESSION_RESIZE_PERCENT} max={MAX_COMPRESSION_RESIZE_PERCENT} step="1" value={targetResizePercent ?? ""} onChange={(event) => { const value = event.target.value; if (value === "") { setCustomResizeActive(false); setTargetResizePercent(null); setPreset("custom"); return; } const next = Number(value); if (Number.isFinite(next)) setTargetResizePercent(Math.min(MAX_COMPRESSION_RESIZE_PERCENT, Math.max(MIN_COMPRESSION_RESIZE_PERCENT, Math.round(next)))); setPreset("custom"); }} disabled={busy || autoResizeActive} aria-label="自定义输出尺寸缩放百分比" placeholder="10–100" /> : null}<small className="compression-field-hint">保持宽高比，禁止放大；范围 {MIN_COMPRESSION_RESIZE_PERCENT}–{MAX_COMPRESSION_RESIZE_PERCENT}%。</small></label> : null}
+          {lossyQualityVisible ? <CompressionSelectField
+            id="compression-resize"
+            label={<span className="compression-label-row"><span>输出尺寸缩放</span><strong>{autoResizeActive ? "自动" : `${targetResizePercent ?? 100}%`}</strong></span>}
+            ariaLabel="输出尺寸缩放"
+            value={customResizeActive ? "custom" : String(targetResizePercent ?? "")}
+            options={[{ value: "", label: "原始尺寸（100%）" }, { value: "75", label: "75%" }, { value: "50", label: "50%" }, { value: "25", label: "25%" }, { value: "10", label: "10%" }, { value: "custom", label: "自定义百分比" }]}
+            onChange={(value) => { if (value === "custom") { setAutoResizeToTarget(false); setCustomResizeActive(true); if (targetResizePercent === null || COMPRESSION_RESIZE_PRESETS.includes(targetResizePercent as typeof COMPRESSION_RESIZE_PRESETS[number])) setTargetResizePercent(50); } else { setAutoResizeToTarget(false); setCustomResizeActive(false); setTargetResizePercent(value === "" ? null : Number(value)); } setPreset("custom"); }}
+            disabled={busy || autoResizeActive}
+            hint={<>{customResizeActive ? <input type="number" min={MIN_COMPRESSION_RESIZE_PERCENT} max={MAX_COMPRESSION_RESIZE_PERCENT} step="1" value={targetResizePercent ?? ""} onChange={(event) => { const value = event.target.value; if (value === "") { setCustomResizeActive(false); setTargetResizePercent(null); setPreset("custom"); return; } const next = Number(value); if (Number.isFinite(next)) setTargetResizePercent(Math.min(MAX_COMPRESSION_RESIZE_PERCENT, Math.max(MIN_COMPRESSION_RESIZE_PERCENT, Math.round(next)))); setPreset("custom"); }} disabled={busy || autoResizeActive} aria-label="自定义输出尺寸缩放百分比" placeholder="10–100" /> : null}<small className="compression-field-hint">保持宽高比，禁止放大；范围 {MIN_COMPRESSION_RESIZE_PERCENT}–{MAX_COMPRESSION_RESIZE_PERCENT}%。</small></>}
+          /> : null}
           {parameterIssues.length > 0 ? <div className="compression-parameter-issues" role="alert" aria-label="参数问题"><strong>参数问题</strong>{parameterIssues.map((issue) => <span key={issue.key}>{issue.message}</span>)}</div> : null}
           {encodingDetailsVisible ? <details className="compression-advanced-settings">
             <summary><strong>编码细节</strong><span>{encodingSummary}</span></summary>
             <div className="compression-advanced-settings-body">
-          {format === "png" ? <label className="compression-field"><span>PNG 优化级别</span><select value={pngOptimizationLevel} onChange={(event) => { setPngOptimizationLevel(Number(event.target.value)); setPreset("custom"); }} disabled={busy}>{[0, 1, 2, 3, 4, 5, 6].map((level) => <option key={level} value={level}>{level}</option>)}</select><small className="compression-field-hint">0 最快，6 压缩更积极；默认 2。</small></label> : null}
+          {format === "png" ? <CompressionSelectField
+            id="compression-png-level"
+            label="PNG 优化级别"
+            ariaLabel="PNG 优化级别"
+            value={pngOptimizationLevel}
+            options={[0, 1, 2, 3, 4, 5, 6].map((level) => ({ value: level, label: `${level}` }))}
+            onChange={(level) => { setPngOptimizationLevel(level); setPreset("custom"); }}
+            disabled={busy}
+            hint={<small className="compression-field-hint">0 最快，6 压缩更积极；默认 2。</small>}
+          /> : null}
           {format === "png" ? <label className="compression-check"><input type="checkbox" checked={pngOptimizeAlpha} onChange={(event) => { setPngOptimizeAlpha(event.target.checked); setPreset("custom"); }} disabled={busy} /><span><strong>PNG 透明像素优化</strong><small>可能改变完全透明像素 RGB，像素 Alpha 不变。</small></span></label> : null}
           {format === "jpg" ? <label className="compression-field"><span>JPEG 透明背景</span><input type="color" value={jpegBackground} onChange={(event) => { setJpegBackground(event.target.value.toLowerCase()); setPreset("custom"); }} disabled={encodingOptionDisabled} aria-label="JPEG 透明背景颜色" /><small className="compression-field-hint">输入含透明像素时合成到此背景色；不再静默丢弃 Alpha，默认白色。</small></label> : null}
           {format === "jpg" ? <div className="compression-option-group" aria-label="JPEG 高级编码"><span className="compression-option-group-title">JPEG 高级编码</span><label className="compression-check"><input type="checkbox" checked={jpegProgressive} onChange={(event) => { setJpegProgressive(event.target.checked); setPreset("custom"); }} disabled={encodingOptionDisabled} /><span><strong>渐进式 JPEG</strong><small>分多次扫描显示；适合网络传输，默认关闭以保持旧版输出一致。</small></span></label><label className="compression-check"><input type="checkbox" checked={jpegOptimizeHuffman} onChange={(event) => { setJpegOptimizeHuffman(event.target.checked); setPreset("custom"); }} disabled={encodingOptionDisabled} /><span><strong>优化 Huffman 表</strong><small>按图像统计优化熵编码，通常可减小体积但会增加编码时间。</small></span></label></div> : null}
@@ -1296,8 +1374,26 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           {webpLossyActive ? <label className="compression-field"><span className="compression-label-row"><span>WebP Alpha 质量</span><strong>{webpAlphaQuality}</strong></span><input type="range" min="0" max="100" step="1" value={webpAlphaQuality} onChange={(event) => { setWebpAlphaQuality(Number(event.target.value)); setPreset("custom"); }} disabled={encodingOptionDisabled} /><small className="compression-field-hint">范围 0–100；默认 100。仅影响带透明度的有损 WebP。</small></label> : null}
           {webpLossyActive ? <label className="compression-field"><span className="compression-label-row"><span>WebP 分析遍数</span><strong>{webpPass}</strong></span><input type="range" min="1" max="10" step="1" value={webpPass} onChange={(event) => { setWebpPass(Number(event.target.value)); setPreset("custom"); }} disabled={encodingOptionDisabled} /><small className="compression-field-hint">范围 1–10；只影响编码分析耗时与结果，不代表画质质量。默认 1。</small></label> : null}
           {format === "webp" ? <label className="compression-check"><input type="checkbox" checked={lossless} onChange={(event) => { setLossless(event.target.checked); if (event.target.checked) setTargetSizeEnabled(false); setPreset("custom"); }} disabled={busy} /><span><strong>WebP 无损编码</strong><small>{lossless ? "当前为无损 WebP；关闭后使用有损质量。" : "当前为有损 WebP；质量滑块控制编码质量。"}</small></span></label> : null}
-          {format === "webp" && lossless ? <label className="compression-field"><span>WebP 近无损等级</span><select value={webpNearLossless ?? ""} onChange={(event) => { const value = event.target.value; setWebpNearLossless(value ? Number(value) : null); setPreset("custom"); }} disabled={encodingOptionDisabled}><option value="">标准无损（像素完全一致）</option><option value="95">95 · 高保真</option><option value="90">90 · 平衡</option><option value="80">80 · 更小体积</option></select><small className="compression-field-hint">近无损会对 RGB 做受控量化；Alpha 仍保持无损。等级越高越接近原图，标准无损不做量化。</small></label> : null}
-          {format === "webp" && lossless ? <label className="compression-field"><span className="compression-label-row"><span>WebP 无损编码 effort</span><strong>{webpLosslessMethod === null ? "默认" : webpLosslessMethod}</strong></span><select value={webpLosslessMethod ?? ""} onChange={(event) => { const value = event.target.value; setWebpLosslessMethod(value === "" ? null : Number(value)); setPreset("custom"); }} disabled={encodingOptionDisabled}><option value="">默认编码路径</option>{[0, 1, 2, 3, 4, 5, 6].map((method) => <option key={method} value={method}>{method}</option>)}</select><small className="compression-field-hint">仅无损 WebP 有效；0 更快、6 更积极。默认路径保持旧版编码行为。</small></label> : null}
+          {format === "webp" && lossless ? <CompressionSelectField
+            id="compression-webp-near-lossless"
+            label="WebP 近无损等级"
+            ariaLabel="WebP 近无损等级"
+            value={webpNearLossless ?? ""}
+            options={[{ value: "" as const, label: "标准无损（像素完全一致）" }, { value: 95, label: "95 · 高保真" }, { value: 90, label: "90 · 平衡" }, { value: 80, label: "80 · 更小体积" }]}
+            onChange={(value) => { setWebpNearLossless(value === "" ? null : Number(value)); setPreset("custom"); }}
+            disabled={encodingOptionDisabled}
+            hint={<small className="compression-field-hint">近无损会对 RGB 做受控量化；Alpha 仍保持无损。等级越高越接近原图，标准无损不做量化。</small>}
+          /> : null}
+          {format === "webp" && lossless ? <CompressionSelectField
+            id="compression-webp-lossless-effort"
+            label={<span className="compression-label-row"><span>WebP 无损编码 effort</span><strong>{webpLosslessMethod === null ? "默认" : webpLosslessMethod}</strong></span>}
+            ariaLabel="WebP 无损编码 effort"
+            value={webpLosslessMethod ?? ""}
+            options={[{ value: "" as const, label: "默认编码路径" }, ...[0, 1, 2, 3, 4, 5, 6].map((method) => ({ value: method, label: `${method}` }))]}
+            onChange={(value) => { setWebpLosslessMethod(value === "" ? null : Number(value)); setPreset("custom"); }}
+            disabled={encodingOptionDisabled}
+            hint={<small className="compression-field-hint">仅无损 WebP 有效；0 更快、6 更积极。默认路径保持旧版编码行为。</small>}
+          /> : null}
             </div>
           </details> : null}
           {targetSizeVisible ? <details className="compression-advanced-settings">
@@ -1321,8 +1417,26 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <details className="compression-advanced-settings">
             <summary><strong>输出与元数据</strong><span className={outputSummaryAlert ? "compression-group-alert" : undefined}>{outputSummaryLabel}</span></summary>
             <div className="compression-advanced-settings-body">
-          <label className="compression-field"><span>元数据策略</span><select value={metadataPolicy} onChange={(event) => setMetadataPolicy(event.target.value as MetadataPolicy)} disabled={busy} aria-describedby="compression-metadata-policy-help"><option value="strip">移除元数据（兼容模式）</option><option value="stripAll">全部清理元数据</option><option value="stripSafe" disabled={!stripSafeInputAvailable}>{format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理</option><option value="preserve" disabled={!stripSafeInputAvailable}>保留原始元数据（原字节透传）</option></select><small id="compression-metadata-policy-help" className="compression-field-hint">{metadataPolicy === "preserve" ? "仅允许同格式静态 PNG/JPEG/WebP；输出原字节，不应用压缩、缩放或目标体积参数。" : metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"}：保留结构合法且有界的 ICC payload（不保证内部色彩语义），移除 EXIF/GPS/XMP/注释；输入格式或配置无法验证时会失败。` : "兼容模式保留原有清理范围；全部清理会移除可识别的元数据。"}</small></label>
-          {replaceOriginal ? null : <label className="compression-field"><span>输出位置</span><select value={outputLocation} onChange={(event) => setOutputLocation(event.target.value as CompressionOutputLocation)} disabled={busy}><option value="source">源文件夹</option><option value="subfolder">源文件夹子目录</option><option value="directory">指定目录</option></select></label>}
+          <CompressionSelectField
+            id="compression-metadata-policy"
+            label="元数据策略"
+            ariaLabel="元数据策略"
+            value={metadataPolicy}
+            options={[{ value: "strip" as MetadataPolicy, label: "移除元数据（兼容模式）" }, { value: "stripAll" as MetadataPolicy, label: "全部清理元数据" }, ...(stripSafeInputAvailable ? [{ value: "stripSafe" as MetadataPolicy, label: `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` }, { value: "preserve" as MetadataPolicy, label: "保留原始元数据（原字节透传）" }] : [])]}
+            onChange={setMetadataPolicy}
+            disabled={busy}
+            describedBy="compression-metadata-policy-help"
+            hint={<small id="compression-metadata-policy-help" className="compression-field-hint">{metadataPolicy === "preserve" ? "仅允许同格式静态 PNG/JPEG/WebP；输出原字节，不应用压缩、缩放或目标体积参数。" : metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"}：保留结构合法且有界的 ICC payload（不保证内部色彩语义），移除 EXIF/GPS/XMP/注释；输入格式或配置无法验证时会失败。` : "兼容模式保留原有清理范围；全部清理会移除可识别的元数据。"}</small>}
+          />
+          {replaceOriginal ? null : <CompressionSelectField
+            id="compression-output-location"
+            label="输出位置"
+            ariaLabel="输出位置"
+            value={outputLocation}
+            options={[{ value: "source" as CompressionOutputLocation, label: "源文件夹" }, { value: "subfolder" as CompressionOutputLocation, label: "源文件夹子目录" }, { value: "directory" as CompressionOutputLocation, label: "指定目录" }]}
+            onChange={setOutputLocation}
+            disabled={busy}
+          />}
           {!replaceOriginal && outputLocation === "subfolder" ? <label className="compression-field"><span>子目录名称</span><input value={outputSubdirectory} onChange={(event) => setOutputSubdirectory(event.target.value)} placeholder="例如 compressed" spellCheck={false} aria-invalid={Boolean(outputLocationError)} aria-describedby={outputLocationError ? "compression-output-location-error" : undefined} disabled={busy} /></label> : null}
           {!replaceOriginal && outputLocation === "directory" ? <label className="compression-field"><span>输出目录</span><input value={outputDirectory} onChange={(event) => setOutputDirectory(event.target.value)} placeholder="例如 D:\\Export" spellCheck={false} aria-invalid={Boolean(outputLocationError)} aria-describedby={outputLocationError ? "compression-output-location-error" : undefined} disabled={busy} /></label> : null}
           {replaceOriginal ? null : <label className="compression-field"><span>自定义输出文件名</span><input value={outputFileName} onChange={(event) => { setOutputFileName(event.target.value); setPreset("custom"); }} placeholder={`留空，自动使用 .${format}`} spellCheck={false} aria-invalid={Boolean(outputFileNameError)} aria-describedby="compression-output-file-name-help" disabled={busy} /><small id="compression-output-file-name-help" className="compression-output-file-name-hint" role={outputFileNameError ? "alert" : undefined}>{outputFileNameError ?? `可选；扩展名会自动规范为 .${format}，自动序号仍可继续生效。`}</small></label>}
