@@ -111,6 +111,7 @@
 .gif-timeline span { flex: 0 0 auto; white-space: nowrap; }
 .gif-preview-footer { display: flex; justify-content: space-between; gap: 4px; flex-wrap: wrap; color: var(--qp-text-secondary); font-size: 10px; }
 .gif-settings-card { flex: 0 1 auto; min-height: 0; max-height: min(420px, 45vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.gif-maker-view.gif-settings-expanded > .gif-settings-card { position: relative; z-index: 4; }
 .gif-settings-card::-webkit-scrollbar { display: none; }
 .gif-group-tabs { gap: 6px; }
 .gif-group-tabs > span { margin-left: auto; color: var(--qp-text-tertiary); font-size: 10px; }

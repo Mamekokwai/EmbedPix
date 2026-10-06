@@ -474,6 +474,9 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toContain(".gif-maker-content > .gif-settings-card { max-height: none; overflow: visible; }");
     expect(gifCss).toContain("@media (max-width: 500px) and (min-height: 621px) and (max-height: 760px) {\n  .gif-maker-content > .gif-settings-card { max-height: none; overflow: visible; }");
   });
+  it("raises the expanded GIF settings card above the frame workspace", () => {
+    expect(gifCss).toContain(".gif-maker-view.gif-settings-expanded > .gif-settings-card { position: relative; z-index: 4; }");
+  });
 
   it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {
     expect(gifCss).toContain("@media (max-width: 760px) and (min-height: 621px)");
