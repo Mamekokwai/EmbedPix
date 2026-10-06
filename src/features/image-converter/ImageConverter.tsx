@@ -407,12 +407,9 @@ export default function ImageConverter({
     ? "直接保存到源图片所在文件夹。"
     : outputLocation === "directory"
       ? "目录不存在时会自动创建，支持绝对路径。"
-      : outputLocation === "original"
-        ? "替换源图片并保留旧文件备份。"
-        : null;
+      : null;
   const outputLocationDescription = [
     outputLocationHelp ? "output-location-help" : null,
-    outputLocation === "original" ? "output-original-help" : null,
     outputLocationError ? "output-location-error" : null,
   ].filter(Boolean).join(" ");
   const batchOutputLocationError = useMemo(() => {
@@ -794,7 +791,7 @@ export default function ImageConverter({
     try {
       const bundle = importWorkspace(await file.text(), "image"); const p = bundle.parameters;
       setError(bundle.issues.length ? bundle.issues.map((issue) => issue.path ? `${formatWorkspaceTransferError(issue.message)}：${issue.path}` : formatWorkspaceTransferError(issue.message)).join("；") : null);
-      if (bundle.outputLocation === "source" || bundle.outputLocation === "subfolder" || bundle.outputLocation === "directory" || bundle.outputLocation === "original") setOutputLocation(bundle.outputLocation); if (typeof bundle.outputDirectory === "string") setOutputDirectory(bundle.outputDirectory); if (typeof bundle.outputSubdirectory === "string") setOutputSubdirectory(bundle.outputSubdirectory); if (typeof bundle.namingTemplate === "string") setFileNameTemplate(bundle.namingTemplate);
+      if (bundle.outputLocation === "source" || bundle.outputLocation === "subfolder" || bundle.outputLocation === "directory") setOutputLocation(bundle.outputLocation); if (typeof bundle.outputDirectory === "string") setOutputDirectory(bundle.outputDirectory); if (typeof bundle.outputSubdirectory === "string") setOutputSubdirectory(bundle.outputSubdirectory); if (typeof bundle.namingTemplate === "string") setFileNameTemplate(bundle.namingTemplate);
       if (typeof p.defaultOutputFormat === "string") setOutputFormat(p.defaultOutputFormat as OutputFormat); if (typeof p.defaultBitDepth === "number") setBitDepth(p.defaultBitDepth as BmpBitDepth); if (typeof p.defaultJpegQuality === "number") setJpegQuality(p.defaultJpegQuality); if (p.defaultByteOrder === "little" || p.defaultByteOrder === "big") setByteOrder(p.defaultByteOrder); if (p.defaultChannelOrder === "rgb" || p.defaultChannelOrder === "bgr") setChannelOrder(p.defaultChannelOrder); if (p.defaultRowOrder === "top-down" || p.defaultRowOrder === "bottom-up") setRowOrder(p.defaultRowOrder); if (p.defaultRowAlignment === 1 || p.defaultRowAlignment === 2 || p.defaultRowAlignment === 4) setRowAlignment(p.defaultRowAlignment); if (typeof p.defaultCArrayName === "string") setCArrayName(p.defaultCArrayName); if (typeof p.keepAspectRatio === "boolean") setKeepAspectRatio(p.keepAspectRatio); if (typeof p.defaultBackgroundColor === "string") setBackgroundColor(p.defaultBackgroundColor);
       if (isTauriEnvironment() && bundle.sourcePaths.length) {
         const restored = await loadNativeImages(bundle.sourcePaths);
@@ -1770,7 +1767,6 @@ export default function ImageConverter({
                   { value: "source" as const, label: "源文件夹" },
                   { value: "subfolder" as const, label: "源文件夹 / 子文件夹" },
                   { value: "directory" as const, label: "指定目录" },
-                  { value: "original" as const, label: "覆盖原图" },
                 ]}
                 aria-label="输出位置"
                 aria-describedby={outputLocationDescription}
@@ -1831,28 +1827,24 @@ export default function ImageConverter({
               {batchPlan ? <p className={`field-help${batchPlan.duplicateTargets.length > 0 ? " output-location-error" : ""}`} role={batchPlan.duplicateTargets.length > 0 ? "alert" : undefined}>
                 示例目标：{batchPlan.targetPaths[0] ?? "暂无"}{batchPlan.duplicateTargets.length > 0 ? ` · 检测到 ${batchPlan.duplicateTargets.length} 个重复目标` : ""}
               </p> : null}
-              {outputLocation === "original" ? (
-                <p className="field-help output-action-help output-action-info field-help-hover" id="output-original-help">导出前会列出将被覆盖的目标和待备份源文件并要求确认；旧图片会先移入同目录的 bak 文件夹，再将新文件写回原图位置。</p>
-              ) : (
-                <div className="output-actions">
-                  <div className="output-action">
-                    <label className="toggle-row output-action-toggle">
-                      <input type="checkbox" checked={overwriteSameName} aria-describedby="overwrite-same-name-help" onChange={(event) => { setOverwriteSameName(event.target.checked); setError(null); }} />
-                      <span className="toggle-track" aria-hidden="true"><span /></span>
-                      <span>覆盖同名输出文件</span>
-                    </label>
-                    <p className="field-help output-action-help field-help-hover" id="overwrite-same-name-help">导出前会列出目标文件并要求确认；已有同名输出会直接覆盖，不移动到 bak 文件夹。</p>
-                  </div>
-                  <div className="output-action">
-                    <label className="toggle-row output-action-toggle">
-                      <input type="checkbox" checked={deleteSource} aria-describedby="delete-source-help" onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
-                      <span className="toggle-track" aria-hidden="true"><span /></span>
-                      <span>导出成功后删除源图片</span>
-                    </label>
-                    <p className="field-help output-action-help output-action-danger field-help-hover" id="delete-source-help">导出前会列出待删除源文件并要求确认；只有对应输出成功后才会删除。</p>
-                  </div>
+              <div className="output-actions">
+                <div className="output-action">
+                  <label className="toggle-row output-action-toggle">
+                    <input type="checkbox" checked={overwriteSameName} aria-describedby="overwrite-same-name-help" onChange={(event) => { setOverwriteSameName(event.target.checked); setError(null); }} />
+                    <span className="toggle-track" aria-hidden="true"><span /></span>
+                    <span>覆盖同名输出文件</span>
+                  </label>
+                  <p className="field-help output-action-help field-help-hover" id="overwrite-same-name-help">导出前会列出目标文件并要求确认；已有同名输出会直接覆盖，不移动到 bak 文件夹。</p>
                 </div>
-              )}
+                <div className="output-action">
+                  <label className="toggle-row output-action-toggle">
+                    <input type="checkbox" checked={deleteSource} aria-describedby="delete-source-help" onChange={(event) => handleDeleteSourceChange(event.target.checked)} />
+                    <span className="toggle-track" aria-hidden="true"><span /></span>
+                    <span>导出成功后删除源图片</span>
+                  </label>
+                  <p className="field-help output-action-help output-action-danger field-help-hover" id="delete-source-help">导出前会列出待删除源文件并要求确认；只有对应输出成功后才会删除。</p>
+                </div>
+              </div>
             </div>
             <div className="setting-group">
               <label className="toggle-row">
