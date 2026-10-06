@@ -54,6 +54,14 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain("background: var(--qp-bg-panel)");
     expect(themeSelectCss).toContain(".theme-select-trigger");
   });
+  it("wraps the compression import support hint inside narrow drop zones", () => {
+    expect(compressionView).toContain('className="compression-drop-hint"');
+    expect(compressionView).toContain('className="compression-secondary-button compression-import-button"');
+    expect(compressionCss).toContain(".compression-drop-hint { display: grid; width: min(100%, 360px); min-width: 0;");
+    expect(compressionCss).toContain(".compression-drop-hint span { min-width: 0; }");
+    expect(compressionCss).toContain(".compression-import-button { flex-basis: 100%; }");
+    expect(compressionCss).toContain("overflow-wrap: anywhere;");
+  });
   it("exposes a copyable compression batch summary without changing native wiring", () => {
     expect(compressionView).toContain("formatCompressionBatchSummary");
     expect(compressionView).toContain("复制批处理摘要");
@@ -250,7 +258,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("导入 JSON");
     expect(compressionView).toContain("loadCompressionCustomPresets");
     expect(compressionView).toContain("importCompressionPresetsJson");
-    expect(compressionCss).toContain(".compression-balanced-reset { justify-self: start; }");
+    expect(compressionCss).toContain(".compression-balanced-reset { align-self: start; justify-self: start; }");
     expect(compressionView).toContain("JPEG 使用质量滑块进行有损编码");
     expect(compressionView).toContain("当前为有损 WebP；质量滑块控制编码质量");
     expect(compressionView).toContain("核心最多尝试 ${maxCandidates} 个 WebP 质量候选");
@@ -446,6 +454,10 @@ describe("compact layout viewport contract", () => {
   it("flips custom dropdowns above the trigger in short windows", () => {
     expect(themeSelectCss).toContain("@media (max-height: 620px)");
     expect(themeSelectCss).toContain("bottom: calc(100% + 5px);");
+  });
+  it("keeps GIF settings dropdowns outside the short-window card clip", () => {
+    expect(gifCss).toContain("@media (max-height: 760px)");
+    expect(gifCss).toContain(".gif-maker-content > .gif-settings-card { max-height: none; overflow: visible; }");
   });
 
   it("keeps the 700px narrow workspace in normal vertical flow when settings expand", () => {

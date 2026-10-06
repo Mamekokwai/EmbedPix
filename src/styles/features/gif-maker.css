@@ -317,6 +317,12 @@
   .gif-help-text { display: none; }
 }
 
+/* Let themed dropdowns escape the settings card while the page remains the scroll container. */
+@media (max-height: 760px) {
+  .gif-maker-content.page-content { overflow: visible; }
+  .gif-maker-content > .gif-settings-card { max-height: none; overflow: visible; }
+}
+
 @media (max-height: 620px) {
   .gif-maker-content.page-content { flex: 0 0 auto; gap: 5px; overflow: visible; }
   .gif-source-video .gif-video-card { max-height: none; overflow: visible; }

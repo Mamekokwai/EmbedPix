@@ -1170,11 +1170,11 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             <span className="compression-drop-icon"><Upload size={22} aria-hidden="true" /></span>
             <strong>拖放图片到这里</strong>
             <span>或点击选择多个文件</span>
-            <small>支持 PNG / JPEG / WebP / BMP / GIF；单张输入不超过 {COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB；输出格式为 PNG / JPEG / WebP</small>
+            <small className="compression-drop-hint"><span>支持格式：PNG / JPEG / WebP / BMP / GIF</span><span>单张输入上限：{COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB</span><span>输出格式：PNG / JPEG / WebP</span></small>
           </div>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={sourceBusy} />
           <div className="compression-source-actions">
-            <button type="button" className="compression-secondary-button" onClick={() => { void chooseFiles(); }} disabled={sourceBusy}><Images size={15} aria-hidden="true" /> {importBusy ? "正在导入" : "选择图片"}</button>
+            <button type="button" className="compression-secondary-button compression-import-button" onClick={() => { void chooseFiles(); }} disabled={sourceBusy}><Images size={15} aria-hidden="true" /> {importBusy ? "正在导入" : "选择图片"}</button>
             <button type="button" className="compression-secondary-button" onClick={replaceSelectedItem} disabled={sourceBusy || !selectedItemId}><RefreshCw size={15} aria-hidden="true" /> 替换当前</button>
             <button type="button" className="compression-secondary-button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
           </div>
