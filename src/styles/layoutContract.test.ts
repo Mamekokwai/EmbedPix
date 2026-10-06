@@ -60,6 +60,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-drop-hint { display: grid; width: min(100%, 360px); min-width: 0;");
     expect(compressionCss).toContain(".compression-drop-hint span { min-width: 0; }");
     expect(compressionCss).toContain(".compression-import-button { flex-basis: 100%; }");
+    expect(compressionCss).toContain(".compression-drop-zone > span:not(.compression-drop-icon)");
     expect(compressionCss).toContain("overflow-wrap: anywhere;");
   });
   it("exposes a copyable compression batch summary without changing native wiring", () => {

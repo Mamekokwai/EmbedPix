@@ -67,7 +67,7 @@
 .compression-drop-icon, .compression-item-icon { display: grid; place-items: center; color: var(--qp-accent-default); }
 .compression-drop-icon { width: 44px; height: 44px; margin-bottom: 13px; border: 1px solid color-mix(in srgb, var(--qp-accent-default) 40%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); }
 .compression-drop-zone strong { color: var(--qp-text-primary); font-size: 14px; }
-.compression-drop-zone span:not(.compression-drop-icon) { margin-top: 6px; font-size: 12px; }
+.compression-drop-zone > span:not(.compression-drop-icon) { margin-top: 6px; font-size: 12px; }
 .compression-drop-zone small { margin-top: 18px; color: var(--qp-text-tertiary); font-size: 11px; }
 .compression-drop-hint { display: grid; width: min(100%, 360px); min-width: 0; gap: 2px; padding-inline: 12px; line-height: 1.5; overflow-wrap: anywhere; text-align: center; }
 .compression-drop-hint span { min-width: 0; }
