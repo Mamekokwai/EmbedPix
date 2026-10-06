@@ -9,6 +9,8 @@ import {
   WifiOff,
 } from "lucide-react";
 import "../../styles/features/update.css";
+import UpdateConfirmDialog from "./UpdateConfirmDialog";
+import UpdateProgressBar, { type UpdateProgressModel } from "./UpdateProgressBar";
 
 export type UpdateStatus =
   | "idle"
@@ -97,7 +99,7 @@ export function resolveUpdateProgress(
   status: UpdateStatus,
   downloadedBytes: number | null | undefined,
   totalBytes: number | null | undefined,
-) {
+): UpdateProgressModel | null {
   const hasDownloaded = typeof downloadedBytes === "number" && Number.isFinite(downloadedBytes);
   const hasTotal = typeof totalBytes === "number" && Number.isFinite(totalBytes) && totalBytes > 0;
   const percent = hasDownloaded && hasTotal
@@ -140,39 +142,9 @@ function StatusIcon({ status, offline }: { status: UpdateStatus; offline: boolea
   return <Info size={16} aria-hidden="true" />;
 }
 
-function UpdateProgressBar({
-  progress,
-}: {
-  progress: ReturnType<typeof resolveUpdateProgress>;
-}) {
-  if (!progress) return null;
-  const resolvedPercent = progress.percent ?? 0;
-  return (
-    <div className="update-progress" aria-label={progress.label}>
-      <div className="update-progress-label">
-        <span>{progress.label}</span>
-        {progress.valueText ? <strong>{progress.valueText}</strong> : null}
-      </div>
-      <div
-        className="update-progress-track"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={progress.indeterminate ? undefined : resolvedPercent}
-        aria-valuetext={progress.valueText ?? progress.label}
-      >
-        {progress.indeterminate ? (
-          <span className="update-progress-indeterminate" />
-        ) : (
-          <span className="update-progress-value" style={{ width: `${resolvedPercent}%` }} />
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function UpdateView({
   currentVersion,
+  latestVersion,
   status,
   releaseNotes,
   releaseUrl,
@@ -193,6 +165,7 @@ export default function UpdateView({
   const [releaseOpenError, setReleaseOpenError] = useState<string | null>(null);
   const [releaseExpanded, setReleaseExpanded] = useState(false);
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const meta = STATUS_META[status];
   const progress = resolveUpdateProgress(status, downloadedBytes, totalBytes);
   const busy = status === "checking" || status === "downloading" || status === "installing";
@@ -204,6 +177,11 @@ export default function UpdateView({
       setLastCheckedAt(new Date());
     }
   }, [errorStage, status]);
+
+  // 和 patina 一样：查到新版本就弹确认框，下载与安装在弹窗里完成，卡片只留入口
+  useEffect(() => {
+    if (status === "available") setConfirmOpen(true);
+  }, [status]);
 
   const handlePrimaryAction = () => {
     if (busy) return;
@@ -226,6 +204,19 @@ export default function UpdateView({
     if (status !== "available") void onCheckForUpdates();
   };
 
+  const handleCheckButtonAction = () => {
+    if (busy) return;
+    if (status === "available" || status === "downloaded" || (status === "cancelled" && assetAvailable)) {
+      setConfirmOpen(true);
+      return;
+    }
+    if (status === "error" && errorStage === "download" && assetAvailable) {
+      setConfirmOpen(true);
+      return;
+    }
+    handlePrimaryAction();
+  };
+
   const handleOpenReleasePage = async () => {
     if (!releaseUrl) {
       setReleaseOpenError("当前没有可用的发布页地址。");
@@ -246,13 +237,13 @@ export default function UpdateView({
     : status === "downloading" || status === "installing"
       ? "处理中…"
       : status === "available" && assetAvailable
-        ? "立即下载"
+        ? "查看更新"
         : status === "cancelled" && assetAvailable
-          ? "重新下载"
+          ? "继续下载"
         : status === "downloaded"
-          ? "关闭并安装"
+          ? "安装更新"
           : status === "error" && errorStage === "install"
-            ? "再次关闭并安装"
+            ? "再次安装"
             : status === "error" && errorStage === "download" && assetAvailable
               ? "重新下载"
               : status === "error"
@@ -285,13 +276,13 @@ export default function UpdateView({
                 type="button"
                 disabled={busy}
                 aria-busy={busy}
-                onClick={handlePrimaryAction}
+                onClick={handleCheckButtonAction}
               >
                 {offline ? <WifiOff size={15} aria-hidden="true" /> : status === "available" && assetAvailable ? <Download size={15} aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" />}
                 {actionLabel}
               </button>
             ) : null}
-            {status === "downloading" ? <button className="quiet-button update-check-button" type="button" onClick={() => void onCancelDownload()}>取消下载</button> : null}
+            {status === "downloading" && !confirmOpen ? <button className="quiet-button update-check-button" type="button" onClick={() => void onCancelDownload()}>取消下载</button> : null}
           </div>
 
           <div className="update-version-grid" aria-label="版本信息">
@@ -306,7 +297,7 @@ export default function UpdateView({
           </div>
           {status === "error" && errorMessage ? <p className="update-error-message" role="alert">{errorMessage}</p> : null}
           {installHealthMessage ? <p className="update-release-open-error" role="alert">{installHealthMessage}</p> : null}
-          {progress ? <UpdateProgressBar progress={progress} /> : null}
+          {progress && !confirmOpen ? <UpdateProgressBar progress={progress} /> : null}
         </section>
 
         {(releaseNotes || releaseUrl || releaseOpenError) && (
@@ -332,6 +323,24 @@ export default function UpdateView({
           </section>
         )}
       </div>
+
+      <UpdateConfirmDialog
+        open={confirmOpen}
+        currentVersion={currentVersion}
+        latestVersion={latestVersion}
+        status={status}
+        releaseNotes={releaseNotes}
+        errorMessage={status === "error" ? errorMessage : undefined}
+        progress={progress}
+        downloading={status === "downloading"}
+        installing={status === "installing"}
+        assetAvailable={assetAvailable}
+        onClose={() => setConfirmOpen(false)}
+        onDownload={() => { void onDownloadUpdate(); }}
+        onInstall={() => { void onInstallUpdate(); }}
+        onCancelDownload={() => { void onCancelDownload(); }}
+        onOpenReleasePage={() => { void handleOpenReleasePage(); }}
+      />
 
     </div>
   );

@@ -493,6 +493,10 @@ CLI 约定退出码 0/1/2，并通过 JSONL 提供机器可解析输出；限制
 - [x] 转换页与压缩页的介绍标题简化为「转换图片」/「图片压缩」，并去掉互相重复的界面说明：位深行不再复述候选位深、BMP 的格式描述整块不渲染、拖入区与空状态的多余提示删掉（压缩页与 GIF 页的同类提示一并清理）
 - [x] 导入类按钮图标改为向下箭头、导出按钮改为向上箭头（导入与导出方向不再相同，`layoutContract` 保持只读源码断言）
 - [x] BMP 32 位新增「填充透明色」：勾选后透明区域按透明色合成、输出不再保留透明度，预览与导出走同一逻辑，Rust 侧补两条单测（保留 alpha / 填充后不透明）
+- [x] 设置面板层级拉开：模块标题 13.5px / 700、组标题正文主色 + 650 字重（原来和正文糊在一起）
+- [x] 更新流程按 patina 的交互重做：查到新版本弹确认框（版本对比 + 进度 + 发布说明预览 + 稍后/查看发布页/下载并安装），下载完成转「关闭并安装」，卡片保留入口；进度条抽成 `UpdateProgressBar`，与弹窗共用
+- [ ] 安装包构建模式与 patina 的差异待定：`bundle.targets` 目前是 `nsis`，patina 用 `all`（Windows 上会多出 MSI）；`createUpdaterArtifacts`、nsis `currentUser` 与签名密钥两边已一致。更新运行时嵌图匠走自建 Rust 更新器（GitHub API + minisign-verify），patina 走 `tauri-plugin-updater` + `latest.json` 端点（含 R2 镜像）、`dialog: false`——是否整段换成插件需单独决定
+- [ ] 裁剪仍只在导出时执行，预览不裁切；可用裁切矩形 + `overflow: hidden` 偏移做成实时预览，待定
 - [ ] 压缩页的 `compression-field-hint`（15 处）仍是常显，按新规则迁到 `.field-help-hover`；危险项与错误提示（如参数问题、覆盖原图/删除源文件）是否常显需单独判断
 - [ ] GIF 时间轴工具栏的「缩放」仍是原生 `<select>`（`GifMakerView.tsx` 时间轴头部），迁移 GIF 页外壳时一并换 `ThemeSelect`——它是个紧凑行内控件，直接换 36px 盒子会挤坏时间轴布局，需要单独量一次
 

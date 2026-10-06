@@ -27,6 +27,8 @@ const appShellCss = readSource(new URL("./app-shell.css", import.meta.url));
 const fieldHintCss = readSource(new URL("./components/field-hint.css", import.meta.url));
 const tokensCss = readSource(new URL("./tokens.css", import.meta.url));
 const imageExportGateway = readSource(new URL("../platform/image/imageExportGateway.ts", import.meta.url));
+const updateConfirmDialog = readSource(new URL("../features/update/UpdateConfirmDialog.tsx", import.meta.url));
+const updateProgressBar = readSource(new URL("../features/update/UpdateProgressBar.tsx", import.meta.url));
 
 const VIEWPORT_MATRIX = [
   { name: "compact portrait", width: 320, height: 480 },
@@ -636,5 +638,25 @@ describe("compact layout viewport contract", () => {
     // 预览与导出两条请求都要带上这个参数
     expect(converterView.match(/^ {10}fillTransparent,$/gmu) ?? []).toHaveLength(2);
     expect(imageExportGateway).toContain("...(request.fillTransparent ? { fillTransparent: true } : {})");
+  });
+
+  it("routes the update check button through a confirm dialog instead of inline download", () => {
+    expect(updateView).toContain('import UpdateConfirmDialog from "./UpdateConfirmDialog";');
+    expect(updateView).toContain('if (status === "available") setConfirmOpen(true);');
+    expect(updateView).toContain("onClick={handleCheckButtonAction}");
+    expect(updateView).toContain('? "查看更新"');
+    expect(updateView).toContain('? "安装更新"');
+    // 进度条同一时刻只出现一处，卡片与弹窗不重复显示
+    expect(updateView).toContain("{progress && !confirmOpen ? <UpdateProgressBar progress={progress} /> : null}");
+  });
+
+  it("keeps the update confirm dialog wired to download, install and cancel", () => {
+    expect(updateConfirmDialog).toContain('role="dialog"');
+    expect(updateConfirmDialog).toContain('aria-labelledby="update-confirm-title"');
+    expect(updateConfirmDialog).toContain("onDownload");
+    expect(updateConfirmDialog).toContain("onInstall");
+    expect(updateConfirmDialog).toContain("onCancelDownload");
+    expect(updateConfirmDialog).toContain("稍后");
+    expect(updateProgressBar).toContain('role="progressbar"');
   });
 });
