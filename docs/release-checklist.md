@@ -36,19 +36,20 @@
 
 自动门禁：`npm run check:release-signing` 先检查私钥变量与加密私钥密码，再调用 `scripts/release-config-smoke.ps1`；后者负责发布配置、公钥一致性和脚本契约；`scripts/release-fixture-smoke.ps1` 用临时伪造数据覆盖 7 项资产集合、manifest schema、平台 URL/签名、受信任 GitHub 下载 URL、`pub_date`、资产大小和 PE 边界负例；发布工作流在 publish 前用同一 release contract 校验本地资产并检查 x64/ARM64 构建产物的 GUI subsystem，publish 后由 `scripts/release-smoke.ps1` 先限制下载到精确的 GitHub release URL，再负责真实资产下载、SHA256、独立 minisign、安装后 PE GUI subsystem 和 Windows x64 安装/启动 smoke；不改变生产审批配置。
 
-## v0.7.0 真实发布 smoke 记录
+## 历史真实发布 smoke 记录
+
+以下记录仅用于追溯，不代表当前版本状态。
 
 - 已对 GitHub Release `v0.7.0` 执行真实 smoke：x64/ARM64 资产均完成下载、大小、SHA256SUMS 和独立 minisign 验证。
 - x64 安装器静默安装成功，安装后的 `EmbedPix.exe` 为 GUI subsystem=2，应用保持运行至少 8 秒，随后静默卸载并确认安装文件已移除。
 - ARM64 安装器未在 x64 runner 上执行安装和启动；其资产下载、大小和签名已验证，原生 ARM64 安装/启动仍需 ARM64 runner 记录。
 - 更新下载中断、断点续传、签名门禁和 `.part`/`.etag`/临时签名清理由本地 fixture 与 17 个 updater tests 覆盖；安装失败自动回滚仍未实现，当前行为是安装前阻断、失败诊断和首次启动健康 marker。
 
-## 当前版本发布准备（v0.7.0）
+## 当前版本发布准备
 
-- [ ] GIF 目标体积正式导出验收通过
-- [ ] 静态 WebP、TIFF、ICO 输出验收通过
-- [ ] WebP/APNG 动图输出验收通过
-- [ ] 响应式 UI 矩阵验收通过
-- [ ] 安装、启动、卸载 smoke 通过，资源清理无残留
-- [ ] `metadataPolicy=preserve` 仍明确暂不支持；原因是当前编码链不保留 ICC/EXIF，未完成真实色彩管理与元数据 round-trip 契约
-- [ ] 仅完成上述验收后再创建当前版本 tag（当前为 `v0.7.0`）；本次版本准备不创建 tag、不触发发布
+执行前将 `<version>` 替换为 `package.json`、`Cargo.toml`、`Cargo.lock`、`tauri.conf.json` 和目标 tag 的实际版本；未取得真实发布资产或对应设备证据时，不得勾选相关项目。
+
+- [ ] 本次声明支持的格式均完成真实输出回读；未支持格式保持明确拒绝
+- [ ] `metadataPolicy=preserve` 的能力边界与当前编码策略一致，未将未完成的 ICC/EXIF round-trip 宣称为已支持
+- [ ] 真实发布资产、安装/启动/卸载和更新 smoke 已按平台记录；缺少 ARM64 或 macOS/Linux 设备时明确保留平台边界
+- [ ] 所有自动门禁通过后，才创建 `v<version>` tag 并触发发布；本清单本身不会替代真实资产验收
