@@ -1814,7 +1814,7 @@ export default function ImageConverter({
                   <span>文件名模板</span>
                   <input id="file-name-template" value={fileNameTemplate} onChange={(event) => { setFileNameTemplate(event.target.value); setError(null); }} placeholder="{name}.{ext}" spellCheck={false} aria-describedby="file-name-template-help" />
                 </label>
-                <p className="field-help field-help-hover" id="file-name-template-help">可用变量：&#123;name&#125;、&#123;ext&#125;、&#123;width&#125;、&#123;height&#125;、&#123;index&#125;。</p>
+                <p className="field-help field-help-hover" id="file-name-template-help"><strong>可用变量</strong><br /><strong>&#123;name&#125;</strong> 源图片文件名，不含扩展名<br /><strong>&#123;ext&#125;</strong> 输出扩展名，不带点：bmp / png / jpg / webp / tiff / ico，RGB565 为 bin，C 数组为 h<br /><strong>&#123;width&#125; / &#123;height&#125;</strong> 源图片的像素宽 / 高<br /><strong>&#123;index&#125;</strong> 批次内序号，按导入顺序从 1 开始<br />不支持其它 &#123;…&#125; 占位符，模板里也不能写路径分隔符；没写扩展名时会按输出格式自动补上。</p>
               </div> : null}
               {batchPlan ? <p className={`field-help${batchPlan.duplicateTargets.length > 0 ? " output-location-error" : ""}`} role={batchPlan.duplicateTargets.length > 0 ? "alert" : undefined}>
                 示例目标：{batchPlan.targetPaths[0] ?? "暂无"}{batchPlan.duplicateTargets.length > 0 ? ` · 检测到 ${batchPlan.duplicateTargets.length} 个重复目标` : ""}
