@@ -627,6 +627,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setFailureDetails([]);
     setItemResults([]);
     setSkipReasons([]);
+    setLastSuccessfulOutputPath(null);
+    setSuccessfulOutputPaths([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setStatus("ready");
   };
@@ -654,6 +656,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       setFailureDetails([]);
       setItemResults([]);
       setSkipReasons([]);
+      setLastSuccessfulOutputPath(null);
+      setSuccessfulOutputPaths([]);
       setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
       setStatus("ready");
     }
@@ -966,6 +970,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setFailureDetails([]);
     setItemResults([]);
     setSkipReasons([]);
+    setLastSuccessfulOutputPath(null);
+    setSuccessfulOutputPaths([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setMessage("");
     setStatus(nextItems.length > 0 ? "ready" : "idle");
@@ -982,6 +988,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     setItemResults([]);
     setImportErrors([]);
     setSkipReasons([]);
+    setLastSuccessfulOutputPath(null);
+    setSuccessfulOutputPaths([]);
     setResultStats({ total: 0, succeeded: 0, skipped: 0, failed: 0, inputBytes: 0, processedInputBytes: 0, outputBytes: 0, savedBytes: 0, targetMet: null, selectedQualities: [] });
     setMessage("");
     setStatus("idle");

@@ -323,6 +323,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-clear-button:focus-visible");
     expect(compressionCss).toContain(".compression-import-errors");
     expect(compressionCss).toContain(".compression-output-actions");
+    expect(compressionView).toContain("successfulOutputPaths.length > 1");
+    expect(compressionView).toContain("copyAllOutputPaths");
+    expect(compressionView).toContain("setSuccessfulOutputPaths([])");
     expect(compressionCss).toContain(".compression-current-file");
     expect(compressionView).toContain('className="compression-current-file" aria-live="polite" title={currentFileName ?? undefined}');
     expect(compressionCss).toContain(".compression-failure-details");
