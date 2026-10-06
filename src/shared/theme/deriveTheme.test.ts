@@ -12,26 +12,36 @@ const COLOR_TOKENS = [
 ] as const;
 
 describe("theme derivation", () => {
-  it("derives the default scheme from the patina preset palette", () => {
+  it("derives the default scheme exactly like patina's defaultControls", () => {
     const light = deriveTheme("light", "default");
+    expect(light["--qp-bg-app"]).toBe("#f4f4f4");
     expect(light["--qp-bg-canvas"]).toBe("#fbfbfb");
     expect(light["--qp-text-primary"]).toBe("#171717");
+    expect(light["--qp-text-secondary"]).toBe("#434343");
     expect(light["--qp-accent-default"]).toBe("#315f9f");
+    expect(light["--qp-accent-muted"]).toBe("#e8eef6");
+    expect(light["--qp-text-on-accent"]).toBe("rgb(255, 255, 255)");
     expect(light["--qp-accent-contrast"]).toBe("rgb(255, 255, 255)");
+    // 主色已达 4.5:1，按钮底色不再压暗
+    expect(light["--qp-button-primary-bg"]).toBe("#315f9f");
 
     const dark = deriveTheme("dark", "default");
+    expect(dark["--qp-bg-app"]).toBe("#212121");
     expect(dark["--qp-bg-canvas"]).toBe("#262626");
     expect(dark["--qp-text-primary"]).toBe("#d1d5dc");
     expect(dark["--qp-accent-default"]).toBe("#8ba1c0");
-    // 深色下主色偏亮，白字对比度不够，文字翻成黑
-    expect(dark["--qp-accent-contrast"]).toBe("rgb(0, 0, 0)");
+    // 深色默认主色对白字不达标（≈2.3:1），patina 会把按钮底色压暗到 4.5:1
+    expect(dark["--qp-button-primary-bg"]).toMatch(/^#[0-9a-f]{6}$/u);
+    expect(dark["--qp-button-primary-bg"]).not.toBe("#8ba1c0");
   });
 
   it("keeps each preset's own accent and surface", () => {
     expect(deriveTheme("light", "catppuccin")["--qp-accent-default"]).toBe("#8839ef");
     expect(deriveTheme("dark", "catppuccin")["--qp-bg-canvas"]).toBe("#1e1e2e");
     expect(deriveTheme("dark", "nord")["--qp-accent-default"]).toBe("#88c0d0");
-    expect(deriveTheme("dark", "matrix")["--qp-accent-contrast"]).toBe("rgb(0, 0, 0)");
+    // matrix 的主色太亮，patina 的做法是把按钮底色压暗，文字始终白
+    expect(deriveTheme("dark", "matrix")["--qp-button-primary-bg"]).not.toBe("#1eff5a");
+    expect(deriveTheme("dark", "matrix")["--qp-accent-contrast"]).toBe("rgb(255, 255, 255)");
   });
 
   it("covers every selectable scheme with the full color token set", () => {
@@ -66,7 +76,8 @@ describe("theme derivation", () => {
     const root = { style: { setProperty: (token: string, value: string) => { written[token] = value; } } } as unknown as HTMLElement;
     applyThemeColors("dark", "nord" as ColorScheme, root);
     expect(written["--qp-bg-canvas"]).toBe("#2e3440");
-    expect(Object.keys(written)).toHaveLength(COLOR_TOKENS.length);
+    expect(Object.keys(written)).toEqual(expect.arrayContaining([...COLOR_TOKENS]));
+    expect(written["--qp-button-primary-bg"]).toBeTruthy();
     // 圆角 / 动效 / 字体不属于派生范围
     expect(written["--qp-radius-panel"]).toBeUndefined();
   });

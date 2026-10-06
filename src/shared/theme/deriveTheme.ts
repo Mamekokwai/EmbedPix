@@ -1,6 +1,7 @@
-// 派生逻辑移植自 patina（`src/shared/theme/deriveTheme.ts`），只保留 EmbedPix tokens.css 里存在的颜色 token：
-// 明暗底色、边框、四档文字、主色三态与语义色。patina 的 participation / chart / scrollbar 等 token 本项目没有，不派生。
-import { effectiveThemeContrast, getThemePreset, type ColorScheme, type ThemeVariant } from "./themePresets";
+// 移植自 patina 的 `src/shared/theme/deriveTheme.ts`：常量、派生顺序与 token 值逐行照搬，只把 import 指向本仓库的预设表；
+// 额外输出 `--qp-accent-contrast`（与 patina 的 `--qp-text-on-accent` 同值），供本项目既有样式沿用。
+import type { ColorScheme } from "./themePresets";
+import { effectiveThemeContrast, getThemePreset, type ThemeVariant } from "./themePresets";
 
 type RGB = [number, number, number];
 const WHITE: RGB = [255, 255, 255];
@@ -9,6 +10,7 @@ const clamp = (value: number) => Math.min(1, Math.max(0, value));
 const parse = (hex: string): RGB => [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16)) as RGB;
 const mix = (from: RGB, to: RGB, amount: number): RGB => from.map((channel, index) => Math.round(channel + (to[index] - channel) * clamp(amount))) as RGB;
 const hex = (rgb: RGB) => `#${rgb.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+const solid = (rgb: RGB) => `rgb(${rgb.join(", ")})`;
 
 function contrastWithWhite(rgb: RGB): number {
   const linear = rgb.map((channel) => {
@@ -18,50 +20,146 @@ function contrastWithWhite(rgb: RGB): number {
   return 1.05 / (0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2] + 0.05);
 }
 
-// 文字压在主色按钮上：主色够暗就用白字，够亮（matrix 那种荧光绿）就翻成黑字。
-function accentContrast(accent: string): string {
-  return contrastWithWhite(parse(accent)) >= 4.5 ? "rgb(255, 255, 255)" : "rgb(0, 0, 0)";
+function primaryButtonBackground(accent: string): string {
+  const rgb = parse(accent);
+  if (contrastWithWhite(rgb) >= 4.5) return accent;
+  let insufficient = 0;
+  let sufficient = 1;
+  // Search rounded sRGB blends; the tiny margin never rounds a failing WCAG ratio up.
+  for (let step = 0; step < 24; step += 1) {
+    const amount = (insufficient + sufficient) / 2;
+    if (contrastWithWhite(mix(rgb, BLACK, amount)) >= 4.5001) sufficient = amount;
+    else insufficient = amount;
+  }
+  return hex(mix(rgb, BLACK, sufficient));
 }
 
-// 对比度是形状参数，不夹取；只有通道混合与 alpha 才夹取。
+// Contrast shaping is intentionally unclamped; clamp only channel blends and alpha.
 function shapeContrast(value: number, dark: boolean): number {
   const baseline = dark ? 60 : 45;
   const shaped = value / 100 + (value - baseline) / 60 * 0.7;
   return value <= baseline ? shaped : baseline / 100 + (shaped - baseline / 100) * 2;
 }
 
-/** 按方案与明暗派生整套颜色 token；写进根元素即可覆盖 tokens.css 的静态值。 */
+const DEFAULT_CONTROLS: Record<ThemeVariant, Record<string, string>> = {
+  "light": {
+    "--qp-bg-app": "#f4f4f4",
+    "--qp-bg-canvas": "#fbfbfb",
+    "--qp-bg-panel": "#ffffff",
+    "--qp-bg-elevated": "#f5f5f5",
+    "--qp-text-primary": "#171717",
+    "--qp-text-secondary": "#434343",
+    "--qp-text-tertiary": "#707070",
+    "--qp-accent-default": "#315f9f",
+    "--qp-accent-muted": "#e8eef6",
+    "--qp-success": "#2f7d49",
+    "--qp-participation": "#3f74c2",
+    "--qp-warning": "#9a6700",
+    "--qp-danger": "#b53a3a",
+    "--qp-control-off": "#d2d2d2",
+    "--qp-track-muted": "#e6e6e6",
+    "--qp-badge-subtle": "#f1f1f1",
+    "--qp-text-disabled": "#adadad",
+    "--qp-scrollbar-default": "#cccccc",
+    "--qp-scrollbar-hover": "#b8b8b8",
+    "--qp-control-thumb": "#ffffff",
+    "--qp-chart-cursor": "rgba(101, 114, 135, 0.12)",
+    "--qp-chart-grid": "rgba(156, 168, 186, 0.25)"
+  },
+  "dark": {
+    "--qp-bg-app": "#212121",
+    "--qp-bg-canvas": "#262626",
+    "--qp-bg-panel": "#2d2d2d",
+    "--qp-bg-elevated": "#282828",
+    "--qp-text-primary": "#d1d5dc",
+    "--qp-text-secondary": "#adb3bd",
+    "--qp-text-tertiary": "#7f8791",
+    "--qp-accent-default": "#8ba1c0",
+    "--qp-accent-muted": "#333b46",
+    "--qp-success": "#82ad8b",
+    "--qp-participation": "#93a9c8",
+    "--qp-warning": "#c19b5c",
+    "--qp-danger": "#c98383",
+    "--qp-control-off": "#555555",
+    "--qp-track-muted": "#484848",
+    "--qp-badge-subtle": "#3a3a3a",
+    "--qp-text-disabled": "#6f7680",
+    "--qp-scrollbar-default": "#545454",
+    "--qp-scrollbar-hover": "#686868",
+    "--qp-control-thumb": "#bdc6d1",
+    "--qp-chart-cursor": "rgba(127, 135, 145, 0.12)",
+    "--qp-chart-grid": "rgba(127, 135, 145, 0.1)"
+  }
+};
+
+function controlColors(variant: ThemeVariant, scheme: ColorScheme): Record<string, string> {
+  if (scheme === "default") return DEFAULT_CONTROLS[variant];
+  const p = getThemePreset(variant, scheme);
+  return variant === "dark" ? {
+    "--qp-text-primary": `${p.ink}`,
+    "--qp-text-secondary": `color-mix(in srgb, ${p.ink} 78%, ${p.surface})`,
+    "--qp-text-tertiary": `color-mix(in srgb, ${p.ink} 56%, ${p.surface})`,
+    "--qp-accent-default": `${p.accent}`,
+    "--qp-accent-muted": `color-mix(in srgb, ${p.accent} 20%, ${p.surface})`,
+    "--qp-success": `${p.semanticColors.diffAdded}`,
+    "--qp-participation": `${p.semanticColors.skill}`,
+    "--qp-warning": `color-mix(in srgb, ${p.accent} 52%, #d29922)`,
+    "--qp-danger": `${p.semanticColors.diffRemoved}`,
+    "--qp-control-off": `color-mix(in srgb, ${p.surface} 62%, ${p.ink})`,
+    "--qp-track-muted": `color-mix(in srgb, ${p.surface} 72%, ${p.ink})`,
+    "--qp-badge-subtle": `color-mix(in srgb, ${p.surface} 86%, ${p.ink})`,
+    "--qp-text-disabled": `color-mix(in srgb, ${p.ink} 34%, ${p.surface})`,
+    "--qp-scrollbar-default": `color-mix(in srgb, ${p.surface} 60%, ${p.ink})`,
+    "--qp-scrollbar-hover": `color-mix(in srgb, ${p.surface} 46%, ${p.ink})`,
+    "--qp-control-thumb": `${p.ink}`,
+    "--qp-chart-cursor": `color-mix(in srgb, ${p.accent} 14%, transparent)`,
+    "--qp-chart-grid": `color-mix(in srgb, ${p.ink} 12%, transparent)`,
+  } : {
+    "--qp-text-primary": `${p.ink}`,
+    "--qp-text-secondary": `color-mix(in srgb, ${p.ink} 76%, ${p.surface})`,
+    "--qp-text-tertiary": `color-mix(in srgb, ${p.ink} 56%, ${p.surface})`,
+    "--qp-accent-default": `${p.accent}`,
+    "--qp-accent-muted": `color-mix(in srgb, ${p.accent} 12%, ${p.surface})`,
+    "--qp-success": `${p.semanticColors.diffAdded}`,
+    "--qp-participation": `${p.semanticColors.skill}`,
+    "--qp-warning": `color-mix(in srgb, ${p.accent} 64%, #b58900)`,
+    "--qp-danger": `${p.semanticColors.diffRemoved}`,
+    "--qp-control-off": `color-mix(in srgb, ${p.surface} 88%, ${p.ink})`,
+    "--qp-track-muted": `color-mix(in srgb, ${p.surface} 95%, ${p.ink})`,
+    "--qp-badge-subtle": `color-mix(in srgb, ${p.surface} 96%, ${p.accent})`,
+    "--qp-text-disabled": `color-mix(in srgb, ${p.ink} 38%, ${p.surface})`,
+    "--qp-scrollbar-default": `color-mix(in srgb, ${p.surface} 86%, ${p.ink})`,
+    "--qp-scrollbar-hover": `color-mix(in srgb, ${p.surface} 76%, ${p.ink})`,
+    "--qp-control-thumb": "#ffffff",
+    "--qp-chart-cursor": `color-mix(in srgb, ${p.accent} 12%, transparent)`,
+    "--qp-chart-grid": `color-mix(in srgb, ${p.ink} 18%, transparent)`,
+  };
+}
+
+/** Corrected theme surfaces with Patina control colors and interaction hierarchy. */
 export function deriveTheme(variant: ThemeVariant, scheme: ColorScheme, override: number | null = null): Record<string, string> {
-  const preset = getThemePreset(variant, scheme);
+  const p = getThemePreset(variant, scheme);
   const dark = variant === "dark";
   const value = effectiveThemeContrast(variant, scheme, override);
-  const contrast = shapeContrast(value, dark);
-  const surface = parse(preset.surface);
-  const ink = parse(preset.ink);
+  const c = shapeContrast(value, dark);
+  const surface = parse(p.surface), ink = parse(p.ink);
   const under = hex(mix(surface, dark ? BLACK : ink, dark ? 0.16 + (value - 60) * 0.0015 : 0.04 + (value - 45) * 0.0012));
-  const panel = hex(mix(surface, dark ? ink : WHITE, dark ? 0.03 + contrast * 0.03 : 0.18 + contrast * 0.008));
-
+  const panel = hex(mix(surface, dark ? ink : WHITE, dark ? 0.03 + c * 0.03 : 0.18 + c * 0.008));
+  const controls = controlColors(variant, scheme);
   return {
     "--qp-bg-app": under,
-    "--qp-bg-canvas": preset.surface,
+    "--qp-bg-canvas": p.surface,
     "--qp-bg-panel": panel,
-    // 嵌套卡片落在面板之下，浅混一点让层次看得出来。
+    // Nested cards sit below their panel; a small blend softens the separation.
     "--qp-bg-elevated": hex(mix(dark ? surface : parse(under), parse(panel), dark ? 0.25 : 0.3)),
-    "--qp-border-subtle": preset.borderSubtle,
-    "--qp-border-strong": preset.borderStrong,
-    "--qp-text-primary": preset.ink,
-    "--qp-text-secondary": `color-mix(in srgb, ${preset.ink} ${dark ? 78 : 76}%, ${preset.surface})`,
-    "--qp-text-tertiary": `color-mix(in srgb, ${preset.ink} 56%, ${preset.surface})`,
-    "--qp-text-disabled": `color-mix(in srgb, ${preset.ink} ${dark ? 34 : 38}%, ${preset.surface})`,
-    "--qp-control-off": `color-mix(in srgb, ${preset.surface} ${dark ? 62 : 88}%, ${preset.ink})`,
-    "--qp-accent-default": preset.accent,
-    "--qp-accent-muted": `color-mix(in srgb, ${preset.accent} ${dark ? 20 : 12}%, ${preset.surface})`,
-    "--qp-accent-contrast": accentContrast(preset.accent),
-    "--qp-success": preset.semanticColors.diffAdded,
-    "--qp-warning": dark
-      ? `color-mix(in srgb, ${preset.accent} 52%, #d29922)`
-      : `color-mix(in srgb, ${preset.accent} 64%, #b58900)`,
-    "--qp-danger": preset.semanticColors.diffRemoved,
+    "--qp-border-subtle": p.borderSubtle,
+    "--qp-border-strong": p.borderStrong,
+    "--qp-text-on-accent": solid(WHITE),
+    ...controls,
+    "--qp-button-primary-bg": primaryButtonBackground(controls["--qp-accent-default"]),
+    "--qp-chart-track": `rgba(${ink.join(", ")}, ${(0.04 + c * 0.02).toFixed(3)})`,
+    // 本项目既有样式沿用这个名字指「压在主色上的文字」，与 patina 的 --qp-text-on-accent 同值。
+    "--qp-accent-contrast": solid(WHITE),
   };
 }
 
