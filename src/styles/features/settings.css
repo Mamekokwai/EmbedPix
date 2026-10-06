@@ -2,8 +2,15 @@
 .settings-card { border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
 .settings-card-header { padding: 20px 22px 16px; }
 .settings-card h2 { margin: 0; color: var(--qp-text-primary); font-size: 14px; font-weight: 700; }
-.settings-card-header p, .settings-row p, .settings-check-row small { margin: 5px 0 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.5; }
-.settings-row { display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 22px; border-top: 1px solid var(--qp-border-subtle); padding: 16px 22px; }
+.settings-card-header p, .settings-check-row small { margin: 5px 0 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.5; }
+.settings-row { display: grid; grid-template-columns: minmax(0, 1fr) 260px; align-items: center; gap: 12px; min-height: 72px; border-top: 1px solid var(--qp-border-subtle); padding: 16px 22px; }
+.settings-row-stacked { grid-template-columns: minmax(0, 1fr); }
+.settings-row-copy { min-width: 0; }
+.settings-row-title { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.settings-row-control { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--qp-stack-gap); }
+.settings-help-icon { display: inline-flex; min-width: 20px; min-height: 20px; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: transparent; padding: 0; color: var(--qp-text-tertiary); cursor: pointer; transition: color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease); }
+.settings-help-icon:hover { background: var(--qp-bg-elevated); color: var(--qp-text-secondary); }
+.settings-help-icon:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; color: var(--qp-text-secondary); }
 .settings-custom-preset-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .theme-option { position: relative; cursor: pointer; }
 .theme-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }

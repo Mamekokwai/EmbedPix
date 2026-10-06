@@ -674,6 +674,15 @@ describe("compact layout viewport contract", () => {
     expect(tokensCss).toContain("--qp-accent-contrast");
   });
 
+  it("puts every settings row hint on the help icon instead of an always-on paragraph", () => {
+    // 每行 = 标题 + ⓘ 提示 + 控件列，说明只挂在 ⓘ 上（aria-label + title），不再常显 <p>。
+    expect(settingsView).toContain('className="settings-row-title"');
+    expect(settingsView).toContain('className="settings-help-icon"');
+    expect(settingsView).toContain('aria-label="选择 EmbedPix 的显示方式。"');
+    expect(settingsView).toContain('className="settings-row-control"');
+    expect(settingsView).not.toContain("<p>选择 EmbedPix 的显示方式。</p>");
+  });
+
   it("centers the about profile and groups the format tags", () => {
     // 11 个格式铺满一排太碎，按类别收成三块
     expect(aboutView).toContain("FORMAT_GROUPS");
