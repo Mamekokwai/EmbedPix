@@ -30,6 +30,9 @@ const imageExportGateway = readSource(new URL("../platform/image/imageExportGate
 const updateConfirmDialog = readSource(new URL("../features/update/UpdateConfirmDialog.tsx", import.meta.url));
 const updateProgressBar = readSource(new URL("../features/update/UpdateProgressBar.tsx", import.meta.url));
 const aboutView = readSource(new URL("../features/about/AboutView.tsx", import.meta.url));
+const tauriConfig = readSource(new URL("../../src-tauri/tauri.conf.json", import.meta.url));
+const libRs = readSource(new URL("../../src-tauri/src/lib.rs", import.meta.url));
+const agentsMd = readSource(new URL("../../AGENTS.md", import.meta.url));
 const formatMetadata = readSource(new URL("../shared/formatMetadata.ts", import.meta.url));
 const aboutCss = readSource(new URL("./features/about.css", import.meta.url));
 
@@ -664,6 +667,14 @@ describe("compact layout viewport contract", () => {
     expect(converterView).not.toContain("裁剪将在导出时按原图像素坐标执行");
     expect(converterView).toContain("旋转、翻转和裁剪都会实时反映在预览。");
     expect(converterView).not.toContain("裁剪按原图像素坐标于导出时执行");
+  });
+
+  // 窗口最小尺寸对齐 patina（src-tauri/src/app/main_window.rs 的 MAIN_WINDOW_MIN_WIDTH/HEIGHT）。
+  it("pins the window minimum size to patina's 900 × 636 everywhere", () => {
+    expect(tauriConfig).toContain('"minWidth": 900');
+    expect(tauriConfig).toContain('"minHeight": 636');
+    expect(libRs).toContain("tauri::LogicalSize::new(900.0, 636.0)");
+    expect(agentsMd).toContain("900 × 636");
   });
 
   it("exposes light and dark color schemes and applies the derived tokens", () => {

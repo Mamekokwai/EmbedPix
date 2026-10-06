@@ -52,7 +52,9 @@ pub fn run() {
             // 无边框窗口下 tauri.conf 的 minWidth/minHeight 不一定生效（WM_GETMINMAXINFO 是靠系统边框走的），
             // 运行时再钉一次，保证窗口缩不到两栏工作区会压叠的宽度。
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_min_size(Some(tauri::LogicalSize::new(900.0, 560.0)));
+                if let Err(err) = window.set_min_size(Some(tauri::LogicalSize::new(900.0, 636.0))) {
+                    eprintln!("pin main window min size failed: {err}");
+                }
             }
             commands::update::mark_app_started(
                 app.handle(),
