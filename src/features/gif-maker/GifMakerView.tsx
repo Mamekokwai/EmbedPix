@@ -609,6 +609,19 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     setLastExportPath(null);
   };
 
+  const invalidateGifExportResults = () => {
+    clearOutputSelection();
+    setMeasuredSizeBytes(null);
+    setMeasuredCanvasSize(null);
+    setSizeComparison(null);
+    setCompressionSummary(null);
+    setExportFrameSummary(null);
+    compressionPlanRequestRef.current += 1;
+    setCompressionPlan(null);
+    setCompressionPlanError(null);
+    setCompressionPlanBusy(false);
+  };
+
   const changeOutputLocation = (location: GifOutputLocation) => {
     setOutputLocation(location);
     clearOutputSelection();
@@ -902,6 +915,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       setStatus({ kind: "error", text: "视频导入被阻止" });
       return;
     }
+    invalidateGifExportResults();
     if (!isVideoFile(file)) {
       setError("请选择 MP4、WebM 或 OGG 视频文件。");
       setStatus({ kind: "error", text: "视频导入失败" });
@@ -1145,6 +1159,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const importFiles = async (inputFiles: File[], replaceFrameId: string | null = null, insertAt: number | null = null, replaceAll = false) => {
     if (lockedRef.current || !inputFiles.length) return;
+    invalidateGifExportResults();
     const imageFiles = inputFiles.filter(isImageFile);
     if (imageFiles.length !== inputFiles.length) {
       setError("请选择 PNG、JPEG、BMP 或 WEBP 静态图片；不支持视频和 GIF 拆帧。");

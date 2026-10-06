@@ -99,6 +99,9 @@ describe("compact layout viewport contract", () => {
   });
   it("clears stale GIF export actions when export inputs change", () => {
     expect(gifView).toContain("setExportFrameSummary(null);\n    setLastExportPath(null);");
+    expect(gifView).toContain("const invalidateGifExportResults = () => {");
+    expect(gifView).toContain("invalidateGifExportResults();\n    if (!isVideoFile(file))");
+    expect(gifView).toContain("invalidateGifExportResults();\n    const imageFiles = inputFiles.filter(isImageFile);");
   });
   it("clears stale compression preflight space when inputs or options change", () => {
     expect(compressionView).toContain("setPreflightSpaceBytes(null);");
