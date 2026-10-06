@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Github, HeartHandshake, Info, MessageSquare, X } from "lucide-react";
+import { FileText, Github, HeartHandshake, Info, MessageSquare, X, Coffee, QrCode } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
 import packageJson from "../../../package.json";
@@ -15,6 +15,16 @@ const PROJECT_REPOSITORY_URL = "https://github.com/Mamekokwai/EmbedPix";
 const PROJECT_ISSUES_URL = "https://github.com/Mamekokwai/EmbedPix/issues/new/choose";
 const KOFI_SUPPORT_URL = "https://ko-fi.com/nywerya";
 const WECHAT_REWARD_IMAGE_URL = "/wechat-reward.png";
+
+// 11 个格式铺成一排太碎：按格式元数据的类别收成三块，细节留给悬停提示。
+const FORMAT_GROUPS = (["静态图片", "嵌入式像素", "动画输出"] as const).map((category) => {
+  const formats = FORMAT_METADATA.filter((format) => format.category === category);
+  return {
+    category,
+    label: `${category} · ${formats.map((format) => format.label.replace(/ (动图|BIN)$/u, "")).join(" / ")}`,
+    detail: formats.map((format) => `${format.label}：${format.description}`).join("\n"),
+  };
+});
 
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined"
@@ -52,18 +62,15 @@ export default function AboutView(updateProps: UpdateViewProps) {
       </header>
 
       <div className="page-content about-content">
-        <section className="about-hero">
+        <section className="about-hero" aria-labelledby="about-app-name">
           <div className="about-logo-shell"><img src="/embedpix-icon.png" alt="嵌图匠图标" /></div>
-          <div className="about-hero-copy">
-            <div className="about-title-line"><h2>嵌图匠</h2><span>v{packageJson.version}</span></div>
-            <p>EmbedPix 把常见图片处理和单片机资源导出集中在一个轻量工作区里。</p>
-            <div className="about-output-list" aria-label="支持的输出格式">
-              {FORMAT_METADATA.map((format) => <span key={format.id} title={format.description}>{format.label}</span>)}
-            </div>
+          <div className="about-title-line"><h2 id="about-app-name">嵌图匠</h2><span>v{packageJson.version}</span></div>
+          <p className="about-hero-copy">EmbedPix 把常见图片处理和单片机资源导出集中在一个轻量工作区里。</p>
+          <div className="about-output-list" aria-label="支持的输出格式">
+            {FORMAT_GROUPS.map((group) => <span key={group.category} title={group.detail}>{group.label}</span>)}
           </div>
-        </section>
 
-        <section className="about-pill-row" aria-label="项目与支持">
+          <div className="about-pill-row" aria-label="项目与支持">
           <a className="about-pill-action" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, PROJECT_REPOSITORY_URL)}>
             <span className="about-pill-icon" aria-hidden="true"><Github size={14} /></span>
             <span className="about-pill-label">GitHub Star</span>
@@ -80,6 +87,7 @@ export default function AboutView(updateProps: UpdateViewProps) {
             <span className="about-pill-icon" aria-hidden="true"><HeartHandshake size={14} /></span>
             <span className="about-pill-label">赞助项目</span>
           </button>
+          </div>
         </section>
 
         <section className="about-author-card" aria-label="作者信息">
@@ -113,22 +121,33 @@ export default function AboutView(updateProps: UpdateViewProps) {
           >
             <div className="about-support-dialog" role="dialog" aria-modal="true" aria-labelledby="about-support-title">
               <div className="about-support-head">
-                <h2 id="about-support-title">赞助嵌图匠</h2>
+                <h2 id="about-support-title">赞助项目</h2>
                 <button type="button" className="about-support-close" aria-label="关闭赞助弹窗" onClick={() => setSupportDialogOpen(false)}>
                   <X size={16} aria-hidden="true" />
                 </button>
               </div>
               <p className="about-support-copy">嵌图匠是免费的开源工具，赞助完全自愿，不影响任何功能。</p>
-              <div className="about-support-channel">
-                <img className="about-support-qr" src={WECHAT_REWARD_IMAGE_URL} alt="微信赞赏码，扫码支持嵌图匠" />
-                <div className="about-support-channel-copy">
-                  <h3>微信赞赏</h3>
-                  <p>用微信扫码，金额随意。</p>
-                </div>
+              <div className="about-support-body">
+                <section className="about-support-card">
+                  <div className="about-support-card-heading">
+                    <QrCode size={16} aria-hidden="true" />
+                    <h4>微信赞赏</h4>
+                  </div>
+                  <div className="about-support-qr-frame">
+                    <img className="about-support-qr" src={WECHAT_REWARD_IMAGE_URL} alt="微信赞赏码，扫码支持嵌图匠" draggable={false} />
+                  </div>
+                </section>
+                <section className="about-support-card">
+                  <div className="about-support-card-heading">
+                    <Coffee size={16} aria-hidden="true" />
+                    <h4>Ko-fi</h4>
+                  </div>
+                  <p className="about-support-card-copy">喜欢嵌图匠的话，也可以在 Ko-fi 上请我喝一杯咖啡。</p>
+                  <a className="about-support-kofi" href={KOFI_SUPPORT_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, KOFI_SUPPORT_URL)}>
+                    在 Ko-fi 上请我喝咖啡
+                  </a>
+                </section>
               </div>
-              <a className="about-support-kofi" href={KOFI_SUPPORT_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, KOFI_SUPPORT_URL)}>
-                在 Ko-fi 上请我喝咖啡
-              </a>
             </div>
           </div>
         ) : null}
