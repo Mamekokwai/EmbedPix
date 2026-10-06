@@ -77,6 +77,11 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain("关闭时仅尝试同格式、原尺寸、无裁剪旋转和无水印的原始字节直通");
     expect(converterView).not.toContain("关闭后默认清理 EXIF/ICC");
   });
+  it("associates compression metadata policy with its constraints", () => {
+    expect(compressionView).toContain('aria-describedby="compression-metadata-policy-help"');
+    expect(compressionView).toContain('id="compression-metadata-policy-help"');
+    expect(compressionView).toContain("仅允许同格式静态 PNG/JPEG/WebP；输出原字节，不应用压缩、缩放或目标体积参数。");
+  });
   it("clears stale GIF export actions when export inputs change", () => {
     expect(gifView).toContain("setExportFrameSummary(null);\n    setLastExportPath(null);");
   });

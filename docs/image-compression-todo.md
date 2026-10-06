@@ -47,6 +47,7 @@
 - [x] 发布收尾：GIF/视频 GIF 导出进度补齐 `role=progressbar` 语义；release notes 版本漂移拒绝用例已完成；本轮 release fixture 与 desktop smoke 均通过。
 - [x] 本轮批处理与资产门禁收尾：累计压缩批处理进度摘要已完成；release fixture 已覆盖 x64 签名资产 `browser_download_url` 篡改拒绝。
 - [x] 本轮门禁确认：前端 32 个测试文件 / 387 个测试通过；压缩 CLI、release fixture、release config、desktop smoke 全部通过。
+- [x] 压缩元数据策略可访问性收尾：下拉控件显式关联保留/安全清理约束说明，避免用户或辅助技术误解原字节透传不会执行压缩、缩放和目标体积控制；不改变压缩协议与默认策略。
 - [x] 本轮可访问性收尾：累计压缩批处理进度摘要增加 `aria-live` 通知；前端当前为 32 个测试文件 / 387 个测试通过。
 - [x] `targetResize` 分阶段接入：固定 `targetResizePercent` 与 `autoResizeToTarget` 均已完成安全缩放；默认关闭、仅允许 10–100%、禁止放大、保持宽高比，JPEG/有损 WebP 的 preview/estimate/formal/CLI 共用同一份 resize preparation，Lanczos3 缩放并复用尺寸上限。结果额外回报 `originalInputBytes`/`preparedInputBytes`/`selectedResizePercent`，现有 `inputBytes` 明确定义为源文件体积，跳过和节省率按源文件比较；缩放准备阶段有取消检查并受单文件输入预算约束。
 - [x] 本轮增量：输出缩放支持自定义 10–100% 输入，不再局限于预设档位；偏好、自定义预设、参数摘要和格式切换清理均已覆盖。当前门禁为前端 32 个测试文件 / 392 项通过，Rust 277 项、CLI 4 项；构建与 compression CLI smoke 已通过。
