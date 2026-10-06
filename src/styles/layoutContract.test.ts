@@ -248,7 +248,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("deleteSourceAvailable");
     expect(compressionView).toContain("!replaceOriginalAvailable");
     expect(compressionView).toContain('disabled={encodingOptionDisabled || !qualityEnabled}');
-    expect(compressionView).toContain('disabled={encodingOptionDisabled || !qualityEnabled || !targetSizeActive}');
+    expect(compressionView).toContain('{targetSizeActive ? <label className="compression-field"><span className="compression-label-row"><span>最大输出体积（JPEG/WebP 有损）');
+    expect(compressionView).toContain("{replaceOriginal ? null :");
     expect(compressionView).toContain('const encodingOptionDisabled = busy || metadataPreserveActive;');
     expect(compressionView).toContain("maxCandidates: !metadataPreserveActive && maxOutputBytes ? maxCandidates : undefined");
     expect(compressionView).toContain("selectedQuality");
@@ -270,7 +271,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("loadCompressionCustomPresets");
     expect(compressionView).toContain("importCompressionPresetsJson");
     expect(compressionCss).toContain(".compression-balanced-reset { align-self: start; justify-self: start; }");
-    expect(compressionView).toContain("JPEG 使用质量滑块进行有损编码");
+    expect(compressionView).toContain('{format === "webp" ? <label className="compression-check"><input type="checkbox" checked={lossless}');
     expect(compressionView).toContain("当前为有损 WebP；质量滑块控制编码质量");
     expect(compressionView).toContain("核心最多尝试 ${maxCandidates} 个 WebP 质量候选");
     expect(compressionView).toContain("WebP 无损编码");
@@ -279,7 +280,7 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("Alpha 质量 ${webpAlphaQuality}");
     expect(compressionView).toContain("分析遍数 ${webpPass}");
     expect(compressionView).toContain("compression-webp-method-hint");
-    expect(compressionView).toContain("disabled={encodingOptionDisabled || !webpLossyActive}");
+    expect(compressionView).toContain('{webpLossyActive ? <label className="compression-field"><span className="compression-label-row"><span>WebP 编码方法');
     expect(compressionPreferences).toContain("webpMethod");
     expect(compressionPreferences).toContain("webpPass");
     expect(compressionPreferences).toContain("skipIfLarger");
@@ -300,7 +301,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView.indexOf("质量（JPEG/WebP 有损）")).toBeLessThan(compressionView.indexOf("<strong>编码细节</strong>"));
     expect(compressionView.indexOf("启用目标体积控制")).toBeGreaterThan(compressionView.indexOf("<strong>目标体积</strong>"));
     expect(compressionView.indexOf("允许覆盖同名文件")).toBeGreaterThan(compressionView.indexOf("<strong>输出与元数据</strong>"));
-    expect(compressionView).toContain("PNG 始终无损");
+    expect(compressionView).toContain("{lossyQualityVisible ?");
+    expect(compressionView).toContain('{targetSizeVisible ? <details className="compression-advanced-settings">');
+    expect(compressionView).toContain("{replaceOriginal ? null : <label className=\"compression-field\"><span>输出位置</span>");
     expect(compressionView).toContain("formatCompressionProgressError");
     expect(compressionView).toContain("const progressError = formatCompressionProgressError(next);");
     expect(compressionView).toContain("const sourceBusy = busy || importBusy;");

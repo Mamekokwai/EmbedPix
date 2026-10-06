@@ -1612,18 +1612,19 @@ export default function ImageConverter({
             </div>
             <div className="setting-group">
               <div className="label-row">
-                <label className="field-label" htmlFor="bit-depth">位深</label>
+                <span className="field-label">位深</span>
                 <span className="field-note">{outputFormat === "jpg" ? "JPG 固定 24 位" : isRawPixelFormat(outputFormat) ? "RGB565 固定 16 位" : `${getBitDepths(outputFormat).join(" / ")} 位可选`}</span>
               </div>
-              <ThemeSelect
-                id="bit-depth"
-                value={bitDepth}
-                options={getBitDepths(outputFormat).map((depth) => ({ value: depth, label: `${depth} 位` }))}
-                disabled={outputFormat === "jpg" || isRawPixelFormat(outputFormat)}
-                aria-label="位深"
-                aria-describedby="bit-depth-description"
-                onChange={handleBitDepthChange}
-              />
+              {outputFormat === "jpg" || isRawPixelFormat(outputFormat) ? null : (
+                <ThemeSelect
+                  id="bit-depth"
+                  value={bitDepth}
+                  options={getBitDepths(outputFormat).map((depth) => ({ value: depth, label: `${depth} 位` }))}
+                  aria-label="位深"
+                  aria-describedby="bit-depth-description"
+                  onChange={handleBitDepthChange}
+                />
+              )}
               <p className="field-help" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>
             </div>
 
@@ -1795,15 +1796,15 @@ export default function ImageConverter({
                       placeholder="例如 D:\\Images\\Export"
                       spellCheck={false}
                     />
-                    <button
+                    {isTauriEnvironment() ? <button
                       className="quiet-button path-input-picker"
                       type="button"
-                      disabled={!isTauriEnvironment() || status.kind === "busy"}
+                      disabled={status.kind === "busy"}
                       onClick={() => void handlePickOutputDirectory()}
-                      title={isTauriEnvironment() ? "使用系统对话框选择目录" : "仅桌面应用支持目录选择"}
+                      title="使用系统对话框选择目录"
                     >
                       选择目录
-                    </button>
+                    </button> : null}
                   </div>
                 </label>
               ) : null}
