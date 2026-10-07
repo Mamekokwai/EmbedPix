@@ -180,7 +180,6 @@ export default function ThemeSelect<T extends string | number>({
         aria-describedby={ariaDescribedBy}
         aria-invalid={ariaInvalid}
         disabled={disabled || options.length === 0}
-        title={selectedLabel}
         onBlur={() => setOpen(false)}
         onClick={() => {
           setHighlightedIndex(selectedIndex);
