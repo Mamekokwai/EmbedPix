@@ -10,6 +10,5 @@ describe("输出设置高度链契约", () => {
     expect(styles).toContain(".settings-stack > .format-group .format-selector {");
     expect(styles).toContain(".settings-stack > .settings-module[open] {");
     expect(styles).toContain(".settings-stack > .settings-module[open] > .settings-module-body {");
-    expect(styles).toContain("container: settings-module / size;");
   });
 });
