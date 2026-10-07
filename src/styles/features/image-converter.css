@@ -1081,6 +1081,7 @@
 .embedded-output-inspector {
   grid-column: 1 / -1;
   display: grid;
+  container: embedded-output / inline-size;
   gap: 8px;
   border: 1px solid var(--qp-border-subtle);
   border-radius: var(--qp-radius-control);
@@ -1090,7 +1091,7 @@
 
 .embedded-output-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   color: var(--qp-text-tertiary);
   font-size: 10px;
@@ -1098,6 +1099,13 @@
 
 .embedded-output-grid span { display: grid; gap: 3px; min-width: 0; }
 .embedded-output-grid strong { overflow: hidden; color: var(--qp-text-primary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+/* 组合参数远长于单项数值，独占一行才能在窄卡片里完整呈现字节序与行序。 */
+.embedded-output-grid span:last-child { grid-column: 1 / -1; }
+.embedded-output-grid span:last-child strong { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+
+@container embedded-output (max-width: 290px) {
+  .embedded-output-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 .export-retry-button {
   min-height: 40px;
