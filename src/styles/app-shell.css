@@ -194,7 +194,9 @@
   transition: background-color var(--qp-motion-fast) var(--qp-motion-ease), border-color var(--qp-motion-fast) var(--qp-motion-ease), color var(--qp-motion-fast) var(--qp-motion-ease);
 }
 
-.sidebar-nav-item > svg { width: 22px; height: 22px; }
+.sidebar-nav-item > svg { width: 18px; height: 18px; }
+/* 文字模式（侧栏变宽）时图标再收一档，对齐 patina 的 15px。 */
+.app-sidebar[data-sidebar-mode="labeled"] .sidebar-nav-item > svg { width: 15px; height: 15px; }
 
 .sidebar-nav-item:hover:not(.sidebar-nav-item-active) {
   border-color: var(--qp-border-subtle);
