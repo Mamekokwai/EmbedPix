@@ -587,7 +587,7 @@
   white-space: nowrap;
 }
 
-/* 设置体是卡片内唯一滚动层，与 .settings-content 同套 6px 细滚动条；其它设置卡片各行其是。 */
+/* 隐藏拖动条仍保留设置体滚动，窄窗展开后的控件才能继续访问。 */
 .settings-stack {
   display: flex;
   flex: 1 1 auto;
@@ -598,12 +598,10 @@
   min-inline-size: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--qp-border-strong) transparent;
+  scrollbar-width: none;
   padding: 0;
 }
-.settings-stack::-webkit-scrollbar { width: 6px; height: 6px; }
-.settings-stack::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
+.settings-stack::-webkit-scrollbar { display: none; }
 
 /* 悬停说明是 opacity:0 的绝对定位浮层，收起态也在布局里：Chromium 会把它的盒子算进 .settings-stack 的滚动溢出区。
    最后一块折叠模块的说明默认向下浮出，等于在滚动内容底部垫出一整段看不见的空白（卡片滑到底看到的就是它），

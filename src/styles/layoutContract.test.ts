@@ -207,12 +207,12 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toMatch(/\.settings-panel \{[^}]*min-height: 0;/);
     expect(converterCss).toMatch(/\.settings-panel \{[^}]*overflow: hidden;/);
     expect(converterCss).toMatch(/\.settings-panel > \.panel-heading,\n\.settings-panel > \.panel-footer \{[^}]*flex: 0 0 auto;/);
-    // 卡片内部的设置体自带纵向滚动 + 6px 细滚动条（与 .settings-content 同套）。
+    // 滚动层仍在设置体，隐藏拖动条不能让窄窗展开控件失去访问途径。
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*flex: 1 1 auto;/);
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*min-height: 0;/);
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*overflow-y: auto;/);
-    expect(converterCss).toContain(".settings-stack::-webkit-scrollbar { width: 6px; height: 6px; }");
-    expect(converterCss).toContain(".settings-stack::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }");
+    expect(converterCss).toMatch(/\.settings-stack \{[^}]*scrollbar-width: none;/);
+    expect(converterCss).toContain(".settings-stack::-webkit-scrollbar { display: none; }");
   });
 
   it("keeps every page header and card stack on the image-converter baseline", () => {
