@@ -24,6 +24,8 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
+  /* 头带的分割线到内容之间留一口气，否则上面的卡片直接贴着线。 */
+  padding-top: 14px;
 }
 
 /* 双栏工作区撑满内容区，两栏等高；行高锁到可用高度，卡片才有确定高度可内滚。 */
