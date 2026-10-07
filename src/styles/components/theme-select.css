@@ -6,8 +6,10 @@
 .theme-select-trigger {
   display: flex;
   width: 100%;
+  flex: 0 0 36px;
   height: 36px;
   min-height: 36px;
+  max-height: 36px;
   box-sizing: border-box;
   align-items: center;
   justify-content: space-between;
