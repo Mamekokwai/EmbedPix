@@ -113,15 +113,13 @@ describe("compact layout viewport contract", () => {
     // 展开后标题栏下方那条 1px 分隔线保留。
     expect(converterCss).toMatch(/\.settings-module\[open\] > summary \{[^}]*border-bottom: 1px solid var\(--qp-border-subtle\);/);
   });
-  it("stretches each converter format option to fill the row instead of a fixed column count", () => {
-    // 固定列数会在最后一行右侧留白（8 个格式按 3 列排成 3+3+2）；弹性列让每行都撑满可用宽度。
-    expect(converterCss).toMatch(/\.format-selector \{[^}]*display: flex;/);
-    expect(converterCss).toMatch(/\.format-selector \{[^}]*flex-wrap: wrap;/);
-    expect(converterCss).toMatch(/\.format-option \{[^}]*flex: 1 1 \d+px;/);
+  it("sizes converter format options from their nearest card width", () => {
+    expect(converterCss).toContain("container: format-options / inline-size;");
+    expect(converterCss).toMatch(/\.format-selector \{[^}]*display: grid;/);
+    expect(converterCss).toMatch(/\.format-selector \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+    expect(converterCss).toContain("@container format-options (max-width: 270px)");
+    expect(converterCss).toContain("@container format-options (max-width: 210px)");
     expect(converterCss).toMatch(/\.format-option \{[^}]*min-width: 0;/);
-    // 固定列数（含短窗媒体查询里那份 repeat(5, …)）必须一并删掉，否则又会退回按列排。
-    expect(converterCss).not.toContain("grid-template-columns: repeat(5, minmax(0, 1fr))");
-    expect(converterCss).not.toMatch(/\.format-selector \{[^}]*grid-template-columns/);
   });
   it("reveals converter explanations on hover instead of always showing them", () => {
     expect(fieldHintCss).toContain(".field-help-hover {");
@@ -364,16 +362,13 @@ describe("compact layout viewport contract", () => {
     expect(height).toBeGreaterThan(0);
     expect(gifCss).toContain("overflow-x: hidden");
     expect(gifCss).toContain(".gif-canvas-stage { min-height: 132px;");
-    expect(converterCss).toContain(".converter-app {\n  width: min(1180px, 100%);");
+    expect(converterCss).toMatch(/\.converter-app\s*\{\s*width:\s*100%;\s*max-width:\s*none;/s);
     expect(converterCss).toContain("overflow-x: hidden;");
     // 左栏预览卡改成卡片内滚后不再有固定高度下限；改锁内滚层的盒模型（同一组取值四页共用）。
     expect(converterCss).toContain(".preview-content {\n  display: flex;\n  min-height: 0;");
-    expect(compressionCss).toContain(".compression-app {\n  width: min(1180px, 100%);");
+    expect(compressionCss).toMatch(/\.compression-app\s*\{\s*width:\s*100%;\s*max-width:\s*none;/s);
     expect(compressionCss).toContain("overflow-x: hidden;");
-    // 窗口最小宽度 900（对齐 patina）：窄于 900 的 max-width 断点已整批删除，样式里不该再出现
-    for (const css of [compressionCss, gifCss, converterCss, appCss, appShellCss, updateCss]) {
-      expect(css).not.toMatch(/@media[^{]*max-width:\s*[1-8]\d\dpx/u);
-    }
+    expect(converterCss).toContain("@media (max-width: 620px)");
     expect(themeSelectCss).toContain(".theme-select-option:focus-visible");
   });
 
@@ -878,14 +873,14 @@ describe("compact layout viewport contract", () => {
   });
 
   it("crops the preview window in the same order the native transform runs", () => {
-    expect(converterView).toContain("getCropPreviewLayout(cropInputs, dimensions)");
+    expect(converterView).toContain("previewTransform.crop ? getCropPreviewLayout(");
     expect((converterView.match(/data-crop-window="true"/gu) ?? [])).toHaveLength(2);
     // 窗口承载裁切，旋转与翻转叠加在窗口上（等价 Rust 的 crop → rotate → fliph/flipv）
-    expect(converterView).toContain("transform: `scaleY(${flipVertical ? -1 : 1}) scaleX(${flipHorizontal ? -1 : 1}) rotate(${rotation}deg)`");
+    expect(converterView).toContain("transform: `scaleY(${previewTransform.flipVertical ? -1 : 1}) scaleX(${previewTransform.flipHorizontal ? -1 : 1}) rotate(${previewTransform.rotation}deg)`");
     expect(converterCss).toContain(".preview-crop-window");
     expect(converterCss).toContain("aspect-ratio: var(--crop-w, 1) / var(--crop-h, 1)");
     expect(converterView).not.toContain("裁剪将在导出时按原图像素坐标执行");
-    expect(converterView).toContain("旋转、翻转和裁剪都会实时反映在预览。");
+    expect(converterView).toContain("裁剪按原图像素坐标实时预览。");
     expect(converterView).not.toContain("裁剪按原图像素坐标于导出时执行");
   });
 

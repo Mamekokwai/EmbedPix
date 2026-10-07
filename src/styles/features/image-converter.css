@@ -674,6 +674,17 @@
   overflow: hidden;
 }
 
+/* 余高落在格式卡片，避免展开模块为填高而拉伸内容或制造额外滚动。 */
+.settings-stack > .format-group {
+  flex-grow: 1;
+}
+
+.settings-stack > .format-group .format-selector {
+  flex: 1 0 auto;
+  max-height: 240px;
+  margin-block: auto;
+}
+
 .settings-stack > .settings-module[open] { display: block; }
 .settings-stack > .settings-module[open] > .settings-module-body { width: 100%; min-width: 0; }
 
@@ -744,7 +755,7 @@
   font-size: 11px;
 }
 
-/* 宽窗口用 4 列，格式选项保持稳定的 4 × 3 视觉网格；窄窗口在媒体规则中降列数。 */
+/* 窗口宽度无法反映右栏实际可用空间，格式选项需跟随就近容器变化。 */
 .format-selector {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -755,6 +766,7 @@
 
 .format-option {
   display: flex;
+  container: format-option / inline-size;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -783,23 +795,40 @@
 }
 
 .format-option span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
 }
 
 .format-option small {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   color: var(--qp-text-tertiary);
   font-size: 10px;
 }
 
 @container format-options (max-width: 520px) {
+  .format-option { padding-inline: 6px; }
 }
 
 @container format-options (max-width: 360px) {
+  .format-selector { gap: 5px; }
+  .format-option { gap: 2px; padding-inline: 3px; }
 }
 
-@container format-options (min-height: 520px) and (min-width: 521px) {
+@container format-option (max-width: 78px) {
+  .format-option span { font-size: 10px; }
+  .format-option small { font-size: 8px; }
+}
+
+@container format-options (max-width: 270px) {
+  .format-selector { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@container format-options (max-width: 210px) {
+  .format-selector { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .dimension-input:focus-within,
@@ -1335,7 +1364,7 @@
   .converter-footer { padding-top: 8px; }
 }
 
-/* 窄窗（最小 900）一行挤 3 个：收掉横向内边距，「RGB565 BIN」这类长标签才不会折行。 */
+/* 窄窗里位深说明比选择框更长，缩小选择框才有足够的说明宽度。 */
 @media (max-width: 960px) {
   .bit-depth-select-row { align-items: flex-start; }
   .bit-depth-select-row .theme-select { flex-basis: 150px; }
