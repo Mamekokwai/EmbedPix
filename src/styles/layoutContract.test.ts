@@ -301,6 +301,26 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*padding: 0;/);
     expect(converterCss).not.toMatch(/\.settings-stack \{[^}]*padding-bottom:/);
   });
+  it("keeps the card's scroll position when a settings module is expanded", () => {
+    // 展开/收起只切换 <details> 的 open，卡片(.settings-stack)的滚动位置不得改变。
+    // 判据（结构/规则证据，无法在契约测试里跑真实布局）：
+    // 1) 折叠处理只把 event.currentTarget.open 同步进 state，展开路径上没有任何 scrollIntoView / 写 scrollTop，
+    //    也没有 autoFocus——三者都会触发浏览器的焦点/编程滚动（壳层为此外加 html{overflow:clip} 与 .app-main 定位祖先契约）。
+    expect(converterView).not.toContain("scrollIntoView");
+    expect(converterView).not.toContain("scrollTop");
+    expect(converterView).not.toContain("autoFocus");
+    expect(converterView).toMatch(/onToggle=\{\(event\) => setPixelSettingsOpen\(event\.currentTarget\.open\)\}/);
+    expect(converterView).toMatch(/onToggle=\{\(event\) => setOutputSettingsOpen\(event\.currentTarget\.open\)\}/);
+    // 2) 滚动体自己不得声明改变滚动位置的规则：scroll-behavior 会让展开后停在别处，
+    //    overflow-anchor 会改写内容变化时的滚动锚点；滚动高度只由内容决定（零内边距才不会有底部留白）。
+    const stackRule = converterCss.match(/\.settings-stack \{([^}]*)\}/)?.[1] ?? "";
+    const stackDeclarations = stackRule.split(";").map((declaration) => declaration.trim()).filter(Boolean);
+    const stackProperties = stackDeclarations.map((declaration) => declaration.split(":")[0].trim());
+    expect(stackDeclarations).toContain("padding: 0");
+    expect(stackProperties).not.toContain("padding-bottom");
+    expect(stackProperties).not.toContain("scroll-behavior");
+    expect(stackProperties).not.toContain("overflow-anchor");
+  });
   it("wraps the compression import support hint inside narrow drop zones", () => {
     expect(compressionView).toContain('className="compression-drop-hint"');
     expect(compressionView).toContain('className="compression-secondary-button compression-import-button"');
@@ -1045,5 +1065,37 @@ describe("compact layout viewport contract", () => {
     // 高度链靠 flex 收缩，不用固定像素高度去凑。
     expect(aboutCss).not.toMatch(/\.about-layout \{[^}]*height: \d+px;/);
     expect(updateCss).not.toMatch(/\.update-content-embedded \{[^}]*height: \d+px;/);
+  });
+
+  it("centers the about blocks on the card's center axis without fixed pixel heights", () => {
+    // 参照 patina 的 .about-center-profile：外层容器限宽居中（min(Npx, 100%) + justify-self/justify-items），块内再对齐中轴。
+    // 关于页把每个内容块作为卡片子项对齐中轴：卡片 align-items:center，各块限宽 min(560px, 100%)（窄窗 100% 铺满、宽窗收窄居中）。
+    expect(aboutCss).toMatch(/\.about-primary-card \{ display: flex;[^}]*align-items: center;/);
+    expect(aboutCss).toMatch(/\.about-primary-intro \{[^}]*width: min\(560px, 100%\);/);
+    expect(aboutCss).toMatch(/\.about-primary-intro \{[^}]*justify-content: center;/);
+    expect(aboutCss).toMatch(/\.about-primary-intro \{[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-primary-copy \{[^}]*flex: 1 1 auto;[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-title-line \{[^}]*justify-content: center;/);
+    expect(aboutCss).toMatch(/\.about-hero-copy \{[^}]*margin: 6px auto 0;[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-feature-block,\n\.about-action-block \{[^}]*width: min\(560px, 100%\);[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-block-heading \{[^}]*justify-content: center;[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-pill-row \{[^}]*justify-content: center;/);
+    expect(aboutCss).toMatch(/\.about-secondary-card \{ width: min\(560px, 100%\);[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-secondary-heading \{[^}]*justify-content: center;.*text-align: center;/);
+    // 列表项只居中文字：不能给 li 加 align-items:center——那会解除 small 的拉伸，nowrap 的说明文字不再被裁切，
+    // 会把卡片撑出约 35px 横向溢出（实测 900×636）。缺省 stretch + text-align:center 才能既居中又不溢出。
+    expect(aboutCss).toMatch(/\.about-output-list li \{[^}]*text-align: center;/);
+    expect(aboutCss).not.toMatch(/\.about-output-list li \{[^}]*align-items: center;/);
+    // 更新卡在右栏内滚区，只改对齐：头部改上下列居中，按钮跟着中轴；版本项与状态居中。
+    expect(aboutCss).toMatch(/\.about-update-view \.update-card-header \{[^}]*flex-direction: column;[^}]*align-items: center;/);
+    expect(aboutCss).toContain(".about-update-view .update-card-header > div { flex: 0 1 auto; }");
+    expect(aboutCss).toMatch(/\.about-update-view \.update-version-item \{[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-update-view \.update-status \{[^}]*justify-content: center;/);
+    expect(aboutCss).toMatch(/\.about-update-view \.update-release-heading \{[^}]*flex-direction: column;[^}]*align-items: center;/);
+    // 发布说明正文是多行长文，保持左对齐，只把标题与按钮居中对齐。
+    expect(aboutCss).toMatch(/\.about-update-view \.update-release-notes \{[^}]*text-align: left;/);
+    // 居中一律靠对齐 + 限宽，钉死不许用固定像素高度去凑。
+    expect(aboutCss).not.toMatch(/\.about-primary-(?:card|intro|copy) \{[^}]*height: \d+px;/);
+    expect(aboutCss).not.toMatch(/\.about-(?:feature-block|action-block|secondary-card) \{[^}]*height: \d+px;/);
   });
 });
