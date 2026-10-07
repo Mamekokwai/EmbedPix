@@ -146,7 +146,7 @@ pub(crate) fn validate_path_chain(
                 if !is_final && !metadata.is_dir() {
                     return Err(PathSecurityError::NotDirectory);
                 }
-                if is_final && !metadata.is_file() {
+                if is_final && require_final && !metadata.is_file() {
                     return Err(PathSecurityError::NotFile);
                 }
             }
