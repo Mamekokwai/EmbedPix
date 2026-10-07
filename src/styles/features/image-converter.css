@@ -589,9 +589,9 @@
 
 /* 设置体是卡片内唯一滚动层，与 .settings-content 同套 6px 细滚动条；其它设置卡片各行其是。 */
 .settings-stack {
-  display: grid;
+  display: flex;
   flex: 1 1 auto;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex-direction: column;
   gap: 16px;
   margin-top: 20px;
   min-height: 0;
@@ -628,7 +628,7 @@
 }
 
 .settings-module {
-  grid-column: 1 / -1;
+  flex: 0 1 auto;
   min-width: 0;
   border: 1px solid var(--qp-border-subtle);
   border-radius: var(--qp-radius-control);
@@ -654,6 +654,29 @@
 .settings-module > summary::after { flex: 0 0 auto; color: var(--qp-text-tertiary); content: "+"; font-family: var(--font-mono); font-size: 14px; font-weight: 400; line-height: 1; }
 .settings-module[open] > summary { border-bottom: 1px solid var(--qp-border-subtle); color: var(--qp-text-primary); }
 .settings-module[open] > summary::after { content: "−"; }
+
+.settings-stack > .format-group {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.settings-stack > .format-group .format-selector {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.settings-stack > .settings-module[open] {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.settings-stack > .settings-module[open] > .settings-module-body {
+  min-height: 0;
+  overflow-y: auto;
+}
 
 .settings-module-body {
   display: grid;
