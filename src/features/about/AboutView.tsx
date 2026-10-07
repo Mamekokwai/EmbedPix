@@ -51,7 +51,6 @@ export default function AboutView(updateProps: UpdateViewProps) {
         <div>
           <p className="page-eyebrow">ABOUT EMBEDPIX</p>
           <h1>关于嵌图匠</h1>
-          <p>面向嵌入式 UI 开发的本地图片格式转换工具。</p>
         </div>
       </header>
 
