@@ -1240,21 +1240,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           <Minimize2 className="header-lockup-icon" size={19} strokeWidth={2} aria-hidden="true" />
           <div>
             <p className="eyebrow">EMBEDPIX</p>
-            <h1>图片压缩</h1>
+            <h1>图片压缩工作台</h1>
           </div>
-          <span className="header-context"><span className="status-dot" aria-hidden="true" />本地处理</span>
         </div>
       </header>
 
       <div className="compression-content">
-      <div className="compression-intro">
-        <div className="intro-copy">
-          <p className="eyebrow">IMAGE COMPRESSION</p>
-          <h2>减小体积，保留需要的画质</h2>
-          <p>导入图片，调整核心参数，预览结果后一次导出。</p>
-        </div>
-        <span className="intro-note">PNG · JPEG · WebP</span>
-      </div>
       <div className="compression-grid">
         <div className="compression-card compression-input-card">
           <div className="compression-card-heading">

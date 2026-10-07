@@ -834,10 +834,8 @@ describe("compact layout viewport contract", () => {
 
     expect(compressionView).toContain('<Minimize2 className="header-lockup-icon"');
     expect(compressionView).toContain('<p className="eyebrow">EMBEDPIX</p>');
-    expect(compressionView).toContain("<h1>图片压缩</h1>");
+    expect(compressionView).toContain("<h1>图片压缩工作台</h1>");
     expect(compressionView).not.toContain("brand-mark");
-    expect(compressionView).toContain('className="header-context"');
-    expect(compressionView).toContain('className="compression-intro"');
 
     expect(gifView).toContain('<div className="page-header-icon"><Film size={19}');
     expect(gifView).toContain('<p className="page-eyebrow">EMBEDPIX</p>');
@@ -862,11 +860,26 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).not.toContain(".intro-note");
 
     expect(compressionCss).toMatch(/\.compression-header \{[^}]*border-bottom: 1px solid var\(--qp-border-subtle\);/);
-    expect(compressionCss).toContain(".compression-intro {");
 
     expect(gifCss).toMatch(/\.gif-maker-header\.page-header \{[^}]*flex: 0 0 auto;/);
     expect(gifCss).not.toContain(".gif-header-note .status-dot");
     expect(gifCss).not.toContain(".gif-maker-header .page-eyebrow");
+  });
+
+  it("locks the compression header to the two-line EMBEDPIX lockup", () => {
+    // 压缩页头只留 EMBEDPIX + 「图片压缩」两行；介绍带与本地处理状态点已并入清理，不得回流。
+    expect(compressionView).toContain('<p className="eyebrow">EMBEDPIX</p>');
+    expect(compressionView).toContain("<h1>图片压缩工作台</h1>");
+    expect(compressionView).not.toContain('className="header-context"');
+    expect(compressionView).not.toContain("本地处理");
+    expect(compressionView).not.toContain("IMAGE COMPRESSION");
+    expect(compressionView).not.toContain("减小体积，保留需要的画质");
+    expect(compressionView).not.toContain("导入图片，调整核心参数，预览结果后一次导出。");
+    expect(compressionView).not.toContain("PNG · JPEG · WebP");
+    expect(compressionView).not.toContain("compression-intro");
+    expect(compressionCss).not.toContain(".compression-intro");
+    expect(compressionCss).not.toContain(".header-context");
+    expect(compressionCss).not.toContain(".status-dot");
   });
 
   it("locks the GIF header to the two-line EMBEDPIX lockup", () => {
