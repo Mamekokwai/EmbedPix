@@ -1237,7 +1237,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     <section className="compression-app" aria-label="图片压缩工作台" aria-busy={busy}>
       <header className="compression-header">
         <div className="brand-lockup">
-          <Minimize2 className="header-lockup-icon" size={19} strokeWidth={2} aria-hidden="true" />
+          <div className="page-header-icon"><Minimize2 className="header-lockup-icon" size={19} strokeWidth={2} aria-hidden="true" /></div>
           <div>
             <p className="eyebrow">EMBEDPIX</p>
             <h1>图片压缩工作台</h1>

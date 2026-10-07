@@ -1374,7 +1374,7 @@ export default function ImageConverter({
     <main className="converter-app">
       <header className="converter-header">
         <div className="header-lockup">
-          <Images className="header-lockup-icon" size={19} strokeWidth={2} aria-hidden="true" />
+          <div className="page-header-icon"><Images className="header-lockup-icon" size={19} strokeWidth={2} aria-hidden="true" /></div>
           <div>
             <p className="eyebrow">EMBEDPIX</p>
             <h1>图片转换工作区</h1>
@@ -1573,7 +1573,7 @@ export default function ImageConverter({
             </fieldset>
 
             {embeddedInspection ? <section className="embedded-output-inspector" aria-labelledby="embedded-output-title">
-              <div className="label-row"><span className="field-label" id="embedded-output-title">嵌入式输出检查</span><span className="field-note">CRC32 {embeddedInspection.crc32}</span></div>
+              <div className="label-row"><span className="field-label" id="embedded-output-title">输出检查</span><span className="field-note">CRC32 {embeddedInspection.crc32}</span></div>
               <div className="embedded-output-grid">
                 <span>理论像素字节<strong>{embeddedInspection.pixelBytes}</strong></span>
                 <span>行 stride<strong>{embeddedInspection.rowStrideBytes} B</strong></span>

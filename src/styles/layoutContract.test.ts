@@ -1098,4 +1098,46 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).not.toMatch(/\.about-primary-(?:card|intro|copy) \{[^}]*height: \d+px;/);
     expect(aboutCss).not.toMatch(/\.about-(?:feature-block|action-block|secondary-card) \{[^}]*height: \d+px;/);
   });
+
+  it("keeps all five fixed page headers on one icon frame, eyebrow, and title scale", () => {
+    // 五页共用一个页头图标外框（壳层 .page-header-icon）：34×34 + 1px token 边线 + control 圆角 + panel 底色；
+    // 框内 lucide 字形一律 18px，由 CSS 定宽高，不再依赖各页组件传的 size（props 换字号或漏传都不会再偏）。
+    expect(appShellCss).toMatch(/\.page-header-icon \{[^}]*width: 34px;/);
+    expect(appShellCss).toMatch(/\.page-header-icon \{[^}]*height: 34px;/);
+    expect(appShellCss).toMatch(/\.page-header-icon \{[^}]*border: 1px solid var\(--qp-border-subtle\);/);
+    expect(appShellCss).toMatch(/\.page-header-icon \{[^}]*border-radius: var\(--qp-radius-control\);/);
+    expect(appShellCss).toMatch(/\.page-header-icon \{[^}]*background: var\(--qp-bg-panel\);/);
+    expect(appShellCss).toMatch(/\.page-header-icon > svg \{[^}]*width: 18px;[^}]*height: 18px;/);
+    // GIF 页头曾把外框圆角改回按钮圆角并重复声明尺寸：基规则必须与壳层同组取值，破坏即在此失败（短窗自适应规则不算）。
+    const gifIconBaseRule = gifCss.match(/\.gif-maker-header \.page-header-icon \{[^}]*\}/)?.[0] ?? "";
+    expect(gifIconBaseRule).not.toContain("--qp-radius-button");
+    expect(gifIconBaseRule).toMatch(/border-radius: var\(--qp-radius-control\);/);
+
+    // eyebrow 10px：转换/压缩页用自己的 .eyebrow，GIF/设置/关于共用壳层 .page-eyebrow。
+    expect(converterCss).toMatch(/\.eyebrow,\n\.panel-kicker \{[^}]*font-size: 10px;/);
+    expect(appShellCss).toMatch(/\.page-eyebrow \{[^}]*font-size: 10px;/);
+    // h1 14px + margin-top 2px：转换页 .header-lockup h1、压缩页 .brand-lockup h1、其余走壳层 .page-header h1。
+    expect(converterCss).toMatch(/\.header-lockup h1 \{\n  margin-top: 2px;\n  font-size: 14px;\n\}/);
+    expect(compressionCss).toMatch(/\.compression-header \.brand-lockup h1 \{[^}]*margin: 2px 0 0;[^}]*font-size: 14px;/);
+    expect(appShellCss).toMatch(/\.page-header h1 \{[^}]*margin: 2px 0 0;[^}]*font-size: 14px;/);
+    // 图标与文案的间距五页同为 11px；三条页头基规则的间距取值也一致（转换页头补回 gap）。
+    expect(converterCss).toMatch(/\.header-lockup \{[^}]*gap: 11px;/);
+    expect(compressionCss).toMatch(/\.compression-header \.brand-lockup \{[^}]*gap: 11px;/);
+    expect(gifCss).toMatch(/\.gif-brand-lockup \{[^}]*gap: 11px;/);
+    expect(appShellCss).toMatch(/\.page-header \{[^}]*gap: 11px;/);
+    expect(converterCss).toMatch(/\.converter-header \{[^}]*gap: 11px;/);
+    expect(compressionCss).toMatch(/\.compression-header \{[^}]*gap: 11px;/);
+  });
+
+  it("wraps the converter and compression header icons in the shared frame instead of leaving them bare", () => {
+    // 转换/压缩页原先把 lucide 图标裸挂在 .header-lockup / .brand-lockup 下（既无外框，字号也只由组件 size 决定）。
+    // 现在必须包进壳层同一个 .page-header-icon 外框，五页页头结构一致。
+    expect(converterView).toMatch(/<div className="header-lockup">\s*<div className="page-header-icon">/);
+    expect(compressionView).toMatch(/<div className="brand-lockup">\s*<div className="page-header-icon">/);
+    expect(settingsView).toContain('<div className="page-header-icon"><Settings2');
+    expect(aboutView).toContain('<div className="page-header-icon"><Info');
+    // 负向断言：图标不再作为 lockup 的直接子元素裸挂。
+    expect(converterView).not.toMatch(/<div className="header-lockup">\s*<Images/);
+    expect(compressionView).not.toMatch(/<div className="brand-lockup">\s*<Minimize2/);
+  });
 });

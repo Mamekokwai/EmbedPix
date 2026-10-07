@@ -329,9 +329,9 @@
 /* 固定页头（悬浮顶栏）以图片转换页为基准：min-height 34px + padding-bottom 10px + 1px token 底边线 = 45px；改基准必须五页同步。 */
 .page-header { display: flex; flex: 0 0 auto; min-height: 34px; align-items: center; gap: 11px; border-bottom: 1px solid var(--qp-border-subtle); padding-bottom: 10px; }
 .page-header-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-accent-default); }
-.page-header-icon > svg { width: 24px; height: 24px; }
+.page-header-icon > svg { width: 18px; height: 18px; }
 .page-eyebrow { margin: 0; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
-.page-header h1 { margin: 2px 0 0; color: var(--qp-text-primary); font-size: 14px; font-weight: 700; letter-spacing: -.02em; }
+.page-header h1 { margin: 2px 0 0; color: var(--qp-text-primary); font-size: 14px; font-weight: 650; letter-spacing: -.02em; }
 .page-content { display: flex; min-height: 0; flex-direction: column; gap: 16px; padding-top: 14px; }
 
 /* 短窗只收页面外层内边距：页头盒模型保持基准不变，四页在最小窗口（900×636）仍然等高。 */
