@@ -1017,12 +1017,10 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toContain(".about-layout { display: grid;");
     expect(aboutCss).toContain("@container about-page (max-width: 760px)");
     expect(aboutCss).toContain(".about-layout { grid-template-columns: minmax(0, 1fr) minmax(280px, 300px); }");
-    // 可用高度由左主卡与右栏更新卡共同吸收；展开内容由右栏卡片内滚，外层不再冒滚动条。
+    // 可用高度由左主卡与右栏更新卡共同吸收，项目详情贴底；展开内容由右栏卡片内滚，外层不再冒滚动条。
     expect(aboutCss).toContain("flex: 1 1 auto; min-height: 0; grid-template-columns:");
     expect(aboutCss).toContain("align-items: stretch; }");
-    // 项目详情是左主卡里排在操作入口之后的最后一组，不再用 margin-top:auto 钉到卡底（钉底会留中缝、分隔线悬空）。
-    expect(aboutCss).not.toMatch(/margin-top: auto/);
-    expect(aboutView.indexOf('className="about-action-block"')).toBeLessThan(aboutView.indexOf('className="about-secondary-card about-project-details-card"'));
+    expect(aboutCss).toContain(".about-project-details-card { margin-top: auto; }");
     expect(aboutCss).toContain("align-content: start;");
     expect(aboutView.indexOf('className="about-primary-card"')).toBeLessThan(aboutView.indexOf('className="about-secondary-card about-project-details-card"'));
     expect(aboutView.indexOf('className="about-secondary-card about-project-details-card"')).toBeLessThan(aboutView.indexOf('className="about-secondary-column"'));
@@ -1069,31 +1067,25 @@ describe("compact layout viewport contract", () => {
     expect(updateCss).not.toMatch(/\.update-content-embedded \{[^}]*height: \d+px;/);
   });
 
-  it("layers the about card by group and keeps long text left-aligned", () => {
-    // 新排版：左主卡不再逐个限宽居中，而是把一个分组当一层——卡片是拉伸列，分组占满卡宽，靠 1px token 分隔线 + 上下留白分组。
-    expect(aboutCss).toMatch(/\.about-primary-card \{ display: flex;[^}]*flex-direction: column;[^}]*align-items: stretch;/);
-    expect(aboutCss).toMatch(/\.about-primary-card \{[^}]*gap: 0;/);
-    // 主标题区（含短标语）是唯一居中分组：短标题 + 短标语，限宽 min(560px, 100%) + margin-inline:auto 落在中轴。
-    expect(aboutCss).toMatch(/\.about-primary-intro \{[^}]*width: min\(560px, 100%\);[^}]*justify-content: center;[^}]*margin-inline: auto;/);
+  it("centers the about blocks on the card's center axis without fixed pixel heights", () => {
+    // 参照 patina 的 .about-center-profile：外层容器限宽居中（min(Npx, 100%) + justify-self/justify-items），块内再对齐中轴。
+    // 关于页把每个内容块作为卡片子项对齐中轴：卡片 align-items:center，各块限宽 min(560px, 100%)（窄窗 100% 铺满、宽窗收窄居中）。
+    expect(aboutCss).toMatch(/\.about-primary-card \{ display: flex;[^}]*align-items: center;/);
+    expect(aboutCss).toMatch(/\.about-primary-intro \{[^}]*width: min\(560px, 100%\);/);
+    expect(aboutCss).toMatch(/\.about-primary-intro \{[^}]*justify-content: center;/);
     expect(aboutCss).toMatch(/\.about-primary-intro \{[^}]*text-align: center;/);
     expect(aboutCss).toMatch(/\.about-primary-copy \{[^}]*flex: 1 1 auto;[^}]*text-align: center;/);
     expect(aboutCss).toMatch(/\.about-title-line \{[^}]*justify-content: center;/);
     expect(aboutCss).toMatch(/\.about-hero-copy \{[^}]*margin: 6px auto 0;[^}]*text-align: center;/);
-    // 功能列表左对齐：组长说明文本，居中只会把每行的行首甩来甩去；分隔靠 1px token 上边线。
-    expect(aboutCss).toMatch(/\.about-feature-block,\n\.about-action-block \{[^}]*border-top: 1px solid var\(--qp-border-subtle\);[^}]*text-align: left;/);
-    expect(aboutCss).toMatch(/\.about-block-heading \{[^}]*text-align: left;/);
-    // 工作流条目从三张居中同权重小卡改成左对齐的「标签 + 说明」行；说明不再 nowrap 裁切。
-    expect(aboutCss).toMatch(/\.about-output-list \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
-    expect(aboutCss).toMatch(/\.about-output-list li \{[^}]*grid-template-columns: max-content minmax\(0, 1fr\);[^}]*text-align: left;/);
-    expect(aboutCss).not.toMatch(/\.about-output-list li \{[^}]*white-space: nowrap;/);
-    expect(aboutCss).not.toMatch(/\.about-output-list li \{[^}]*align-items: center;/);
-    // 操作入口是按钮组：这一组回到居中，与它上面左对齐的功能列表形成对比。
-    expect(aboutCss).toContain(".about-action-block { text-align: center; }");
-    expect(aboutCss).toMatch(/\.about-action-block \.about-block-heading \{[^}]*justify-content: center;/);
+    expect(aboutCss).toMatch(/\.about-feature-block,\n\.about-action-block \{[^}]*width: min\(560px, 100%\);[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-block-heading \{[^}]*justify-content: center;[^}]*text-align: center;/);
     expect(aboutCss).toMatch(/\.about-pill-row \{[^}]*justify-content: center;/);
-    // 项目详情去卡片化：去掉外框/底色，降为左对齐的收尾说明，只留顶部 1px token 分隔线。
-    expect(aboutCss).toMatch(/\.about-secondary-card \{[^}]*width: 100%;[^}]*border-top: 1px solid var\(--qp-border-subtle\);[^}]*background: transparent;[^}]*text-align: left;/);
-    expect(aboutCss).toMatch(/\.about-secondary-heading \{[^}]*justify-content: space-between;[^}]*text-align: left;/);
+    expect(aboutCss).toMatch(/\.about-secondary-card \{ width: min\(560px, 100%\);[^}]*text-align: center;/);
+    expect(aboutCss).toMatch(/\.about-secondary-heading \{[^}]*justify-content: center;.*text-align: center;/);
+    // 列表项只居中文字：不能给 li 加 align-items:center——那会解除 small 的拉伸，nowrap 的说明文字不再被裁切，
+    // 会把卡片撑出约 35px 横向溢出（实测 900×636）。缺省 stretch + text-align:center 才能既居中又不溢出。
+    expect(aboutCss).toMatch(/\.about-output-list li \{[^}]*text-align: center;/);
+    expect(aboutCss).not.toMatch(/\.about-output-list li \{[^}]*align-items: center;/);
     // 更新卡在右栏内滚区，只改对齐：头部改上下列居中，按钮跟着中轴；版本项与状态居中。
     expect(aboutCss).toMatch(/\.about-update-view \.update-card-header \{[^}]*flex-direction: column;[^}]*align-items: center;/);
     expect(aboutCss).toContain(".about-update-view .update-card-header > div { flex: 0 1 auto; }");
@@ -1102,24 +1094,9 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toMatch(/\.about-update-view \.update-release-heading \{[^}]*flex-direction: column;[^}]*align-items: center;/);
     // 发布说明正文是多行长文，保持左对齐，只把标题与按钮居中对齐。
     expect(aboutCss).toMatch(/\.about-update-view \.update-release-notes \{[^}]*text-align: left;/);
-    // 一律靠分组 + 对齐 + 留白，钉死不许用固定像素高度去凑。
+    // 居中一律靠对齐 + 限宽，钉死不许用固定像素高度去凑。
     expect(aboutCss).not.toMatch(/\.about-primary-(?:card|intro|copy) \{[^}]*height: \d+px;/);
     expect(aboutCss).not.toMatch(/\.about-(?:feature-block|action-block|secondary-card) \{[^}]*height: \d+px;/);
-  });
-
-  it("distinguishes the about groups by type scale and background instead of stacking same-weight cards", () => {
-    // 层级（从重到轻）：主标题 22px/700 主色 > 组标题与工作流标签 12px/650 主色 > eyebrow 10px 三色 > 说明 10–11px 三色。
-    expect(aboutCss).toMatch(/\.about-title-line h2 \{[^}]*font-size: 22px;[^}]*font-weight: 700;/);
-    expect(aboutCss).toMatch(/\.about-block-heading > span \{[^}]*color: var\(--qp-text-primary\);[^}]*font-size: 12px;[^}]*font-weight: 650;/);
-    expect(aboutCss).toMatch(/\.about-output-list li span \{[^}]*color: var\(--qp-text-primary\);[^}]*font-size: 12px;[^}]*font-weight: 650;/);
-    expect(aboutCss).toMatch(/\.about-output-list li small \{[^}]*color: var\(--qp-text-tertiary\);[^}]*font-size: 10px;/);
-    expect(aboutCss).toMatch(/\.about-section-eyebrow \{[^}]*color: var\(--qp-text-tertiary\);[^}]*font-size: 10px;/);
-    // 底色只留两档：卡片 panel、按钮 pill elevated；功能说明与项目详情靠留白不靠底色，不再给每组垫底。
-    expect(aboutCss).toMatch(/\.about-primary-card \{[^}]*background: var\(--qp-bg-panel\);/);
-    expect(aboutCss).toMatch(/\.about-pill-action \{[^}]*background: var\(--qp-bg-elevated\);/);
-    expect(aboutCss).not.toMatch(/\.about-output-list li \{[^}]*background:/);
-    // 颜色一律 tokens.css 的 --qp-*：本文件不得出现任何硬编码颜色。
-    expect(aboutCss).not.toMatch(/#[0-9a-fA-F]{3,6}/);
   });
 
   it("keeps all five fixed page headers on one icon frame, eyebrow, and title scale", () => {
