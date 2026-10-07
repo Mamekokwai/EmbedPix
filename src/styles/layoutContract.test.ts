@@ -1039,6 +1039,16 @@ describe("compact layout viewport contract", () => {
     expect(aboutView).not.toContain("wechat-qr.png");
   });
 
+  it("keeps the about quick links free of the redundant release-notes entry", () => {
+    expect(aboutView).not.toContain("更新说明");
+    expect(aboutView).not.toContain("RELEASES_PAGE_URL");
+    expect(aboutView).not.toContain("<FileText");
+    expect(aboutView).toContain('className="about-pill-row" aria-label="项目与支持"');
+    expect(aboutView).toContain("GitHub Star");
+    expect(aboutView).toContain("问题反馈");
+    expect(aboutView).toContain("赞助项目");
+  });
+
   it("keeps the about page outer container unscrollable so expanding release notes squishes the card instead", () => {
     // 主人要求：关于页最外层取消滚动条；展开右栏发布说明时不把容器变成可滚，而是卡片挤占剩余高度，多出的文本在卡片内部滚。
     // 外层只裁剪：显式 hidden，且不得再退回任何纵向滚动。

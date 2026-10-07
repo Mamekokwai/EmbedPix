@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { FileText, Github, HeartHandshake, Info, MessageSquare, X } from "lucide-react";
+import { Github, HeartHandshake, Info, MessageSquare, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
 import packageJson from "../../../package.json";
 import UpdateView, { type UpdateViewProps } from "../update/UpdateView";
-import { RELEASES_PAGE_URL } from "../../platform/update/updateGateway";
 
 const PROJECT_REPOSITORY_URL = "https://github.com/Mamekokwai/EmbedPix";
 const PROJECT_ISSUES_URL = "https://github.com/Mamekokwai/EmbedPix/issues/new/choose";
@@ -86,10 +85,6 @@ export default function AboutView(updateProps: UpdateViewProps) {
                 <a className="about-pill-action" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, PROJECT_REPOSITORY_URL)}>
                   <span className="about-pill-icon" aria-hidden="true"><Github size={14} /></span>
                   <span className="about-pill-label">GitHub Star</span>
-                </a>
-                <a className="about-pill-action" href={RELEASES_PAGE_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, RELEASES_PAGE_URL)}>
-                  <span className="about-pill-icon" aria-hidden="true"><FileText size={14} /></span>
-                  <span className="about-pill-label">更新说明</span>
                 </a>
                 <a className="about-pill-action" href={PROJECT_ISSUES_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, PROJECT_ISSUES_URL)}>
                   <span className="about-pill-icon" aria-hidden="true"><MessageSquare size={14} /></span>
