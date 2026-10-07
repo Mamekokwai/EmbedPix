@@ -665,7 +665,7 @@
 }
 
 .settings-stack > .settings-module {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
 }
