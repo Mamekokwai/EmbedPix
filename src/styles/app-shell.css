@@ -10,6 +10,8 @@
 }
 
 .app-titlebar {
+  position: relative;
+  z-index: 80;
   display: flex;
   min-height: 0;
   flex: 0 0 var(--qp-titlebar-height);
@@ -17,6 +19,7 @@
   align-items: center;
   border-bottom: 1px solid var(--qp-border-subtle);
   background: var(--qp-bg-app);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--qp-bg-app) 55%, transparent);
   color: var(--qp-text-secondary);
   user-select: none;
 }
