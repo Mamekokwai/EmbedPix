@@ -211,8 +211,11 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*flex: 1 1 auto;/);
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*min-height: 0;/);
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*overflow-y: auto;/);
-    expect(converterCss).toMatch(/\.settings-stack \{[^}]*scrollbar-width: none;/);
-    expect(converterCss).toContain(".settings-stack::-webkit-scrollbar { display: none; }");
+    expect(appCss).toMatch(/\* \{[^}]*scrollbar-width: none;/);
+    expect(appCss).toContain("*::-webkit-scrollbar { display: none; }");
+    for (const css of [converterCss, compressionCss, gifCss, settingsCss, aboutCss, updateCss, appShellCss]) {
+      expect(css).not.toMatch(/scrollbar-(?:width|color)|::-webkit-scrollbar/);
+    }
   });
 
   it("keeps every page header and card stack on the image-converter baseline", () => {
@@ -264,12 +267,10 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toMatch(/\.preview-panel \{[^}]*min-height: 0;/);
     expect(converterCss).toMatch(/\.preview-panel \{[^}]*overflow: hidden;/);
     expect(converterCss).toMatch(/\.preview-panel > \.panel-heading \{[^}]*flex: 0 0 auto;/);
-    // 内滚层是 .preview-content：min-height 归零 + 纵向滚动 + 6px 细滚动条（与 .settings-stack 一致）。
+    // 内滚层是 .preview-content：min-height 归零后才能收窄并保留纵向滚动。
     expect(converterCss).toMatch(/\.preview-content \{[^}]*min-height: 0;/);
     expect(converterCss).toMatch(/\.preview-content \{[^}]*flex: 1 1 auto;/);
     expect(converterCss).toMatch(/\.preview-content \{[^}]*overflow-y: auto;/);
-    expect(converterCss).toContain(".preview-content::-webkit-scrollbar { width: 6px; height: 6px; }");
-    expect(converterCss).toContain(".preview-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }");
     // 顶住内滚的固定下限必须消失，否则整列又被顶出卡片、按钮又被裁掉。
     expect(converterCss).not.toContain(".preview-content { min-height: 356px;");
     expect(converterCss).not.toMatch(/\.preview-frame \{[^}]*min-height: \d+px;/);

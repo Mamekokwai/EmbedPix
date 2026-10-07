@@ -20,7 +20,11 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
 }
+
+/* 滚动仍由各容器负责，统一隐藏拖动条可避免局部样式把它重新显示出来。 */
+*::-webkit-scrollbar { display: none; }
 
 body {
   width: 100%;

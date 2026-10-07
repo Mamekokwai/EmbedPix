@@ -1,7 +1,5 @@
 /* 内容区自带纵向滚动：外壳不滚，设置列在这里滚多少都行，高度不再交给外层。 */
-.settings-content { flex: 1 1 auto; width: 100%; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--qp-border-strong) transparent; }
-.settings-content::-webkit-scrollbar { width: 6px; height: 6px; }
-.settings-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
+.settings-content { flex: 1 1 auto; width: 100%; min-height: 0; overflow-y: auto; }
 .settings-card { border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
 .settings-card-header { padding: 20px 22px 16px; }
 .settings-card h2 { margin: 0; color: var(--qp-text-primary); font-size: 14px; font-weight: 700; }

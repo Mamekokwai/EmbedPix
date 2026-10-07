@@ -73,7 +73,7 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 - **同类组件的间距必须相同**：竖向堆叠的控件行与设置组统一用 `--qp-stack-gap`（`src/styles/tokens.css`，当前 7px）——模块体（`.settings-module-body`）、设置组（`.setting-group`）、勾选组（`.output-actions` / `.output-action`），连同它们的短窗媒体查询覆盖，都只用这一个 token；不要再各自写 4px / 5px / 7px / 8px / 10px，同一屏里相邻选项的间距差一点就看得出。卡片之间的间距属于另一层（`.settings-stack`），不在这一条里。
 - **卡片间距与固定页头（悬浮顶栏）以图片转换页为基准，五页一视同仁**：卡片之间的间距统一 `16px`（基准是 `src/styles/features/image-converter.css` 里 `.settings-stack { gap: 16px }`；压缩页 `.compression-settings-card`、设置／关于页壳层的 `.page-content` 都用同一取值），两栏工作区的外层网格间距统一 `18px`（基准同页 `.workspace-grid { gap: 18px }`，对应压缩页 `.compression-grid`、GIF 页 `.gif-workspace-grid`）；固定页头（悬浮顶栏）统一 `min-height: 34px` + `padding-bottom: 10px` + 1px `--qp-border-subtle` 底边线（合计 45px），页面外层内边距统一 `20px 28px 18px`、页头到内容之间留 `14px`。转换／压缩页各自在 `.converter-header` / `.compression-header` 里声明，GIF／设置／关于共用壳层 `.page-header`（`app-shell.css`）；设置页顶栏右侧的保存／取消与状态提示、关于页的单列内容属于页面结构，保持不变、只统一高度与内边距。**改基准必须五页同步改，并同步 `src/styles/layoutContract.test.ts` 的契约断言**——各页曾各写一套（页头 44/46px、卡片间距 15/16/18px 混用），同一屏里差一点就看得出。
 - **阻断性错误要有始终可见的出口**：字段被折叠时，按钮禁用必须配一个折叠组之外的说明块（如 `compression-parameter-issues`），不能让用户对着灰按钮猜原因。
-- **滚动条可见但细**：主滚动层用 6px 细滚动条，不要再写 `scrollbar-width: none`（0.2.2 的隐藏滚动条契约已作废）。
+- **全局隐藏滚动条**：`src/App.css` 统一隐藏可拖动的滚动条；页面和卡片仍保留正常的滚轮、触控板、键盘与程序滚动。不要在局部样式中重新声明可见滚动条。
 - **控件用真语义**：导入类操作用真 `<button>` + ref 触发隐藏 `<input type="file">`（不要 `label` 包 input），单选组用真 `<input type="radio">`，列表用 `list` / `listitem`，忙碌时用 `<fieldset disabled>` 或 `aria-busy` 禁用整组。
 - 能机器检查的部分写在 `src/styles/layoutContract.test.ts`：新增页面时同步补断言，改样式前先改契约。
 

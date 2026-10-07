@@ -26,17 +26,14 @@
 .gif-source-tab { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); padding: 3px 8px; background: var(--qp-bg-panel); color: var(--qp-text-secondary); font-size: 11px; }
 .gif-source-tab:hover { border-color: var(--qp-border-strong); background: var(--qp-bg-elevated); }
 .gif-source-tab-active { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); color: var(--qp-accent-default); }
-.gif-maker-content.page-content { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; min-inline-size: 0; min-block-size: 0; flex-direction: column; gap: 16px; padding: 0; margin: 0; border: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 18px; scrollbar-width: thin; scrollbar-color: var(--qp-border-strong) transparent; }
-.gif-maker-content.page-content::-webkit-scrollbar { width: 6px; height: 6px; }
-.gif-maker-content.page-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
+.gif-maker-content.page-content { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; min-inline-size: 0; min-block-size: 0; flex-direction: column; gap: 16px; padding: 0; margin: 0; border: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 18px; }
 .gif-coming-soon { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; flex-direction: column; gap: 8px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-text-secondary); text-align: center; }
 .gif-coming-soon-icon { display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-accent-default); }
 .gif-coming-soon h2 { margin: 2px 0 0; color: var(--qp-text-primary); font-size: 16px; }
 .gif-coming-soon p, .gif-coming-soon span { max-width: 360px; margin: 0; font-size: 11px; }
 .gif-coming-soon span { color: var(--qp-text-tertiary); }
 .gif-video-card { flex: 0 1 auto; display: flex; min-height: 0; flex-direction: column; gap: 8px; }
-.gif-source-video .gif-video-card { max-height: min(320px, 42vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-.gif-source-video .gif-video-card::-webkit-scrollbar { display: none; }
+.gif-source-video .gif-video-card { max-height: min(320px, 42vh); overflow-y: auto; overscroll-behavior: contain; }
 .gif-video-preview { display: block; width: min(100%, 520px); max-height: 170px; margin: 0 auto; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: #000; object-fit: contain; }
 .gif-video-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(150px, 1.4fr); gap: 8px 12px; align-items: end; }
 .gif-video-custom-crop { grid-column: 1 / -1; min-width: 0; padding: 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: var(--qp-bg-elevated); }
@@ -75,8 +72,7 @@
 .gif-frame-toolbar { justify-content: space-between; }
 .gif-frame-toolbar > div { flex-wrap: wrap; justify-content: flex-end; }
 .gif-frame-toolbar > span { color: var(--qp-text-secondary); }
-.gif-frame-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: none; }
-.gif-frame-list::-webkit-scrollbar { display: none; }
+.gif-frame-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
 .gif-frame-row { display: flex; align-items: center; gap: 2px; border: 1px solid transparent; border-radius: var(--qp-radius-button); padding: 3px; margin-bottom: 4px; }
 .gif-frame-row[draggable="true"] { cursor: grab; }
 .gif-frame-row[draggable="true"]:active { cursor: grabbing; }
@@ -107,9 +103,8 @@
 .gif-timeline input[type="number"], .gif-timeline select { width: 52px; min-width: 0; padding: 2px 3px; font-size: 10px; }
 .gif-timeline span { flex: 0 0 auto; white-space: nowrap; }
 .gif-preview-footer { display: flex; justify-content: space-between; gap: 4px; flex-wrap: wrap; color: var(--qp-text-secondary); font-size: 10px; }
-.gif-settings-card { flex: 0 1 auto; min-height: 0; max-height: min(420px, 45vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.gif-settings-card { flex: 0 1 auto; min-height: 0; max-height: min(420px, 45vh); overflow-y: auto; overscroll-behavior: contain; }
 .gif-maker-view.gif-settings-expanded > .gif-settings-card { position: relative; z-index: 4; }
-.gif-settings-card::-webkit-scrollbar { display: none; }
 .gif-group-tabs { gap: 6px; }
 .gif-group-tabs > span { margin-left: auto; color: var(--qp-text-tertiary); font-size: 10px; }
 .gif-maker-view .gif-group-active { color: var(--qp-accent-default); background: var(--qp-accent-muted); border-color: var(--qp-accent-default); }
@@ -269,8 +264,7 @@
   .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(150px, auto) minmax(190px, auto); }
   .gif-preview-card { min-height: 190px; }
   .gif-canvas-stage { min-height: 132px; }
-  .gif-settings-card { max-height: 170px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-  .gif-settings-card::-webkit-scrollbar { display: none; }
+  .gif-settings-card { max-height: 170px; overflow-y: auto; overscroll-behavior: contain; }
   .gif-maker-view > .gif-export-footer { position: sticky; bottom: 0; z-index: 2; padding: 5px 0; background: var(--qp-bg-app); }
   .gif-maker-view.gif-settings-expanded > .gif-export-footer { position: static; }
 }
@@ -280,8 +274,7 @@
   .gif-source-video .gif-workspace-grid { grid-template-rows: minmax(170px, auto) minmax(220px, 1fr); }
   .gif-preview-card { min-height: 220px; }
   .gif-canvas-stage { min-height: 150px; }
-  .gif-settings-card { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-  .gif-settings-card::-webkit-scrollbar { display: none; }
+  .gif-settings-card { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
 }
 
 /* 展开设置时内容区仍是滚动容器：只让工作区按内容自然撑高，预览和导出操作在内容区里滚得到。 */

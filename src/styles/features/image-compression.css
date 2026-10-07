@@ -27,11 +27,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--qp-border-strong) transparent;
 }
-.compression-content::-webkit-scrollbar { width: 6px; height: 6px; }
-.compression-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 
 .compression-grid { flex: 1 0 auto; }
 
@@ -100,7 +96,7 @@
 .compression-secondary-button, .compression-primary-button, .compression-retry-button, .compression-icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); cursor: pointer; font: inherit; transition: background-color var(--qp-motion-fast) var(--qp-motion-ease), border-color var(--qp-motion-fast) var(--qp-motion-ease); }
 .compression-secondary-button { min-height: 32px; padding: 0 11px; background: var(--qp-bg-elevated); color: var(--qp-text-secondary); font-size: 12px; }
 .compression-secondary-button:hover, .compression-icon-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
-.compression-list { display: grid; gap: 6px; max-height: 220px; margin-top: 14px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; }
+.compression-list { display: grid; gap: 6px; max-height: 220px; margin-top: 14px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
 .compression-item { display: flex; min-width: 0; align-items: center; gap: 6px; padding: 5px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); }
 .compression-item-select { display: flex; min-width: 0; flex: 1; align-items: center; gap: 9px; border: 1px solid transparent; border-radius: calc(var(--qp-radius-control) - 2px); background: transparent; color: inherit; padding: 3px 4px; text-align: left; }
 .compression-item-select:hover, .compression-item-select:focus-visible, .compression-item-select.compression-item-selected { border-color: color-mix(in srgb, var(--qp-accent-default) 55%, var(--qp-border-subtle)); background: var(--qp-accent-muted); }
