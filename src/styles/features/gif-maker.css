@@ -304,7 +304,7 @@
 .gif-file-button { cursor: pointer; }
 .workspace-file-button { cursor: pointer; }
 
-/* 头部把工作区身份和本地处理状态放在同一条基线上，主操作因此可以独立占据下一行。 */
+/* 头部把工作区身份放在同一条基线上，主操作因此可以独立占据下一行。 */
 .gif-brand-lockup {
   display: inline-flex;
   min-width: 0;
@@ -312,66 +312,7 @@
   gap: 11px;
 }
 
-.gif-local-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-left: 4px;
-  color: var(--qp-text-tertiary);
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.gif-local-status i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--qp-success);
-}
-
-/* 介绍带和命令栏是低高度窗口里的固定导航，内容区只承担工作区滚动。 */
-.gif-intro-band {
-  display: flex;
-  min-width: 0;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  border-bottom: 1px solid var(--qp-border-subtle);
-  padding: 1px 0 12px;
-}
-
-.gif-intro-copy {
-  min-width: 0;
-}
-
-.gif-intro-eyebrow {
-  margin: 0 0 3px;
-  color: var(--qp-text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: .12em;
-}
-
-.gif-intro-copy h2 {
-  margin: 0;
-  color: var(--qp-text-primary);
-  font-size: 16px;
-  letter-spacing: -.02em;
-}
-
-.gif-intro-copy p:last-child {
-  margin: 4px 0 0;
-  color: var(--qp-text-secondary);
-  font-size: 11px;
-}
-
-.gif-intro-note {
-  flex: 0 0 auto;
-  color: var(--qp-text-tertiary);
-  font-size: 10px;
-  white-space: nowrap;
-}
-
+/* 命令栏是低高度窗口里的固定导航，内容区只承担工作区滚动。 */
 .gif-command-bar {
   display: flex;
   min-width: 0;
@@ -586,19 +527,6 @@
 }
 
 @media (max-height: 700px) {
-  .gif-intro-band {
-    padding-bottom: 8px;
-  }
-
-  .gif-intro-copy h2 {
-    font-size: 14px;
-  }
-
-  .gif-intro-copy p:last-child,
-  .gif-intro-note {
-    display: none;
-  }
-
   .gif-maker-content > .gif-workspace-grid {
     min-height: 280px;
   }
@@ -619,14 +547,6 @@
 
   .gif-maker-content.page-content {
     gap: 9px;
-  }
-
-  .gif-intro-band {
-    padding-bottom: 6px;
-  }
-
-  .gif-intro-copy h2 {
-    font-size: 13px;
   }
 
   .gif-maker-content > .gif-workspace-grid {

@@ -842,7 +842,6 @@ describe("compact layout viewport contract", () => {
     expect(gifView).toContain('<div className="page-header-icon"><Film size={19}');
     expect(gifView).toContain('<p className="page-eyebrow">EMBEDPIX</p>');
     expect(gifView).toContain("<h1>GIF 制作</h1>");
-    expect(gifView).toContain('className="gif-local-status"');
     expect(gifView).toContain('className="gif-command-bar"');
     expect(gifView).not.toContain("GIF MAKER");
 
@@ -868,6 +867,21 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toMatch(/\.gif-maker-header\.page-header \{[^}]*flex: 0 0 auto;/);
     expect(gifCss).not.toContain(".gif-header-note .status-dot");
     expect(gifCss).not.toContain(".gif-maker-header .page-eyebrow");
+  });
+
+  it("locks the GIF header to the two-line EMBEDPIX lockup", () => {
+    // GIF 页头只留 EMBEDPIX + 「GIF 制作」两行；介绍带与本地处理状态点已并入清理，不得回流。
+    expect(gifView).toContain('<p className="page-eyebrow">EMBEDPIX</p>');
+    expect(gifView).toContain("<h1>GIF 制作</h1>");
+    expect(gifView).not.toContain('className="gif-local-status"');
+    expect(gifView).not.toContain("本地处理");
+    expect(gifView).not.toContain("ANIMATION WORKSPACE");
+    expect(gifView).not.toContain("把图片或视频片段整理成动画");
+    expect(gifView).not.toContain("先导入素材，再在右侧预览；帧时长、画布和导出参数按需展开。");
+    expect(gifView).not.toContain("本地处理 · 文件不会上传");
+    expect(gifView).not.toContain("gif-intro-band");
+    expect(gifCss).not.toContain(".gif-intro-band");
+    expect(gifCss).not.toContain(".gif-local-status");
   });
 
   it("shows the selected format description, BMP included", () => {
@@ -959,8 +973,8 @@ describe("compact layout viewport contract", () => {
     expect(settingsView).not.toContain("<p>选择 EmbedPix 的显示方式。</p>");
   });
 
-  it("places the about update card beside a compact project profile", () => {
-    // 版本和检查更新在宽窗首屏；窄内容容器再纵向堆叠。
+  it("places project details at bottom left and updates at top right", () => {
+    // 避免版本卡被右栏底部对齐规则推走，项目详情也不能回到右侧。
     expect(aboutView).toContain("FEATURE_GROUPS");
     expect(aboutView).not.toContain("FORMAT_METADATA.map((format) => <span key={format.id}");
     expect(aboutView).toContain('className="about-layout"');
@@ -968,11 +982,13 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toContain(".about-layout { display: grid;");
     expect(aboutCss).toContain("@container about-page (max-width: 760px)");
     expect(aboutCss).toContain(".about-layout { grid-template-columns: minmax(0, 1fr) minmax(280px, 300px); }");
-    // 可用高度由左主卡吸收，右栏靠下；内容变长时仍由内容区滚动。
+    // 可用高度由左主卡吸收，项目详情贴底；内容变长时仍由内容区滚动。
     expect(aboutCss).toContain("flex: 1 0 auto; grid-template-columns:");
     expect(aboutCss).toContain("align-items: stretch; }");
-    expect(aboutCss).toContain("justify-content: space-between;");
-    expect(aboutCss).toContain("align-content: safe end;");
+    expect(aboutCss).toContain(".about-project-details-card { margin-top: auto; }");
+    expect(aboutCss).toContain("align-content: start;");
+    expect(aboutView.indexOf('className="about-primary-card"')).toBeLessThan(aboutView.indexOf('className="about-secondary-card about-project-details-card"'));
+    expect(aboutView.indexOf('className="about-secondary-card about-project-details-card"')).toBeLessThan(aboutView.indexOf('className="about-secondary-column"'));
     expect(aboutView).toContain('<UpdateView {...updateProps} embedded className="about-update-view" />');
     expect(updateView).toContain("update-release-card");
     // 赞助弹窗照 patina 的两张卡结构

@@ -2364,7 +2364,6 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             <p className="page-eyebrow">EMBEDPIX</p>
             <h1>GIF 制作</h1>
           </div>
-          <span className="gif-local-status"><i aria-hidden="true" />本地处理</span>
         </div>
         <div className="gif-header-note">
           <button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceFileInputRef.current?.click()}>打开工作区</button><input ref={workspaceFileInputRef} className="gif-hidden-input" type="file" accept="application/json,.json" onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} />
@@ -2373,14 +2372,6 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
       <fieldset className="page-content gif-maker-content" disabled={!canEditFrames} aria-label="GIF 制作工作区" aria-busy={!canEditFrames}>
         <>
-        <div className="gif-intro-band">
-          <div className="gif-intro-copy">
-            <p className="gif-intro-eyebrow">ANIMATION WORKSPACE</p>
-            <h2>把图片或视频片段整理成动画</h2>
-            <p>先导入素材，再在右侧预览；帧时长、画布和导出参数按需展开。</p>
-          </div>
-          <span className="gif-intro-note">本地处理 · 文件不会上传</span>
-        </div>
         <div className="gif-command-bar">
         <div className="gif-source-tabs" role="tablist" aria-label="GIF 来源" aria-orientation="horizontal">
           <button
