@@ -1565,7 +1565,7 @@ export default function ImageConverter({
             <span className="output-summary">{outputSummary}</span>
           </div>
 
-          <fieldset className="settings-stack" disabled={status.kind === "busy"} aria-busy={status.kind === "busy"}>
+          <div className="settings-stack" inert={status.kind === "busy"} aria-disabled={status.kind === "busy"} aria-busy={status.kind === "busy"}>
             <fieldset className="setting-group format-group">
               <legend className="field-label">输出格式</legend>
               <FormatSelector value={outputFormat} onChange={handleFormatChange} describedBy="format-description" />
@@ -1914,7 +1914,7 @@ export default function ImageConverter({
                 </div>
               </details>
 
-          </fieldset>
+          </div>
 
           <div className="panel-footer">
             <div className="footer-status">

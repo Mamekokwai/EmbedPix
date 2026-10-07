@@ -121,7 +121,7 @@ export default function ThemeSelect<T extends string | number>({
   };
 
   const chooseOption = (index: number) => {
-    if (triggerRef.current?.matches(":disabled")) { setOpen(false); return; }
+    if (triggerRef.current?.matches(":disabled") || triggerRef.current?.closest("[inert]")) { setOpen(false); return; }
     const option = options[index];
     if (!option) return;
     onChange(option.value);
