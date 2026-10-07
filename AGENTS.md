@@ -58,7 +58,7 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 
 ## GUI 规则
 
-页面外壳、折叠模块与控件语义按这套做；新页面照抄现有类，不要另造视觉语言。样板：`src/features/image-converter/ImageConverter.tsx` 的 `converter-*`、`src/features/image-compression/ImageCompressionView.tsx` 的 `compression-*`。
+页面外壳、折叠模块与控件语义按这套做；新页面照抄现有类，不要另造视觉语言。**窗口不显示 WebView 的默认右键菜单**（右键不弹菜单，桌面应用不需要）：拦截落在 `src/main.tsx` 的 `contextmenu` 监听里，但在 `input` / `textarea` / `contenteditable` 内保留，否则连复制粘贴一起没掉。样板：`src/features/image-converter/ImageConverter.tsx` 的 `converter-*`、`src/features/image-compression/ImageCompressionView.tsx` 的 `compression-*`。
 
 适用范围：主工作区页面（图片转换、图片压缩）已按此执行；**GIF 制作、设置、关于尚未迁移**，改动这三个页面时按本规则收敛外壳与折叠模块，不要另立一套（2026-10-06 核实现状：三页均无品牌头带与品牌行）。
 
