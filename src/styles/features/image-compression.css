@@ -2,7 +2,8 @@
 .app-kept-view.app-kept-compression:not([hidden]) { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 /* 页面根是撑满主区高度的弹性列：头部固定在列首，滚动下沉到 .compression-content。 */
 .compression-app {
-  width: min(1180px, 100%);
+  width: 100%;
+  max-width: none;
   display: flex;
   min-width: 0;
   min-height: 0;

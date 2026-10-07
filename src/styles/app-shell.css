@@ -323,7 +323,7 @@
 
 /* min-width 是内容区下限的兼底：值取自最宽的两栏工作区（转换页右栏 360px + 左栏可用宽 + 间距）；窗口最小尺寸 900 生效时轮不到它，缩到更窄只会被 .app-main 裁掉。 */
 /* 页面根是撑满主区高度的弹性列：头部固定在列首，内容区（.page-content）自带滚动，滚动不再挂在外壳上。 */
-.page-view { display: flex; flex-direction: column; width: min(1820px, 100%); min-width: 720px; height: 100%; min-height: 0; margin: 0 auto; padding: 20px 28px 18px; }
+.page-view { display: flex; flex-direction: column; width: 100%; max-width: none; min-width: 720px; height: 100%; min-height: 0; margin: 0 auto; padding: 20px 28px 18px; }
 /* 固定页头（悬浮顶栏）以图片转换页为基准：min-height 34px + padding-bottom 10px + 1px token 底边线 = 45px；改基准必须五页同步。 */
 .page-header { display: flex; flex: 0 0 auto; min-height: 34px; align-items: center; gap: 11px; border-bottom: 1px solid var(--qp-border-subtle); padding-bottom: 10px; }
 .page-header-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-accent-default); }
