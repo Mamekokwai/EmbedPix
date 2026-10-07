@@ -70,21 +70,32 @@ pub fn run() {
                 let scale = window.scale_factor().unwrap_or(1.0);
                 let min_width = (900.0 * scale).round() as u32;
                 let min_height = (636.0 * scale).round() as u32;
+                // 任何一次 resize 都作废排队中的纠正——否则用户已经拉大了，先前那次仍会执行，
+                // 把窗口按回最小尺寸、与鼠标抢方向，看起来就是抽动。
+                let generation =
+                    RESIZE_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
                 if size.width >= min_width && size.height >= min_height {
                     return;
                 }
                 // 无边框窗口下 set_min_size 不被系统采纳（实测 WM_GETMINMAXINFO 回报 minTrack=0x0），
-                // 只能自己顶回去。但拖拽途中每次都顶会和系统抢尺寸、把窗口拽得一抖一抖，
-                // 所以等尺寸停下 180ms 再纠正；期间又发生 resize 就交给后来者（代数不匹配即放弃）。
-                let generation =
-                    RESIZE_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                // 只能自己顶回去；等尺寸停下 180ms 再动手，拖拽途中不插手。
                 let window = window.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(180));
                     if RESIZE_GENERATION.load(std::sync::atomic::Ordering::SeqCst) != generation {
                         return;
                     }
-                    let _ = window.set_size(tauri::PhysicalSize::new(min_width, min_height));
+                    // 执行前再看一眼当前尺寸：期间用户可能已经拉大了，那就什么都不做。
+                    let Ok(current) = window.inner_size() else {
+                        return;
+                    };
+                    if current.width >= min_width && current.height >= min_height {
+                        return;
+                    }
+                    let _ = window.set_size(tauri::PhysicalSize::new(
+                        current.width.max(min_width),
+                        current.height.max(min_height),
+                    ));
                 });
             }
         })
