@@ -623,7 +623,8 @@
 }
 
 .settings-module > summary::-webkit-details-marker { display: none; }
-.settings-module > summary::after { color: var(--qp-text-tertiary); content: "+"; font-family: var(--font-mono); font-size: 14px; font-weight: 400; }
+/* 标记是 summary 的 flex 子项：line-height:1 让它的盒子收敛到字形盒，align-items:center 才是真居中；留默认行高会随基线上浮。 */
+.settings-module > summary::after { flex: 0 0 auto; color: var(--qp-text-tertiary); content: "+"; font-family: var(--font-mono); font-size: 14px; font-weight: 400; line-height: 1; }
 .settings-module[open] > summary { border-bottom: 1px solid var(--qp-border-subtle); color: var(--qp-text-primary); }
 .settings-module[open] > summary::after { content: "−"; }
 
@@ -688,14 +689,17 @@
   font-size: 11px;
 }
 
+/* 选项撑满可用宽度：固定列数会在最后一行右侧留白（8 个格式按 3 列排成 3+3+2）。 */
 .format-selector {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 7px;
 }
 
 .format-option {
   display: flex;
+  flex: 1 1 88px;
+  min-width: 0;
   min-height: 49px;
   flex-direction: column;
   align-items: flex-start;
@@ -704,7 +708,7 @@
   border: 1px solid var(--qp-border-subtle);
   border-radius: var(--qp-radius-control);
   background: var(--qp-bg-panel);
-  padding: 0 12px;
+  padding: 0 10px;
   color: var(--qp-text-secondary);
   text-align: left;
   transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease), color var(--qp-motion-fast) var(--qp-motion-ease);
@@ -1246,10 +1250,9 @@
   .converter-footer { padding-top: 8px; }
 }
 
+/* 窄窗（最小 900）一行挤 3 个：收掉横向内边距，「RGB565 BIN」这类长标签才不会折行。 */
 @media (max-width: 960px) {
-  .format-selector {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+  .format-option { padding-inline: 8px; }
 }
 
 
@@ -1266,7 +1269,7 @@
   .drop-zone { min-height: 120px; margin-top: 8px; }
   .drop-icon { width: 34px; height: 34px; margin-bottom: 7px; }
   .drop-zone small { margin-top: 8px; }
-  .format-selector { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .format-selector { gap: 4px; }
   .format-option { min-height: 36px; gap: 1px; padding: 0 5px; }
   .format-option span { font-size: 10px; }
   .format-option small { font-size: 8px; }

@@ -103,6 +103,26 @@ describe("compact layout viewport contract", () => {
   it("keeps helper text on one width by spanning groups that carry explanations", () => {
     expect(converterCss).toContain(".settings-module-body > .setting-group:has(> .field-help, > .format-description) { grid-column: 1 / -1; }");
   });
+  it("centers the collapsible module header text and marker on one flex row", () => {
+    // 标题与 +/− 标记都是 summary 的 flex 子项，靠 align-items:center 居中；标记 line-height:1 收敛到字形盒。
+    // 纵向只留 padding: 0，不许用纵向内边距或基线技巧去凑（换字号/字体后会再偏）。
+    expect(converterCss).toMatch(/\.settings-module > summary \{[^}]*display: flex;/);
+    expect(converterCss).toMatch(/\.settings-module > summary \{[^}]*align-items: center;/);
+    expect(converterCss).toMatch(/\.settings-module > summary \{[^}]*padding: 0 \d+px;/);
+    expect(converterCss).toMatch(/\.settings-module > summary::after \{[^}]*line-height: 1;/);
+    // 展开后标题栏下方那条 1px 分隔线保留。
+    expect(converterCss).toMatch(/\.settings-module\[open\] > summary \{[^}]*border-bottom: 1px solid var\(--qp-border-subtle\);/);
+  });
+  it("stretches each converter format option to fill the row instead of a fixed column count", () => {
+    // 固定列数会在最后一行右侧留白（8 个格式按 3 列排成 3+3+2）；弹性列让每行都撑满可用宽度。
+    expect(converterCss).toMatch(/\.format-selector \{[^}]*display: flex;/);
+    expect(converterCss).toMatch(/\.format-selector \{[^}]*flex-wrap: wrap;/);
+    expect(converterCss).toMatch(/\.format-option \{[^}]*flex: 1 1 \d+px;/);
+    expect(converterCss).toMatch(/\.format-option \{[^}]*min-width: 0;/);
+    // 固定列数（含短窗媒体查询里那份 repeat(5, …)）必须一并删掉，否则又会退回按列排。
+    expect(converterCss).not.toContain("grid-template-columns: repeat(5, minmax(0, 1fr))");
+    expect(converterCss).not.toMatch(/\.format-selector \{[^}]*grid-template-columns/);
+  });
   it("reveals converter explanations on hover instead of always showing them", () => {
     expect(fieldHintCss).toContain(".field-help-hover {");
     expect(fieldHintCss).toContain("*:has(+ .field-help-hover):hover + .field-help-hover,");
