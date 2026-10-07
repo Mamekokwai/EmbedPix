@@ -1,65 +1,105 @@
-/* 内容区自带纵向滚动并撑满可用高度：外壳不滚，卡片列在这里滚、跟着窗口长高。 */
-.about-content { flex: 1 1 auto; width: 100%; min-height: 0; overflow-y: auto; }
-/* 居中留白：整块 profile 居中、内容限宽 560，图标壳只做定位不画框（对齐 patina 的 about-center-*）。 */
-.about-hero { display: grid; width: 100%; justify-items: center; gap: 10px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); padding: 34px 28px; text-align: center; }
-.about-logo-shell { display: inline-flex; width: 62px; height: 62px; align-items: center; justify-content: center; }
+/* 内容区独立滚动，保证页头在窗口滚动时始终可见。 */
+.about-content { container: about-page / inline-size; flex: 1 1 auto; width: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.about-header-context { display: inline-flex; min-width: 0; align-items: center; gap: 6px; margin-left: auto; color: var(--qp-text-secondary); font-size: 11px; white-space: nowrap; }
+.about-status-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--qp-success); }
+
+.about-layout { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.18fr) minmax(300px, .82fr); gap: 18px; align-items: start; }
+.about-primary-card,
+.about-secondary-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
+.about-primary-card { display: flex; min-height: 0; flex-direction: column; gap: 20px; padding: 22px; }
+.about-primary-intro { display: flex; min-width: 0; align-items: center; gap: 16px; }
+.about-logo-shell { display: grid; width: 60px; height: 60px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); }
 .about-logo-shell img { display: block; width: 42px; height: 42px; object-fit: contain; }
-.about-title-line { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 8px; }
-.about-title-line h2 { margin: 0; color: var(--qp-text-primary); font-size: 20px; font-weight: 700; }
-.about-title-line span { color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
-.about-hero-copy { max-width: 460px; margin: 0; color: var(--qp-text-tertiary); font-size: 12px; line-height: 1.6; }
-.about-output-list { display: flex; width: min(560px, 100%); flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
-.about-output-list span { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-chip); background: var(--qp-bg-elevated); padding: 5px 9px; color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 10px; line-height: 1.4; text-align: center; }
-.about-info-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.about-info-card { display: flex; min-width: 0; gap: 11px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); padding: 16px; color: var(--qp-accent-default); }
-.about-info-card h3 { margin: 0; color: var(--qp-text-primary); font-size: 12px; font-weight: 650; }
-.about-info-card p { margin: 6px 0 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.55; }
-.about-footnote { margin: 4px 0 0; color: var(--qp-text-tertiary); font-size: 11px; text-align: center; }
-.about-pill-row { display: flex; width: min(560px, 100%); justify-self: center; flex-wrap: wrap; justify-content: center; gap: var(--qp-stack-gap); margin-top: 6px; }
+.about-primary-copy { min-width: 0; }
+.about-section-eyebrow { margin: 0; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.about-title-line { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 3px; }
+.about-title-line h2 { margin: 0; color: var(--qp-text-primary); font-size: 22px; font-weight: 700; letter-spacing: -.03em; }
+.about-title-line span { color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 11px; }
+.about-hero-copy { max-width: 460px; margin: 6px 0 0; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.6; }
+.about-feature-block,
+.about-action-block { min-width: 0; border-top: 1px solid var(--qp-border-subtle); padding-top: 14px; }
+.about-block-heading { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.about-block-heading > span { color: var(--qp-text-tertiary); font-size: 11px; }
+.about-output-list { display: grid; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.about-output-list li { display: flex; min-width: 0; min-height: 52px; flex-direction: column; justify-content: center; gap: 4px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); padding: 9px 10px; }
+.about-output-list li:hover { border-color: var(--qp-border-strong); }
+.about-output-list li span { color: var(--qp-text-primary); font-size: 12px; font-weight: 650; }
+.about-output-list li small { overflow: hidden; color: var(--qp-text-tertiary); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.about-pill-row { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--qp-stack-gap); }
 .about-pill-action { display: inline-flex; min-height: 32px; align-items: center; gap: 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); padding: 0 12px; color: var(--qp-text-secondary); font-size: 12px; text-decoration: none; cursor: pointer; transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), color var(--qp-motion-fast) var(--qp-motion-ease); }
 .about-pill-action:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
-.about-pill-action:focus-visible { outline: 2px solid var(--qp-accent-default); outline-offset: 2px; }
-.about-pill-icon { display: inline-flex; align-items: center; color: var(--qp-text-tertiary); }
+.about-pill-action:focus-visible,
+.about-support-close:focus-visible,
+.about-support-kofi:focus-visible { outline: 2px solid var(--qp-accent-default); outline-offset: 2px; }
+.about-pill-icon { display: inline-flex; align-items: center; color: var(--qp-accent-default); }
 .about-pill-label { white-space: nowrap; }
+
+.about-secondary-column { display: grid; min-width: 0; gap: 16px; }
+.about-update-view.update-view-embedded { min-width: 0; margin-top: 0; }
+.about-update-view .update-content-embedded { gap: 0; }
+.about-update-view .update-card { border-radius: var(--qp-radius-panel); }
+.about-update-view .update-card-header { padding: 16px 18px 13px; }
+.about-update-view .update-version-item { min-height: 64px; padding: 12px 14px; }
+.about-update-view .update-version-item strong { font-size: 13px; }
+.about-update-view .update-status { min-height: 38px; padding: 9px 18px; }
+.about-update-view .update-release-card { margin-top: 16px; }
+.about-secondary-card { padding: 16px 18px; }
+.about-secondary-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.about-secondary-heading h2 { margin: 4px 0 0; color: var(--qp-text-primary); font-size: 13px; font-weight: 700; line-height: 1.35; }
+.about-secondary-card > p { margin: 10px 0 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.6; }
+.about-version-badge { flex: 0 0 auto; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-chip); background: var(--qp-bg-elevated); padding: 4px 7px; color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 10px; }
+.about-footnote { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; text-align: center; }
+
 .about-support-backdrop { position: fixed; z-index: 30; inset: 0; display: grid; overflow-y: auto; align-items: start; justify-items: center; background: color-mix(in srgb, var(--qp-bg-app) 62%, transparent); padding: 20px; }
-/* 结构照搬 patina 的赞助弹窗：标题 + 说明 + 两张卡（微信赞赏 / Ko-fi），卡片头是图标 + 小标题。 */
-/* 弹窗与内部盒子都按内容定形：不留任何随视口高度变化的尺寸，窗口拉高拉矮都不该影响它。 */
 .about-support-dialog { display: grid; width: min(580px, calc(100vw - 40px)); height: auto; max-height: none; align-content: start; justify-self: center; align-self: center; gap: 10px; overflow: hidden; border: 1px solid var(--qp-border-strong); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); box-shadow: var(--qp-shadow-overlay); padding: 20px; }
 .about-support-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .about-support-head h2 { margin: 0; color: var(--qp-text-primary); font-size: 16px; font-weight: 700; }
 .about-support-close { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-secondary); cursor: pointer; }
 .about-support-close:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
 .about-support-copy { margin: 0; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.65; }
-.about-support-body { display: grid; min-width: 0; align-content: start; gap: 10px; }
+.about-support-body { display: grid; min-width: 0; align-content: start; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .about-support-card { display: grid; min-width: 0; align-content: start; gap: 10px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); padding: 14px; }
 .about-support-card-heading { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--qp-text-primary); }
 .about-support-card-heading h4 { margin: 0; font-size: 13px; font-weight: 650; }
 .about-support-mark { display: block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; }
 .about-support-card-copy { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.55; }
 .about-support-qr-frame { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); padding: 6px; }
-/* 整张赞赏码放满卡片宽度，靠图本身变大让中间二维码好扫；图不设圆角，边框与圆角留给外层框。 */
 .about-support-qr { display: block; width: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }
 .about-support-kofi { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; border: 1px solid var(--qp-button-primary-bg, var(--qp-accent-default)); border-radius: var(--qp-radius-control); background: var(--qp-button-primary-bg, var(--qp-accent-default)); color: var(--qp-text-on-accent, var(--qp-accent-contrast)); font-size: 12px; font-weight: 600; text-decoration: none; }
-.about-support-kofi:hover { opacity: 0.86; }
+.about-support-kofi:hover { opacity: .86; }
 
-
-@media (max-height: 760px) {
-  .about-hero { gap: 8px; padding: 16px 14px; }
-  .about-logo-shell { width: 56px; height: 56px; }
-  .about-logo-shell img { width: 38px; height: 38px; }
-  .about-hero-copy { font-size: 11px; }
-  .about-output-list { gap: 4px; }
-  .about-output-list span { padding: 3px 6px; }
-  .about-info-grid { gap: 8px; }
-  .about-info-card { gap: 8px; padding: 10px; }
-  .about-info-card p { margin-top: 4px; font-size: 10px; }
-  .about-pill-action { min-height: 28px; padding: 0 10px; font-size: 11px; }
-  .update-view-embedded { margin-top: 8px; }
+@container about-page (max-width: 760px) {
+  .about-layout { grid-template-columns: minmax(0, 1fr); }
+  .about-secondary-column { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 }
 
-@media (max-width: 620px), (max-height: 620px) {
+@container about-page (max-width: 520px) {
+  .about-primary-card { padding: 16px; }
+  .about-primary-intro { align-items: flex-start; gap: 11px; }
+  .about-logo-shell { width: 48px; height: 48px; }
+  .about-logo-shell img { width: 34px; height: 34px; }
+  .about-output-list { grid-template-columns: 1fr; }
+  .about-secondary-column { grid-template-columns: 1fr; }
+}
+
+@media (max-height: 760px) {
+  .about-primary-card { gap: 14px; padding: 16px 18px; }
+  .about-output-list li { min-height: 44px; padding-block: 7px; }
+  .about-update-view .update-card-header { padding-block: 12px 10px; }
+  .about-update-view .update-version-item { min-height: 52px; padding-block: 9px; }
+}
+
+@media (max-height: 620px) {
+  .about-primary-card { gap: 10px; padding: 12px 14px; }
+  .about-feature-block, .about-action-block { padding-top: 10px; }
+  .about-block-heading { margin-bottom: 7px; }
+  .about-secondary-card { padding-block: 12px; }
   .about-support-backdrop { padding: 12px; }
   .about-support-dialog { width: min(480px, calc(100vw - 24px)); max-height: calc(100vh - 24px); align-self: start; gap: 8px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; padding: 14px; }
   .about-support-card { gap: 8px; padding: 10px; }
   .about-support-qr { width: min(100%, 180px); margin-inline: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about-pill-action { transition: none; }
 }

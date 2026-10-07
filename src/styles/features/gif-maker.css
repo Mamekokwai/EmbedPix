@@ -27,6 +27,7 @@
 .gif-source-tab:hover { border-color: var(--qp-border-strong); background: var(--qp-bg-elevated); }
 .gif-source-tab-active { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); color: var(--qp-accent-default); }
 .gif-maker-content.page-content { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; min-inline-size: 0; min-block-size: 0; flex-direction: column; gap: 16px; padding: 0; margin: 0; border: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 18px; }
+.gif-maker-content { container: gif-maker / inline-size; }
 .gif-coming-soon { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; flex-direction: column; gap: 8px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-text-secondary); text-align: center; }
 .gif-coming-soon-icon { display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-accent-default); }
 .gif-coming-soon h2 { margin: 2px 0 0; color: var(--qp-text-primary); font-size: 16px; }
@@ -302,3 +303,398 @@
 .gif-custom-preset-controls .gif-text-input { min-width: 120px; flex: 1 1 120px; }
 .gif-file-button { cursor: pointer; }
 .workspace-file-button { cursor: pointer; }
+
+/* 头部把工作区身份和本地处理状态放在同一条基线上，主操作因此可以独立占据下一行。 */
+.gif-brand-lockup {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+
+.gif-local-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 4px;
+  color: var(--qp-text-tertiary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.gif-local-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--qp-success);
+}
+
+/* 介绍带和命令栏是低高度窗口里的固定导航，内容区只承担工作区滚动。 */
+.gif-intro-band {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--qp-border-subtle);
+  padding: 1px 0 12px;
+}
+
+.gif-intro-copy {
+  min-width: 0;
+}
+
+.gif-intro-eyebrow {
+  margin: 0 0 3px;
+  color: var(--qp-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: .12em;
+}
+
+.gif-intro-copy h2 {
+  margin: 0;
+  color: var(--qp-text-primary);
+  font-size: 16px;
+  letter-spacing: -.02em;
+}
+
+.gif-intro-copy p:last-child {
+  margin: 4px 0 0;
+  color: var(--qp-text-secondary);
+  font-size: 11px;
+}
+
+.gif-intro-note {
+  flex: 0 0 auto;
+  color: var(--qp-text-tertiary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.gif-command-bar {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+}
+
+.gif-command-bar .gif-source-tabs {
+  flex: 0 1 auto;
+}
+
+.gif-command-bar .gif-maker-toolbar {
+  flex: 1 1 360px;
+  justify-content: flex-end;
+}
+
+.gif-command-bar .gif-maker-toolbar .primary-button {
+  min-height: 38px;
+  padding-inline: 14px;
+  font-weight: 700;
+}
+
+.gif-command-bar .gif-maker-toolbar > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 主工作区给预览更多空间，素材列表只保留可快速整理帧序的宽度。 */
+.gif-maker-content > .gif-workspace-grid {
+  flex: 1 1 420px;
+  min-height: 320px;
+  grid-template-columns: minmax(260px, .82fr) minmax(0, 1.6fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.gif-assets-card,
+.gif-main-column,
+.gif-preview-card {
+  min-height: 320px;
+}
+
+.gif-assets-card,
+.gif-preview-card {
+  border-color: var(--qp-border-subtle);
+  background: var(--qp-bg-panel);
+}
+
+.gif-card-heading {
+  min-height: 32px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--qp-border-subtle);
+}
+
+.gif-card-heading h2 {
+  font-size: 14px;
+}
+
+.gif-drop-zone {
+  min-height: 56px;
+  border-color: var(--qp-border-strong);
+  background: var(--qp-bg-elevated);
+}
+
+.gif-drop-zone strong {
+  font-weight: 600;
+}
+
+.gif-video-empty > button {
+  display: none;
+}
+
+.gif-drop-zone:hover,
+.gif-drop-zone:focus-visible {
+  border-color: var(--qp-accent-default);
+  background: var(--qp-accent-muted);
+}
+
+.gif-main-column {
+  gap: 0;
+}
+
+.gif-preview-card {
+  gap: 10px;
+  padding: 12px;
+}
+
+.gif-preview-card .gif-canvas-stage {
+  min-height: 0;
+}
+
+.gif-playback-controls .gif-play-button {
+  min-height: 30px;
+  padding-inline: 11px;
+  font-weight: 650;
+}
+
+.gif-timeline {
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.gif-timeline label {
+  gap: 5px;
+}
+
+.gif-timeline label:last-of-type {
+  min-width: 72px;
+}
+
+.gif-timeline .theme-select {
+  width: 58px;
+  min-width: 58px;
+}
+
+.gif-timeline .theme-select-trigger {
+  min-height: 26px;
+  padding-inline: 6px;
+  font-size: 10px;
+}
+
+.gif-timeline > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 设置区采用独立抽屉式标题，展开内容才消耗高度，避免抢走导入和预览的注意力。 */
+.gif-settings-card {
+  flex: 0 0 auto;
+  max-height: min(420px, 46vh);
+  padding: 0;
+  background: var(--qp-bg-elevated);
+}
+
+.gif-group-tabs {
+  min-height: 38px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--qp-border-subtle);
+}
+
+.gif-group-tabs > button {
+  min-height: 28px;
+  padding-inline: 9px;
+  font-size: 11px;
+}
+
+.gif-group-tabs > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gif-settings-card > [role="region"] {
+  padding: 11px 12px 12px;
+}
+
+.gif-settings-grid,
+.gif-export-grid {
+  gap: var(--qp-stack-gap) 12px;
+  margin-top: 0;
+}
+
+.gif-settings-card .gif-help-text {
+  margin-top: 9px;
+}
+
+.gif-export-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  min-height: 46px;
+  margin-top: 0;
+  border-top: 1px solid var(--qp-border-subtle);
+  background: var(--qp-bg-app);
+  padding: 9px 0 0;
+}
+
+.gif-export-footer .gif-export-button {
+  min-height: 38px;
+  padding-inline: 17px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gif-export-footer .gif-status,
+.gif-export-footer .gif-error-message {
+  padding-top: 6px;
+}
+
+.gif-brand-line {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 2px 1px 0;
+  color: var(--qp-text-tertiary);
+  font-size: 10px;
+}
+
+@container gif-maker (max-width: 760px) {
+  .gif-command-bar .gif-maker-toolbar {
+    flex-basis: 100%;
+    justify-content: space-between;
+  }
+
+  .gif-command-bar .gif-maker-toolbar > span {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-height: 700px) {
+  .gif-intro-band {
+    padding-bottom: 8px;
+  }
+
+  .gif-intro-copy h2 {
+    font-size: 14px;
+  }
+
+  .gif-intro-copy p:last-child,
+  .gif-intro-note {
+    display: none;
+  }
+
+  .gif-maker-content > .gif-workspace-grid {
+    min-height: 280px;
+  }
+
+  .gif-assets-card,
+  .gif-main-column,
+  .gif-preview-card {
+    min-height: 280px;
+  }
+}
+
+@media (max-height: 620px) {
+  .gif-maker-view.page-view {
+    gap: 8px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .gif-maker-content.page-content {
+    gap: 9px;
+  }
+
+  .gif-intro-band {
+    padding-bottom: 6px;
+  }
+
+  .gif-intro-copy h2 {
+    font-size: 13px;
+  }
+
+  .gif-maker-content > .gif-workspace-grid {
+    min-height: 240px;
+  }
+
+  .gif-assets-card,
+  .gif-main-column,
+  .gif-preview-card {
+    min-height: 240px;
+  }
+
+  .gif-settings-card {
+    max-height: 190px;
+  }
+
+  .gif-export-footer {
+    min-height: 38px;
+    padding-top: 5px;
+  }
+}
+
+/* 内容区给固定导出栏留出可滚动的尾部，参数面板滚到底时不会被动作栏盖住。 */
+.gif-maker-content.page-content {
+  padding-bottom: 58px;
+}
+
+.gif-maker-view.gif-settings-expanded .gif-maker-content.page-content {
+  padding-bottom: 14px;
+}
+
+.gif-maker-content > .gif-workspace-grid {
+  flex-basis: 300px;
+  min-height: 230px;
+}
+
+.gif-assets-card,
+.gif-main-column,
+.gif-preview-card {
+  min-height: 230px;
+}
+
+.gif-drop-zone {
+  cursor: default;
+}
+
+@media (max-height: 700px) {
+  .gif-maker-content > .gif-workspace-grid {
+    flex-basis: 250px;
+    min-height: 220px;
+  }
+
+  .gif-assets-card,
+  .gif-main-column,
+  .gif-preview-card {
+    min-height: 220px;
+  }
+}
+
+@media (max-height: 620px) {
+  .gif-maker-content > .gif-workspace-grid {
+    flex-basis: 210px;
+    min-height: 190px;
+  }
+
+  .gif-assets-card,
+  .gif-main-column,
+  .gif-preview-card {
+    min-height: 190px;
+  }
+}

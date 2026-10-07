@@ -1236,20 +1236,29 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   return (
     <section className="compression-app" aria-label="图片压缩工作台" aria-busy={busy}>
       <header className="compression-header">
-        <div className="header-lockup">
+        <div className="brand-lockup">
           <Minimize2 className="header-lockup-icon" size={19} strokeWidth={2} aria-hidden="true" />
           <div>
             <p className="eyebrow">EMBEDPIX</p>
-            <h1>图片压缩工作台</h1>
+            <h1>图片压缩</h1>
           </div>
+          <span className="header-context"><span className="status-dot" aria-hidden="true" />本地处理</span>
         </div>
       </header>
 
       <div className="compression-content">
+      <div className="compression-intro">
+        <div className="intro-copy">
+          <p className="eyebrow">IMAGE COMPRESSION</p>
+          <h2>减小体积，保留需要的画质</h2>
+          <p>导入图片，调整核心参数，预览结果后一次导出。</p>
+        </div>
+        <span className="intro-note">PNG · JPEG · WebP</span>
+      </div>
       <div className="compression-grid">
         <div className="compression-card compression-input-card">
           <div className="compression-card-heading">
-            <div><span className="compression-card-kicker">01 / SOURCE</span><h2>导入图片</h2></div>
+            <div><span className="compression-card-kicker">01 / IMPORT</span><h2>导入图片</h2></div>
             <div className="compression-heading-actions"><span className="compression-count">{items.length} 个文件</span>{items.length > 0 ? <button type="button" className="compression-clear-button" onClick={clearItems} disabled={sourceBusy}>清空</button> : null}</div>
           </div>
           <div
@@ -1289,7 +1298,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         </div>
 
         <aside className="compression-card compression-settings-card">
-          <div className="compression-card-heading"><div><span className="compression-card-kicker">02 / OPTIONS</span><h2>压缩参数</h2></div></div>
+          <div className="compression-card-heading"><div><span className="compression-card-kicker">02 / COMPRESS</span><h2>压缩参数</h2></div></div>
           <CompressionSelectField
             id="compression-preset"
             label="内置预设"
@@ -1300,25 +1309,6 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             disabled={busy}
             hint={<small className="compression-field-hint">{preset === "custom" ? "手动参数；JPEG/WebP 有损质量、PNG 优化和 WebP 无损语义分别生效" : getCompressionPreset(preset).description}</small>}
           /><button type="button" className="compression-secondary-button compression-balanced-reset" onClick={restoreBalancedDefaults} disabled={busy}>恢复平衡默认</button>
-          <details className="compression-advanced-settings">
-            <summary><strong>预设管理</strong><span>已保存 {customPresets.length} 个自定义预设 · 导入 / 导出 JSON</span></summary>
-            <div className="compression-advanced-settings-body">
-          <div className="compression-custom-presets" aria-label="自定义压缩预设">
-            <CompressionSelectField
-              id="compression-custom-preset"
-              label="自定义预设"
-              ariaLabel="自定义预设"
-              value={customPresetId}
-              options={[{ value: "", label: "选择已保存预设" }, ...customPresets.map((customPreset) => ({ value: customPreset.id, label: customPreset.name }))]}
-              onChange={applyCustomPreset}
-              disabled={busy}
-            />
-            <div className="compression-preset-save-row"><input className="compression-preset-name" value={customPresetName} placeholder="预设名称" aria-label="压缩预设名称" onChange={(event) => setCustomPresetName(event.target.value)} disabled={busy} /><button type="button" className="compression-secondary-button" disabled={busy || !customPresetName.trim()} onClick={saveCurrentAsCustomPreset}>保存当前参数</button></div>
-            <div className="compression-preset-actions"><button type="button" className="compression-secondary-button" onClick={downloadCustomPresets} disabled={busy}>导出 JSON</button><button type="button" className="compression-secondary-button" onClick={() => presetFileInputRef.current?.click()} disabled={busy}>导入 JSON</button><input ref={presetFileInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={(event) => { void importCustomPresets(event); }} disabled={busy} tabIndex={-1} aria-hidden="true" /></div>
-            {customPresetMessage ? <p className="compression-preset-message" role="status">{customPresetMessage}</p> : null}
-          </div>
-            </div>
-          </details>
           <CompressionSelectField
             id="compression-format"
             label="输出格式"
@@ -1341,6 +1331,25 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             hint={<>{customResizeActive ? <input type="number" min={MIN_COMPRESSION_RESIZE_PERCENT} max={MAX_COMPRESSION_RESIZE_PERCENT} step="1" value={targetResizePercent ?? ""} onChange={(event) => { const value = event.target.value; if (value === "") { setCustomResizeActive(false); setTargetResizePercent(null); setPreset("custom"); return; } const next = Number(value); if (Number.isFinite(next)) setTargetResizePercent(Math.min(MAX_COMPRESSION_RESIZE_PERCENT, Math.max(MIN_COMPRESSION_RESIZE_PERCENT, Math.round(next)))); setPreset("custom"); }} disabled={busy || autoResizeActive} aria-label="自定义输出尺寸缩放百分比" placeholder="10–100" /> : null}<small className="compression-field-hint">保持宽高比，禁止放大；范围 {MIN_COMPRESSION_RESIZE_PERCENT}–{MAX_COMPRESSION_RESIZE_PERCENT}%。</small></>}
           /> : null}
           {parameterIssues.length > 0 ? <div className="compression-parameter-issues" role="alert" aria-label="参数问题"><strong>参数问题</strong>{parameterIssues.map((issue) => <span key={issue.key}>{issue.message}</span>)}</div> : null}
+          <details className="compression-advanced-settings">
+            <summary><strong>预设管理</strong><span>已保存 {customPresets.length} 个自定义预设 · 导入 / 导出 JSON</span></summary>
+            <div className="compression-advanced-settings-body">
+          <div className="compression-custom-presets" aria-label="自定义压缩预设">
+            <CompressionSelectField
+              id="compression-custom-preset"
+              label="自定义预设"
+              ariaLabel="自定义预设"
+              value={customPresetId}
+              options={[{ value: "", label: "选择已保存预设" }, ...customPresets.map((customPreset) => ({ value: customPreset.id, label: customPreset.name }))]}
+              onChange={applyCustomPreset}
+              disabled={busy}
+            />
+            <div className="compression-preset-save-row"><input className="compression-preset-name" value={customPresetName} placeholder="预设名称" aria-label="压缩预设名称" onChange={(event) => setCustomPresetName(event.target.value)} disabled={busy} /><button type="button" className="compression-secondary-button" disabled={busy || !customPresetName.trim()} onClick={saveCurrentAsCustomPreset}>保存当前参数</button></div>
+            <div className="compression-preset-actions"><button type="button" className="compression-secondary-button" onClick={downloadCustomPresets} disabled={busy}>导出 JSON</button><button type="button" className="compression-secondary-button" onClick={() => presetFileInputRef.current?.click()} disabled={busy}>导入 JSON</button><input ref={presetFileInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={(event) => { void importCustomPresets(event); }} disabled={busy} tabIndex={-1} aria-hidden="true" /></div>
+            {customPresetMessage ? <p className="compression-preset-message" role="status">{customPresetMessage}</p> : null}
+          </div>
+            </div>
+          </details>
           {encodingDetailsVisible ? <details className="compression-advanced-settings">
             <summary><strong>编码细节</strong><span>{encodingSummary}</span></summary>
             <div className="compression-advanced-settings-body">
@@ -1444,7 +1453,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       </section>
 
       <section className="compression-card compression-preview-card" aria-live="polite" aria-label="压缩预览">
-        <div className="compression-card-heading"><div><span className="compression-card-kicker">03 / PREVIEW</span><h2>真实压缩预览</h2></div><div className="compression-preview-heading-actions"><span className="compression-count">{selectedItem?.file.name ?? "未选择图片"}</span><button type="button" className="compression-secondary-button" aria-pressed={previewCompareMode} onClick={() => setPreviewCompareMode((current) => !current)} disabled={!originalPreviewUrl || !previewUrl || previewBusy}>{previewCompareMode ? "并排预览" : "滑动对比"}</button></div></div>
+        <div className="compression-card-heading"><div><span className="compression-card-kicker">03 / PREVIEW</span><h2>压缩预览</h2></div><div className="compression-preview-heading-actions"><span className="compression-count">{selectedItem?.file.name ?? "未选择图片"}</span><button type="button" className="compression-secondary-button" aria-pressed={previewCompareMode} onClick={() => setPreviewCompareMode((current) => !current)} disabled={!originalPreviewUrl || !previewUrl || previewBusy}>{previewCompareMode ? "并排预览" : "滑动对比"}</button></div></div>
         {selectedItem ? previewCompareMode && originalPreviewUrl && previewUrl ? <div className="compression-preview-compare" aria-label="滑动对比预览">
           <div className="compression-preview-compare-image"><img src={originalPreviewUrl} alt={`原图 ${selectedItem.file.name}`} /></div>
           <div className="compression-preview-compare-image compression-preview-compare-after" style={{ clipPath: `inset(0 0 0 ${previewSplit}%)` }}><img src={previewUrl} alt={`压缩预览 ${selectedItem.file.name}`} /></div>
@@ -1483,6 +1492,8 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         {skipReasons.length > 0 ? <div className="compression-skip-details"><strong>跳过原因</strong>{skipReasons.map((reason) => <span key={reason}>{formatCompressionReason(reason)}</span>)}</div> : null}
       </section>
 
+      <p className="compression-brand-line">EmbedPix · 嵌图匠</p>
+      </div>
       <footer className="compression-footer">
         <div className={`compression-status compression-status-${status}`} role={status === "error" ? "alert" : "status"}>
           {status === "busy" ? <LoaderCircle size={15} className="compression-spin" aria-hidden="true" /> : status === "success" ? <CheckCircle2 size={15} aria-hidden="true" /> : status === "error" ? <AlertCircle size={15} aria-hidden="true" /> : status === "cancelled" ? <Info size={15} aria-hidden="true" /> : null}
@@ -1502,9 +1513,6 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         ><span style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }} /></div>
           <button type="button" className="compression-primary-button" onClick={() => { void runCompression(); }} disabled={busy || items.length === 0 || Boolean(outputLocationError) || Boolean(outputFileNameError) || Boolean(targetSizeError) || Boolean(maxRgbMaeError)}>{busy ? <LoaderCircle size={16} className="compression-spin" aria-hidden="true" /> : <FileDown size={16} aria-hidden="true" />} {busy ? "正在压缩" : "开始压缩"}</button>
       </footer>
-
-      <p className="compression-brand-line">EmbedPix · 嵌图匠</p>
-      </div>
     </section>
   );
 }

@@ -60,7 +60,7 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 
 页面外壳、折叠模块与控件语义按这套做；新页面照抄现有类，不要另造视觉语言。**窗口不显示 WebView 的默认右键菜单**（右键不弹菜单，桌面应用不需要）：拦截落在 `src/main.tsx` 的 `contextmenu` 监听里，但在 `input` / `textarea` / `contenteditable` 内保留，否则连复制粘贴一起没掉。样板：`src/features/image-converter/ImageConverter.tsx` 的 `converter-*`、`src/features/image-compression/ImageCompressionView.tsx` 的 `compression-*`。
 
-适用范围：主工作区页面（图片转换、图片压缩）已按此执行；**GIF 制作、设置、关于尚未迁移**，改动这三个页面时按本规则收敛外壳与折叠模块，不要另立一套（2026-10-06 核实现状：三页均无品牌头带与品牌行）。
+适用范围：图片转换、图片压缩、GIF 制作与关于页已按此收敛；**设置页尚未迁移**，改动时按本规则收敛外壳与折叠模块，不要另立一套。
 
 - **页面外壳 = 品牌头带 + 介绍带 + 底部边界**：头带是「图标 + `EMBEDPIX` + 工作区名 + `● 本地处理`」并带底边线（`brand-lockup` / `brand-mark` / `eyebrow` / `header-context` / `status-dot`，样式在 `image-converter.css`，全局可用）；介绍带是「英文 eyebrow + 标语 + 说明」，可按需在右侧放一条注释（`intro-copy` / `intro-note`）；页面动作栏加顶边线，页尾以品牌行 `EmbedPix · 嵌图匠` 收尾。
 - **折叠模块 = 独立边框卡片**：1px `--qp-border-subtle` 边框、`--qp-radius-control` 圆角、`--qp-bg-elevated` 底色，标题栏 38px、左右 12px 内边距，展开时标题栏下方补 1px 分隔线，收起/展开标记用等宽字体的 `+` / `−`。样板见 `.settings-module` 与 `.compression-advanced-settings`。

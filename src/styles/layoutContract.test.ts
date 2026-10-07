@@ -46,6 +46,13 @@ const VIEWPORT_MATRIX = [
   { name: "regular desktop", width: 1280, height: 800 },
 ] as const;
 
+const CONTENT_CONTAINER_MATRIX = [
+  { name: "normal", width: 920, height: 640, expanded: false },
+  { name: "narrow", width: 700, height: 640, expanded: false },
+  { name: "short", width: 920, height: 320, expanded: false },
+  { name: "multiple expanded modules", width: 700, height: 320, expanded: true },
+] as const;
+
 describe("compact layout viewport contract", () => {
   it("renders update failure details only for error states and wraps long text", () => {
     expect(updateView).toContain('status === "error" && errorMessage');
@@ -378,6 +385,25 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain("overflow-x: hidden;");
     expect(converterCss).toContain("@media (max-width: 620px)");
     expect(themeSelectCss).toContain(".theme-select-option:focus-visible");
+  });
+
+  it.each(CONTENT_CONTAINER_MATRIX)("keeps $name content containers scrollable at $width×$height", ({ width, height, expanded }) => {
+    expect(gifCss).toContain(".gif-maker-content { container: gif-maker / inline-size; }");
+    expect(aboutCss).toContain("container: about-page / inline-size;");
+    if (width <= 760) {
+      expect(gifCss).toContain("@container gif-maker (max-width: 760px)");
+      expect(aboutCss).toContain("@container about-page (max-width: 760px)");
+    }
+    if (height < 636) {
+      expect(gifCss).toContain("@media (max-height: 620px)");
+      expect(aboutCss).toContain("@media (max-height: 620px)");
+    }
+    if (expanded) {
+      expect(compressionCss).toMatch(/\.compression-settings-card \{[^}]*min-height: 0;/);
+      expect(compressionCss).toMatch(/\.compression-settings-card \{[^}]*overflow-y: auto;/);
+      expect(gifCss).toMatch(/\.gif-settings-card \{[^}]*overflow-y: auto;/);
+      expect(gifCss).toContain(".gif-maker-view.gif-settings-expanded");
+    }
   });
 
   it("covers the requested portrait and narrow-tall viewport safeguards", () => {
@@ -797,8 +823,8 @@ describe("compact layout viewport contract", () => {
     expect(gifView).not.toContain("或点击选择视频文件");
   });
 
-  it("slims the three workbench headers to a two-line lockup with the page icon", () => {
-    // 两行页头：EMBEDPIX eyebrow + 工作区名，左侧用本页导航图标（不再是嵌图匠 logo）。
+  it("keeps the workbench icon headers and gives redesigned pages concise context", () => {
+    // 转换页保留紧凑基准，压缩与 GIF 的介绍内容留在固定页头之外。
     expect(converterView).toContain('<Images className="header-lockup-icon"');
     expect(converterView).toContain('<p className="eyebrow">EMBEDPIX</p>');
     expect(converterView).toContain("<h1>图片转换工作区</h1>");
@@ -808,15 +834,16 @@ describe("compact layout viewport contract", () => {
 
     expect(compressionView).toContain('<Minimize2 className="header-lockup-icon"');
     expect(compressionView).toContain('<p className="eyebrow">EMBEDPIX</p>');
-    expect(compressionView).toContain("<h1>图片压缩工作台</h1>");
+    expect(compressionView).toContain("<h1>图片压缩</h1>");
     expect(compressionView).not.toContain("brand-mark");
-    expect(compressionView).not.toContain("本地处理");
-    expect(compressionView).not.toContain("compression-intro");
+    expect(compressionView).toContain('className="header-context"');
+    expect(compressionView).toContain('className="compression-intro"');
 
     expect(gifView).toContain('<div className="page-header-icon"><Film size={19}');
     expect(gifView).toContain('<p className="page-eyebrow">EMBEDPIX</p>');
     expect(gifView).toContain("<h1>GIF 制作</h1>");
-    expect(gifView).not.toContain("status-dot");
+    expect(gifView).toContain('className="gif-local-status"');
+    expect(gifView).toContain('className="gif-command-bar"');
     expect(gifView).not.toContain("GIF MAKER");
 
     // 三页图标与侧栏导航 NAV_ITEMS 里该页的 lucide 图标一致。
@@ -824,7 +851,7 @@ describe("compact layout viewport contract", () => {
     expect(appShell).toContain('{ id: "compression", label: "图片压缩", hint: "批量降低图片体积", icon: Minimize2 }');
     expect(appShell).toContain('{ id: "gif", label: "GIF 制作", hint: "图片序列制作动画", icon: Film }');
 
-    // 页头样式：矮、flex: 0 0 auto 固定不滚、底部 1px token 分隔线；已删的牌子/介绍带不留死规则。
+    // 页头固定不滚，介绍带在内容层；转换页保留原有更短的版式。
     expect(converterCss).toMatch(/\.converter-header \{[^}]*flex: 0 0 auto;/);
     expect(converterCss).toMatch(/\.converter-header \{[^}]*border-bottom: 1px solid var\(--qp-border-subtle\);/);
     expect(converterCss).not.toContain(".brand-mark");
@@ -836,7 +863,7 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).not.toContain(".intro-note");
 
     expect(compressionCss).toMatch(/\.compression-header \{[^}]*border-bottom: 1px solid var\(--qp-border-subtle\);/);
-    expect(compressionCss).not.toContain("compression-intro");
+    expect(compressionCss).toContain(".compression-intro {");
 
     expect(gifCss).toMatch(/\.gif-maker-header\.page-header \{[^}]*flex: 0 0 auto;/);
     expect(gifCss).not.toContain(".gif-header-note .status-dot");
@@ -932,12 +959,14 @@ describe("compact layout viewport contract", () => {
     expect(settingsView).not.toContain("<p>选择 EmbedPix 的显示方式。</p>");
   });
 
-  it("centers the about profile and groups the format tags", () => {
-    // 11 个格式铺满一排太碎，按类别收成三块
+  it("places the about update card beside a compact project profile", () => {
+    // 版本和检查更新在宽窗首屏；窄内容容器再纵向堆叠。
     expect(aboutView).toContain("FEATURE_GROUPS");
     expect(aboutView).not.toContain("FORMAT_METADATA.map((format) => <span key={format.id}");
-    expect(aboutCss).toContain(".about-hero { display: grid; width: 100%; justify-items: center;");
-    expect(aboutCss).toContain("justify-content: center; gap: var(--qp-stack-gap);");
+    expect(aboutView).toContain('className="about-layout"');
+    expect(aboutView).toContain('className="about-secondary-column"');
+    expect(aboutCss).toContain(".about-layout { display: grid;");
+    expect(aboutCss).toContain("@container about-page (max-width: 760px)");
     // 赞助弹窗照 patina 的两张卡结构
     expect(aboutView).toContain("about-support-card-heading");
     expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(580px, calc(100vw - 40px)); height: auto; max-height: none;");

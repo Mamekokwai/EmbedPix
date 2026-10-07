@@ -52,38 +52,71 @@ export default function AboutView(updateProps: UpdateViewProps) {
           <p className="page-eyebrow">ABOUT EMBEDPIX</p>
           <h1>关于嵌图匠</h1>
         </div>
+        <span className="about-header-context"><span className="about-status-dot" aria-hidden="true" />本地处理</span>
       </header>
 
       <div className="page-content about-content">
-        <section className="about-hero" aria-labelledby="about-app-name">
-          <div className="about-logo-shell"><img src="/embedpix-icon.png" alt="嵌图匠图标" /></div>
-          <div className="about-title-line"><h2 id="about-app-name">嵌图匠</h2><span>v{packageJson.version}</span></div>
-          <p className="about-hero-copy">EmbedPix 把常见图片处理和单片机资源导出集中在一个轻量工作区里。</p>
-          <div className="about-output-list" aria-label="支持的输出格式">
-            {FEATURE_GROUPS.map((group) => <span key={group.label} title={group.detail}>{group.label}</span>)}
-          </div>
+        <div className="about-layout">
+          <section className="about-primary-card" aria-labelledby="about-app-name">
+            <div className="about-primary-intro">
+              <div className="about-logo-shell"><img src="/embedpix-icon.png" alt="嵌图匠图标" /></div>
+              <div className="about-primary-copy">
+                <p className="about-section-eyebrow">EMBEDDED IMAGE WORKSPACE</p>
+                <div className="about-title-line"><h2 id="about-app-name">嵌图匠</h2><span>EmbedPix</span></div>
+                <p className="about-hero-copy">把常见图片处理和单片机资源导出集中在一个轻量工作区里。</p>
+              </div>
+            </div>
 
-          <div className="about-pill-row" aria-label="项目与支持">
-          <a className="about-pill-action" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, PROJECT_REPOSITORY_URL)}>
-            <span className="about-pill-icon" aria-hidden="true"><Github size={14} /></span>
-            <span className="about-pill-label">GitHub Star</span>
-          </a>
-          <a className="about-pill-action" href={RELEASES_PAGE_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, RELEASES_PAGE_URL)}>
-            <span className="about-pill-icon" aria-hidden="true"><FileText size={14} /></span>
-            <span className="about-pill-label">更新说明</span>
-          </a>
-          <a className="about-pill-action" href={PROJECT_ISSUES_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, PROJECT_ISSUES_URL)}>
-            <span className="about-pill-icon" aria-hidden="true"><MessageSquare size={14} /></span>
-            <span className="about-pill-label">问题反馈</span>
-          </a>
-          <button type="button" className="about-pill-action" onClick={() => setSupportDialogOpen(true)}>
-            <span className="about-pill-icon" aria-hidden="true"><HeartHandshake size={14} /></span>
-            <span className="about-pill-label">赞助项目</span>
-          </button>
-          </div>
-        </section>
+            <div className="about-feature-block">
+              <div className="about-block-heading">
+                <p className="about-section-eyebrow">WORKSPACE</p>
+                <span>支持的工作流</span>
+              </div>
+              <ul className="about-output-list" aria-label="支持的工作流">
+                {FEATURE_GROUPS.map((group) => <li key={group.label} title={group.detail}><span>{group.label}</span><small>{group.detail}</small></li>)}
+              </ul>
+            </div>
 
-        <UpdateView {...updateProps} embedded />
+            <div className="about-action-block">
+              <div className="about-block-heading">
+                <p className="about-section-eyebrow">QUICK LINKS</p>
+                <span>项目与支持</span>
+              </div>
+              <div className="about-pill-row" aria-label="项目与支持">
+                <a className="about-pill-action" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, PROJECT_REPOSITORY_URL)}>
+                  <span className="about-pill-icon" aria-hidden="true"><Github size={14} /></span>
+                  <span className="about-pill-label">GitHub Star</span>
+                </a>
+                <a className="about-pill-action" href={RELEASES_PAGE_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, RELEASES_PAGE_URL)}>
+                  <span className="about-pill-icon" aria-hidden="true"><FileText size={14} /></span>
+                  <span className="about-pill-label">更新说明</span>
+                </a>
+                <a className="about-pill-action" href={PROJECT_ISSUES_URL} target="_blank" rel="noreferrer" onClick={(event) => handleExternalLink(event, PROJECT_ISSUES_URL)}>
+                  <span className="about-pill-icon" aria-hidden="true"><MessageSquare size={14} /></span>
+                  <span className="about-pill-label">问题反馈</span>
+                </a>
+                <button type="button" className="about-pill-action" onClick={() => setSupportDialogOpen(true)}>
+                  <span className="about-pill-icon" aria-hidden="true"><HeartHandshake size={14} /></span>
+                  <span className="about-pill-label">赞助项目</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <aside className="about-secondary-column" aria-label="版本与项目详情">
+            <UpdateView {...updateProps} embedded className="about-update-view" />
+            <section className="about-secondary-card" aria-labelledby="about-project-title">
+              <div className="about-secondary-heading">
+                <div>
+                  <p className="about-section-eyebrow">PROJECT DETAILS</p>
+                  <h2 id="about-project-title">轻量、本地、面向嵌入式</h2>
+                </div>
+                <span className="about-version-badge">v{packageJson.version}</span>
+              </div>
+              <p>所有图片处理都在本地完成，无需账号或云端服务。适合准备屏幕 UI 资源时快速预览、转换和导出。</p>
+            </section>
+          </aside>
+        </div>
 
         <p className="about-footnote">EmbedPix · 为嵌入式屏幕 UI 准备的图片工具</p>
 

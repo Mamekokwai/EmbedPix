@@ -490,15 +490,12 @@ function SelectField<T extends string | number>({
   );
 }
 
-function EmptyFrames({ onImport, sourceMode }: { onImport: () => void; sourceMode: GifSourceMode }) {
+function EmptyFrames({ sourceMode }: { sourceMode: GifSourceMode }) {
   return (
     <div className="gif-empty-frames">
       <ImagePlus size={24} aria-hidden="true" />
       <strong>还没有动画帧</strong>
       <span>{sourceMode === "video" ? "先导入视频并提取时间范围内的帧。" : "导入多张图片，按顺序组成 GIF。"}</span>
-      <button className="quiet-button" type="button" onClick={onImport}>
-        <Download size={15} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片"}
-      </button>
     </div>
   );
 }
@@ -2361,10 +2358,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   return (
     <div className={`gif-maker-view page-view gif-source-${sourceMode}${group ? " gif-settings-expanded" : ""}`}>
       <header className="page-header gif-maker-header">
-        <div className="page-header-icon"><Film size={19} aria-hidden="true" /></div>
-        <div className="page-header-copy">
-          <p className="page-eyebrow">EMBEDPIX</p>
-          <h1>GIF 制作</h1>
+        <div className="gif-brand-lockup">
+          <div className="page-header-icon"><Film size={19} aria-hidden="true" /></div>
+          <div className="page-header-copy">
+            <p className="page-eyebrow">EMBEDPIX</p>
+            <h1>GIF 制作</h1>
+          </div>
+          <span className="gif-local-status"><i aria-hidden="true" />本地处理</span>
         </div>
         <div className="gif-header-note">
           <button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceFileInputRef.current?.click()}>打开工作区</button><input ref={workspaceFileInputRef} className="gif-hidden-input" type="file" accept="application/json,.json" onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} />
@@ -2373,6 +2373,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
       <fieldset className="page-content gif-maker-content" disabled={!canEditFrames} aria-label="GIF 制作工作区" aria-busy={!canEditFrames}>
         <>
+        <div className="gif-intro-band">
+          <div className="gif-intro-copy">
+            <p className="gif-intro-eyebrow">ANIMATION WORKSPACE</p>
+            <h2>把图片或视频片段整理成动画</h2>
+            <p>先导入素材，再在右侧预览；帧时长、画布和导出参数按需展开。</p>
+          </div>
+          <span className="gif-intro-note">本地处理 · 文件不会上传</span>
+        </div>
+        <div className="gif-command-bar">
         <div className="gif-source-tabs" role="tablist" aria-label="GIF 来源" aria-orientation="horizontal">
           <button
             id="gif-source-tab-image"
@@ -2407,6 +2416,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           </button>
           <span>{sourceMode === "video" ? "支持 MP4 / WebM / OGG · 最多提取 200 帧" : "多选 / 拖放追加 · 最多 200 帧，32 MiB / 帧，总计 128 MiB"}</span>
           <input ref={fileInputRef} className="gif-hidden-input" type="file" accept={sourceMode === "video" ? VIDEO_ACCEPT : IMAGE_ACCEPT} multiple={sourceMode === "image"} onChange={handleInputChange} />
+        </div>
         </div>
 
         {sourceMode === "video" ? (
@@ -2458,16 +2468,13 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             </div>
             <div
               className={`gif-drop-zone${isDragging ? " gif-drop-zone-active" : ""}`}
-              role="button"
-              tabIndex={canEditFrames ? 0 : -1}
+              role="region"
               aria-disabled={!canEditFrames}
-              onClick={() => { if (canEditFrames) openFileDialog(); }}
-              onKeyDown={(event) => { if (canEditFrames && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openFileDialog(); } }}
               onDragEnter={(event) => { event.preventDefault(); if (canEditFrames) setIsDragging(true); }}
               onDragOver={(event) => { event.preventDefault(); if (canEditFrames) setIsDragging(true); }}
               onDragLeave={() => { if (canEditFrames) setIsDragging(false); }}
               onDrop={(event) => { if (locked) { event.preventDefault(); return; } handleDrop(event); }}
-              aria-label={sourceMode === "video" ? "拖放视频或选择视频" : "拖放图片或选择图片"}
+              aria-label={sourceMode === "video" ? "将视频拖放到这里" : "将图片拖放到这里"}
             >
               <Download size={20} aria-hidden="true" />
               <strong>
@@ -2507,7 +2514,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                   ))}
                 </div>
               </>
-            ) : <EmptyFrames sourceMode={sourceMode} onImport={() => openFileDialog()} />}
+            ) : <EmptyFrames sourceMode={sourceMode} />}
           </section>
 
           <div className="gif-main-column">
@@ -2529,7 +2536,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
                 <label>定位 <input type="range" min="0" max={Math.max(0, frames.length - 1)} step="1" value={selectedIndex} aria-label="动画时间轴" aria-valuetext={`第 ${selectedIndex + 1} / ${frames.length} 帧`} onChange={(event) => seekPreviewFrame(Number(event.target.value))} /></label>
                 <label>起始帧 <input type="number" min="1" max={frames.length} value={timelineStartIndex + 1} onChange={(event) => { const next = clampGifTimelineRange(Number(event.target.value) - 1, timelineEndIndex, frames.length); setTimelineStartIndex(next.start); setTimelineEndIndex(next.end); }} /></label>
                 <label>结束帧 <input type="number" min="1" max={frames.length} value={timelineEndIndex + 1} onChange={(event) => { const next = clampGifTimelineRange(timelineStartIndex, Number(event.target.value) - 1, frames.length); setTimelineStartIndex(next.start); setTimelineEndIndex(next.end); }} /></label>
-                <label>缩放 <select aria-label="时间轴缩放" value={timelineZoom} onChange={(event) => setTimelineZoom(Number(event.target.value))}><option value="0.75">75%</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></label>
+                <label>缩放 <ThemeSelect id="gif-timeline-zoom" value={timelineZoom} options={[{ value: 0.75, label: "75%" }, { value: 1, label: "100%" }, { value: 1.5, label: "150%" }, { value: 2, label: "200%" }]} aria-label="时间轴缩放" onChange={setTimelineZoom} /></label>
                 <span aria-label={`当前源时间 ${formatGifTimelineTime(timeline.currentMs)}，选区时长 ${formatGifTimelineTime(timeline.selectionMs)}，源总时长 ${formatGifTimelineTime(timeline.totalMs)}`}>当前源时间 {formatGifTimelineTime(timeline.currentMs)} · 选区 {formatGifTimelineTime(timeline.selectionMs)} / 源总计 {formatGifTimelineTime(timeline.totalMs)} · 导出第 {timelineStartIndex + 1}–{timelineEndIndex + 1} 帧</span>
               </div> : null}
               <div className="gif-preview-footer"><span>{frames.length ? `第 ${selectedIndex + 1} / ${frames.length} 帧` : "未选择帧"}</span><span>{sourceHint}</span><span>{canvasSize.width} × {canvasSize.height} px 画布</span></div>
@@ -2543,7 +2550,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             {([['timing', '帧时长'], ['canvas', '画布'], ['export', '导出设置']] as const).map(([id, label], index) => (
               <button key={id} id={`gif-group-${id}`} className={`quiet-button${group === id ? ' gif-group-active' : ''}`} type="button" role="tab" aria-selected={group === id} aria-controls={`gif-panel-${id}`} tabIndex={(group === id || (!group && index === 0)) ? 0 : -1} onClick={() => setGroup(group === id ? null : id)} onKeyDown={(event) => handleSettingsTabKeyDown(event, index)}>{label}</button>
             ))}
-            <span>再次点击折叠</span>
+            <span>参数按需展开</span>
           </div>
           {group === "timing" ? <div id="gif-panel-timing" role="region" aria-labelledby="gif-group-timing">
               <div className="gif-settings-grid">
@@ -2667,6 +2674,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           <p className="gif-help-text">{outputFormat === "png-sequence" ? "桌面端保存；每帧输出为 PNG。关闭覆盖时会自动选择不冲突的序号前缀。" : "桌面端保存；输出目录由原生保存对话框选择，关闭覆盖时同名文件会安全拒绝写入。"}</p>
           </div> : null}
         </section>
+        <p className="gif-brand-line">EmbedPix · 嵌图匠</p>
         </>
       </fieldset>
       <div className="gif-export-footer">

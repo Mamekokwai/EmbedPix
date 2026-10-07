@@ -27,6 +27,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding-top: 14px;
 }
 
 .compression-grid { flex: 1 0 auto; }
@@ -39,6 +40,45 @@
 .compression-label-row {
   display: flex;
   align-items: center;
+}
+
+.compression-header .brand-lockup {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+
+.compression-header .header-lockup-icon {
+  flex: 0 0 auto;
+  color: var(--qp-accent-default);
+}
+
+.compression-header .brand-lockup h1 {
+  margin: 2px 0 0;
+  color: var(--qp-text-primary);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.compression-header .header-context {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-left: 3px;
+  color: var(--qp-text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.compression-header .status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--qp-success);
 }
 
 .compression-header,
@@ -80,7 +120,7 @@
 .compression-count { max-width: 100%; overflow: hidden; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .compression-clear-button { min-height: 26px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: transparent; color: var(--qp-text-tertiary); font-size: 11px; padding-inline: 8px; }
 .compression-clear-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
-.compression-drop-zone { display: flex; min-height: 214px; flex-direction: column; align-items: center; justify-content: center; margin-top: 16px; border: 1px dashed var(--qp-border-strong); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); cursor: pointer; color: var(--qp-text-secondary); transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease); }
+.compression-drop-zone { display: flex; min-height: 166px; flex-direction: column; align-items: center; justify-content: center; margin-top: 12px; border: 1px dashed var(--qp-border-strong); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); cursor: pointer; color: var(--qp-text-secondary); transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease); }
 .compression-drop-zone:hover, .compression-drop-zone-dragging { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }
 .compression-drop-zone-disabled { cursor: not-allowed; opacity: .58; }
 .compression-drop-zone:focus-visible, .compression-secondary-button:focus-visible, .compression-primary-button:focus-visible, .compression-retry-button:focus-visible, .compression-clear-button:focus-visible, .compression-icon-button:focus-visible, .compression-field input:focus-visible, .compression-check input:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
@@ -88,7 +128,7 @@
 .compression-drop-icon { width: 44px; height: 44px; margin-bottom: 13px; border: 1px solid color-mix(in srgb, var(--qp-accent-default) 40%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); }
 .compression-drop-zone strong { color: var(--qp-text-primary); font-size: 14px; }
 .compression-drop-zone > span:not(.compression-drop-icon) { margin-top: 6px; font-size: 12px; }
-.compression-drop-zone small { margin-top: 18px; color: var(--qp-text-tertiary); font-size: 11px; }
+.compression-drop-zone small { margin-top: 12px; color: var(--qp-text-tertiary); font-size: 11px; }
 .compression-drop-hint { display: grid; width: min(100%, 360px); min-width: 0; gap: 2px; padding-inline: 12px; line-height: 1.5; overflow-wrap: anywhere; text-align: center; }
 .compression-drop-hint span { min-width: 0; }
 .compression-source-actions { flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -250,6 +290,119 @@
 .compression-spin { animation: compression-spin 900ms linear infinite; }
 @keyframes compression-spin { to { transform: rotate(360deg); } }
 .visually-hidden { position: absolute; top: 0; left: 0; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* 压缩页沿用转换页的介绍带，但把首屏文案压成一行信息层，尽早露出核心设置与导出动作。 */
+.compression-intro {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 0 2px;
+}
+
+.compression-intro .intro-copy {
+  min-width: 0;
+}
+
+.compression-intro .intro-copy h2 {
+  margin: 4px 0 0;
+  color: var(--qp-text-primary);
+  font-size: clamp(17px, 1.8vw, 22px);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.compression-intro .intro-copy > p:last-child {
+  margin: 4px 0 0;
+  color: var(--qp-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.compression-intro .intro-note {
+  flex: 0 0 auto;
+  padding-bottom: 2px;
+  color: var(--qp-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+
+.compression-grid {
+  margin-top: 12px;
+  align-items: stretch;
+}
+
+.compression-input-card,
+.compression-settings-card {
+  min-height: 0;
+  padding: 16px;
+}
+
+.compression-input-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.compression-input-card .compression-list {
+  flex: 1 1 auto;
+  min-height: 72px;
+  max-height: 190px;
+}
+
+.compression-settings-card {
+  max-height: calc(100vh - 220px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.compression-settings-card > .compression-field:has(#compression-format),
+.compression-settings-card > .compression-field:has(#compression-resize) {
+  position: relative;
+  z-index: 1;
+}
+
+.compression-settings-card .compression-advanced-settings-body {
+  gap: var(--qp-stack-gap, 7px);
+  padding: 10px;
+}
+
+.compression-settings-card .compression-advanced-settings {
+  border-radius: var(--qp-radius-control);
+}
+
+.compression-settings-card .compression-advanced-settings > summary {
+  min-height: 36px;
+}
+
+.compression-settings-card .compression-field {
+  gap: 5px;
+}
+
+.compression-parameter-summary {
+  margin-top: 14px;
+}
+
+.compression-footer {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  padding: 10px 0;
+  background: var(--qp-bg-app);
+}
+
+.compression-footer .compression-status {
+  flex-basis: 300px;
+}
+
+.compression-footer .compression-primary-button {
+  min-width: 118px;
+}
+
+.compression-brand-line {
+  margin-top: 12px;
+}
 
 
 
