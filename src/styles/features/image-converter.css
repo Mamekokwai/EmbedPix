@@ -205,16 +205,22 @@
 
 .drop-zone {
   display: flex;
-  min-height: 344px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  width: 100%;
   margin-top: 20px;
   border: 1px dashed var(--qp-border-strong);
   border-radius: var(--qp-radius-control);
   background: var(--qp-bg-elevated);
   cursor: pointer;
   color: var(--qp-text-secondary);
+  box-sizing: border-box;
+  overflow: hidden;
+  text-align: center;
   transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease);
 }
 
@@ -1276,14 +1282,14 @@
   .settings-module > summary { min-height: 34px; }
   .settings-module-body { gap: var(--qp-stack-gap); padding: 8px; }
   .setting-group { gap: var(--qp-stack-gap); padding: 9px; }
-  .drop-zone { min-height: 250px; margin-top: 12px; }
+  .drop-zone { min-height: 0; margin-top: 12px; }
   .panel-footer { margin-top: 12px; padding-top: 10px; }
 }
 
 @media (max-height: 620px) {
   .converter-app { padding: 8px 16px; }
   .converter-header { min-height: 30px; padding-bottom: 8px; }
-  .drop-zone { min-height: 190px; }
+  .drop-zone { min-height: 0; }
   .preview-frame img { max-height: 155px; }
   .panel-heading h3 { font-size: 15px; }
   .panel-footer { gap: 8px; margin-top: 8px; padding-top: 8px; }
@@ -1313,7 +1319,7 @@
   .preview-panel, .settings-panel { padding: 8px; }
   .panel-heading { min-height: 30px; }
   .panel-heading h3 { margin-top: 2px; font-size: 14px; }
-  .drop-zone { min-height: 120px; margin-top: 8px; }
+  .drop-zone { min-height: 0; margin-top: 8px; }
   .drop-icon { width: 34px; height: 34px; margin-bottom: 7px; }
   .drop-zone small { margin-top: 8px; }
   .format-selector { gap: 4px; }
