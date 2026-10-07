@@ -265,6 +265,8 @@ export default function ImageConverter({
   const [flipVertical, setFlipVertical] = useState(false);
   const [cropEnabled, setCropEnabled] = useState(false);
   const [cropInputs, setCropInputs] = useState<CropInputs>(() => getFullImageCropInputs(null));
+  const [livePreview, setLivePreview] = useState(true);
+  const [appliedPreviewTransform, setAppliedPreviewTransform] = useState<ImageTransform>({ rotation: 0, flipHorizontal: false, flipVertical: false, crop: null });
   const [pixelSettingsOpen, setPixelSettingsOpen] = useState(false);
   const [outputSettingsOpen, setOutputSettingsOpen] = useState(false);
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
@@ -366,13 +368,15 @@ export default function ImageConverter({
         }
       : null,
   }), [cropEnabled, cropInputs.height, cropInputs.width, cropInputs.x, cropInputs.y, flipHorizontal, flipVertical, rotation]);
+  const previewTransform = livePreview ? imageTransform : appliedPreviewTransform;
+  const previewTransformDirty = JSON.stringify(imageTransform) !== JSON.stringify(appliedPreviewTransform);
   const transformedSourceDimensions = dimensions
     ? getTransformedSourceDimensions(dimensions, imageTransform)
     : null;
   const hasImageTransform = rotation !== 0 || flipHorizontal || flipVertical || cropEnabled;
   const cropPreview = useMemo(
-    () => (cropEnabled ? getCropPreviewLayout(cropInputs, dimensions) : null),
-    [cropEnabled, cropInputs, dimensions],
+    () => (previewTransform.crop ? getCropPreviewLayout({ x: String(previewTransform.crop.x), y: String(previewTransform.crop.y), width: String(previewTransform.crop.width), height: String(previewTransform.crop.height) }, dimensions) : null),
+    [dimensions, previewTransform.crop],
   );
   const previewAppliedTransforms = [
     cropEnabled && cropPreview ? "裁剪" : null,
@@ -476,7 +480,7 @@ export default function ImageConverter({
       }
       setRealPreviewError(null);
       try {
-        const targetSourceDimensions = getTransformedSourceDimensions(dimensions, imageTransform);
+        const targetSourceDimensions = getTransformedSourceDimensions(dimensions, previewTransform);
         const targetDimensions = keepAspectRatio
           ? constrainAspectDimensions("width", width, targetSourceDimensions)
           : { width, height };
@@ -496,7 +500,7 @@ export default function ImageConverter({
           rowOrder,
           rowAlignment,
           cArrayName: normalizeCArrayName(cArrayName),
-          transform: imageTransform,
+          transform: previewTransform,
           metadataPolicy,
         });
         if (cancelled) return;
@@ -518,7 +522,7 @@ export default function ImageConverter({
     };
     void requestPreview();
     return () => { cancelled = true; };
-  }, [active, backgroundColor, bitDepth, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, fillTransparent, height, imageTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
+  }, [active, backgroundColor, bitDepth, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, fillTransparent, height, previewTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
 
   const resetImageTransform = (source: ImageDimensions | null = dimensions) => {
     setRotation(0);
@@ -1441,7 +1445,7 @@ export default function ImageConverter({
                         left: `${cropPreview.imageLeftPercent}%`,
                         top: `${cropPreview.imageTopPercent}%`,
                         width: `${cropPreview.imageWidthPercent}%`,
-                        transform: `scaleY(${flipVertical ? -1 : 1}) scaleX(${flipHorizontal ? -1 : 1}) rotate(${rotation}deg)`,
+                        transform: `scaleY(${previewTransform.flipVertical ? -1 : 1}) scaleX(${previewTransform.flipHorizontal ? -1 : 1}) rotate(${previewTransform.rotation}deg)`,
                       }}
                     />
                   </div>
@@ -1449,7 +1453,7 @@ export default function ImageConverter({
                   src={previewUrl}
                   alt={`预览：${file.name}`}
                   style={{
-                    transform: `rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`,
+                    transform: `rotate(${previewTransform.rotation}deg) scaleX(${previewTransform.flipHorizontal ? -1 : 1}) scaleY(${previewTransform.flipVertical ? -1 : 1})`,
                   }}
                 />) : null}
               </div>
@@ -1469,11 +1473,11 @@ export default function ImageConverter({
                           left: `${cropPreview.imageLeftPercent}%`,
                           top: `${cropPreview.imageTopPercent}%`,
                           width: `${cropPreview.imageWidthPercent}%`,
-                          transform: `scaleY(${flipVertical ? -1 : 1}) scaleX(${flipHorizontal ? -1 : 1}) rotate(${rotation}deg)`,
+                          transform: `scaleY(${previewTransform.flipVertical ? -1 : 1}) scaleX(${previewTransform.flipHorizontal ? -1 : 1}) rotate(${previewTransform.rotation}deg)`,
                         }}
                       />
                     </div>
-                  ) : <img src={previewUrl} alt={`输出预览：${file.name}`} style={{ transform: `rotate(${rotation}deg) scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})` }} />) : null}
+                  ) : <img src={previewUrl} alt={`输出预览：${file.name}`} style={{ transform: `rotate(${previewTransform.rotation}deg) scaleX(${previewTransform.flipHorizontal ? -1 : 1}) scaleY(${previewTransform.flipVertical ? -1 : 1})` }} />) : null}
                 </div>
                 <div className="preview-comparison-meta">
                   <span>{outputPreviewComparison.dimensions}</span>
@@ -1637,7 +1641,12 @@ export default function ImageConverter({
               </div> : null}
               {cropValidationError ? <p className="error-message transform-error" role="alert">{cropValidationError}</p> : null}
               <div className="transform-footer">
-                <p className="field-help">旋转、翻转和裁剪都会实时反映在预览。</p>
+                <label className="toggle-row transform-live-preview-toggle">
+                  <input type="checkbox" checked={livePreview} onChange={(event) => { const enabled = event.target.checked; setLivePreview(enabled); if (enabled) setAppliedPreviewTransform(imageTransform); }} />
+                  <span className="toggle-track" aria-hidden="true"><span /></span>
+                  <span>实时预览</span>
+                </label>
+                {!livePreview && previewTransformDirty ? <button className="quiet-button" type="button" onClick={() => setAppliedPreviewTransform(imageTransform)}>应用预览</button> : null}
                 <button className="quiet-button" type="button" onClick={handleResetImageTransform} disabled={!hasImageTransform}>重置编辑</button>
               </div>
             </div>
@@ -1647,16 +1656,18 @@ export default function ImageConverter({
                 {outputFormat === "jpg" ? <span className="field-note">JPG 固定 24 位</span> : isRawPixelFormat(outputFormat) ? <span className="field-note">RGB565 固定 16 位</span> : null}
               </div>
               {outputFormat === "jpg" || isRawPixelFormat(outputFormat) ? null : (
-                <ThemeSelect
-                  id="bit-depth"
-                  value={bitDepth}
-                  options={getBitDepths(outputFormat).map((depth) => ({ value: depth, label: `${depth} 位` }))}
-                  aria-label="位深"
-                  aria-describedby="bit-depth-description"
-                  onChange={handleBitDepthChange}
-                />
+                <div className="bit-depth-select-row">
+                  <ThemeSelect
+                    id="bit-depth"
+                    value={bitDepth}
+                    options={getBitDepths(outputFormat).map((depth) => ({ value: depth, label: `${depth} 位` }))}
+                    aria-label="位深"
+                    aria-describedby="bit-depth-description"
+                    onChange={handleBitDepthChange}
+                  />
+                  <p className="field-help bit-depth-option-help" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>
+                </div>
               )}
-              <p className="field-help" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>
             </div>
 
             {outputFormat === "jpg" ? (

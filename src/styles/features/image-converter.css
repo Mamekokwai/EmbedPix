@@ -1140,6 +1140,23 @@
   background: var(--qp-success);
 }
 
+.bit-depth-select-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.bit-depth-select-row .theme-select {
+  flex: 0 1 180px;
+  min-width: 120px;
+}
+
+.bit-depth-option-help {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
 .error-message {
   max-width: 100%;
   margin: 0;
@@ -1275,6 +1292,15 @@
 
 /* 窄窗（最小 900）一行挤 3 个：收掉横向内边距，「RGB565 BIN」这类长标签才不会折行。 */
 @media (max-width: 960px) {
+  .bit-depth-select-row { align-items: flex-start; }
+  .bit-depth-select-row .theme-select { flex-basis: 150px; }
+}
+
+@media (max-width: 620px) {
+  .bit-depth-select-row { flex-wrap: wrap; }
+  .bit-depth-select-row .theme-select { flex-basis: 100%; }
+  .bit-depth-option-help { flex-basis: 100%; }
+}
   .format-option { padding-inline: 8px; }
 }
 
