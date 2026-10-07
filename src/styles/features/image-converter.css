@@ -720,13 +720,16 @@
 .format-selector {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: minmax(49px, 1fr);
+  align-content: stretch;
   gap: 7px;
 }
 
 .format-option {
   display: flex;
   min-width: 0;
-  min-height: 49px;
+  min-height: 0;
+  height: 100%;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
@@ -1307,6 +1310,10 @@
   .bit-depth-select-row { flex-wrap: wrap; }
   .bit-depth-select-row .theme-select { flex-basis: 100%; }
   .bit-depth-option-help { flex-basis: 100%; }
+}
+
+@media (min-height: 800px) and (min-width: 961px) {
+  .format-selector { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 
