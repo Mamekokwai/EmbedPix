@@ -2,6 +2,9 @@ pub mod commands;
 
 use tauri::Manager;
 
+/// Resized 的代数：合并拖拽途中的连续 resize，只在尺寸停下来之后纠正最小尺寸。
+static RESIZE_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -63,18 +66,26 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 无边框窗口下 set_min_size 不够用：实测该窗口的 WM_GETMINMAXINFO 回报 minTrack=0x0，
-            // 拖拽时系统根本不拦。这里按物理尺寸在每次 resize 后顶回去，尺寸已达标就不再触发。
             if let tauri::WindowEvent::Resized(size) = event {
                 let scale = window.scale_factor().unwrap_or(1.0);
                 let min_width = (900.0 * scale).round() as u32;
                 let min_height = (636.0 * scale).round() as u32;
-                if size.width < min_width || size.height < min_height {
-                    let _ = window.set_size(tauri::PhysicalSize::new(
-                        size.width.max(min_width),
-                        size.height.max(min_height),
-                    ));
+                if size.width >= min_width && size.height >= min_height {
+                    return;
                 }
+                // 无边框窗口下 set_min_size 不被系统采纳（实测 WM_GETMINMAXINFO 回报 minTrack=0x0），
+                // 只能自己顶回去。但拖拽途中每次都顶会和系统抢尺寸、把窗口拽得一抖一抖，
+                // 所以等尺寸停下 180ms 再纠正；期间又发生 resize 就交给后来者（代数不匹配即放弃）。
+                let generation =
+                    RESIZE_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                let window = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(180));
+                    if RESIZE_GENERATION.load(std::sync::atomic::Ordering::SeqCst) != generation {
+                        return;
+                    }
+                    let _ = window.set_size(tauri::PhysicalSize::new(min_width, min_height));
+                });
             }
         })
         .run(tauri::generate_context!())
