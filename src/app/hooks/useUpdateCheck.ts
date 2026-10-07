@@ -277,10 +277,23 @@ export function useUpdateCheck() {
         current.info.latestVersion,
         current.info.assetSizeBytes,
       );
-      const downloaded: UpdateCheckState = { ...downloading, status: "downloaded", downloadPath: packageInfo.path, downloadedBytes: packageInfo.sizeBytes, totalBytes: packageInfo.sizeBytes };
-      stateRef.current = downloaded;
-      setState(downloaded);
-      return downloaded;
+      const installing: UpdateCheckState = {
+        ...downloading,
+        status: "installing",
+        downloadPath: packageInfo.path,
+        downloadedBytes: packageInfo.sizeBytes,
+        totalBytes: packageInfo.sizeBytes,
+      };
+      stateRef.current = installing;
+      setState(installing);
+      await installUpdate(
+        packageInfo.path,
+        current.info.assetSha256,
+        current.info.latestVersion,
+        current.info.assetSizeBytes,
+        true,
+      );
+      return installing;
     } catch (error) {
       const latestState = stateRef.current as UpdateCheckState;
       if (latestState.status === "cancelled") return latestState;
