@@ -58,3 +58,10 @@
   .about-pill-action { min-height: 28px; padding: 0 10px; font-size: 11px; }
   .update-view-embedded { margin-top: 8px; }
 }
+
+@media (max-width: 620px), (max-height: 620px) {
+  .about-support-backdrop { padding: 12px; }
+  .about-support-dialog { width: min(480px, calc(100vw - 24px)); max-height: calc(100vh - 24px); align-self: start; gap: 8px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; padding: 14px; }
+  .about-support-card { gap: 8px; padding: 10px; }
+  .about-support-qr { width: min(100%, 180px); margin-inline: auto; }
+}
