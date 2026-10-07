@@ -62,6 +62,21 @@ pub fn run() {
             );
             Ok(())
         })
+        .on_window_event(|window, event| {
+            // 无边框窗口下 set_min_size 不够用：实测该窗口的 WM_GETMINMAXINFO 回报 minTrack=0x0，
+            // 拖拽时系统根本不拦。这里按物理尺寸在每次 resize 后顶回去，尺寸已达标就不再触发。
+            if let tauri::WindowEvent::Resized(size) = event {
+                let scale = window.scale_factor().unwrap_or(1.0);
+                let min_width = (900.0 * scale).round() as u32;
+                let min_height = (636.0 * scale).round() as u32;
+                if size.width < min_width || size.height < min_height {
+                    let _ = window.set_size(tauri::PhysicalSize::new(
+                        size.width.max(min_width),
+                        size.height.max(min_height),
+                    ));
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running EmbedPix");
 }
