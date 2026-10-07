@@ -196,6 +196,15 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".settings-stack::-webkit-scrollbar { width: 6px; height: 6px; }");
     expect(converterCss).toContain(".settings-stack::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }");
   });
+  it("keeps the last converter module's hover hints from padding out the card's scroll bottom", () => {
+    // 悬停说明是 opacity:0 的绝对定位浮层，收起态也参与布局：Chromium 会把它算进 .settings-stack 的滚动溢出区。
+    // 最后一块折叠模块的说明若向下浮出，会在滚动内容底部垫出一整段看不见的空白（卡片滑到底看到的就是它）。
+    // 最后一个模块的说明改向上开；滚动体自己保持零内边距，底部留白只由内容收尾，不靠固定像素去垫。
+    expect(converterCss).toMatch(/\.settings-stack > \.settings-module:last-child \.field-help-hover \{[^}]*top: auto;/);
+    expect(converterCss).toMatch(/\.settings-stack > \.settings-module:last-child \.field-help-hover \{[^}]*bottom: 100%;/);
+    expect(converterCss).toMatch(/\.settings-stack \{[^}]*padding: 0;/);
+    expect(converterCss).not.toMatch(/\.settings-stack \{[^}]*padding-bottom:/);
+  });
   it("wraps the compression import support hint inside narrow drop zones", () => {
     expect(compressionView).toContain('className="compression-drop-hint"');
     expect(compressionView).toContain('className="compression-secondary-button compression-import-button"');

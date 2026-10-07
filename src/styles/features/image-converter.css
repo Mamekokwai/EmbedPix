@@ -582,6 +582,16 @@
 .settings-stack::-webkit-scrollbar { width: 6px; height: 6px; }
 .settings-stack::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 
+/* 悬停说明是 opacity:0 的绝对定位浮层，收起态也在布局里：Chromium 会把它的盒子算进 .settings-stack 的滚动溢出区。
+   最后一块折叠模块的说明默认向下浮出，等于在滚动内容底部垫出一整段看不见的空白（卡片滑到底看到的就是它），
+   真到卡片底边还会被裁掉。最后一个模块的说明改向上开——与近底下拉浮层翻转同一个思路，既不留白也不被裁。 */
+.settings-stack > .settings-module:last-child .field-help-hover {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
 .settings-stack:disabled .format-option,
 .settings-stack:disabled .toggle-row,
 .settings-stack:disabled .color-control,
