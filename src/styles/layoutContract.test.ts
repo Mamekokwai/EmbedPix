@@ -967,6 +967,14 @@ describe("compact layout viewport contract", () => {
     expect(aboutView).toContain('className="about-secondary-column"');
     expect(aboutCss).toContain(".about-layout { display: grid;");
     expect(aboutCss).toContain("@container about-page (max-width: 760px)");
+    expect(aboutCss).toContain(".about-layout { grid-template-columns: minmax(0, 1fr) minmax(280px, 300px); }");
+    // 可用高度由左主卡吸收，右栏靠下；内容变长时仍由内容区滚动。
+    expect(aboutCss).toContain("flex: 1 0 auto; grid-template-columns:");
+    expect(aboutCss).toContain("align-items: stretch; }");
+    expect(aboutCss).toContain("justify-content: space-between;");
+    expect(aboutCss).toContain("align-content: safe end;");
+    expect(aboutView).toContain('<UpdateView {...updateProps} embedded className="about-update-view" />');
+    expect(updateView).toContain("update-release-card");
     // 赞助弹窗照 patina 的两张卡结构
     expect(aboutView).toContain("about-support-card-heading");
     expect(aboutCss).toContain(".about-support-dialog { display: grid; width: min(580px, calc(100vw - 40px)); height: auto; max-height: none;");
