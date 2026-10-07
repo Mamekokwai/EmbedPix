@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, Download, FileDown, FolderOpen, Images, Info, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, FileDown, FolderOpen, Images, Info, LoaderCircle, Minimize2, RefreshCw, Trash2 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import "../../styles/features/image-compression.css";
 import { cancelCompression, compressImage, createCompressionRequest, estimateImageCompression, formatCompressionProgressError, formatCompressionProgressStage, getCompressionProgress, MAX_COMPRESSION_RESIZE_PERCENT, MIN_COMPRESSION_RESIZE_PERCENT, pickCompressionDirectoryResult, pickCompressionFiles, preflightCompression, previewCompression } from "../../platform/compression/compressionGateway";
@@ -1236,27 +1236,14 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   return (
     <section className="compression-app" aria-label="图片压缩工作台" aria-busy={busy}>
       <header className="compression-header">
-        <div className="brand-lockup">
-          <img className="brand-mark" src="/embedpix-icon.png" alt="" aria-hidden="true" />
+        <div className="header-lockup">
+          <Minimize2 className="header-lockup-icon" size={19} strokeWidth={2} aria-hidden="true" />
           <div>
             <p className="eyebrow">EMBEDPIX</p>
             <h1>图片压缩工作台</h1>
           </div>
         </div>
-        <div className="header-context">
-          <span className="status-dot" aria-hidden="true" />
-          本地处理
-        </div>
       </header>
-
-      <section className="compression-intro" aria-labelledby="compression-title">
-        <div>
-          <p className="eyebrow">IMAGE COMPRESSION</p>
-          <h2 id="compression-title">图片压缩</h2>
-          <p className="intro-copy">批量压缩图片体积，保留对嵌入式 UI 有用的格式与参数控制。</p>
-        </div>
-        <div className="intro-note"><FileDown size={17} aria-hidden="true" /> 桌面原生队列</div>
-      </section>
 
       <div className="compression-content">
       <div className="compression-grid">

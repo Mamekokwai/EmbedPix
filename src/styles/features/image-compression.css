@@ -1,6 +1,6 @@
 /* 外壳把页面包在自动高度的 .app-kept-view 里；要撑满主区就先让这层等高、变成弹性列，页面根才有确定高度可用。 */
-.app-kept-view.app-kept-compression { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-/* 页面根是撑满主区高度的弹性列：品牌头带 + 介绍带固定在列首，滚动下沉到 .compression-content。 */
+.app-kept-view.app-kept-compression:not([hidden]) { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* 页面根是撑满主区高度的弹性列：头部固定在列首，滚动下沉到 .compression-content。 */
 .compression-app {
   width: min(1180px, 100%);
   display: flex;
@@ -13,8 +13,7 @@
   padding: 20px 28px 18px;
 }
 
-.compression-header,
-.compression-intro {
+.compression-header {
   flex: 0 0 auto;
 }
 
@@ -54,19 +53,10 @@
 .compression-header > *, .compression-card-heading > * { min-width: 0; }
 
 .compression-header {
-  min-height: 42px;
-  gap: 18px;
-  padding: 0 2px 12px;
+  min-height: 34px;
+  gap: 11px;
+  padding: 0 2px 10px;
   border-bottom: 1px solid var(--qp-border-subtle);
-}
-
-.compression-intro {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 28px 2px 20px;
 }
 
 .compression-card-kicker {
@@ -78,14 +68,12 @@
   letter-spacing: .12em;
 }
 
-.compression-intro h2,
 .compression-card-heading h2 {
   margin: 7px 0 0;
   color: var(--qp-text-primary);
   letter-spacing: -.02em;
 }
 
-.compression-intro h2 { font-size: clamp(23px, 3vw, 29px); }
 .compression-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(300px, .92fr); gap: 16px; margin-top: 18px; }
 .compression-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
 .compression-input-card, .compression-settings-card { padding: 18px; }
@@ -278,7 +266,7 @@
 
 @media (max-height: 620px) {
   .compression-app { padding-top: 10px; padding-bottom: 12px; }
-  .compression-header { padding-top: 4px; padding-bottom: 12px; }
+  .compression-header { padding-top: 4px; padding-bottom: 8px; }
   .compression-grid { gap: 10px; margin-top: 10px; }
   .compression-input-card, .compression-settings-card, .compression-preview-card { padding: 10px; }
   .compression-drop-zone { min-height: 150px; margin-top: 10px; }

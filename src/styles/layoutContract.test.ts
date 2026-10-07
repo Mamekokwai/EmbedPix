@@ -166,13 +166,14 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toMatch(/\.converter-content \{[^}]*overflow-y: auto;/);
     expect(compressionCss).toMatch(/\.compression-content \{[^}]*overflow-y: auto;/);
     expect(gifCss).toMatch(/\.gif-maker-content\.page-content \{[^}]*overflow-y: auto;/);
-    // 品牌头带 / 介绍带固定在弹性列首，不随内容滚动。
-    expect(converterCss).toMatch(/\.converter-intro \{[^}]*flex: 0 0 auto;/);
-    expect(compressionCss).toMatch(/\.compression-intro \{[^}]*flex: 0 0 auto;/);
+    // 两行页头固定在弹性列首，不随内容滚动。
+    expect(converterCss).toMatch(/\.converter-header \{[^}]*flex: 0 0 auto;/);
+    expect(compressionCss).toMatch(/\.compression-header \{[^}]*flex: 0 0 auto;/);
     expect(gifCss).toMatch(/\.gif-maker-header\.page-header \{[^}]*flex: 0 0 auto;/);
     // 这三页不在 .app-main 下（外壳包了一层自动高度的 .app-kept-view），由页面 CSS 让这层等高、页面根才撑满主区。
-    expect(converterCss).toMatch(/\.app-kept-view:has\(> \.converter-app\) \{[^}]*height: 100%;/);
-    expect(compressionCss).toMatch(/\.app-kept-view\.app-kept-compression \{[^}]*height: 100%;/);
+    // 必须带 :not([hidden])：否则与 App.css 的 .app-kept-view[hidden] 特异性相同而源序在后，会把 display:none 压掉。
+    expect(converterCss).toMatch(/\.app-kept-view:has\(> \.converter-app\):not\(\[hidden\]\) \{[^}]*height: 100%;/);
+    expect(compressionCss).toMatch(/\.app-kept-view\.app-kept-compression:not\(\[hidden\]\) \{[^}]*height: 100%;/);
   });
   it("wraps the compression import support hint inside narrow drop zones", () => {
     expect(compressionView).toContain('className="compression-drop-hint"');
@@ -670,17 +671,61 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("formatCompressionSizeDelta(estimate.inputBytes - estimate.estimatedBytes, estimate.savingsPercent)");
   });
 
-  it("keeps page intros and drop zones free of repeated helper copy", () => {
-    expect(converterView).toContain('<h2 id="workspace-title">转换图片</h2>');
+  it("keeps workbench drop zones free of repeated helper copy", () => {
     expect(converterView).not.toContain("转换图片，适配你的嵌入式界面");
     expect(converterView).not.toContain("或点击选择一个或多个本地文件");
     expect(converterView).not.toContain("导入图片后开始设置输出参数");
     // 位深候选由下拉列表给出，标签行不再复述一遍
     expect(converterView).not.toContain("位可选");
-    expect(compressionView).toContain('<h2 id="compression-title">图片压缩</h2>');
     expect(compressionView).not.toContain("压到目标体积，格式与画质可控");
     expect(compressionView).not.toContain("或点击选择多个文件");
     expect(gifView).not.toContain("或点击选择视频文件");
+  });
+
+  it("slims the three workbench headers to a two-line lockup with the page icon", () => {
+    // 两行页头：EMBEDPIX eyebrow + 工作区名，左侧用本页导航图标（不再是嵌图匠 logo）。
+    expect(converterView).toContain('<Images className="header-lockup-icon"');
+    expect(converterView).toContain('<p className="eyebrow">EMBEDPIX</p>');
+    expect(converterView).toContain("<h1>图片转换工作区</h1>");
+    expect(converterView).not.toContain("brand-mark");
+    expect(converterView).not.toContain("本地处理");
+    expect(converterView).not.toContain("converter-intro");
+
+    expect(compressionView).toContain('<Minimize2 className="header-lockup-icon"');
+    expect(compressionView).toContain('<p className="eyebrow">EMBEDPIX</p>');
+    expect(compressionView).toContain("<h1>图片压缩工作台</h1>");
+    expect(compressionView).not.toContain("brand-mark");
+    expect(compressionView).not.toContain("本地处理");
+    expect(compressionView).not.toContain("compression-intro");
+
+    expect(gifView).toContain('<div className="page-header-icon"><Film size={19}');
+    expect(gifView).toContain('<p className="page-eyebrow">EMBEDPIX</p>');
+    expect(gifView).toContain("<h1>GIF 制作</h1>");
+    expect(gifView).not.toContain("status-dot");
+    expect(gifView).not.toContain("GIF MAKER");
+
+    // 三页图标与侧栏导航 NAV_ITEMS 里该页的 lucide 图标一致。
+    expect(appShell).toContain('{ id: "converter", label: "图片转换", hint: "导入、调整并导出", icon: Images }');
+    expect(appShell).toContain('{ id: "compression", label: "图片压缩", hint: "批量降低图片体积", icon: Minimize2 }');
+    expect(appShell).toContain('{ id: "gif", label: "GIF 制作", hint: "图片序列制作动画", icon: Film }');
+
+    // 页头样式：矮、flex: 0 0 auto 固定不滚、底部 1px token 分隔线；已删的牌子/介绍带不留死规则。
+    expect(converterCss).toMatch(/\.converter-header \{[^}]*flex: 0 0 auto;/);
+    expect(converterCss).toMatch(/\.converter-header \{[^}]*border-bottom: 1px solid var\(--qp-border-subtle\);/);
+    expect(converterCss).not.toContain(".brand-mark");
+    expect(converterCss).not.toContain("brand-lockup");
+    expect(converterCss).not.toContain("converter-intro");
+    expect(converterCss).not.toContain(".header-context");
+    expect(converterCss).not.toContain("status-dot");
+    expect(converterCss).not.toContain(".intro-copy");
+    expect(converterCss).not.toContain(".intro-note");
+
+    expect(compressionCss).toMatch(/\.compression-header \{[^}]*border-bottom: 1px solid var\(--qp-border-subtle\);/);
+    expect(compressionCss).not.toContain("compression-intro");
+
+    expect(gifCss).toMatch(/\.gif-maker-header\.page-header \{[^}]*flex: 0 0 auto;/);
+    expect(gifCss).not.toContain(".gif-header-note .status-dot");
+    expect(gifCss).not.toContain(".gif-maker-header .page-eyebrow");
   });
 
   it("shows the selected format description, BMP included", () => {

@@ -17,13 +17,12 @@
 .gif-maker-view :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
   scroll-margin-block: 18px;
 }
-.gif-maker-header.page-header { flex: 0 0 auto; padding-bottom: 10px; gap: 10px; }
+.gif-maker-header.page-header { flex: 0 0 auto; padding-bottom: 8px; gap: 10px; }
+.gif-maker-header .page-header-icon { width: 34px; height: 34px; border-radius: var(--qp-radius-button); }
 .gif-maker-header h1 { font-size: 19px; }
 .gif-maker-header .page-header-copy { min-width: 0; }
-.gif-maker-header .page-header-copy > p:last-child { display: none; }
-.gif-header-note { margin-left: auto; color: var(--qp-text-secondary); font-size: 11px; white-space: nowrap; }
-.gif-header-note .status-dot { margin-right: 6px; }
-.gif-source-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.gif-header-note { display: flex; margin-left: auto; align-items: center; gap: 6px; color: var(--qp-text-secondary); font-size: 11px; white-space: nowrap; }
+.gif-source-tabs { display: flex; flex-wrap: wrap; gap: 5px; }
 .gif-source-tab { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); padding: 3px 8px; background: var(--qp-bg-panel); color: var(--qp-text-secondary); font-size: 11px; }
 .gif-source-tab:hover { border-color: var(--qp-border-strong); background: var(--qp-bg-elevated); }
 .gif-source-tab-active { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); color: var(--qp-accent-default); }
@@ -192,7 +191,6 @@
   .gif-maker-header.page-header { gap: 7px; padding-bottom: 6px; }
   .gif-maker-header .page-header-icon { width: 34px; height: 34px; }
   .gif-maker-header h1 { font-size: 17px; }
-  .gif-source-tabs { margin-top: 4px; }
   .gif-maker-content.page-content { gap: 6px; }
   .gif-card { padding: 7px; }
   .gif-video-card { gap: 5px; }
@@ -209,7 +207,7 @@
   .gif-maker-header.page-header { gap: 5px; padding-bottom: 4px; }
   .gif-maker-header .page-header-icon { width: 28px; height: 28px; }
   .gif-maker-header h1 { font-size: 15px; }
-  .gif-source-tabs { gap: 3px; margin-top: 2px; }
+  .gif-source-tabs { gap: 3px; }
   .gif-source-tab { min-height: 22px; padding-block: 2px; }
   .gif-maker-toolbar { min-height: 28px; }
   .gif-maker-view :is(.quiet-button, .primary-button, .export-button) { min-height: 28px; padding-block: 3px; }
@@ -235,7 +233,6 @@
   .gif-maker-view.page-view, .gif-maker-content.page-content { gap: 6px; }
   .gif-maker-header .page-header-icon { width: 28px; height: 28px; }
   .gif-maker-header h1 { font-size: 16px; }
-  .gif-maker-header .page-eyebrow { display: none; }
   .gif-maker-header.page-header { padding-bottom: 4px; }
   .gif-preview-footer { font-size: 9px; }
 }

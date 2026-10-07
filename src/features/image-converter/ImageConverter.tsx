@@ -10,6 +10,7 @@ import {
   Check,
   Download,
   Image as ImageIcon,
+  Images,
   Plus,
   Upload,
   X,
@@ -1368,26 +1369,14 @@ export default function ImageConverter({
   return (
     <main className="converter-app">
       <header className="converter-header">
-        <div className="brand-lockup">
-          <img className="brand-mark" src="/embedpix-icon.png" alt="" aria-hidden="true" />
+        <div className="header-lockup">
+          <Images className="header-lockup-icon" size={19} strokeWidth={2} aria-hidden="true" />
           <div>
             <p className="eyebrow">EMBEDPIX</p>
             <h1>图片转换工作区</h1>
           </div>
         </div>
-        <div className="header-context">
-          <span className="status-dot" aria-hidden="true" />
-          本地处理
-        </div>
       </header>
-
-      <section className="converter-intro" aria-labelledby="workspace-title">
-        <div>
-          <p className="eyebrow">IMAGE WORKSPACE</p>
-          <h2 id="workspace-title">转换图片</h2>
-          <p className="intro-copy">导入一张或多张图片，统一调整尺寸与输出规格，然后导出到本地文件。</p>
-        </div>
-      </section>
 
       <div className="converter-content">
       <section className="workspace-grid" aria-label="图片转换工作区">

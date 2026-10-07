@@ -1,5 +1,5 @@
 /* 外壳把页面包在自动高度的 .app-kept-view 里；要撑满主区就先让这层等高、变成弹性列，页面根才有确定高度可用。 */
-.app-kept-view:has(> .converter-app) { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.app-kept-view:has(> .converter-app):not([hidden]) { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 /* 页面根是撑满主区高度的弹性列：品牌头带 + 介绍带固定在列首，滚动下沉到 .converter-content。 */
 .converter-app {
   width: min(1180px, 100%);
@@ -13,8 +13,7 @@
   padding: 20px 28px 18px;
 }
 
-.converter-header,
-.converter-intro {
+.converter-header {
   flex: 0 0 auto;
 }
 
@@ -53,15 +52,12 @@
 }
 
 .converter-header,
-.converter-intro,
 .panel-heading,
 .label-row,
 .dimensions-row,
 .panel-footer,
 .converter-footer,
-.brand-lockup,
-.header-context,
-.intro-note,
+.header-lockup,
 .file-summary,
 .file-ready,
 .toggle-row,
@@ -71,7 +67,6 @@
 }
 
 .converter-header,
-.converter-intro,
 .panel-heading,
 .label-row,
 .panel-footer,
@@ -80,20 +75,18 @@
 }
 
 .converter-header {
-  min-height: 42px;
+  min-height: 34px;
   border-bottom: 1px solid var(--qp-border-subtle);
-  padding-bottom: 12px;
+  padding-bottom: 10px;
 }
 
-.brand-lockup {
+.header-lockup {
   gap: 11px;
 }
 
-.brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--qp-radius-button);
-  object-fit: contain;
+.header-lockup-icon {
+  flex: 0 0 auto;
+  color: var(--qp-accent-default);
 }
 
 .eyebrow,
@@ -106,26 +99,18 @@
   letter-spacing: 0.12em;
 }
 
-.brand-lockup h1,
-.converter-intro h2,
+.header-lockup h1,
 .panel-heading h3 {
   margin: 0;
   font-weight: 650;
   letter-spacing: -0.02em;
 }
 
-.brand-lockup h1 {
+.header-lockup h1 {
   margin-top: 2px;
   font-size: 14px;
 }
 
-.header-context {
-  gap: 7px;
-  color: var(--qp-text-tertiary);
-  font-size: 12px;
-}
-
-.status-dot,
 .status-indicator {
   display: inline-block;
   width: 7px;
@@ -133,31 +118,6 @@
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--qp-success);
-}
-
-.converter-intro {
-  gap: 24px;
-  padding: 28px 2px 20px;
-}
-
-.converter-intro h2 {
-  margin-top: 9px;
-  font-size: clamp(23px, 3vw, 29px);
-  line-height: 1.15;
-}
-
-.intro-copy {
-  margin: 9px 0 0;
-  color: var(--qp-text-secondary);
-  font-size: 13px;
-}
-
-.intro-note {
-  gap: 8px;
-  align-self: flex-end;
-  color: var(--qp-text-tertiary);
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .workspace-grid {
@@ -1228,7 +1188,6 @@
 
 @media (max-height: 700px) {
   .converter-app { padding-top: 12px; padding-bottom: 12px; }
-  .converter-intro { padding-top: 18px; padding-bottom: 14px; }
   .workspace-grid { gap: 12px; }
   .preview-panel, .settings-panel { padding: 12px; }
   .settings-stack { gap: 10px; margin-top: 12px; }
@@ -1243,11 +1202,7 @@
 
 @media (max-height: 620px) {
   .converter-app { padding: 8px 16px; }
-  .converter-header { min-height: 34px; padding-bottom: 8px; }
-  .brand-mark { width: 28px; height: 28px; }
-  .converter-intro { gap: 10px; padding: 10px 2px; }
-  .converter-intro h2 { margin-top: 4px; font-size: 20px; }
-  .intro-copy, .intro-note { margin-top: 5px; font-size: 11px; }
+  .converter-header { min-height: 30px; padding-bottom: 8px; }
   .drop-zone { min-height: 190px; }
   .preview-content { min-height: 210px; }
   .preview-frame { min-height: 155px; }
@@ -1270,7 +1225,6 @@
 
 
 @media (max-height: 620px) {
-  .converter-intro { display: none; }
   .workspace-grid { gap: 8px; }
   .preview-panel, .settings-panel { padding: 8px; }
   .panel-heading { min-height: 30px; }

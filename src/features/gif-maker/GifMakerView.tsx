@@ -2363,43 +2363,44 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
       <header className="page-header gif-maker-header">
         <div className="page-header-icon"><Film size={19} aria-hidden="true" /></div>
         <div className="page-header-copy">
-          <p className="page-eyebrow">GIF MAKER</p>
+          <p className="page-eyebrow">EMBEDPIX</p>
           <h1>GIF 制作</h1>
-          <div className="gif-source-tabs" role="tablist" aria-label="GIF 来源" aria-orientation="horizontal">
-            <button
-              id="gif-source-tab-image"
-              className={`gif-source-tab${sourceMode === "image" ? " gif-source-tab-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={sourceMode === "image"}
-              aria-controls="gif-source-panel-image"
-              tabIndex={sourceMode === "image" ? 0 : -1}
-              onClick={() => selectSourceMode("image")}
-              onKeyDown={(event) => handleSourceTabKeyDown(event, 0)}
-            >
-              <Images size={14} aria-hidden="true" />图生 GIF
-            </button>
-            <button
-              id="gif-source-tab-video"
-              className={`gif-source-tab${sourceMode === "video" ? " gif-source-tab-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={sourceMode === "video"}
-              aria-controls="gif-source-panel-video"
-              tabIndex={sourceMode === "video" ? 0 : -1}
-              onClick={() => selectSourceMode("video")}
-              onKeyDown={(event) => handleSourceTabKeyDown(event, 1)}
-            >
-              <Video size={14} aria-hidden="true" />视频生 GIF
-            </button>
-          </div>
-          <p>{sourceMode === "image" ? "把图片序列整理成适合界面演示和嵌入式资源预览的轻量动画。" : "截取视频片段并按指定帧率生成轻量 GIF。"}</p>
         </div>
-        <div className="gif-header-note"><span className="status-dot" />支持图片序列与视频 <button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceFileInputRef.current?.click()}>打开工作区</button><input ref={workspaceFileInputRef} className="gif-hidden-input" type="file" accept="application/json,.json" onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} /></div>
+        <div className="gif-header-note">
+          <button className="quiet-button" type="button" onClick={saveWorkspace}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceFileInputRef.current?.click()}>打开工作区</button><input ref={workspaceFileInputRef} className="gif-hidden-input" type="file" accept="application/json,.json" onChange={(event) => { void openWorkspace(event.target.files?.[0]); event.target.value = ""; }} />
+        </div>
       </header>
 
       <fieldset className="page-content gif-maker-content" disabled={!canEditFrames} aria-label="GIF 制作工作区" aria-busy={!canEditFrames}>
         <>
+        <div className="gif-source-tabs" role="tablist" aria-label="GIF 来源" aria-orientation="horizontal">
+          <button
+            id="gif-source-tab-image"
+            className={`gif-source-tab${sourceMode === "image" ? " gif-source-tab-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={sourceMode === "image"}
+            aria-controls="gif-source-panel-image"
+            tabIndex={sourceMode === "image" ? 0 : -1}
+            onClick={() => selectSourceMode("image")}
+            onKeyDown={(event) => handleSourceTabKeyDown(event, 0)}
+          >
+            <Images size={14} aria-hidden="true" />图生 GIF
+          </button>
+          <button
+            id="gif-source-tab-video"
+            className={`gif-source-tab${sourceMode === "video" ? " gif-source-tab-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={sourceMode === "video"}
+            aria-controls="gif-source-panel-video"
+            tabIndex={sourceMode === "video" ? 0 : -1}
+            onClick={() => selectSourceMode("video")}
+            onKeyDown={(event) => handleSourceTabKeyDown(event, 1)}
+          >
+            <Video size={14} aria-hidden="true" />视频生 GIF
+          </button>
+        </div>
         <div className="gif-maker-toolbar">
           <button className="primary-button" type="button" onClick={() => openFileDialog()}>
             <Download size={16} aria-hidden="true" />{sourceMode === "video" ? "导入视频" : "导入图片序列"}
