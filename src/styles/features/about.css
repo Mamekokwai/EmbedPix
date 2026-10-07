@@ -6,7 +6,7 @@
 .about-layout { display: grid; min-width: 0; flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(280px, 300px); grid-template-rows: minmax(0, 1fr); gap: 18px; align-items: stretch; }
 .about-primary-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
 /* 居中：卡片用 align-items 把各内容块对齐到中轴，块自身限宽（min(560px, 100%)），窄窗口下 100% 即铺满、宽窗口下居中收窄。 */
-.about-primary-card { display: flex; min-height: 0; flex-direction: column; align-items: center; gap: 20px; padding: 22px; }
+.about-primary-card { display: flex; min-height: 0; flex-direction: column; align-items: center; gap: 20px; padding: var(--qp-space-page-block); }
 /* 简介块保留「图标在左 + 文案在右」的一行（改成上下叠放会多出约 51px，最小窗口 900×636 下左卡会盖住页脚，见 layoutContract 断言）。 */
 .about-primary-intro { display: flex; width: min(560px, 100%); min-width: 0; align-items: center; justify-content: center; gap: 16px; text-align: center;  flex-direction: column; }
 .about-logo-shell { display: grid; width: 60px; height: 60px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); }

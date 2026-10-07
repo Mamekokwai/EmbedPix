@@ -247,14 +247,14 @@ describe("compact layout viewport contract", () => {
     expect(gifBaseHeaderRule).toBe(".gif-maker-header.page-header { flex: 0 0 auto; }");
     expect(gifCss).not.toContain(".gif-maker-header h1 { font-size: 19px; }");
     expect(compressionCss).not.toMatch(/\.compression-header \{[^}]*padding: 0 2px/);
-    // 页面外层内边距四页同值。
+    // 页面外层内边距四页同值，并统一引用 spacing token。
     for (const [css, selector] of [
       [converterCss, "\\.converter-app"],
       [compressionCss, "\\.compression-app"],
       [gifCss, "\\.gif-maker-view\\.page-view"],
       [appShellCss, "\\.page-view"],
     ] as const) {
-      expect(css).toMatch(new RegExp(`${selector} \\{[^}]*padding: 20px 28px 18px;`));
+      expect(css).toMatch(new RegExp(`${selector} \\{[^}]*padding: var\\(--qp-space-page-block\\) var\\(--qp-space-page-inline\\) 18px;`));
     }
     expect(appShellCss).toMatch(/\.page-content \{[^}]*padding-top: 14px;/);
     // 内层卡片栈 16px（转换 .settings-stack / 压缩 .compression-settings-card / 设置·关于壳层 .page-content）。
@@ -1050,6 +1050,18 @@ describe("compact layout viewport contract", () => {
     expect(aboutView).toContain("GitHub Star");
     expect(aboutView).toContain("问题反馈");
     expect(aboutView).toContain("赞助项目");
+  });
+
+  it("uses shared spacing tokens for page and card insets", () => {
+    expect(tokensCss).toContain("--qp-space-page-block: 20px;");
+    expect(tokensCss).toContain("--qp-space-page-inline: 28px;");
+    expect(tokensCss).toContain("--qp-space-card: 18px;");
+    expect(tokensCss).toContain("--qp-space-compact: 12px;");
+    expect(appShellCss).toContain("padding: var(--qp-space-page-block) var(--qp-space-page-inline) 18px;");
+    expect(converterCss).toContain("padding: var(--qp-space-card);");
+    expect(compressionCss).toContain("padding: var(--qp-space-card);");
+    expect(gifCss).toContain("padding: var(--qp-space-compact);");
+    expect(aboutCss).toContain("padding: var(--qp-space-page-block);");
   });
 
   it("keeps the about page outer container unscrollable so expanding release notes squishes the card instead", () => {

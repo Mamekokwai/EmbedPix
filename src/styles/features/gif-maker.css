@@ -8,7 +8,7 @@
   height: 100%;
   min-height: 0;
   min-width: 0;
-  padding: 20px 28px 18px;
+  padding: var(--qp-space-page-block) var(--qp-space-page-inline) 18px;
   gap: 14px;
   overflow-x: hidden;
   overflow-y: hidden;
@@ -59,7 +59,7 @@
 .gif-maker-content > .gif-workspace-grid { width: 100%; min-height: 0; }
 .gif-source-video .gif-workspace-grid { flex: 1 1 180px; min-height: 180px; }
 .gif-source-video .gif-assets-card, .gif-source-video .gif-main-column, .gif-source-video .gif-preview-card { min-height: 180px; }
-.gif-card { min-width: 0; min-height: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); padding: 10px; background: var(--qp-bg-panel); }
+.gif-card { min-width: 0; min-height: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); padding: var(--qp-space-compact); background: var(--qp-bg-panel); }
 .gif-card-heading { justify-content: space-between; flex: 0 0 auto; }
 .gif-card-heading h2 { font-size: 13px; margin: 0; }
 .gif-card-kicker { margin: 0 0 3px; font-size: 9px; color: var(--qp-text-tertiary); font-family: var(--font-mono); }

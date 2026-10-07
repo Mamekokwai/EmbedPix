@@ -22,6 +22,11 @@
   --qp-radius-chip: 6px;
   /* 竖向堆叠的控件行/设置组统一用这个间距：同一屏里相邻选项间距不一致一眼看得出来。 */
   --qp-stack-gap: 7px;
+  /* 页面、卡片和紧凑模块共用这组间距，避免不同工作台各自漂移。 */
+  --qp-space-page-block: 20px;
+  --qp-space-page-inline: 28px;
+  --qp-space-card: 18px;
+  --qp-space-compact: 12px;
   --qp-motion-fast: 140ms;
   --qp-motion-ease: ease-out;
   --qp-shadow-overlay: 0 10px 24px rgb(17 24 39 / 8%);

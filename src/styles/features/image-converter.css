@@ -11,7 +11,7 @@
   height: 100%;
   overflow-x: hidden;
   margin: 0 auto;
-  padding: 20px 28px 18px;
+  padding: var(--qp-space-page-block) var(--qp-space-page-inline) 18px;
 }
 
 .converter-header {
@@ -139,7 +139,7 @@
 .preview-panel,
 .settings-panel {
   min-height: 0;
-  padding: 18px;
+  padding: var(--qp-space-card);
 }
 
 /* 两栏卡片的设置体各自内滚：卡片撑满工作区行高，内容在卡片内部滚，不再把整块顶出内容区。 */

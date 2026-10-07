@@ -11,7 +11,7 @@
   height: 100%;
   overflow-x: hidden;
   margin: 0 auto;
-  padding: 20px 28px 18px;
+  padding: var(--qp-space-page-block) var(--qp-space-page-inline) 18px;
 }
 
 .compression-header {
@@ -94,7 +94,7 @@
 
 .compression-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(300px, .92fr); gap: 18px; }
 .compression-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
-.compression-input-card, .compression-settings-card { padding: 18px; }
+.compression-input-card, .compression-settings-card { padding: var(--qp-space-card); }
 .compression-card-heading { gap: 12px; min-height: 36px; }
 .compression-card-heading h2 { font-size: 17px; }
 .compression-heading-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
@@ -169,7 +169,7 @@
 .compression-preset-name { min-width: 0; flex: 1 1 150px; min-height: 32px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-primary); font: inherit; font-size: 12px; padding: 0 10px; }
 .compression-preset-name:focus { border-color: var(--qp-accent-default); }
 .compression-preset-message { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
-.compression-preview-card { margin-top: 16px; padding: 18px; }
+.compression-preview-card { margin-top: 16px; padding: var(--qp-space-card); }
 .compression-preview-heading-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .compression-preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .compression-preview-pane { min-width: 0; margin: 0; }
