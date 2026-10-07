@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Film,
   Info,
@@ -6,11 +6,13 @@ import {
   Menu,
   Minimize2,
   Settings2,
+  X,
 } from "lucide-react";
 import AppTitleBar from "./AppTitleBar";
 import ImageConverter from "../features/image-converter/ImageConverter";
 import AboutView from "../features/about/AboutView";
 import SettingsView from "../features/settings/SettingsView";
+import type { SettingsDraftState } from "../features/settings/SettingsView";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import type { UpdateCheckState } from "./hooks/useUpdateCheck";
 import {
@@ -124,12 +126,60 @@ export default function AppShell() {
     setMountedViews((current) => current[view] ? current : { ...current, [view]: true });
   }, [view]);
 
-  const updatePreferences = (next: Partial<AppPreferences>) => {
+  // 稳定引用：设置页靠它上报草稿脏态与保存入口；identity 变化会反复触发上报 effect。
+  const updatePreferences = useCallback((next: Partial<AppPreferences>) => {
     setPreferences((current) => ({ ...current, ...next }));
-  };
+  }, []);
 
   // 稳定引用：设置页的上报 effect 把它列进依赖，identity 一变就会清掉再重报预览。
   const handleThemePreview = useCallback((preview: ThemePreview | null) => setThemePreview(preview), []);
+
+  // 设置页的草稿脏态与保存入口存在 ref 里：切页时读最新值，不因上报触发重渲染。
+  const draftStateRef = useRef<SettingsDraftState>({ dirty: false, save: null });
+  const handleDraftStateChange = useCallback((state: SettingsDraftState) => {
+    draftStateRef.current = state;
+  }, []);
+
+  // 切页前的「保存更改」确认：用 state 控制弹窗显隐，用 ref 承接 Promise 的 resolve。
+  const [unsavedPromptOpen, setUnsavedPromptOpen] = useState(false);
+  const promptResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
+  const unsavedDialogRef = useRef<HTMLDivElement>(null);
+
+  const resolveUnsavedPrompt = useCallback((confirmed: boolean) => {
+    setUnsavedPromptOpen(false);
+    const resolve = promptResolverRef.current;
+    promptResolverRef.current = null;
+    resolve?.(confirmed);
+  }, []);
+
+  const handleNavigate = useCallback(async (next: AppView) => {
+    if (next === view) return;
+    const { dirty, save } = draftStateRef.current;
+    if (!dirty) {
+      setView(next);
+      return;
+    }
+    // 有未保存改动：先问，确认后保存，保存完成才真正切页；取消或保存失败都留在当前页。
+    const confirmed = await new Promise<boolean>((resolve) => {
+      promptResolverRef.current = resolve;
+      setUnsavedPromptOpen(true);
+    });
+    if (!confirmed) return;
+    const didSave = save ? await save() : false;
+    if (!didSave) return;
+    setView(next);
+  }, [view]);
+
+  // 弹窗键盘可达：打开即聚焦对话框，Esc 等同取消。
+  useEffect(() => {
+    if (!unsavedPromptOpen) return;
+    unsavedDialogRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") resolveUnsavedPrompt(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [unsavedPromptOpen, resolveUnsavedPrompt]);
 
   const toggleSidebarMode = () => {
     setSidebarMode((current) => {
@@ -164,7 +214,7 @@ export default function AppShell() {
                   type="button"
                   aria-current={active ? "page" : undefined}
                   aria-label={label}
-                  onClick={() => setView(id)}
+                  onClick={() => { void handleNavigate(id); }}
                   title={`${label} · ${hint}`}
                 >
                   <Icon size={18} strokeWidth={2.1} aria-hidden="true" />
@@ -219,6 +269,7 @@ export default function AppShell() {
               preferences={preferences}
               onChange={updatePreferences}
               onThemePreview={handleThemePreview}
+              onDraftStateChange={handleDraftStateChange}
               onReset={() => {
                 setPreferences(DEFAULT_APP_PREFERENCES);
                 setSidebarMode(DEFAULT_APP_PREFERENCES.sidebarMode);
@@ -238,6 +289,37 @@ export default function AppShell() {
           )}
         </main>
       </div>
+
+      {/* 未保存切页确认：外壳沿用配色弹窗那套（backdrop + header + close），只是更窄、说明 + 两个按钮。 */}
+      {unsavedPromptOpen ? (
+        <div
+          className="settings-scheme-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) resolveUnsavedPrompt(false);
+          }}
+        >
+          <div
+            className="settings-unsaved-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-unsaved-title"
+            ref={unsavedDialogRef}
+            tabIndex={-1}
+          >
+            <header className="settings-scheme-header">
+              <h4 id="settings-unsaved-title">保存更改</h4>
+              <button type="button" className="settings-scheme-close" aria-label="关闭" onClick={() => resolveUnsavedPrompt(false)}>
+                <X size={14} aria-hidden="true" />
+              </button>
+            </header>
+            <p>当前页面有未保存更改，保存后再切换页面。</p>
+            <div className="settings-unsaved-actions">
+              <button className="quiet-button" type="button" onClick={() => resolveUnsavedPrompt(false)}>取消</button>
+              <button className="settings-primary-button" type="button" onClick={() => resolveUnsavedPrompt(true)}>保存</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Check, Info, Laptop, Moon, RefreshCw, RotateCcw, Settings2, Sun, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { getBitDepths, OUTPUT_FORMATS } from "../image-converter/imageConverterLogic";
 import type { BmpBitDepth, ByteOrder, ChannelOrder, RowAlignment, RowOrder } from "../image-converter/types";
 import {
@@ -20,11 +20,18 @@ import { exportPresetBundle, formatPresetTransferError, importPresetBundle, merg
 import { downloadBlob } from "../../shared/downloadBlob";
 import { createImageCustomPreset, loadImageCustomPresets, saveImageCustomPresets, type ImageCustomPreset } from "../image-converter/imagePresets";
 
+// 设置页对外暴露的两件事：草稿是否脏、以及“保存草稿”这个动作。外壳切页前据此拦截。
+export interface SettingsDraftState {
+  dirty: boolean;
+  save: (() => Promise<boolean>) | null;
+}
+
 interface SettingsViewProps {
   preferences: AppPreferences;
   onChange: (next: Partial<AppPreferences>) => void;
   onReset: () => void;
   onThemePreview: (preview: ThemePreview | null) => void;
+  onDraftStateChange: (state: SettingsDraftState) => void;
 }
 
 // 预览只带主题三个字段；外壳据此临时改主题，不落盘。
@@ -177,7 +184,7 @@ function SchemePicker({ variant, label, value, onChange }: {
   );
 }
 
-export default function SettingsView({ preferences, onChange, onReset, onThemePreview }: SettingsViewProps) {
+export default function SettingsView({ preferences, onChange, onReset, onThemePreview, onDraftStateChange }: SettingsViewProps) {
   const [customPresets, setCustomPresets] = useState<ImageCustomPreset[]>(() => loadImageCustomPresets());
   const [customPresetId, setCustomPresetId] = useState("");
   const [customPresetName, setCustomPresetName] = useState("");
@@ -212,8 +219,11 @@ export default function SettingsView({ preferences, onChange, onReset, onThemePr
     onThemePreview,
   ]);
 
-  // 离开设置页等于丢弃草稿，预览也要一起撤，否则主题会停在未保存的样式上。
-  useEffect(() => () => onThemePreview(null), [onThemePreview]);
+  // 离开设置页等于丢弃草稿，预览和上报给外壳的脏状态都要一起撤，否则外壳会拿着过期的「脏」拦下一次切页。
+  useEffect(() => () => {
+    onThemePreview(null);
+    onDraftStateChange({ dirty: false, save: null });
+  }, [onThemePreview, onDraftStateChange]);
 
   const hasUnsavedChanges = !arePreferencesEqual(draft, preferences);
   const activeImagePresetDescription = IMAGE_PRESET_OPTIONS.find((option) => option.value === draft.imagePreset)?.description;
@@ -223,13 +233,28 @@ export default function SettingsView({ preferences, onChange, onReset, onThemePr
     patchDraft({ ...next, imagePreset: "custom" });
   };
 
-  const handleSave = () => {
+  // 「保存草稿」入口：点保存按钮和外壳确认弹窗的「保存」都走它；返回值就是保存是否完成。
+  const performSave = useCallback((): Promise<boolean> => {
     setSaveStatus("saving");
     // 提交后主题由已提交的 preferences 决定，预览这一层立即撤掉，避免多一帧脏样式。
     onThemePreview(null);
     onChange(draft);
-    window.setTimeout(() => setSaveStatus("idle"), SAVE_FEEDBACK_MS);
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        setSaveStatus("idle");
+        resolve(true);
+      }, SAVE_FEEDBACK_MS);
+    });
+  }, [draft, onChange, onThemePreview]);
+
+  const handleSave = () => {
+    void performSave();
   };
+
+  // 把「有没有未保存改动」和「保存入口」上报给外壳，供切页拦截；脏状态一变才重报，避免每帧刷 ref。
+  useEffect(() => {
+    onDraftStateChange({ dirty: hasUnsavedChanges, save: performSave });
+  }, [hasUnsavedChanges, performSave, onDraftStateChange]);
 
   const handleCancel = () => {
     // 取消即完全回退：先撤预览，再丢弃草稿，主题回到已提交值。

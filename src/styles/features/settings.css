@@ -82,3 +82,8 @@
 .settings-toolbar-cancel:focus-visible, .settings-primary-button:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .settings-save-spinner { animation: none; } }
 
+/* 未保存切页确认：外壳沿用配色弹窗那套（backdrop + header + close），这里只补更窄的对话框体与按钮行。 */
+.settings-unsaved-dialog { display: grid; width: min(420px, calc(100vw - 48px)); gap: 14px; border: 1px solid var(--qp-border-strong); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); box-shadow: var(--qp-shadow-overlay); padding: 16px; }
+.settings-unsaved-dialog p { margin: 0; color: var(--qp-text-secondary); font-size: 12px; line-height: 1.65; }
+.settings-unsaved-actions { display: flex; justify-content: flex-end; gap: 8px; }
+

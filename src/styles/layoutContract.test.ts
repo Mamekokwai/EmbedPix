@@ -162,10 +162,12 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toMatch(/\.about-content \{[^}]*overflow-y: auto;/);
     // 设置卡片的列表类内容（配色方案色卡网格）在卡片内部滚，不下放给页面外层。
     expect(settingsCss).toMatch(/\.settings-color-scheme-list \{[^}]*overflow-y: auto;/);
-    // 转换 / 压缩 / GIF 三页同套挤占式布局：外壳只裁剪，滚动下沉到各页内容区。
-    expect(converterCss).toMatch(/\.converter-content \{[^}]*overflow-y: auto;/);
+    // 压缩页在双栏工作区下方还有参数摘要 / 预览 / 统计 / 结果区块，页面级内容区必须保留为唯一滚动层；GIF 页同理。
     expect(compressionCss).toMatch(/\.compression-content \{[^}]*overflow-y: auto;/);
     expect(gifCss).toMatch(/\.gif-maker-content\.page-content \{[^}]*overflow-y: auto;/);
+    // 转换页再下沉一层：内容区只裁剪、不滚，纵向滚动进 02 / OUTPUT 输出设置卡片内部（见下条）。
+    expect(converterCss).toMatch(/\.converter-content \{[^}]*overflow: hidden;/);
+    expect(converterCss).not.toMatch(/\.converter-content \{[^}]*overflow-y: auto;/);
     // 两行页头固定在弹性列首，不随内容滚动。
     expect(converterCss).toMatch(/\.converter-header \{[^}]*flex: 0 0 auto;/);
     expect(compressionCss).toMatch(/\.compression-header \{[^}]*flex: 0 0 auto;/);
@@ -174,6 +176,25 @@ describe("compact layout viewport contract", () => {
     // 必须带 :not([hidden])：否则与 App.css 的 .app-kept-view[hidden] 特异性相同而源序在后，会把 display:none 压掉。
     expect(converterCss).toMatch(/\.app-kept-view:has\(> \.converter-app\):not\(\[hidden\]\) \{[^}]*height: 100%;/);
     expect(compressionCss).toMatch(/\.app-kept-view\.app-kept-compression:not\(\[hidden\]\) \{[^}]*height: 100%;/);
+  });
+  it("sinks the converter scroll into the 02 / OUTPUT settings card", () => {
+    // 转换页是撑满视口的双栏工作区：把页面级内容区的纵向滚动去掉，改由 02 / OUTPUT 输出设置卡片内滚，避免两个嵌套滚动条。
+    expect(converterCss).toMatch(/\.converter-content \{[^}]*overflow: hidden;/);
+    expect(converterCss).not.toMatch(/\.converter-content \{[^}]*overflow-y: auto;/);
+    // 工作区两栏等高；行高锁到可用高度，卡片才有确定高度可内滚。
+    expect(converterCss).toMatch(/\.workspace-grid \{[^}]*grid-template-rows: minmax\(0, 1fr\);/);
+    // 输出设置卡片撑满行高并裁剪溢出；头部与底栏固定不缩。
+    expect(converterCss).toMatch(/\.settings-panel \{[^}]*display: flex;/);
+    expect(converterCss).toMatch(/\.settings-panel \{[^}]*flex-direction: column;/);
+    expect(converterCss).toMatch(/\.settings-panel \{[^}]*min-height: 0;/);
+    expect(converterCss).toMatch(/\.settings-panel \{[^}]*overflow: hidden;/);
+    expect(converterCss).toMatch(/\.settings-panel > \.panel-heading,\n\.settings-panel > \.panel-footer \{[^}]*flex: 0 0 auto;/);
+    // 卡片内部的设置体自带纵向滚动 + 6px 细滚动条（与 .settings-content 同套）。
+    expect(converterCss).toMatch(/\.settings-stack \{[^}]*flex: 1 1 auto;/);
+    expect(converterCss).toMatch(/\.settings-stack \{[^}]*min-height: 0;/);
+    expect(converterCss).toMatch(/\.settings-stack \{[^}]*overflow-y: auto;/);
+    expect(converterCss).toContain(".settings-stack::-webkit-scrollbar { width: 6px; height: 6px; }");
+    expect(converterCss).toContain(".settings-stack::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }");
   });
   it("wraps the compression import support hint inside narrow drop zones", () => {
     expect(compressionView).toContain('className="compression-drop-hint"');
