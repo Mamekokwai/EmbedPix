@@ -1020,10 +1020,13 @@ describe("compact layout viewport contract", () => {
     // 可用高度由左主卡与右栏更新卡共同吸收，项目详情贴底；展开内容由右栏卡片内滚，外层不再冒滚动条。
     expect(aboutCss).toContain("flex: 1 1 auto; min-height: 0; grid-template-columns:");
     expect(aboutCss).toContain("align-items: stretch; }");
-    expect(aboutCss).toContain(".about-project-details-card { margin-top: auto; }");
     expect(aboutCss).toContain("align-content: start;");
-    expect(aboutView.indexOf('className="about-primary-card"')).toBeLessThan(aboutView.indexOf('className="about-secondary-card about-project-details-card"'));
-    expect(aboutView.indexOf('className="about-secondary-card about-project-details-card"')).toBeLessThan(aboutView.indexOf('className="about-secondary-column"'));
+    expect(aboutView).not.toContain("about-project-details-card");
+    expect(aboutView).not.toContain("about-project-title");
+    expect(aboutView).not.toContain("PROJECT DETAILS");
+    expect(aboutView).not.toContain("轻量、本地、面向嵌入式");
+    expect(aboutView).not.toContain("所有图片处理都在本地完成");
+    expect(aboutView).not.toContain("packageJson.version");
     expect(aboutView).toContain('<UpdateView {...updateProps} embedded className="about-update-view" />');
     expect(updateView).toContain("update-release-card");
     // 赞助弹窗照 patina 的两张卡结构
@@ -1090,8 +1093,6 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toMatch(/\.about-feature-block,\n\.about-action-block \{[^}]*width: min\(560px, 100%\);[^}]*text-align: center;/);
     expect(aboutCss).toMatch(/\.about-block-heading \{[^}]*justify-content: center;[^}]*text-align: center;/);
     expect(aboutCss).toMatch(/\.about-pill-row \{[^}]*justify-content: center;/);
-    expect(aboutCss).toMatch(/\.about-secondary-card \{ width: min\(560px, 100%\);[^}]*text-align: center;/);
-    expect(aboutCss).toMatch(/\.about-secondary-heading \{[^}]*justify-content: center;.*text-align: center;/);
     // 列表项只居中文字：不能给 li 加 align-items:center——那会解除 small 的拉伸，nowrap 的说明文字不再被裁切，
     // 会把卡片撑出约 35px 横向溢出（实测 900×636）。缺省 stretch + text-align:center 才能既居中又不溢出。
     expect(aboutCss).toMatch(/\.about-output-list li \{[^}]*text-align: center;/);

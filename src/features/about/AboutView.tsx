@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Github, HeartHandshake, Info, MessageSquare, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MouseEvent } from "react";
-import packageJson from "../../../package.json";
 import UpdateView, { type UpdateViewProps } from "../update/UpdateView";
 
 const PROJECT_REPOSITORY_URL = "https://github.com/Mamekokwai/EmbedPix";
@@ -97,16 +96,6 @@ export default function AboutView(updateProps: UpdateViewProps) {
               </div>
             </div>
 
-            <section className="about-secondary-card about-project-details-card" aria-labelledby="about-project-title">
-              <div className="about-secondary-heading">
-                <div>
-                  <p className="about-section-eyebrow">PROJECT DETAILS</p>
-                  <h2 id="about-project-title">轻量、本地、面向嵌入式</h2>
-                </div>
-                <span className="about-version-badge">v{packageJson.version}</span>
-              </div>
-              <p>所有图片处理都在本地完成，无需账号或云端服务。适合准备屏幕 UI 资源时快速预览、转换和导出。</p>
-            </section>
           </section>
 
           <aside className="about-secondary-column" aria-label="版本信息">

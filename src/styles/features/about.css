@@ -4,8 +4,7 @@
 .about-status-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--qp-success); }
 
 .about-layout { display: grid; min-width: 0; flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(280px, 300px); grid-template-rows: minmax(0, 1fr); gap: 18px; align-items: stretch; }
-.about-primary-card,
-.about-secondary-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
+.about-primary-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
 /* 居中：卡片用 align-items 把各内容块对齐到中轴，块自身限宽（min(560px, 100%)），窄窗口下 100% 即铺满、宽窗口下居中收窄。 */
 .about-primary-card { display: flex; min-height: 0; flex-direction: column; align-items: center; gap: 20px; padding: 22px; }
 /* 简介块保留「图标在左 + 文案在右」的一行（改成上下叠放会多出约 51px，最小窗口 900×636 下左卡会盖住页脚，见 layoutContract 断言）。 */
@@ -38,7 +37,6 @@
 .about-pill-label { white-space: nowrap; }
 
 .about-secondary-column { display: grid; min-width: 0; grid-template-rows: minmax(0, 1fr); gap: 16px; align-content: start; align-items: stretch; }
-.about-project-details-card { margin-top: auto; }
 .about-update-view.update-view-embedded { display: flex; min-width: 0; flex-direction: column; flex: 1 1 auto; min-height: 0; margin-top: 0; }
 /* 更新卡在右栏内滚区里，居中只改对齐、不加高度预算：头部改上下列（按钮跟着中轴），原 > div 的横向弹性基准 150px 在列方向会变成固定高，归还为内容高。 */
 .about-update-view .update-card-header { flex-direction: column; align-items: center; gap: 10px; text-align: center; }
@@ -57,11 +55,6 @@
 .about-update-view .update-release-heading { flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 /* 发布说明正文是多行长文，居中会伤可读性：只把卡片标题与按钮对齐中轴，正文保持左对齐。 */
 .about-update-view .update-release-notes { text-align: left; }
-.about-secondary-card { width: min(560px, 100%); padding: 16px 18px; text-align: center; }
-.about-secondary-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: center; gap: 12px; text-align: center; }
-.about-secondary-heading h2 { margin: 4px 0 0; color: var(--qp-text-primary); font-size: 13px; font-weight: 700; line-height: 1.35; }
-.about-secondary-card > p { margin: 10px 0 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.6; }
-.about-version-badge { flex: 0 0 auto; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-chip); background: var(--qp-bg-elevated); padding: 4px 7px; color: var(--qp-text-secondary); font-family: var(--font-mono); font-size: 10px; }
 .about-footnote { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; text-align: center; }
 
 .about-support-backdrop { position: fixed; z-index: 30; inset: 0; display: grid; overflow-y: auto; align-items: start; justify-items: center; background: color-mix(in srgb, var(--qp-bg-app) 62%, transparent); padding: 20px; }
@@ -108,7 +101,6 @@
   .about-primary-card { gap: 10px; padding: 12px 14px; }
   .about-feature-block, .about-action-block { padding-top: 10px; }
   .about-block-heading { margin-bottom: 7px; }
-  .about-secondary-card { padding-block: 12px; }
   .about-support-backdrop { padding: 12px; }
   .about-support-dialog { width: min(480px, calc(100vw - 24px)); max-height: calc(100vh - 24px); align-self: start; gap: 8px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; padding: 14px; }
   .about-support-card { gap: 8px; padding: 10px; }
