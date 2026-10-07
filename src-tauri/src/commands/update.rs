@@ -774,7 +774,7 @@ pub async fn install_update(
 
         #[cfg(windows)]
         {
-            if let Err(error) = Command::new(package_path).spawn() {
+            if let Err(error) = Command::new(package_path).arg("/S").spawn() {
                 clear_pending_install_marker(&app_for_install);
                 return Err(format!("无法启动更新安装程序：{error}"));
             }
