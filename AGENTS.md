@@ -79,6 +79,13 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 
 ## 陷阱
 
+## 原子化响应式布局规则
+
+- 新增或重构页面时，响应式布局优先以组件父容器为边界，使用 CSS Container Query（`container-type` / `@container`）；不要让按钮、选项网格或卡片直接依赖窗口 viewport 断点。
+- 每个可展开模块必须建立独立的高度链：父级允许分配剩余空间，模块本体使用 `min-height: 0`，内容体通过 `flex` 或内部滚动收缩；多个模块同时展开时不得覆盖相邻模块。
+- 原子组件只负责自身尺寸和内部布局，父容器负责排列与可用空间；横向优先 `min-width: 0`、`width: 100%`，纵向优先 `flex: 1 1 auto`、`min-height: 0`，避免固定尺寸把父卡片撑破。
+- 每次修改原子化布局必须补充容器尺寸契约测试，至少覆盖正常容器、窄容器、矮容器和多个模块同时展开的情况。
+
 - 前端测试只收集 `src/**/*.test.ts`（见 `vitest.config.ts`），写成 `.test.tsx` 不会被运行；测试文件与被测代码同目录，`testTimeout` 为 15 s。
 - `src/styles/layoutContract.test.ts` 是源码契约测试：直接读取 CSS/TSX/`src-tauri/capabilities/default.json` 文本做字符串断言，改类名、文案或属性字符串会连带失败，必须同步更新契约。
 - 依赖中有精确锁定版本（`jpeg-encoder`、`kamadak-exif`、`libwebp-sys2`、`oxipng`），所有 cargo 门禁都带 `--locked`；不要顺手升级这些版本。`libwebp-sys2` 为静态构建，需要本机 C 工具链。
