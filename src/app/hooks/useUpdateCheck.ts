@@ -286,14 +286,26 @@ export function useUpdateCheck() {
       };
       stateRef.current = installing;
       setState(installing);
-      await installUpdate(
-        packageInfo.path,
-        current.info.assetSha256,
-        current.info.latestVersion,
-        current.info.assetSizeBytes,
-        true,
-      );
-      return installing;
+      try {
+        await installUpdate(
+          packageInfo.path,
+          current.info.assetSha256,
+          current.info.latestVersion,
+          current.info.assetSizeBytes,
+          true,
+        );
+        return installing;
+      } catch (error) {
+        const failed: UpdateCheckState = {
+          ...installing,
+          status: "error",
+          error: formatUpdateError(error, "install"),
+          errorStage: "install",
+        };
+        stateRef.current = failed;
+        setState(failed);
+        return failed;
+      }
     } catch (error) {
       const latestState = stateRef.current as UpdateCheckState;
       if (latestState.status === "cancelled") return latestState;
