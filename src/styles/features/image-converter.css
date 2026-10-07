@@ -664,6 +664,12 @@
   overflow: hidden;
 }
 
+.settings-stack > .settings-module {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 .settings-stack > .format-group .format-selector {
   flex: 1 1 auto;
   min-width: 0;
@@ -680,8 +686,12 @@
 
 .settings-stack > .settings-module[open] > .settings-module-body {
   flex: 1 1 auto;
+  width: 100%;
+  box-sizing: border-box;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .settings-module-body {
