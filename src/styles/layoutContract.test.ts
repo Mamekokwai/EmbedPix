@@ -184,9 +184,11 @@ describe("compact layout viewport contract", () => {
     expect(appShellCss).toMatch(/\.page-view \{[^}]*height: 100%;/);
     expect(appShellCss).toMatch(/\.page-view \{[^}]*min-height: 0;/);
     expect(appShellCss).toMatch(/\.page-header \{[^}]*flex: 0 0 auto;/);
-    // 两页的内容区各自纵向滚动，不再把高度交给外层。
+    // 设置页内容区仍纵向滚动；关于页改为最外层不滚，纵向滚动下沉进内嵌更新视图的内容体。
     expect(settingsCss).toMatch(/\.settings-content \{[^}]*overflow-y: auto;/);
-    expect(aboutCss).toMatch(/\.about-content \{[^}]*overflow-y: auto;/);
+    expect(aboutCss).toMatch(/\.about-content \{[^}]*overflow: hidden;/);
+    expect(aboutCss).not.toMatch(/\.about-content \{[^}]*overflow-y: auto;/);
+    expect(updateCss).toMatch(/\.update-content-embedded \{[^}]*overflow-y: auto;/);
     // 设置卡片的列表类内容（配色方案色卡网格）在卡片内部滚，不下放给页面外层。
     expect(settingsCss).toMatch(/\.settings-color-scheme-list \{[^}]*overflow-y: auto;/);
     // 压缩页在双栏工作区下方还有参数摘要 / 预览 / 统计 / 结果区块，页面级内容区必须保留为唯一滚动层；GIF 页同理。
@@ -995,8 +997,8 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toContain(".about-layout { display: grid;");
     expect(aboutCss).toContain("@container about-page (max-width: 760px)");
     expect(aboutCss).toContain(".about-layout { grid-template-columns: minmax(0, 1fr) minmax(280px, 300px); }");
-    // 可用高度由左主卡吸收，项目详情贴底；内容变长时仍由内容区滚动。
-    expect(aboutCss).toContain("flex: 1 0 auto; grid-template-columns:");
+    // 可用高度由左主卡与右栏更新卡共同吸收，项目详情贴底；展开内容由右栏卡片内滚，外层不再冒滚动条。
+    expect(aboutCss).toContain("flex: 1 1 auto; min-height: 0; grid-template-columns:");
     expect(aboutCss).toContain("align-items: stretch; }");
     expect(aboutCss).toContain(".about-project-details-card { margin-top: auto; }");
     expect(aboutCss).toContain("align-content: start;");
@@ -1015,5 +1017,33 @@ describe("compact layout viewport contract", () => {
     expect(aboutCss).toContain(".about-support-qr { display: block; width: 100%; max-width: 100%; aspect-ratio: 1; object-fit: contain; }");
     expect(aboutCss).not.toContain("width: 200px; height: 200px");
     expect(aboutView).not.toContain("wechat-qr.png");
+  });
+
+  it("keeps the about page outer container unscrollable so expanding release notes squishes the card instead", () => {
+    // 主人要求：关于页最外层取消滚动条；展开右栏发布说明时不把容器变成可滚，而是卡片挤占剩余高度，多出的文本在卡片内部滚。
+    // 外层只裁剪：显式 hidden，且不得再退回任何纵向滚动。
+    expect(aboutCss).toMatch(/\.about-content \{[^}]*overflow: hidden;/);
+    expect(aboutCss).not.toMatch(/\.about-content \{[^}]*overflow-y: auto;/);
+    expect(aboutCss).not.toMatch(/\.about-content \{[^}]*overflow: auto;/);
+    // 弹性列靠 flex 收缩把可用高度交给 .about-layout；行高锁到容器高度，展开不会再把行撑高。
+    expect(aboutCss).toMatch(/\.about-layout \{[^}]*flex: 1 1 auto;/);
+    expect(aboutCss).toMatch(/\.about-layout \{[^}]*min-height: 0;/);
+    expect(aboutCss).toMatch(/\.about-layout \{[^}]*grid-template-rows: minmax\(0, 1fr\);/);
+    // 右栏单行 1fr + 拉伸：更新卡撑满行高并可向下收缩。
+    expect(aboutCss).toMatch(/\.about-secondary-column \{[^}]*grid-template-rows: minmax\(0, 1fr\);/);
+    // 内嵌更新视图是撑满的弹性列，内容体才是真正的滚动层。
+    expect(aboutCss).toMatch(/\.about-update-view\.update-view-embedded \{[^}]*display: flex;/);
+    expect(aboutCss).toMatch(/\.about-update-view\.update-view-embedded \{[^}]*min-height: 0;/);
+    expect(updateCss).toMatch(/\.update-content-embedded \{[^}]*flex: 1 1 auto;/);
+    expect(updateCss).toMatch(/\.update-content-embedded \{[^}]*min-height: 0;/);
+    expect(updateCss).toMatch(/\.update-content-embedded \{[^}]*overflow-y: auto;/);
+    expect(updateCss).toMatch(/\.update-content-embedded \{[^}]*overscroll-behavior: contain;/);
+    // 内滚层只用于 embedded 分支：独立更新页只挂 .update-content，不挂这个类，也就不会变成内滚。
+    expect(updateView).toContain('embedded ? " update-content-embedded" : ""');
+    expect((updateView.match(/update-content-embedded/g) ?? []).length).toBe(1);
+    expect(updateCss).not.toMatch(/\.update-content \{[^}]*overflow-y: auto;/);
+    // 高度链靠 flex 收缩，不用固定像素高度去凑。
+    expect(aboutCss).not.toMatch(/\.about-layout \{[^}]*height: \d+px;/);
+    expect(updateCss).not.toMatch(/\.update-content-embedded \{[^}]*height: \d+px;/);
   });
 });

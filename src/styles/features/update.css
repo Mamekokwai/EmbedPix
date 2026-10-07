@@ -1,7 +1,8 @@
 .update-view { min-width: 0; }
 .update-view-embedded { margin-top: 16px; }
 .update-content { width: min(760px, 100%); max-width: 760px; }
-.update-content-embedded { width: 100%; max-width: none; padding-top: 0; }
+/* 仅 embedded 分支挂这个类；内嵌时它是撑满父卡片的滚动层，独立更新页只挂 .update-content，不受此规则影响。 */
+.update-content-embedded { width: 100%; max-width: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-top: 0; }
 .update-card,
 .update-release-card { border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
 .update-card-header,

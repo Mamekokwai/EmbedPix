@@ -1,12 +1,12 @@
-/* 内容区独立滚动，保证页头在窗口滚动时始终可见。 */
-.about-content { container: about-page / inline-size; flex: 1 1 auto; width: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+/* 外层不再滚动：页面根是撑满高度的弹性列，展开右栏发布说明时由卡片挤占剩余高度，多出的文本在更新视图内容体内部滚。 */
+.about-content { container: about-page / inline-size; flex: 1 1 auto; width: 100%; min-height: 0; overflow: hidden; overscroll-behavior: contain; }
 .about-header-context { display: inline-flex; min-width: 0; align-items: center; gap: 6px; margin-left: auto; color: var(--qp-text-secondary); font-size: 11px; white-space: nowrap; }
 .about-status-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--qp-success); }
 
-.about-layout { display: grid; min-width: 0; flex: 1 0 auto; grid-template-columns: minmax(0, 1fr) minmax(280px, 300px); gap: 18px; align-items: stretch; }
+.about-layout { display: grid; min-width: 0; flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(280px, 300px); grid-template-rows: minmax(0, 1fr); gap: 18px; align-items: stretch; }
 .about-primary-card,
 .about-secondary-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
-.about-primary-card { display: flex; min-height: 0; flex-direction: column; justify-content: space-between; gap: 20px; padding: 22px; }
+.about-primary-card { display: flex; min-height: 0; flex-direction: column; gap: 20px; padding: 22px; }
 .about-primary-intro { display: flex; min-width: 0; align-items: center; gap: 16px; }
 .about-logo-shell { display: grid; width: 60px; height: 60px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); }
 .about-logo-shell img { display: block; width: 42px; height: 42px; object-fit: contain; }
@@ -34,8 +34,9 @@
 .about-pill-icon { display: inline-flex; align-items: center; color: var(--qp-accent-default); }
 .about-pill-label { white-space: nowrap; }
 
-.about-secondary-column { display: grid; min-width: 0; grid-template-rows: auto auto; gap: 16px; align-content: safe end; align-items: start; }
-.about-update-view.update-view-embedded { min-width: 0; margin-top: 0; }
+.about-secondary-column { display: grid; min-width: 0; grid-template-rows: minmax(0, 1fr); gap: 16px; align-content: start; align-items: stretch; }
+.about-project-details-card { margin-top: auto; }
+.about-update-view.update-view-embedded { display: flex; min-width: 0; flex-direction: column; flex: 1 1 auto; min-height: 0; margin-top: 0; }
 .about-update-view .update-card-header { flex-wrap: wrap; }
 .about-update-view .update-card-header > div { flex: 1 1 150px; }
 .about-update-view .update-check-button { white-space: normal; }

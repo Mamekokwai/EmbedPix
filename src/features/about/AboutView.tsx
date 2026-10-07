@@ -101,11 +101,8 @@ export default function AboutView(updateProps: UpdateViewProps) {
                 </button>
               </div>
             </div>
-          </section>
 
-          <aside className="about-secondary-column" aria-label="版本与项目详情">
-            <UpdateView {...updateProps} embedded className="about-update-view" />
-            <section className="about-secondary-card" aria-labelledby="about-project-title">
+            <section className="about-secondary-card about-project-details-card" aria-labelledby="about-project-title">
               <div className="about-secondary-heading">
                 <div>
                   <p className="about-section-eyebrow">PROJECT DETAILS</p>
@@ -115,6 +112,10 @@ export default function AboutView(updateProps: UpdateViewProps) {
               </div>
               <p>所有图片处理都在本地完成，无需账号或云端服务。适合准备屏幕 UI 资源时快速预览、转换和导出。</p>
             </section>
+          </section>
+
+          <aside className="about-secondary-column" aria-label="版本信息">
+            <UpdateView {...updateProps} embedded className="about-update-view" />
           </aside>
         </div>
 
