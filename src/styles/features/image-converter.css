@@ -17,22 +17,21 @@
   flex: 0 0 auto;
 }
 
-/* 双栏工作区撑满内容区；内容更高时由这里整体滚动，工作区本身不再被压扁。 */
+/* 页面级内容区只裁剪、不滚动：纵向滚动下沉进 02 / OUTPUT 输出设置卡片，避免内容区与卡片各出一条纵向滚动条。 */
 .converter-content {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--qp-border-strong) transparent;
+  overflow: hidden;
 }
-.converter-content::-webkit-scrollbar { width: 6px; height: 6px; }
-.converter-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 
-.workspace-grid { flex: 1 0 auto; }
+/* 双栏工作区撑满内容区，两栏等高；行高锁到可用高度，卡片才有确定高度可内滚。 */
+.workspace-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
 
 .converter-app,
 .workspace-grid,
@@ -137,6 +136,19 @@
 .settings-panel {
   min-height: 0;
   padding: 18px;
+}
+
+/* 02 / OUTPUT 输出设置卡片是这一列唯一可滚的一层：卡片撑满工作区行高，设置体在卡片内部滚。 */
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.settings-panel > .panel-heading,
+.settings-panel > .panel-footer {
+  flex: 0 0 auto;
 }
 
 .panel-heading {
@@ -546,18 +558,27 @@
   white-space: nowrap;
 }
 
+/* 设置体是卡片内唯一滚动层，与 .settings-content 同套 6px 细滚动条；其它设置卡片各行其是。 */
 .settings-stack {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-top: 20px;
+  min-height: 0;
   min-inline-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--qp-border-strong) transparent;
   border: 0;
   margin-inline: 0;
   margin-block-end: 0;
   padding: 0;
   color: inherit;
 }
+.settings-stack::-webkit-scrollbar { width: 6px; height: 6px; }
+.settings-stack::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 
 .settings-stack:disabled .format-option,
 .settings-stack:disabled .toggle-row,
@@ -1170,6 +1191,7 @@
 }
 
 .converter-footer {
+  flex: 0 0 auto;
   padding: 18px 2px 0;
   color: var(--qp-text-tertiary);
   font-size: 11px;
