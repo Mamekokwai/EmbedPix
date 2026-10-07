@@ -254,7 +254,10 @@ pub(crate) fn has_reparse_point(_metadata: &fs::Metadata) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{normalize_subdirectory, validate_source_directory, validate_source_path};
-    use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn subdirectory(value: &str) -> Option<String> {
         normalize_subdirectory(Some(value)).expect("should normalize")
@@ -293,10 +296,15 @@ mod tests {
     fn accepts_directories_for_directory_import_but_not_file_import() {
         let root = std::env::current_dir().unwrap().join(format!(
             "embedpix-directory-check-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::create_dir(&root).expect("create test directory");
-        assert!(validate_source_directory(&root).is_ok());
+        if let Err(error) = validate_source_directory(&root) {
+            panic!("directory validation failed: {error:?}");
+        }
         assert!(validate_source_path(&root).is_err());
         fs::remove_dir(&root).expect("remove test directory");
     }
