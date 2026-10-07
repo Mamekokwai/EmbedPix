@@ -658,7 +658,7 @@
 
 .settings-stack > .format-group {
   display: flex;
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -671,7 +671,7 @@
 }
 
 .settings-stack > .format-group .format-selector {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
