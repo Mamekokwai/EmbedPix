@@ -47,13 +47,13 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 
 ## UI 布局规则
 
-- **窗口最小尺寸固定对齐 patina：`900 × 636`（x 轴 900、y 轴 636）**，三处必须一致：`src-tauri/tauri.conf.json` 的 `minWidth`/`minHeight`、`src-tauri/src/lib.rs` 运行时 `set_min_size`（无边框窗口下 conf 不保证生效）、`src/styles/layoutContract.test.ts` 视口矩阵首条 `minimum window`（900×636）。改一处必须同步另两处，契约测试会校验。
+- **窗口最小尺寸固定对齐 patina：`900 × 636`（x 轴 900、y 轴 636）**，单一来源是 `src-tauri/src/lib.rs` 创建主窗口的 `WebviewWindowBuilder::min_inner_size(900.0, 636.0)`——无边框窗口只有创建期把最小尺寸交给系统才会进 `WM_GETMINMAXINFO` 的 minTrack，运行时 `set_min_size` 不被采纳（对齐 patina `src-tauri/src/app/main_window.rs`）。`src-tauri/tauri.conf.json` 的 `app.windows` 保持空数组、不得再声明窗口（置空后 Tauri 不再自动建窗，主窗口只由 lib.rs 创建）；`src/styles/layoutContract.test.ts` 视口矩阵首条 `minimum window`（900×636）与契约断言同步校验。改一处必须同步其余处。
 - 后续页面默认参照 `E:\Github\patina` 的模块化、响应式和窗口自适应布局；页面功能结构与布局样式变量保持独立。
 - 应用根层固定占满窗口并隐藏溢出；壳层、标题栏、侧栏和视图容器使用 `min-height: 0`。**滚动不在最外层**：`.app-main` 不滚动，改为页面内容区与卡片内部各自滚动（对齐 patina 的挤占式卡片布局——卡片撑满可用高度，列表在卡片里滚）。
 - 桌面布局保持标题栏、侧栏、主视图区三段骨架；侧栏同时支持图标模式和文字模式，窄窗优先缩窄侧栏并保留全部功能，不因宽度隐藏核心导航。
 - 页面内容使用 `max-width` 和 `min-width: 0` 控制可读宽度；卡片、表单行和按钮允许换行，长文本使用省略或折行，禁止依赖固定宽度造成横向溢出。
 - 响应式只剩窗口最小尺寸这一道：**900×636 以下不可达**，窄于 900 的 `max-width` 断点已整批删除，不得再新增。双栏工作区变窄时不靠断点堆叠，靠 `.page-view` 的内容下限（`min-width: 720px`）兜底，超出就由内容区自己出滚动。
-- 以 `src-tauri/tauri.conf.json` 的 `minWidth`/`minHeight` 为最低验收窗口；当前窗口下页面必须可访问、可滚动、可操作，不得把最小尺寸当作正常桌面尺寸。
+- 以 `900 × 636`（`src-tauri/src/lib.rs` 创建主窗口时的 `min_inner_size`）为最低验收窗口；当前窗口下页面必须可访问、可滚动、可操作，不得把最小尺寸当作正常桌面尺寸。
 - 新增样式优先使用现有设计 token，保持紧凑卡片、清晰层级、克制间距和键盘焦点可见；布局验收需同时覆盖正常窗口、最小窗口和窄高窗口。
 
 ## GUI 规则
@@ -71,6 +71,7 @@ EmbedPix（嵌图匠）是面向嵌入式 UI 开发者的本地图片格式转�
 - **说明文字宽度要一致**：折叠模块体是两列网格，任何带说明段落（`.field-help` / `.format-description`）的设置组都要通栏（`grid-column: 1 / -1`，见 `.settings-module-body > .setting-group:has(...)` 那条），否则解释被挤成半栏、和同页其它说明对不齐。半栏只留给纯输入并排。
 - **说明默认收起，悬停 / 聚焦后才浮出**：设置项的说明统一用 `.field-help-hover`（`src/styles/components/field-hint.css`，`App.css` 已引入），不要常显在面板里——逐条解释会把控件本身盖掉。用法：说明元素加这个类，并把控件与说明一起放进 `.field-hint-anchor`（紧贴控件的 `position: relative` 锚点）——浮层按最近定位祖先算 `top: 100%`，拿整个设置组当锚点会让说明落到组底、看着像跑到窗口底部；`.output-action` 这类只包一行的小容器本身就可以当锚点。说明只做视觉收起（`opacity`），必须留在 DOM 里，`aria-describedby` 不能断；出现延迟写在浮出态那一侧的 `transition` 上，写在隐藏态会被覆盖导致秒出。聚焦一律用 `:has(:focus-visible)`，**不要用 `:focus-within`**——鼠标点一下开关也会给它焦点，那样鼠标移开后浮出框会一直挂着。
 - **同类组件的间距必须相同**：竖向堆叠的控件行与设置组统一用 `--qp-stack-gap`（`src/styles/tokens.css`，当前 7px）——模块体（`.settings-module-body`）、设置组（`.setting-group`）、勾选组（`.output-actions` / `.output-action`），连同它们的短窗媒体查询覆盖，都只用这一个 token；不要再各自写 4px / 5px / 7px / 8px / 10px，同一屏里相邻选项的间距差一点就看得出。卡片之间的间距属于另一层（`.settings-stack`），不在这一条里。
+- **卡片间距与固定页头（悬浮顶栏）以图片转换页为基准，五页一视同仁**：卡片之间的间距统一 `16px`（基准是 `src/styles/features/image-converter.css` 里 `.settings-stack { gap: 16px }`；压缩页 `.compression-settings-card`、设置／关于页壳层的 `.page-content` 都用同一取值），两栏工作区的外层网格间距统一 `18px`（基准同页 `.workspace-grid { gap: 18px }`，对应压缩页 `.compression-grid`、GIF 页 `.gif-workspace-grid`）；固定页头（悬浮顶栏）统一 `min-height: 34px` + `padding-bottom: 10px` + 1px `--qp-border-subtle` 底边线（合计 45px），页面外层内边距统一 `20px 28px 18px`、页头到内容之间留 `14px`。转换／压缩页各自在 `.converter-header` / `.compression-header` 里声明，GIF／设置／关于共用壳层 `.page-header`（`app-shell.css`）；设置页顶栏右侧的保存／取消与状态提示、关于页的单列内容属于页面结构，保持不变、只统一高度与内边距。**改基准必须五页同步改，并同步 `src/styles/layoutContract.test.ts` 的契约断言**——各页曾各写一套（页头 44/46px、卡片间距 15/16/18px 混用），同一屏里差一点就看得出。
 - **阻断性错误要有始终可见的出口**：字段被折叠时，按钮禁用必须配一个折叠组之外的说明块（如 `compression-parameter-issues`），不能让用户对着灰按钮猜原因。
 - **滚动条可见但细**：主滚动层用 6px 细滚动条，不要再写 `scrollbar-width: none`（0.2.2 的隐藏滚动条契约已作废）。
 - **控件用真语义**：导入类操作用真 `<button>` + ref 触发隐藏 `<input type="file">`（不要 `label` 包 input），单选组用真 `<input type="radio">`，列表用 `list` / `listitem`，忙碌时用 `<fieldset disabled>` 或 `aria-busy` 禁用整组。

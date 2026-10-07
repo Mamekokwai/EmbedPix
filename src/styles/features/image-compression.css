@@ -55,7 +55,7 @@
 .compression-header {
   min-height: 34px;
   gap: 11px;
-  padding: 0 2px 10px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--qp-border-subtle);
 }
 
@@ -74,7 +74,7 @@
   letter-spacing: -.02em;
 }
 
-.compression-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(300px, .92fr); gap: 16px; margin-top: 18px; }
+.compression-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(300px, .92fr); gap: 18px; margin-top: 14px; }
 .compression-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
 .compression-input-card, .compression-settings-card { padding: 18px; }
 .compression-card-heading { gap: 12px; min-height: 36px; }
@@ -111,7 +111,7 @@
 .compression-item-copy span { color: var(--qp-text-tertiary); font-size: 11px; }
 .compression-icon-button { width: 28px; height: 28px; flex: 0 0 auto; background: transparent; color: var(--qp-text-tertiary); }
 .compression-empty { margin: 14px 0 0; color: var(--qp-text-tertiary); font-size: 12px; line-height: 1.6; }
-.compression-settings-card { display: grid; align-content: start; gap: 15px; }
+.compression-settings-card { display: grid; align-content: start; gap: 16px; }
 /* 与转换页 .settings-module 同一套外观：独立边框卡片 + 折叠标题栏，收起时也看得出是一块。 */
 .compression-advanced-settings {
   min-width: 0;
@@ -151,7 +151,7 @@
 .compression-preset-name { min-width: 0; flex: 1 1 150px; min-height: 32px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-primary); font: inherit; font-size: 12px; padding: 0 10px; }
 .compression-preset-name:focus { border-color: var(--qp-accent-default); }
 .compression-preset-message { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
-.compression-preview-card { margin-top: 14px; padding: 18px; }
+.compression-preview-card { margin-top: 16px; padding: 18px; }
 .compression-preview-heading-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .compression-preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .compression-preview-pane { min-width: 0; margin: 0; }
@@ -188,15 +188,15 @@
 .compression-check small { color: var(--qp-text-tertiary); font-size: 11px; }
 .compression-option-group { display: grid; gap: 8px; padding: 10px 0 2px; border-top: 1px solid color-mix(in srgb, var(--qp-border-subtle) 60%, transparent); }
 .compression-option-group-title { color: var(--qp-text-secondary); font-size: 12px; font-weight: 600; }
-.compression-summary-card { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 14px; padding: 14px 18px; }
-.compression-result-card { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 10px; padding: 14px 18px; }
+.compression-summary-card { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 16px; padding: 14px 18px; }
+.compression-result-card { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 16px; padding: 14px 18px; }
 .compression-summary-stat { display: grid; gap: 5px; min-width: 100px; }
 .compression-summary-stat span, .compression-estimate-note { min-width: 0; color: var(--qp-text-tertiary); font-size: 11px; overflow-wrap: anywhere; }
 .compression-summary-stat strong { color: var(--qp-text-primary); font-family: var(--font-mono); font-size: 16px; }
 .compression-summary-stat .compression-saving { color: var(--qp-success); }
 .compression-summary-stat .compression-failure { color: var(--qp-danger, #df6a6a); }
 .compression-estimate-note { margin-left: auto; }
-.compression-parameter-summary { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 7px 12px; margin-top: 10px; padding: 9px 12px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: color-mix(in srgb, var(--qp-bg-panel) 72%, var(--qp-bg-elevated)); color: var(--qp-text-tertiary); font-size: 11px; }
+.compression-parameter-summary { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 7px 12px; margin-top: 16px; padding: 9px 12px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: color-mix(in srgb, var(--qp-bg-panel) 72%, var(--qp-bg-elevated)); color: var(--qp-text-tertiary); font-size: 11px; }
 .compression-parameter-summary > strong { flex: 0 0 auto; color: var(--qp-text-secondary); font-size: 11px; }
 .compression-parameter-summary > div { display: flex; min-width: 0; flex: 1 1 280px; flex-wrap: wrap; gap: 5px; }
 .compression-copy-summary { flex: 0 0 auto; }

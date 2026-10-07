@@ -772,7 +772,7 @@ export default function ImageConverter({
       setStatus({ kind: skippedCount > 0 ? "error" : "ready", text: summary });
       if (skippedCount > 0) setError(`${summary}。${result.skipped.length ? result.skipped.join("；") : "已跳过列表中已有的重复图片。"}`);
     } catch (importError) {
-      setError(formatImageConverterError(importError));
+      setError(`图片文件夹导入失败：${formatImageConverterError(importError)}`);
       setStatus({ kind: "error", text: "图片文件夹导入失败" });
     }
   };
@@ -1931,7 +1931,6 @@ export default function ImageConverter({
                   <button className="quiet-button export-pause-button" type="button" onClick={toggleExportPause}>{exportPaused ? "继续导出" : "暂停队列"}</button>
                 </div>
               ) : null}
-              {errorMessage ? <p className="error-message" id="dimension-error" role="alert">{errorMessage}</p> : null}
               {exportFailures.length > 0 ? (
                 <div className="export-failure-panel">
                   <div className="export-failure-actions">
@@ -1997,6 +1996,7 @@ export default function ImageConverter({
       </section>
 
       <footer className="converter-footer">
+        {errorMessage ? <p className="error-message converter-footer-error" id="dimension-error" role="alert">{errorMessage}</p> : null}
         <span>EmbedPix · 嵌图匠</span>
       </footer>
       </div>

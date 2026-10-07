@@ -37,7 +37,7 @@ const agentsMd = readSource(new URL("../../AGENTS.md", import.meta.url));
 const formatMetadata = readSource(new URL("../shared/formatMetadata.ts", import.meta.url));
 const aboutCss = readSource(new URL("./features/about.css", import.meta.url));
 
-// 窗口最小宽度对齐 patina（900，见 tauri.conf.json 的 minWidth）：窄于 900 的断点已整批删除，矩阵不再覆盖更窄的视口。
+// 窗口最小宽度对齐 patina（900，按 src-tauri/src/lib.rs 创建主窗口时的 min_inner_size）：窄于 900 的断点已整批删除，矩阵不再覆盖更窄的视口。
 const VIEWPORT_MATRIX = [
   { name: "minimum window", width: 900, height: 636 },
   { name: "narrow tall", width: 900, height: 1100 },
@@ -216,6 +216,67 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".settings-stack::-webkit-scrollbar { width: 6px; height: 6px; }");
     expect(converterCss).toContain(".settings-stack::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }");
   });
+
+  it("keeps every page header and card stack on the image-converter baseline", () => {
+    // 基准全部取自图片转换页：固定页头 = min-height 34px + padding-bottom 10px + 1px token 底边线（合计 45px）；
+    // 卡片间距 = 内层卡片栈 16px、外层两栏工作区 18px；页面外层内边距 = 20px 28px 18px、页头到内容 14px。
+    // 转换/压缩页各在自己的页头类里声明，GIF/设置/关于共用壳层 .page-header；改基准必须五页同步。
+    const assertHeaderBox = (selector: string, css: string) => {
+      expect(css).toMatch(new RegExp(`${selector} \\{[^}]*min-height: 34px;`));
+      expect(css).toMatch(new RegExp(`${selector} \\{[^}]*padding-bottom: 10px;`));
+      expect(css).toMatch(new RegExp(`${selector} \\{[^}]*border-bottom: 1px solid var\\(--qp-border-subtle\\);`));
+    };
+    assertHeaderBox("\\.converter-header", converterCss);
+    assertHeaderBox("\\.compression-header", compressionCss);
+    assertHeaderBox("\\.page-header", appShellCss);
+    // 三页的页头覆盖只许保留固定列首，不许再写回自己的高度 / 底边线 / 标题字号。
+    // GIF 页头基规则只留固定列首：高度 / 内边距 / 底边线全部走壳层 .page-header，多写一条即在此失败。
+    const gifBaseHeaderRule = gifCss.match(/\.gif-maker-header\.page-header \{[^}]*\}/)?.[0] ?? "";
+    expect(gifBaseHeaderRule).toBe(".gif-maker-header.page-header { flex: 0 0 auto; }");
+    expect(gifCss).not.toContain(".gif-maker-header h1 { font-size: 19px; }");
+    expect(compressionCss).not.toMatch(/\.compression-header \{[^}]*padding: 0 2px/);
+    // 页面外层内边距四页同值。
+    for (const [css, selector] of [
+      [converterCss, "\\.converter-app"],
+      [compressionCss, "\\.compression-app"],
+      [gifCss, "\\.gif-maker-view\\.page-view"],
+      [appShellCss, "\\.page-view"],
+    ] as const) {
+      expect(css).toMatch(new RegExp(`${selector} \\{[^}]*padding: 20px 28px 18px;`));
+    }
+    expect(appShellCss).toMatch(/\.page-content \{[^}]*padding-top: 14px;/);
+    // 内层卡片栈 16px（转换 .settings-stack / 压缩 .compression-settings-card / 设置·关于壳层 .page-content）。
+    expect(converterCss).toMatch(/\.settings-stack \{[^}]*gap: 16px;/);
+    expect(compressionCss).toMatch(/\.compression-settings-card \{[^}]*gap: 16px;/);
+    expect(appShellCss).toMatch(/\.page-content \{[^}]*gap: 16px;/);
+    // 外层两栏工作区 18px（转换 .workspace-grid / 压缩 .compression-grid / GIF .gif-workspace-grid）。
+    expect(converterCss).toMatch(/\.workspace-grid \{[^}]*gap: 18px;/);
+    expect(compressionCss).toMatch(/\.compression-grid \{[^}]*gap: 18px;/);
+    expect(gifCss).toMatch(/\.gif-workspace-grid \{[^}]*gap: 18px;/);
+    // 不许再退回各写一套的卡片间距。
+    expect(compressionCss).not.toMatch(/\.compression-settings-card \{[^}]*gap: 15px;/);
+    expect(gifCss).not.toMatch(/\.gif-workspace-grid \{[^}]*gap: 10px;/);
+  });
+
+  it("sinks the converter's left column scroll into the preview card so its toolbar stays clickable", () => {
+    // 左栏预览卡也撑满工作区行高、卡片内滚：没有内滚层时预览列（图 + 文件列表 + 那排按钮）溢出会被后绘制的
+    // .converter-footer 盖住，「继续添加 / 导入文件夹 / 清空列表」在默认 1100×760 下点不到。
+    expect(converterCss).toMatch(/\.preview-panel \{[^}]*display: flex;/);
+    expect(converterCss).toMatch(/\.preview-panel \{[^}]*flex-direction: column;/);
+    expect(converterCss).toMatch(/\.preview-panel \{[^}]*min-height: 0;/);
+    expect(converterCss).toMatch(/\.preview-panel \{[^}]*overflow: hidden;/);
+    expect(converterCss).toMatch(/\.preview-panel > \.panel-heading \{[^}]*flex: 0 0 auto;/);
+    // 内滚层是 .preview-content：min-height 归零 + 纵向滚动 + 6px 细滚动条（与 .settings-stack 一致）。
+    expect(converterCss).toMatch(/\.preview-content \{[^}]*min-height: 0;/);
+    expect(converterCss).toMatch(/\.preview-content \{[^}]*flex: 1 1 auto;/);
+    expect(converterCss).toMatch(/\.preview-content \{[^}]*overflow-y: auto;/);
+    expect(converterCss).toContain(".preview-content::-webkit-scrollbar { width: 6px; height: 6px; }");
+    expect(converterCss).toContain(".preview-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }");
+    // 顶住内滚的固定下限必须消失，否则整列又被顶出卡片、按钮又被裁掉。
+    expect(converterCss).not.toContain(".preview-content { min-height: 356px;");
+    expect(converterCss).not.toMatch(/\.preview-frame \{[^}]*min-height: \d+px;/);
+  });
+
   it("keeps the last converter module's hover hints from padding out the card's scroll bottom", () => {
     // 悬停说明是 opacity:0 的绝对定位浮层，收起态也参与布局：Chromium 会把它算进 .settings-stack 的滚动溢出区。
     // 最后一块折叠模块的说明若向下浮出，会在滚动内容底部垫出一整段看不见的空白（卡片滑到底看到的就是它）。
@@ -305,7 +366,8 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toContain(".gif-canvas-stage { min-height: 132px;");
     expect(converterCss).toContain(".converter-app {\n  width: min(1180px, 100%);");
     expect(converterCss).toContain("overflow-x: hidden;");
-    expect(converterCss).toContain(".preview-content { min-height: 210px; }");
+    // 左栏预览卡改成卡片内滚后不再有固定高度下限；改锁内滚层的盒模型（同一组取值四页共用）。
+    expect(converterCss).toContain(".preview-content {\n  display: flex;\n  min-height: 0;");
     expect(compressionCss).toContain(".compression-app {\n  width: min(1180px, 100%);");
     expect(compressionCss).toContain("overflow-x: hidden;");
     // 窗口最小宽度 900（对齐 patina）：窄于 900 的 max-width 断点已整批删除，样式里不该再出现
@@ -827,11 +889,19 @@ describe("compact layout viewport contract", () => {
     expect(converterView).not.toContain("裁剪按原图像素坐标于导出时执行");
   });
 
-  // 窗口最小尺寸对齐 patina（src-tauri/src/app/main_window.rs 的 MAIN_WINDOW_MIN_WIDTH/HEIGHT）。
-  it("pins the window minimum size to patina's 900 × 636 everywhere", () => {
-    expect(tauriConfig).toContain('"minWidth": 900');
-    expect(tauriConfig).toContain('"minHeight": 636');
-    expect(libRs).toContain("tauri::LogicalSize::new(900.0, 636.0)");
+  // 窗口最小尺寸对齐 patina：主窗口改由 Rust 在创建期创建（只有创建期的 min_inner_size 才会进
+  // WM_GETMINMAXINFO 的 minTrack），因此尺寸的唯一来源是 src-tauri/src/lib.rs 的构建链，
+  // tauri.conf 的 app.windows 必须保持空数组（置空后 Tauri 不再自动建窗，改由 lib.rs 建）。
+  it("pins the window minimum size to patina's 900 × 636 on the Rust-created main window", () => {
+    expect(tauriConfig).toMatch(/"windows":\s*\[\s*\]/);
+    expect(libRs).toContain(
+      'WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))',
+    );
+    expect(libRs).toContain(".title(\"EmbedPix\")");
+    expect(libRs).toContain(".inner_size(1100.0, 760.0)");
+    expect(libRs).toContain(".min_inner_size(900.0, 636.0)");
+    expect(libRs).toContain(".resizable(true)");
+    expect(libRs).toContain(".decorations(false)");
     expect(agentsMd).toContain("900 × 636");
   });
 

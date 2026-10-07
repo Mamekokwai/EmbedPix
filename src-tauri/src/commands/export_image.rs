@@ -499,7 +499,7 @@ pub async fn pick_image_directory() -> Result<Option<ImageDirectoryImportResult>
 }
 
 fn scan_image_directory(root: PathBuf) -> Result<ImageDirectoryImportResult, String> {
-    path_security::validate_source_path(&root)
+    path_security::validate_source_directory(&root)
         .map_err(|error| format_image_path_error(error, "selected image directory"))?;
     let metadata =
         fs::symlink_metadata(&root).map_err(|error| format!("无法检查图片目录：{error}"))?;

@@ -17,7 +17,7 @@
   flex: 0 0 auto;
 }
 
-/* 页面级内容区只裁剪、不滚动：纵向滚动下沉进 02 / OUTPUT 输出设置卡片，避免内容区与卡片各出一条纵向滚动条。 */
+/* 页面级内容区只裁剪、不滚动：纵向滚动分别下沉进左栏预览卡片与 02 / OUTPUT 输出设置卡片，避免内容区与卡片各出一条纵向滚动条。 */
 .converter-content {
   display: flex;
   flex: 1 1 auto;
@@ -140,7 +140,7 @@
   padding: 18px;
 }
 
-/* 02 / OUTPUT 输出设置卡片是这一列唯一可滚的一层：卡片撑满工作区行高，设置体在卡片内部滚。 */
+/* 两栏卡片的设置体各自内滚：卡片撑满工作区行高，内容在卡片内部滚，不再把整块顶出内容区。 */
 .settings-panel {
   display: flex;
   flex-direction: column;
@@ -150,6 +150,18 @@
 
 .settings-panel > .panel-heading,
 .settings-panel > .panel-footer {
+  flex: 0 0 auto;
+}
+
+/* 左栏预览卡同样撑满行高、卡片内滚：预览列（图 + 文件列表 + 继续添加那排按钮）总高会超过可用高度，
+   没有内滚层时溢出部分被后绘制的 .converter-footer 盖住，那排按钮点不到（默认 1100×760 正好落最差档）。 */
+.preview-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.preview-panel > .panel-heading {
   flex: 0 0 auto;
 }
 
@@ -253,18 +265,26 @@
   font-size: 11px;
 }
 
+/* 预览列的唯一内滚层：固定下限会把整块顶出卡片，min-height 归零后才能收窄并出 6px 细滚动条。 */
 .preview-content {
   display: flex;
-  min-height: 356px;
+  min-height: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   justify-content: space-between;
   gap: 12px;
   margin-top: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--qp-border-strong) transparent;
 }
+.preview-content::-webkit-scrollbar { width: 6px; height: 6px; }
+.preview-content::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--qp-border-strong); }
 
 .preview-frame {
   display: grid;
-  min-height: 290px;
+  min-height: 0;
   flex: 1;
   place-items: center;
   overflow: hidden;
@@ -1213,6 +1233,12 @@
   font-size: 11px;
 }
 
+.converter-footer-error {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: 12px;
+}
+
 .footer-contract code {
   border: 1px solid var(--qp-border-subtle);
   border-radius: var(--qp-radius-chip);
@@ -1233,8 +1259,6 @@
   .settings-module-body { gap: var(--qp-stack-gap); padding: 8px; }
   .setting-group { gap: var(--qp-stack-gap); padding: 9px; }
   .drop-zone { min-height: 250px; margin-top: 12px; }
-  .preview-content { min-height: 260px; }
-  .preview-frame { min-height: 210px; }
   .panel-footer { margin-top: 12px; padding-top: 10px; }
 }
 
@@ -1242,8 +1266,6 @@
   .converter-app { padding: 8px 16px; }
   .converter-header { min-height: 30px; padding-bottom: 8px; }
   .drop-zone { min-height: 190px; }
-  .preview-content { min-height: 210px; }
-  .preview-frame { min-height: 155px; }
   .preview-frame img { max-height: 155px; }
   .panel-heading h3 { font-size: 15px; }
   .panel-footer { gap: 8px; margin-top: 8px; padding-top: 8px; }

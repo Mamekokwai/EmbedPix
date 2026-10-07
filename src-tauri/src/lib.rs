@@ -1,6 +1,6 @@
 pub mod commands;
 
-use tauri::Manager;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Resized 的代数：合并拖拽途中的连续 resize，只在尺寸停下来之后纠正最小尺寸。
 static RESIZE_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -52,13 +52,16 @@ pub fn run() {
             commands::update::install_update
         ])
         .setup(|app| {
-            // 无边框窗口下 tauri.conf 的 minWidth/minHeight 不一定生效（WM_GETMINMAXINFO 是靠系统边框走的），
-            // 运行时再钉一次，保证窗口缩不到两栏工作区会压叠的宽度。
-            if let Some(window) = app.get_webview_window("main") {
-                if let Err(err) = window.set_min_size(Some(tauri::LogicalSize::new(900.0, 636.0))) {
-                    eprintln!("pin main window min size failed: {err}");
-                }
-            }
+            // 无边框窗口的最小尺寸必须在创建期交给系统（对齐 patina 的主窗口）：build 前调用 min_inner_size，
+            // 拖拽途中系统才会拿 WM_GETMINMAXINFO 的 minTrack 当场拦下，而不是等松手后由事件回调顶回去。
+            // tauri.conf 的 app.windows 已置空，Tauri 不再自动建窗，主窗口只能在这里创建。
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                .title("EmbedPix")
+                .inner_size(1100.0, 760.0)
+                .min_inner_size(900.0, 636.0)
+                .resizable(true)
+                .decorations(false)
+                .build()?;
             commands::update::mark_app_started(
                 app.handle(),
                 app.state::<commands::update::UpdateHealthState>(),
@@ -77,8 +80,8 @@ pub fn run() {
                 if size.width >= min_width && size.height >= min_height {
                     return;
                 }
-                // 无边框窗口下 set_min_size 不被系统采纳（实测 WM_GETMINMAXINFO 回报 minTrack=0x0），
-                // 只能自己顶回去；等尺寸停下 180ms 再动手，拖拽途中不插手。
+                // 兼底，不是主手段：创建期的 min_inner_size 被系统采纳后这里永不触发（系统当场就拦住了）。
+                // 只有当系统没采纳时才轮到它，而它只能在尺寸停下 180ms 后顶回去，代价就是先能拉小一段再弹回。
                 let window = window.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(180));
