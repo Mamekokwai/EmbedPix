@@ -102,6 +102,8 @@ describe("compact layout viewport contract", () => {
   });
   it("spans groups whose explanations or paired dimension inputs need full width", () => {
     expect(converterCss).toContain(".settings-module-body > .setting-group:has(> .field-help, > .format-description, > .dimensions-row) { grid-column: 1 / -1; }");
+    expect(converterView).toContain('<div className="setting-group bit-depth-group">');
+    expect(converterCss).toContain(".settings-module-body > .bit-depth-group { grid-column: 1 / -1; }");
   });
   it("centers the collapsible module header text and marker on one flex row", () => {
     // 标题与 +/− 标记都是 summary 的 flex 子项，靠 align-items:center 居中；标记 line-height:1 收敛到字形盒。

@@ -1650,7 +1650,7 @@ export default function ImageConverter({
                 <button className="quiet-button" type="button" onClick={handleResetImageTransform} disabled={!hasImageTransform}>重置编辑</button>
               </div>
             </div>
-            <div className="setting-group">
+            <div className="setting-group bit-depth-group">
               <div className="label-row">
                 <span className="field-label">位深</span>
                 {outputFormat === "jpg" ? <span className="field-note">JPG 固定 24 位</span> : isRawPixelFormat(outputFormat) ? <span className="field-note">RGB565 固定 16 位</span> : null}
