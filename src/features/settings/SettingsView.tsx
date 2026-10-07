@@ -327,7 +327,6 @@ export default function SettingsView({ preferences, onChange, onReset, onThemePr
         <div>
           <p className="page-eyebrow">PREFERENCES</p>
           <h1>设置</h1>
-          <p>调整工作区外观与常用导出参数。</p>
         </div>
         <div className="settings-toolbar-actions">
           <span
@@ -356,7 +355,6 @@ export default function SettingsView({ preferences, onChange, onReset, onThemePr
           <div className="settings-card-header">
             <div>
               <h2 id="appearance-title">外观</h2>
-              <p>主题设置只影响本机界面，不会修改图片内容。</p>
             </div>
           </div>
           <SettingsRow title="界面主题" hint="选择 EmbedPix 的显示方式。">
@@ -396,7 +394,6 @@ export default function SettingsView({ preferences, onChange, onReset, onThemePr
           <div className="settings-card-header">
             <div>
               <h2 id="export-defaults-title">导出默认值</h2>
-              <p>新打开转换页时使用这些参数，单次调整不会覆盖默认值。</p>
             </div>
           </div>
           <SettingsRow title="默认输出格式" hint="适合嵌入式资源的常用格式也可以直接设为默认。">
@@ -440,7 +437,6 @@ export default function SettingsView({ preferences, onChange, onReset, onThemePr
           <div className="settings-card-header">
             <div>
               <h2 id="converter-preset-title">图片转换预设</h2>
-              <p>预设会覆盖图片转换的默认格式、质量、位深、RAW 参数、透明色和比例设置；单独修改任一项后会变为自定义。</p>
             </div>
           </div>
           <SettingsRow className="settings-preset-row" title={`当前预设：${presetLabel(draft.imagePreset)}`} hint={activeImagePresetDescription ?? ""}>
@@ -471,7 +467,6 @@ export default function SettingsView({ preferences, onChange, onReset, onThemePr
           <div className="settings-card-header">
             <div>
               <h2 id="raw-defaults-title">RAW 与像素默认参数</h2>
-              <p>用于 BMP、RGB565 BIN 和 C 数组等嵌入式资源输出；切换预设会覆盖这些值。</p>
             </div>
           </div>
           <SettingsRow title="默认位深" hint="具体格式可能固定或限制可用位深。">
@@ -511,7 +506,6 @@ export default function SettingsView({ preferences, onChange, onReset, onThemePr
           <button className="quiet-button" type="button" onClick={onReset}>
             <RotateCcw size={15} aria-hidden="true" />恢复默认设置
           </button>
-          <span>设置自动保存在本机</span>
         </div>
       </div>
     </div>

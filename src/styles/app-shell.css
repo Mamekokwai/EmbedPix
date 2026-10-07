@@ -191,6 +191,8 @@
   transition: background-color var(--qp-motion-fast) var(--qp-motion-ease), border-color var(--qp-motion-fast) var(--qp-motion-ease), color var(--qp-motion-fast) var(--qp-motion-ease);
 }
 
+.sidebar-nav-item > svg { width: 21px; height: 21px; }
+
 .sidebar-nav-item:hover:not(.sidebar-nav-item-active) {
   border-color: var(--qp-border-subtle);
   background: color-mix(in srgb, var(--qp-bg-elevated) 82%, white);
@@ -305,11 +307,15 @@
   scroll-margin-block: 18px;
 }
 
+.app-main :where(.quiet-button, .primary-button, .export-button, .compression-secondary-button, .compression-primary-button, .compression-retry-button, .compression-clear-button) > svg { width: 16px; height: 16px; }
+.app-main :where(.icon-button, .compression-icon-button) > svg { width: 16px; height: 16px; }
+
 /* min-width 是内容区下限的兼底：值取自最宽的两栏工作区（转换页右栏 360px + 左栏可用宽 + 间距）；窗口最小尺寸 900 生效时轮不到它，缩到更窄只会被 .app-main 裁掉。 */
 /* 页面根是撑满主区高度的弹性列：头部固定在列首，内容区（.page-content）自带滚动，滚动不再挂在外壳上。 */
 .page-view { display: flex; flex-direction: column; width: min(1820px, 100%); min-width: 720px; height: 100%; min-height: 0; margin: 0 auto; padding: 34px 40px 42px; }
 .page-header { display: flex; flex: 0 0 auto; align-items: center; gap: 14px; border-bottom: 1px solid var(--qp-border-subtle); padding-bottom: 24px; }
 .page-header-icon { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-accent-default); }
+.page-header-icon > svg { width: 22px; height: 22px; }
 .page-eyebrow { margin: 0 0 5px; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
 .page-header h1 { margin: 0; color: var(--qp-text-primary); font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
 .page-header p:last-child { margin: 6px 0 0; color: var(--qp-text-secondary); font-size: 12px; }
@@ -319,9 +325,16 @@
   .page-view { padding-top: 18px; padding-bottom: 20px; }
   .page-header { gap: 10px; padding-bottom: 14px; }
   .page-header-icon { width: 34px; height: 34px; }
+  .page-header-icon > svg { width: 20px; height: 20px; }
   .page-header h1 { font-size: 19px; }
   .page-header p:last-child { margin-top: 4px; font-size: 11px; }
   .page-content { gap: 8px; padding-top: 14px; }
+}
+
+@media (max-height: 620px) {
+  .sidebar-nav-item > svg { width: 19px; height: 19px; }
+  .app-main :where(.quiet-button, .primary-button, .export-button, .compression-secondary-button, .compression-primary-button, .compression-retry-button, .compression-clear-button) > svg,
+  .app-main :where(.icon-button, .compression-icon-button) > svg { width: 15px; height: 15px; }
 }
 
 
