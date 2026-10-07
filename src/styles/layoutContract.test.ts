@@ -793,7 +793,7 @@ describe("compact layout viewport contract", () => {
     expect(settingsView).toContain("colorSchemeDark: scheme");
     expect(settingsView).toContain("配色方案");
     expect(settingsView).not.toContain('id="color-scheme-light"');
-    expect(appShell).toContain('applyThemeColors(activeTheme, activeTheme === "dark" ? preferences.colorSchemeDark : preferences.colorSchemeLight);');
+    expect(appShell).toContain('applyThemeColors(activeTheme, activeTheme === "dark" ? previewColorSchemeDark : previewColorSchemeLight);');
     expect(tokensCss).toContain("--qp-accent-contrast");
   });
 

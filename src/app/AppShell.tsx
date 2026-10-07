@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Film,
   Info,
@@ -25,6 +25,9 @@ import {
 import { applyThemeColors } from "../shared/theme/deriveTheme";
 
 type AppView = "converter" | "compression" | "gif" | "settings" | "about";
+
+// 预览态只装主题三个字段：设置页草稿里的主题改动先在这里生效；落盘仍只认已提交的 preferences。
+type ThemePreview = Pick<AppPreferences, "themeMode" | "colorSchemeLight" | "colorSchemeDark">;
 
 const LazyImageCompressionView = lazy(() => import("../features/image-compression/ImageCompressionView"));
 const LazyGifMakerView = lazy(() => import("../features/gif-maker/GifMakerView"));
@@ -78,6 +81,8 @@ export default function AppShell() {
   const [view, setView] = useState<AppView>("converter");
   const [mountedViews, setMountedViews] = useState(() => ({ gif: false, compression: false }));
   const [preferences, setPreferences] = useState<AppPreferences>(() => loadAppPreferences());
+  // 主题预览：设置页在草稿里改主题时上报，只影响这三个字段；保存/取消由设置页清成 null。
+  const [themePreview, setThemePreview] = useState<ThemePreview | null>(null);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() => preferences.sidebarMode);
   const [prefersDark, setPrefersDark] = useState(getPrefersDark);
   const {
@@ -88,7 +93,11 @@ export default function AppShell() {
     runInstall: installUpdate,
     openReleasePage,
   } = useUpdateCheck();
-  const activeTheme = useMemo(() => resolveTheme(preferences.themeMode, prefersDark), [preferences.themeMode, prefersDark]);
+  // 预览优先、否则用已提交值——两者都走同一个 resolveTheme，跟随系统不会另立规则。
+  const previewThemeMode = themePreview?.themeMode ?? preferences.themeMode;
+  const previewColorSchemeLight = themePreview?.colorSchemeLight ?? preferences.colorSchemeLight;
+  const previewColorSchemeDark = themePreview?.colorSchemeDark ?? preferences.colorSchemeDark;
+  const activeTheme = useMemo(() => resolveTheme(previewThemeMode, prefersDark), [previewThemeMode, prefersDark]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -100,9 +109,9 @@ export default function AppShell() {
   useEffect(() => {
     document.documentElement.dataset.theme = activeTheme;
     // 配色方案按当前明暗各取一套；派生结果写成内联变量，覆盖 tokens.css 的静态色值。
-    applyThemeColors(activeTheme, activeTheme === "dark" ? preferences.colorSchemeDark : preferences.colorSchemeLight);
+    applyThemeColors(activeTheme, activeTheme === "dark" ? previewColorSchemeDark : previewColorSchemeLight);
     // 依赖只收影响主题的字段：设置页里改其它字段不该重跑 deriveTheme、重写全部内联色变量（拖滑杆的掉帧源）。
-  }, [activeTheme, preferences.colorSchemeLight, preferences.colorSchemeDark]);
+  }, [activeTheme, previewColorSchemeLight, previewColorSchemeDark]);
 
   // 落盘必须看整个 preferences——任一字段改动都要写进 localStorage；debounce 把连续输入（敲变量名、拖滑杆）合并成一次写。
   useEffect(() => {
@@ -118,6 +127,9 @@ export default function AppShell() {
   const updatePreferences = (next: Partial<AppPreferences>) => {
     setPreferences((current) => ({ ...current, ...next }));
   };
+
+  // 稳定引用：设置页的上报 effect 把它列进依赖，identity 一变就会清掉再重报预览。
+  const handleThemePreview = useCallback((preview: ThemePreview | null) => setThemePreview(preview), []);
 
   const toggleSidebarMode = () => {
     setSidebarMode((current) => {
@@ -206,6 +218,7 @@ export default function AppShell() {
             <SettingsView
               preferences={preferences}
               onChange={updatePreferences}
+              onThemePreview={handleThemePreview}
               onReset={() => {
                 setPreferences(DEFAULT_APP_PREFERENCES);
                 setSidebarMode(DEFAULT_APP_PREFERENCES.sidebarMode);

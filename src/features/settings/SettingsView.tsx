@@ -24,7 +24,11 @@ interface SettingsViewProps {
   preferences: AppPreferences;
   onChange: (next: Partial<AppPreferences>) => void;
   onReset: () => void;
+  onThemePreview: (preview: ThemePreview | null) => void;
 }
+
+// 预览只带主题三个字段；外壳据此临时改主题，不落盘。
+type ThemePreview = Pick<AppPreferences, "themeMode" | "colorSchemeLight" | "colorSchemeDark">;
 
 const THEME_OPTIONS: ReadonlyArray<{ value: ThemeMode; label: string; hint: string }> = [
   { value: "system", label: "跟随系统", hint: "自动匹配系统明暗色" },
@@ -173,7 +177,7 @@ function SchemePicker({ variant, label, value, onChange }: {
   );
 }
 
-export default function SettingsView({ preferences, onChange, onReset }: SettingsViewProps) {
+export default function SettingsView({ preferences, onChange, onReset, onThemePreview }: SettingsViewProps) {
   const [customPresets, setCustomPresets] = useState<ImageCustomPreset[]>(() => loadImageCustomPresets());
   const [customPresetId, setCustomPresetId] = useState("");
   const [customPresetName, setCustomPresetName] = useState("");
@@ -186,6 +190,31 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
   // 外部（如「恢复默认设置」）改动 props 后草稿要跟上，否则表单会停在上一次的旧值上。
   useEffect(() => { setDraft(preferences); }, [preferences]);
 
+  // 主题三字段的草稿变化即时上报外壳做预览；只有在偏离已提交值时才报值——保存/取消后草稿回落，
+  // 这里自动回到 null，预览随之撤掉，且全程不碰 localStorage。
+  useEffect(() => {
+    const themeDirty =
+      draft.themeMode !== preferences.themeMode ||
+      draft.colorSchemeLight !== preferences.colorSchemeLight ||
+      draft.colorSchemeDark !== preferences.colorSchemeDark;
+    onThemePreview(
+      themeDirty
+        ? { themeMode: draft.themeMode, colorSchemeLight: draft.colorSchemeLight, colorSchemeDark: draft.colorSchemeDark }
+        : null,
+    );
+  }, [
+    draft.themeMode,
+    draft.colorSchemeLight,
+    draft.colorSchemeDark,
+    preferences.themeMode,
+    preferences.colorSchemeLight,
+    preferences.colorSchemeDark,
+    onThemePreview,
+  ]);
+
+  // 离开设置页等于丢弃草稿，预览也要一起撤，否则主题会停在未保存的样式上。
+  useEffect(() => () => onThemePreview(null), [onThemePreview]);
+
   const hasUnsavedChanges = !arePreferencesEqual(draft, preferences);
   const activeImagePresetDescription = IMAGE_PRESET_OPTIONS.find((option) => option.value === draft.imagePreset)?.description;
 
@@ -196,11 +225,15 @@ export default function SettingsView({ preferences, onChange, onReset }: Setting
 
   const handleSave = () => {
     setSaveStatus("saving");
+    // 提交后主题由已提交的 preferences 决定，预览这一层立即撤掉，避免多一帧脏样式。
+    onThemePreview(null);
     onChange(draft);
     window.setTimeout(() => setSaveStatus("idle"), SAVE_FEEDBACK_MS);
   };
 
   const handleCancel = () => {
+    // 取消即完全回退：先撤预览，再丢弃草稿，主题回到已提交值。
+    onThemePreview(null);
     setDraft(preferences);
     setSaveStatus("idle");
   };
