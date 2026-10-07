@@ -708,8 +708,8 @@
 
 .format-group,
 .output-location-group { grid-column: 1 / -1; }
-/* 带说明文字的设置组通栏：解释被塞进半栏，文字宽度就会跟同页其它说明对不齐。 */
-.settings-module-body > .setting-group:has(> .field-help, > .format-description) { grid-column: 1 / -1; }
+/* 说明和宽高双输入都需要通栏，否则半栏内并排输入会遮住数值。 */
+.settings-module-body > .setting-group:has(> .field-help, > .format-description, > .dimensions-row) { grid-column: 1 / -1; }
 
 .format-group {
   width: 100%;

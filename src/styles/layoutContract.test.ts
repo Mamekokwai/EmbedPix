@@ -100,8 +100,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).not.toContain(".compression-field select");
     expect(themeSelectCss).toContain(".theme-select-trigger");
   });
-  it("keeps helper text on one width by spanning groups that carry explanations", () => {
-    expect(converterCss).toContain(".settings-module-body > .setting-group:has(> .field-help, > .format-description) { grid-column: 1 / -1; }");
+  it("spans groups whose explanations or paired dimension inputs need full width", () => {
+    expect(converterCss).toContain(".settings-module-body > .setting-group:has(> .field-help, > .format-description, > .dimensions-row) { grid-column: 1 / -1; }");
   });
   it("centers the collapsible module header text and marker on one flex row", () => {
     // 标题与 +/− 标记都是 summary 的 flex 子项，靠 align-items:center 居中；标记 line-height:1 收敛到字形盒。
