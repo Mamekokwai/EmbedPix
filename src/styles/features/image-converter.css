@@ -288,7 +288,7 @@
 .preview-frame {
   display: grid;
   min-height: 0;
-  flex: 1;
+  flex: 1 0 120px;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--qp-border-subtle);
@@ -462,12 +462,9 @@
 
 .file-list {
   display: flex;
-  max-height: 132px;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 5px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
   border-top: 1px solid var(--qp-border-subtle);
   padding-top: 8px;
 }

@@ -271,6 +271,11 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toMatch(/\.preview-content \{[^}]*min-height: 0;/);
     expect(converterCss).toMatch(/\.preview-content \{[^}]*flex: 1 1 auto;/);
     expect(converterCss).toMatch(/\.preview-content \{[^}]*overflow-y: auto;/);
+    // 文件列表不能收缩成仅一行的独立滚动区，否则滚轮落在卡片其它位置时无法选后续图片。
+    expect(converterCss).toMatch(/\.file-list \{[^}]*flex: 0 0 auto;/);
+    expect(converterCss).not.toMatch(/\.file-list \{[^}]*overflow-y: auto;/);
+    // 预览保留可辨认的面积，多出的高度由外层预览区滚动。
+    expect(converterCss).toMatch(/\.preview-frame \{[^}]*flex: 1 0 120px;/);
     // 顶住内滚的固定下限必须消失，否则整列又被顶出卡片、按钮又被裁掉。
     expect(converterCss).not.toContain(".preview-content { min-height: 356px;");
     expect(converterCss).not.toMatch(/\.preview-frame \{[^}]*min-height: \d+px;/);
