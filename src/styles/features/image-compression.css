@@ -68,7 +68,8 @@
 .compression-footer {
   justify-content: space-between;
 }
-.compression-header, .compression-card-heading { flex-wrap: wrap; }
+.compression-header { flex-wrap: nowrap; }
+.compression-card-heading { flex-wrap: wrap; }
 .compression-header > *, .compression-card-heading > * { min-width: 0; }
 
 .compression-header {
@@ -209,14 +210,16 @@
 .compression-summary-stat .compression-saving { color: var(--qp-success); }
 .compression-summary-stat .compression-failure { color: var(--qp-danger, #df6a6a); }
 .compression-estimate-note { margin-left: auto; }
-.compression-parameter-summary { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 3px 9px; margin: 0 0 10px; padding: 5px 9px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: color-mix(in srgb, var(--qp-bg-panel) 72%, var(--qp-bg-elevated)); color: var(--qp-text-tertiary); font-size: 10px; line-height: 1.25; }
+.compression-parameter-summary { display: flex; min-width: 0; max-width: min(760px, 62%); height: 32px; flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: 3px 9px; margin: 0; overflow: hidden; padding: 4px 8px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: color-mix(in srgb, var(--qp-bg-panel) 72%, var(--qp-bg-elevated)); color: var(--qp-text-tertiary); font-size: 10px; line-height: 1.2; }
 .compression-parameter-summary > strong { flex: 0 0 auto; color: var(--qp-text-secondary); font-size: 11px; }
-.compression-parameter-summary > div { display: flex; min-width: 0; flex: 1 1 240px; flex-wrap: wrap; gap: 2px 7px; }
+.compression-parameter-summary > div { display: flex; min-width: 0; flex: 1 1 240px; flex-wrap: wrap; gap: 1px 7px; max-height: 23px; overflow: hidden; }
 .compression-copy-summary { flex: 0 0 auto; }
 .compression-parameter-summary span { max-width: 100%; overflow-wrap: anywhere; }
 .compression-parameter-summary span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .compression-parameter-summary span::after { margin-left: 4px; color: var(--qp-border-strong); content: "·"; }
 .compression-parameter-summary span:last-child::after { display: none; }
+.compression-parameter-summary > strong, .compression-parameter-summary > div, .compression-parameter-summary .compression-copy-summary { flex: 0 0 auto; }
+.compression-parameter-summary > div { flex: 1 1 auto; }
 .compression-field-error { margin: -6px 0 0; color: var(--qp-danger, #df6a6a); font-size: 11px; line-height: 1.5; }
 .compression-field-hint, .compression-output-file-name-hint { color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .compression-alpha-status { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 1px; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--qp-border-subtle) 82%, transparent); border-radius: var(--qp-radius-control); background: color-mix(in srgb, var(--qp-bg-elevated) 72%, transparent); color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; }

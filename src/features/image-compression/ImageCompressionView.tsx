@@ -1243,13 +1243,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             <h1>图片压缩工作台</h1>
           </div>
         </div>
+        <section className="compression-parameter-summary" aria-label="导出参数摘要">
+          <strong>当前参数</strong>
+          <div>{compressionParameterSummary.map((entry, index) => <span key={`${entry}-${index}`}>{entry}</span>)}</div>
+          <button type="button" className="compression-secondary-button compression-copy-summary" onClick={() => { void copyParameterSummary(); }} aria-label="复制当前压缩参数摘要">复制参数</button>
+        </section>
       </header>
-
-      <section className="compression-parameter-summary" aria-label="导出参数摘要">
-        <strong>当前参数</strong>
-        <div>{compressionParameterSummary.map((entry, index) => <span key={`${entry}-${index}`}>{entry}</span>)}</div>
-        <button type="button" className="compression-secondary-button compression-copy-summary" onClick={() => { void copyParameterSummary(); }} aria-label="复制当前压缩参数摘要">复制参数</button>
-      </section>
 
       <div className="compression-content">
       <div className="compression-grid">
