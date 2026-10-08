@@ -256,6 +256,9 @@ describe("compact layout viewport contract", () => {
     ] as const) {
       expect(css).toMatch(new RegExp(`${selector} \\{[^}]*padding: var\\(--qp-space-page-block\\) var\\(--qp-space-page-inline\\) 18px;`));
     }
+    expect(appShellCss).toMatch(/\.page-view \{[^}]*box-sizing: border-box;/);
+    expect(converterCss).toMatch(/\.converter-app \{[^}]*box-sizing: border-box;/);
+    expect(compressionCss).toMatch(/\.compression-app \{[^}]*box-sizing: border-box;/);
     expect(appShellCss).toMatch(/\.page-content \{[^}]*padding-top: 14px;/);
     // 内层卡片栈 16px（转换 .settings-stack / 压缩 .compression-settings-card / 设置·关于壳层 .page-content）。
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*gap: 16px;/);
@@ -402,11 +405,11 @@ describe("compact layout viewport contract", () => {
     expect(height).toBeGreaterThan(0);
     expect(gifCss).toContain("overflow-x: hidden");
     expect(gifCss).toContain(".gif-canvas-stage { min-height: 132px;");
-    expect(converterCss).toMatch(/\.converter-app\s*\{\s*width:\s*100%;\s*max-width:\s*none;/s);
+    expect(converterCss).toMatch(/\.converter-app\s*\{[\s\S]*?width:\s*100%;[\s\S]*?max-width:\s*none;/s);
     expect(converterCss).toContain("overflow-x: hidden;");
     // 左栏预览卡改成卡片内滚后不再有固定高度下限；改锁内滚层的盒模型（同一组取值四页共用）。
     expect(converterCss).toContain(".preview-content {\n  display: flex;\n  min-height: 0;");
-    expect(compressionCss).toMatch(/\.compression-app\s*\{\s*width:\s*100%;\s*max-width:\s*none;/s);
+    expect(compressionCss).toMatch(/\.compression-app\s*\{[\s\S]*?width:\s*100%;[\s\S]*?max-width:\s*none;/s);
     expect(compressionCss).toContain("overflow-x: hidden;");
     expect(converterCss).toContain("@media (max-width: 620px)");
     expect(themeSelectCss).toContain(".theme-select-option:focus-visible");

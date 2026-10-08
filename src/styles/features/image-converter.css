@@ -3,6 +3,7 @@
 /* 页面根是撑满主区高度的弹性列：品牌头带 + 介绍带固定在列首，滚动下沉到 .converter-content。 */
 .converter-app {
   width: 100%;
+  box-sizing: border-box;
   max-width: none;
   display: flex;
   min-width: 0;
