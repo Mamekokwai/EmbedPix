@@ -340,10 +340,13 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('className={`drop-zone compression-drop-zone');
     expect(compressionView).toContain('className="drop-icon"');
     expect(compressionView).toContain('className="drop-zone-actions compression-source-actions"');
-    expect(compressionView).toContain('className="quiet-button compression-secondary-button compression-import-button"');
+    expect(compressionView).toContain('className="quiet-button compression-import-button"');
     expect(compressionCss).toContain(".compression-drop-hint { max-width: min(100%, 520px);");
     expect(compressionCss).toContain(".compression-import-button { flex-basis: 100%; }");
     expect(compressionCss).toContain("overflow-wrap: anywhere;");
+    expect(compressionCss).not.toContain(".compression-drop-zone { margin-top:");
+    expect(compressionCss).not.toContain(".compression-drop-zone { min-height:");
+    expect(compressionCss).not.toContain(".compression-input-card, .compression-settings-card { padding:");
   });
   it("exposes a copyable compression batch summary without changing native wiring", () => {
     expect(compressionView).toContain("formatCompressionBatchSummary");

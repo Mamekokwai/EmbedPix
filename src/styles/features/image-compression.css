@@ -96,20 +96,18 @@
 
 .compression-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(300px, .92fr); gap: 18px; }
 .compression-card { min-width: 0; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-panel); background: var(--qp-bg-panel); }
-.compression-input-card, .compression-settings-card { padding: var(--qp-space-card); }
+.compression-settings-card { padding: var(--qp-space-card); }
 .compression-card-heading { gap: 12px; min-height: 36px; }
 .compression-card-heading h2 { font-size: 17px; }
 .compression-heading-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
 .compression-count { max-width: 100%; overflow: hidden; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .compression-clear-button { min-height: 26px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: transparent; color: var(--qp-text-tertiary); font-size: 11px; padding-inline: 8px; }
 .compression-clear-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
-.compression-drop-zone { margin-top: 20px; }
 .compression-drop-zone-dragging { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }
 .compression-drop-zone-disabled { cursor: not-allowed; opacity: .58; }
 .compression-drop-zone:focus-visible, .compression-secondary-button:focus-visible, .compression-primary-button:focus-visible, .compression-retry-button:focus-visible, .compression-clear-button:focus-visible, .compression-icon-button:focus-visible, .compression-field input:focus-visible, .compression-check input:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
 .compression-drop-icon, .compression-item-icon { display: grid; place-items: center; color: var(--qp-accent-default); }
 .compression-drop-icon { width: 44px; height: 44px; margin-bottom: 13px; border: 1px solid color-mix(in srgb, var(--qp-accent-default) 40%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); }
-.compression-drop-zone strong { color: var(--qp-text-primary); font-size: 14px; }
 .compression-drop-zone small { max-width: 100%; overflow-wrap: anywhere; }
 .compression-drop-hint { max-width: min(100%, 520px); padding-inline: 12px; line-height: 1.5; overflow-wrap: anywhere; text-align: center; }
 .compression-source-actions { flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -279,7 +277,6 @@
 .compression-input-card,
 .compression-settings-card {
   min-height: 0;
-  padding: 16px;
 }
 
 .compression-input-card {
@@ -359,8 +356,7 @@
   .compression-app { padding-top: 8px; padding-bottom: 8px; }
   .compression-header { padding-bottom: 8px; }
   .compression-grid { gap: 10px; margin-top: 10px; }
-  .compression-input-card, .compression-settings-card, .compression-preview-card { padding: 10px; }
-  .compression-drop-zone { min-height: 150px; margin-top: 10px; }
+  .compression-settings-card, .compression-preview-card { padding: 10px; }
   .compression-preview-stage { min-height: 130px; max-height: 180px; }
   .compression-preview-stage img { max-height: 178px; }
   .compression-preview-compare { min-height: 130px; max-height: 180px; }
