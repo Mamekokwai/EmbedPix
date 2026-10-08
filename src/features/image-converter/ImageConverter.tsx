@@ -2002,11 +2002,11 @@ export default function ImageConverter({
             <div className="workspace-transfer-actions"><button className="quiet-button" type="button" onClick={saveWorkspace} disabled={status.kind === "busy"}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceInputRef.current?.click()} disabled={status.kind === "busy"}>打开工作区</button></div>
           </div>
         </div>
-        <p className="format-description format-description-outside" id="format-description">{getFormatInfo(outputFormat).description}</p>
       </section>
 
       <footer className="converter-footer">
         {errorMessage ? <p className="error-message converter-footer-error" id="dimension-error" role="alert">{errorMessage}</p> : null}
+        <p className="format-description format-description-footer" id="format-description">{getFormatInfo(outputFormat).description}</p>
         <span>EmbedPix · 嵌图匠</span>
       </footer>
       </div>

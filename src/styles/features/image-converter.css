@@ -734,7 +734,7 @@
   min-height: 15px;
 }
 
-.format-description-outside { grid-column: 2; margin: -10px 2px 0; }
+.format-description-footer { min-width: 0; flex: 1 1 auto; margin: 0; overflow-wrap: anywhere; }
 
 .field-label {
   color: var(--qp-text-primary);
@@ -1323,6 +1323,11 @@
 }
 
 .converter-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   flex: 0 0 auto;
   padding: 18px 2px 0;
   color: var(--qp-text-tertiary);
