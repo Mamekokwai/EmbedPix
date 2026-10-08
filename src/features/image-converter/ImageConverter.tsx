@@ -1568,7 +1568,6 @@ export default function ImageConverter({
             <fieldset className="setting-group format-group">
               <legend className="field-label">输出格式</legend>
               <FormatSelector value={outputFormat} onChange={handleFormatChange} describedBy="format-description" />
-              <p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>
             </fieldset>
 
             {embeddedInspection ? <section className="embedded-output-inspector" aria-labelledby="embedded-output-title">
@@ -2003,6 +2002,7 @@ export default function ImageConverter({
             <div className="workspace-transfer-actions"><button className="quiet-button" type="button" onClick={saveWorkspace} disabled={status.kind === "busy"}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceInputRef.current?.click()} disabled={status.kind === "busy"}>打开工作区</button></div>
           </div>
         </div>
+        <p className="format-description format-description-outside" id="format-description">{getFormatInfo(outputFormat).description}</p>
       </section>
 
       <footer className="converter-footer">

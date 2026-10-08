@@ -734,6 +734,8 @@
   min-height: 15px;
 }
 
+.format-description-outside { grid-column: 2; margin: -10px 2px 0; }
+
 .field-label {
   color: var(--qp-text-primary);
   font-size: 12px;

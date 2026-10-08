@@ -977,7 +977,9 @@ describe("compact layout viewport contract", () => {
   it("shows the selected format description, BMP included", () => {
     expect(converterView).not.toContain("showsFormatDescription");
     expect(converterView).toContain('<FormatSelector value={outputFormat} onChange={handleFormatChange} describedBy="format-description" />');
-    expect(converterView).toContain('<p className="format-description" id="format-description">{getFormatInfo(outputFormat).description}</p>');
+    expect(converterView).toContain('<p className="format-description format-description-outside" id="format-description">{getFormatInfo(outputFormat).description}</p>');
+    expect(converterView.indexOf('className="format-description format-description-outside"')).toBeGreaterThan(converterView.indexOf('className="settings-panel"'));
+    expect(converterCss).toContain(".format-description-outside { grid-column: 2;");
     expect(formatMetadata).toContain("支持 1、4、8、16、24、32 位；仅 32 位保留透明度。");
   });
 
