@@ -1266,16 +1266,22 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           >
             <div className="drop-icon"><Download size={22} aria-hidden="true" /></div>
             <strong>拖放图片到这里</strong>
-            <small className="compression-drop-hint">支持格式：PNG / JPEG / WebP / BMP / GIF · 单张输入上限：{COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB · 输出格式：PNG / JPEG / WebP</small>
+            <small className="compression-drop-hint">支持 PNG、JPEG/JPG、WebP、BMP、GIF</small>
           </div>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={sourceBusy} tabIndex={-1} aria-hidden="true" />
-          <div className="drop-zone-actions compression-source-actions">
-            <button type="button" className="quiet-button compression-import-button" onClick={() => { void chooseFiles(); }} disabled={sourceBusy}><Images size={15} aria-hidden="true" /> {importBusy ? "正在导入" : "选择图片"}</button>
-            <button type="button" className="quiet-button" onClick={replaceSelectedItem} disabled={sourceBusy || !selectedItemId}><RefreshCw size={15} aria-hidden="true" /> 替换当前</button>
-            <button type="button" className="quiet-button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
+          {items.length === 0 ? <div className="drop-zone-actions"><button className="quiet-button directory-import-button" type="button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}>导入图片文件夹</button></div> : null}
+          {items.length > 0 ? <>
+          <div className="file-list-toolbar compression-source-actions">
+            <span className="file-count">已导入 {items.length} 张</span>
+            <div className="file-list-actions">
+              <button type="button" className="quiet-button file-add-button" onClick={() => { void chooseFiles(); }} disabled={sourceBusy}><Images size={15} aria-hidden="true" /> {importBusy ? "正在导入" : "继续添加"}</button>
+              <button type="button" className="quiet-button file-add-button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
+              <button type="button" className="quiet-button file-add-button" onClick={replaceSelectedItem} disabled={sourceBusy || !selectedItemId}><RefreshCw size={15} aria-hidden="true" /> 替换当前</button>
+              {items.length > 1 ? <button type="button" className="quiet-button file-clear-button" onClick={clearItems} disabled={sourceBusy}>清空列表</button> : null}
+            </div>
           </div>
-          <div className="compression-list" aria-label="待压缩图片列表">
-            {items.length === 0 ? <p className="compression-empty">导入后将在这里显示文件、原始大小与来源。</p> : items.map((item) => (
+          <div className="compression-list file-list" aria-label="待压缩图片列表">
+            {items.map((item) => (
               <div className="compression-item" key={item.id}>
                 <button type="button" className={`compression-item-select${selectedItemId === item.id ? " compression-item-selected" : ""}`} aria-pressed={selectedItemId === item.id} onClick={() => { if (!sourceBusy) setSelectedItemId(item.id); }} disabled={sourceBusy}>
                   <div className="compression-item-icon"><Images size={15} aria-hidden="true" /></div>
@@ -1285,6 +1291,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
               </div>
             ))}
           </div>
+          </> : null}
           {importErrors.length > 0 ? <div className="compression-import-errors" role="alert" aria-label="导入问题"><strong>导入问题</strong>{importErrors.map((entry) => <span key={entry.id}>{entry.fileName}：{entry.message}</span>)}</div> : null}
         </div>
 

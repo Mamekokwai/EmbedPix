@@ -109,9 +109,7 @@
 .compression-drop-icon, .compression-item-icon { display: grid; place-items: center; color: var(--qp-accent-default); }
 .compression-drop-icon { width: 44px; height: 44px; margin-bottom: 13px; border: 1px solid color-mix(in srgb, var(--qp-accent-default) 40%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); }
 .compression-drop-zone small { max-width: 100%; overflow-wrap: anywhere; }
-.compression-drop-hint { max-width: min(100%, 520px); padding-inline: 12px; line-height: 1.5; overflow-wrap: anywhere; text-align: center; }
-.compression-source-actions { flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.compression-import-button { flex-basis: 100%; }
+.compression-drop-hint { max-width: 100%; }
 .compression-secondary-button, .compression-primary-button, .compression-retry-button, .compression-icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); cursor: pointer; font: inherit; transition: background-color var(--qp-motion-fast) var(--qp-motion-ease), border-color var(--qp-motion-fast) var(--qp-motion-ease); }
 .compression-secondary-button { min-height: 32px; padding: 0 11px; background: var(--qp-bg-elevated); color: var(--qp-text-secondary); font-size: 12px; }
 .compression-secondary-button:hover, .compression-icon-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
