@@ -691,6 +691,7 @@ jobs:
       - name: Run published release download and installer smoke
         shell: pwsh
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
         run: .\scripts\release-smoke.ps1 -Repository '${{ github.repository }}' -Tag $env:RELEASE_TAG
 

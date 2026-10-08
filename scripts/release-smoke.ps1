@@ -7,6 +7,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $headers = @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'EmbedPix release smoke' }
+$githubToken = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
+if ($githubToken) { $headers.Authorization = "Bearer $githubToken" }
 
 $assetContract = Join-Path $PSScriptRoot 'release-asset-contract.ps1'
 $peContract = Join-Path $PSScriptRoot 'release-pe-contract.ps1'
