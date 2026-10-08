@@ -145,21 +145,6 @@ function getCompressionInputFormat(file: File): string {
   return file.type.startsWith("image/") ? file.type.slice(6).toUpperCase() : "图片";
 }
 
-function compressionModeLabel(mode?: "lossless" | "lossy"): string | null {
-  if (mode === "lossless") return "无损";
-  if (mode === "lossy") return "有损";
-  return null;
-}
-
-function compressionEngineLabel(engine?: "passthrough" | "oxipng" | "image-jpeg" | "jpeg-encoder" | "libwebp"): string | null {
-  if (engine === "passthrough") return "原字节透传";
-  if (engine === "oxipng") return "OxiPNG";
-  if (engine === "image-jpeg") return "image JPEG";
-  if (engine === "jpeg-encoder") return "jpeg-encoder";
-  if (engine === "libwebp") return "libwebp";
-  return null;
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -1460,8 +1445,6 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         </aside>
       </div>
 
-      {preview ? <p className="compression-estimate-note">预览实际元数据策略：{preview.metadataPolicy === "preserve" ? "原字节透传" : preview.metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` : preview.metadataPolicy === "stripAll" ? "全部清理" : "已移除"}{compressionModeLabel(preview.compressionMode) ? ` · 模式 ${compressionModeLabel(preview.compressionMode)}` : ""}{compressionEngineLabel(preview.compressionEngine) ? ` · 后端 ${compressionEngineLabel(preview.compressionEngine)}` : ""}</p> : null}
-      {estimate.metadataPolicy ? <p className="compression-estimate-note">估算实际元数据策略：{estimate.metadataPolicy === "preserve" ? "原字节透传" : estimate.metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` : estimate.metadataPolicy === "stripAll" ? "全部清理" : "已移除"}{compressionModeLabel(estimate.compressionMode) ? ` · 模式 ${compressionModeLabel(estimate.compressionMode)}` : ""}{compressionEngineLabel(estimate.compressionEngine) ? ` · 后端 ${compressionEngineLabel(estimate.compressionEngine)}` : ""}</p> : null}
       <section className="compression-card compression-summary-card" aria-live="polite">
         <div className="compression-summary-stat"><span>原始大小</span><strong>{items.length > 0 ? formatCompressionBytes(estimate.inputBytes) : "—"}</strong></div>
         {estimate.width && estimate.height ? <div className="compression-summary-stat"><span>预估尺寸</span><strong>{estimate.width} × {estimate.height}</strong></div> : null}

@@ -715,6 +715,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('className="compression-alpha-status"');
     expect(compressionView).toContain('aria-label="复制当前压缩参数摘要"');
     expect(compressionView).toContain("formatCompressionParameterSummary");
+    expect(compressionView).not.toContain("预览实际元数据策略");
+    expect(compressionView).not.toContain("估算实际元数据策略");
     expect(compressionCss).toContain(".compression-parameter-summary { box-sizing: border-box; display: flex;");
     expect(compressionCss).toContain("padding: 3px 8px;");
     expect(compressionCss).toContain("height: 34px;");
