@@ -345,6 +345,10 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('className="compression-list file-list"');
     expect(compressionView).toContain('className="compression-preview-inline"');
     expect(compressionView).not.toContain('className="compression-card compression-preview-card"');
+    expect(compressionView).toContain("{items.length === 0 ? <div");
+    expect(compressionView).toContain("items.length > 0 ? <>\n          <div className=\"file-list-toolbar");
+    expect(compressionView).toContain("compression-card-dragging");
+    expect(compressionCss).toContain(".compression-card-dragging { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }");
     expect(compressionCss).toContain(".compression-drop-hint { max-width: 100%; }");
     expect(compressionCss).toContain("overflow-wrap: anywhere;");
     expect(compressionCss).not.toContain(".compression-drop-zone { margin-top:");

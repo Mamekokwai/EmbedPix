@@ -1247,12 +1247,18 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
       <div className="compression-content">
       <div className="compression-grid">
-        <div className="panel preview-panel compression-card compression-input-card">
+        <div
+          className={`panel preview-panel compression-card compression-input-card${dragging && items.length > 0 ? " compression-card-dragging" : ""}`}
+          onDragEnter={items.length > 0 ? (event) => { event.preventDefault(); if (!sourceBusy) setDragging(true); } : undefined}
+          onDragOver={items.length > 0 ? (event) => event.preventDefault() : undefined}
+          onDragLeave={items.length > 0 ? (event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); } : undefined}
+          onDrop={items.length > 0 ? handleDrop : undefined}
+        >
           <div className="panel-heading">
             <div><p className="panel-kicker">01 / IMPORT</p><h3>源图片</h3></div>
             <div className="compression-heading-actions"><span className="compression-count">{items.length} 个文件</span>{items.length > 0 ? <button type="button" className="compression-clear-button" onClick={clearItems} disabled={sourceBusy}>清空</button> : null}</div>
           </div>
-          <div
+          {items.length === 0 ? <div
             className={`drop-zone compression-drop-zone${dragging ? " drop-zone-dragging compression-drop-zone-dragging" : ""}${sourceBusy ? " compression-drop-zone-disabled" : ""}`}
             onDragEnter={(event) => { event.preventDefault(); if (!sourceBusy) setDragging(true); }}
             onDragOver={(event) => event.preventDefault()}
@@ -1267,7 +1273,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             <div className="drop-icon"><Download size={22} aria-hidden="true" /></div>
             <strong>拖放图片到这里</strong>
             <small className="compression-drop-hint">支持 PNG、JPEG/JPG、WebP、BMP、GIF</small>
-          </div>
+          </div> : null}
           <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={sourceBusy} tabIndex={-1} aria-hidden="true" />
           {items.length === 0 ? <div className="drop-zone-actions"><button className="quiet-button directory-import-button" type="button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}>导入图片文件夹</button></div> : null}
           {items.length > 0 ? <>
