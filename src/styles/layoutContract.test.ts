@@ -343,6 +343,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('导入图片文件夹');
     expect(compressionView).toContain('className="file-list-toolbar compression-source-actions"');
     expect(compressionView).toContain('className="compression-list file-list"');
+    expect(compressionView).toContain('className="compression-preview-inline"');
+    expect(compressionView).not.toContain('className="compression-card compression-preview-card"');
     expect(compressionCss).toContain(".compression-drop-hint { max-width: 100%; }");
     expect(compressionCss).toContain("overflow-wrap: anywhere;");
     expect(compressionCss).not.toContain(".compression-drop-zone { margin-top:");

@@ -165,7 +165,6 @@
 .compression-preset-name { min-width: 0; flex: 1 1 150px; min-height: 32px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); color: var(--qp-text-primary); font: inherit; font-size: 12px; padding: 0 10px; }
 .compression-preset-name:focus { border-color: var(--qp-accent-default); }
 .compression-preset-message { margin: 0; color: var(--qp-text-tertiary); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
-.compression-preview-card { margin-top: 16px; padding: var(--qp-space-card); }
 .compression-preview-heading-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .compression-preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .compression-preview-pane { min-width: 0; margin: 0; }
@@ -280,7 +279,13 @@
 .compression-input-card {
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
+
+.compression-input-card .compression-drop-zone { flex: 0 0 220px; min-height: 180px; }
+.compression-preview-inline { flex: 0 0 auto; min-width: 0; margin-top: 18px; border-top: 1px solid var(--qp-border-subtle); padding-top: 16px; }
+.compression-preview-inline .compression-card-heading { display: flex; min-width: 0; min-height: 36px; align-items: center; justify-content: space-between; gap: 12px; }
+.compression-preview-inline .compression-card-heading h2 { margin: 7px 0 0; color: var(--qp-text-primary); font-size: 17px; letter-spacing: -.02em; }
 
 .compression-input-card .compression-list {
   flex: 1 1 auto;
@@ -354,7 +359,7 @@
   .compression-app { padding-top: 8px; padding-bottom: 8px; }
   .compression-header { padding-bottom: 8px; }
   .compression-grid { gap: 10px; margin-top: 10px; }
-  .compression-settings-card, .compression-preview-card { padding: 10px; }
+  .compression-settings-card { padding: 10px; }
   .compression-preview-stage { min-height: 130px; max-height: 180px; }
   .compression-preview-stage img { max-height: 178px; }
   .compression-preview-compare { min-height: 130px; max-height: 180px; }
