@@ -18,7 +18,7 @@
 .gif-maker-view :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
   scroll-margin-block: 18px;
 }
-.gif-maker-header.page-header { flex: 0 0 auto; }
+.gif-maker-header.page-header { box-sizing: border-box; flex: 0 0 auto; margin-top: 0; }
 .gif-maker-header .page-header-icon { width: 34px; height: 34px; border-radius: var(--qp-radius-control); }
 .gif-maker-header .page-header-copy { min-width: 0; }
 .gif-header-note { display: flex; margin-left: auto; align-items: center; gap: 6px; color: var(--qp-text-secondary); font-size: 11px; white-space: nowrap; }

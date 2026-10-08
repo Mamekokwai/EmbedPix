@@ -72,6 +72,7 @@
 .compression-header > *, .compression-card-heading > * { min-width: 0; }
 
 .compression-header {
+  box-sizing: border-box;
   min-height: 34px;
   gap: 11px;
   padding-bottom: 10px;
@@ -354,7 +355,7 @@
 
 @media (max-height: 620px) {
   .compression-app { padding-top: 10px; padding-bottom: 12px; }
-  .compression-header { padding-top: 4px; padding-bottom: 8px; }
+  .compression-header { padding-bottom: 8px; }
   .compression-grid { gap: 10px; margin-top: 10px; }
   .compression-input-card, .compression-settings-card, .compression-preview-card { padding: 10px; }
   .compression-drop-zone { min-height: 150px; margin-top: 10px; }

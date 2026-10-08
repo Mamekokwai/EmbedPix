@@ -327,7 +327,7 @@
 /* 页面根是撑满主区高度的弹性列：头部固定在列首，内容区（.page-content）自带滚动，滚动不再挂在外壳上。 */
 .page-view { display: flex; box-sizing: border-box; flex-direction: column; width: 100%; max-width: none; min-width: 720px; height: 100%; min-height: 0; margin: 0 auto; padding: var(--qp-space-page-block) var(--qp-space-page-inline) 18px; }
 /* 固定页头（悬浮顶栏）以图片转换页为基准：min-height 34px + padding-bottom 10px + 1px token 底边线 = 45px；改基准必须五页同步。 */
-.page-header { display: flex; flex: 0 0 auto; min-height: 34px; align-items: center; gap: 11px; border-bottom: 1px solid var(--qp-border-subtle); padding-bottom: 10px; }
+.page-header { display: flex; box-sizing: border-box; flex: 0 0 auto; min-height: 34px; align-items: center; gap: 11px; border-bottom: 1px solid var(--qp-border-subtle); padding-bottom: 10px; }
 .page-header-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); color: var(--qp-accent-default); }
 .page-header-icon > svg { width: 18px; height: 18px; }
 .page-eyebrow { margin: 0; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .12em; }

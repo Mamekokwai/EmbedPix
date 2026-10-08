@@ -244,7 +244,7 @@ describe("compact layout viewport contract", () => {
     // 三页的页头覆盖只许保留固定列首，不许再写回自己的高度 / 底边线 / 标题字号。
     // GIF 页头基规则只留固定列首：高度 / 内边距 / 底边线全部走壳层 .page-header，多写一条即在此失败。
     const gifBaseHeaderRule = gifCss.match(/\.gif-maker-header\.page-header \{[^}]*\}/)?.[0] ?? "";
-    expect(gifBaseHeaderRule).toBe(".gif-maker-header.page-header { flex: 0 0 auto; }");
+    expect(gifBaseHeaderRule).toBe(".gif-maker-header.page-header { box-sizing: border-box; flex: 0 0 auto; margin-top: 0; }");
     expect(gifCss).not.toContain(".gif-maker-header h1 { font-size: 19px; }");
     expect(compressionCss).not.toMatch(/\.compression-header \{[^}]*padding: 0 2px/);
     // 页面外层内边距四页同值，并统一引用 spacing token。
@@ -257,8 +257,12 @@ describe("compact layout viewport contract", () => {
       expect(css).toMatch(new RegExp(`${selector} \\{[^}]*padding: var\\(--qp-space-page-block\\) var\\(--qp-space-page-inline\\) 18px;`));
     }
     expect(appShellCss).toMatch(/\.page-view \{[^}]*box-sizing: border-box;/);
+    expect(appShellCss).toMatch(/\.page-header \{[^}]*box-sizing: border-box;/);
     expect(converterCss).toMatch(/\.converter-app \{[^}]*box-sizing: border-box;/);
     expect(compressionCss).toMatch(/\.compression-app \{[^}]*box-sizing: border-box;/);
+    expect(converterCss).toMatch(/\.converter-header \{[^}]*box-sizing: border-box;/);
+    expect(compressionCss).toMatch(/\.compression-header \{[^}]*box-sizing: border-box;/);
+    expect(gifCss).toContain(".gif-maker-header.page-header { box-sizing: border-box; flex: 0 0 auto; margin-top: 0; }");
     expect(appShellCss).toMatch(/\.page-content \{[^}]*padding-top: 14px;/);
     // 内层卡片栈 16px（转换 .settings-stack / 压缩 .compression-settings-card / 设置·关于壳层 .page-content）。
     expect(converterCss).toMatch(/\.settings-stack \{[^}]*gap: 16px;/);
@@ -274,6 +278,7 @@ describe("compact layout viewport contract", () => {
     // GIF 短窗口只收紧上下边距，不能把横向页边距压成 4px，避免页头横线变短。
     expect(gifCss).toContain(".gif-maker-view.page-view { padding: 4px var(--qp-space-page-inline); gap: 4px; }");
     expect(gifCss).not.toContain(".gif-maker-view.page-view { padding: 4px; gap: 4px; }");
+    expect(compressionCss).not.toMatch(/\.compression-header \{[^}]*padding-top:/);
   });
 
   it("sinks the converter's left column scroll into the preview card so its toolbar stays clickable", () => {

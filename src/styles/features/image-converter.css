@@ -78,6 +78,7 @@
 }
 
 .converter-header {
+  box-sizing: border-box;
   min-height: 34px;
   gap: 11px;
   border-bottom: 1px solid var(--qp-border-subtle);
