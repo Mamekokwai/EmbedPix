@@ -2006,8 +2006,7 @@ export default function ImageConverter({
 
       <footer className="converter-footer">
         {errorMessage ? <p className="error-message converter-footer-error" id="dimension-error" role="alert">{errorMessage}</p> : null}
-        <p className={`format-description format-description-footer${outputFormat === "rgb565" ? " visually-hidden" : ""}`} id="format-description">{getFormatInfo(outputFormat).description}</p>
-        <span>EmbedPix · 嵌图匠</span>
+        <p className="format-description visually-hidden" id="format-description">{getFormatInfo(outputFormat).description}</p>
       </footer>
       </div>
     </main>

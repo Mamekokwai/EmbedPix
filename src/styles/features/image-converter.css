@@ -734,7 +734,6 @@
   min-height: 15px;
 }
 
-.format-description-footer { min-width: 0; flex: 1 1 auto; margin: 0; overflow-wrap: anywhere; }
 
 .field-label {
   color: var(--qp-text-primary);

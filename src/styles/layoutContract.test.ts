@@ -981,11 +981,10 @@ describe("compact layout viewport contract", () => {
   it("shows the selected format description, BMP included", () => {
     expect(converterView).not.toContain("showsFormatDescription");
     expect(converterView).toContain('<FormatSelector value={outputFormat} onChange={handleFormatChange} describedBy="format-description" />');
-    expect(converterView).toContain('format-description-footer${outputFormat === "rgb565" ? " visually-hidden" : ""}');
+    expect(converterView).toContain('className="format-description visually-hidden"');
     expect(converterView).toContain('getFormatInfo(outputFormat).description');
-    expect(converterView).toContain('outputFormat === "rgb565"');
-    expect(converterView.indexOf("format-description-footer")).toBeGreaterThan(converterView.indexOf("<footer className=\"converter-footer\">"));
-    expect(converterCss).toContain(".format-description-footer { min-width: 0; flex: 1 1 auto;");
+    expect(converterView).not.toContain("format-description-footer");
+    expect(converterView).not.toContain("EmbedPix · 嵌图匠");
     expect(converterCss).toContain(".converter-footer {\n  display: flex;");
     expect(formatMetadata).toContain("支持 1、4、8、16、24、32 位；仅 32 位保留透明度。");
   });
