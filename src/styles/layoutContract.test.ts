@@ -714,8 +714,9 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('className="compression-alpha-status"');
     expect(compressionView).toContain('aria-label="复制当前压缩参数摘要"');
     expect(compressionView).toContain("formatCompressionParameterSummary");
-    expect(compressionCss).toContain(".compression-parameter-summary { display: grid;");
-    expect(compressionCss).toContain("grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));");
+    expect(compressionCss).toContain(".compression-parameter-summary { display: flex;");
+    expect(compressionCss).toContain("padding: 5px 9px;");
+    expect(compressionCss).toContain("overflow-wrap: anywhere;");
     expect(compressionCss).toContain(".compression-alpha-status { display: flex;");
     expect(compressionCss).toContain("overflow-wrap: anywhere");
   });
