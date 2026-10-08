@@ -344,6 +344,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('className="file-list-toolbar compression-source-actions"');
     expect(compressionView).toContain('className="compression-list file-list"');
     expect(compressionView).toContain('className="compression-preview-inline"');
+    expect(compressionView.indexOf('className="compression-preview-inline"')).toBeLessThan(compressionView.indexOf('className="file-list-toolbar compression-source-actions"'));
+    expect(compressionView.indexOf('className="file-list-toolbar compression-source-actions"')).toBeLessThan(compressionView.indexOf('className="compression-list file-list"'));
     expect(compressionView).not.toContain('className="compression-card compression-preview-card"');
     expect(compressionView).toContain("{items.length === 0 ? <div");
     expect(compressionView).toContain("items.length > 0 ? <>\n          <div className=\"file-list-toolbar");
