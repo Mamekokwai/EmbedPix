@@ -6,7 +6,7 @@
   "identifier": "io.github.zerothrax.embedpix",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://127.0.0.1:1420",
+    "devUrl": "http://127.0.0.1:1430",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
