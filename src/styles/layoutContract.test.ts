@@ -417,6 +417,10 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toMatch(/\[active, busy, items, options, selectedItem, stripSafeInputVerified\]/);
     expect(compressionView).toContain("const stripSafeValidationItems = useMemo");
   });
+
+  it("passes JPEG background only when JPEG is the selected output format", () => {
+    expect(compressionView).toContain('jpegBackground: format === "jpg" ? jpegBackground : undefined');
+  });
   it("normalizes both LF and CRLF source checkouts before matching contracts", () => {
     expect(".a\r\n.b\r.c\n".replace(/\r\n?/g, "\n")).toBe(".a\n.b\n.c\n");
   });

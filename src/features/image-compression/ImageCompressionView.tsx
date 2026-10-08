@@ -342,7 +342,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     pngOptimizeAlpha: !metadataPreserveActive && format === "png" ? pngOptimizeAlpha : undefined,
     webpNearLossless: !metadataPreserveActive && format === "webp" && lossless ? webpNearLossless : null,
     webpLosslessMethod: !metadataPreserveActive && format === "webp" && lossless ? webpLosslessMethod : null,
-    jpegBackground,
+    jpegBackground: format === "jpg" ? jpegBackground : undefined,
     jpegProgressive: !metadataPreserveActive && format === "jpg" ? jpegProgressive : undefined,
     jpegOptimizeHuffman: !metadataPreserveActive && format === "jpg" ? jpegOptimizeHuffman : undefined,
     lossless,
