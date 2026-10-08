@@ -198,8 +198,7 @@ function FormatSelector({
           }}
           aria-label={`${format.label}：${format.description}`}
         >
-          <span>{format.label}</span>
-          <small>{format.hint}</small>
+          <span className="format-option-content"><span>{format.label}</span><small>{format.hint}</small></span>
         </button>
       ))}
     </div>

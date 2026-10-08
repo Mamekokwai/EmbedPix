@@ -129,6 +129,10 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain("@container format-options (max-width: 270px)");
     expect(converterCss).toContain("@container format-options (max-width: 210px)");
     expect(converterCss).toMatch(/\.format-option \{[^}]*min-width: 0;/);
+    expect(converterCss).toContain("grid-auto-rows: auto;");
+    expect(converterCss).toContain("aspect-ratio: 2.8 / 1;");
+    expect(converterCss).toContain(".format-option-content { display: flex;");
+    expect(converterView).toContain('className="format-option-content"');
   });
   it("reveals converter explanations on hover instead of always showing them", () => {
     expect(fieldHintCss).toContain(".field-help-hover {");
