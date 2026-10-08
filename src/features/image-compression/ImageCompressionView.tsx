@@ -1245,6 +1245,12 @@ export default function ImageCompressionView({ active = true }: ImageCompression
         </div>
       </header>
 
+      <section className="compression-parameter-summary" aria-label="导出参数摘要">
+        <strong>当前参数</strong>
+        <div>{compressionParameterSummary.map((entry, index) => <span key={`${entry}-${index}`}>{entry}</span>)}</div>
+        <button type="button" className="compression-secondary-button compression-copy-summary" onClick={() => { void copyParameterSummary(); }} aria-label="复制当前压缩参数摘要">复制参数</button>
+      </section>
+
       <div className="compression-content">
       <div className="compression-grid">
         <div
@@ -1454,12 +1460,6 @@ export default function ImageCompressionView({ active = true }: ImageCompression
           </details>
         </aside>
       </div>
-
-      <section className="compression-parameter-summary" aria-label="导出参数摘要">
-        <strong>当前参数</strong>
-        <div>{compressionParameterSummary.map((entry, index) => <span key={`${entry}-${index}`}>{entry}</span>)}</div>
-        <button type="button" className="compression-secondary-button compression-copy-summary" onClick={() => { void copyParameterSummary(); }} aria-label="复制当前压缩参数摘要">复制参数</button>
-      </section>
 
       {preview ? <p className="compression-estimate-note">预览实际元数据策略：{preview.metadataPolicy === "preserve" ? "原字节透传" : preview.metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` : preview.metadataPolicy === "stripAll" ? "全部清理" : "已移除"}{compressionModeLabel(preview.compressionMode) ? ` · 模式 ${compressionModeLabel(preview.compressionMode)}` : ""}{compressionEngineLabel(preview.compressionEngine) ? ` · 后端 ${compressionEngineLabel(preview.compressionEngine)}` : ""}</p> : null}
       {estimate.metadataPolicy ? <p className="compression-estimate-note">估算实际元数据策略：{estimate.metadataPolicy === "preserve" ? "原字节透传" : estimate.metadataPolicy === "stripSafe" ? `${format === "jpg" ? "JPEG" : format === "webp" ? "WebP" : "PNG"} 安全清理` : estimate.metadataPolicy === "stripAll" ? "全部清理" : "已移除"}{compressionModeLabel(estimate.compressionMode) ? ` · 模式 ${compressionModeLabel(estimate.compressionMode)}` : ""}{compressionEngineLabel(estimate.compressionEngine) ? ` · 后端 ${compressionEngineLabel(estimate.compressionEngine)}` : ""}</p> : null}

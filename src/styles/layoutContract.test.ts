@@ -709,11 +709,13 @@ describe("compact layout viewport contract", () => {
   it("keeps compression export parameters visible in a wrapping summary", () => {
     expect(compressionView).toContain('aria-label="导出参数摘要"');
     expect(compressionView).toContain("compressionParameterSummary");
+    expect(compressionView.indexOf('className="compression-parameter-summary"')).toBeLessThan(compressionView.indexOf('className="compression-grid"'));
     expect(compressionView).toContain("getCompressionAlphaHandling");
     expect(compressionView).toContain('className="compression-alpha-status"');
     expect(compressionView).toContain('aria-label="复制当前压缩参数摘要"');
     expect(compressionView).toContain("formatCompressionParameterSummary");
-    expect(compressionCss).toContain(".compression-parameter-summary { display: flex;");
+    expect(compressionCss).toContain(".compression-parameter-summary { display: grid;");
+    expect(compressionCss).toContain("grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));");
     expect(compressionCss).toContain(".compression-alpha-status { display: flex;");
     expect(compressionCss).toContain("overflow-wrap: anywhere");
   });
