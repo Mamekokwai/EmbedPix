@@ -717,7 +717,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("formatCompressionParameterSummary");
     expect(compressionCss).toContain(".compression-parameter-summary { display: flex;");
     expect(compressionCss).toContain("padding: 4px 8px;");
-    expect(compressionCss).toContain("height: 32px;");
+    expect(compressionCss).toContain("height: 34px;");
+    expect(compressionCss).toContain("align-items: center;");
     expect(compressionCss).toContain("overflow: hidden;");
     expect(compressionCss).toContain("overflow-wrap: anywhere;");
     expect(compressionCss).toContain(".compression-alpha-status { display: flex;");
