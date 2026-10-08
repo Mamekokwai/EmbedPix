@@ -135,6 +135,48 @@ fn clear_pending_install_marker(app: &AppHandle) {
     }
 }
 
+fn quote_powershell_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+fn windows_install_script(installer: &Path, application: &Path, process_id: u32) -> String {
+    format!(
+        "$ErrorActionPreference = 'Stop'; $installer = {}; $application = {}; Wait-Process -Id {}; $process = Start-Process -FilePath $installer -ArgumentList @('/S') -Wait -PassThru; if ($process.ExitCode -ne 0) {{ throw \"更新安装程序退出码：$($process.ExitCode)\" }}; Start-Process -FilePath $application",
+        quote_powershell_literal(&installer.to_string_lossy()),
+        quote_powershell_literal(&application.to_string_lossy()),
+        process_id,
+    )
+}
+
+#[cfg(windows)]
+fn spawn_windows_install_handoff(installer: &Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let application =
+        std::env::current_exe().map_err(|error| format!("无法定位当前应用程序：{error}"))?;
+    let script = windows_install_script(installer, &application, std::process::id());
+    let encoded = base64::engine::general_purpose::STANDARD.encode(
+        script
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<_>>(),
+    );
+    Command::new("powershell.exe")
+        .creation_flags(CREATE_NO_WINDOW)
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-EncodedCommand",
+            &encoded,
+        ])
+        .spawn()
+        .map_err(|error| format!("无法启动更新安装接力程序：{error}"))?;
+    Ok(())
+}
+
 pub fn mark_app_started(app: &AppHandle, state: State<'_, UpdateHealthState>) {
     let Ok(path) = pending_install_marker_path(app) else {
         return;
@@ -774,9 +816,9 @@ pub async fn install_update(
 
         #[cfg(windows)]
         {
-            if let Err(error) = Command::new(package_path).arg("/S").spawn() {
+            if let Err(error) = spawn_windows_install_handoff(package_path) {
                 clear_pending_install_marker(&app_for_install);
-                return Err(format!("无法启动更新安装程序：{error}"));
+                return Err(error);
             }
             Ok::<(), String>(())
         }
@@ -1378,11 +1420,13 @@ mod tests {
         pending_install_marker_part_path, select_trusted_asset_for_target, should_append_partial,
         signature_url_for_asset, validate_asset_url, validate_cached_package_path,
         validate_update_cache_dir, verify_cached_package_signature, verify_signature,
-        PendingInstallMarker, ReleaseAsset, UpdateTarget, MAX_DOWNLOAD_ATTEMPTS,
+        windows_install_script, PendingInstallMarker, ReleaseAsset, UpdateTarget,
+        MAX_DOWNLOAD_ATTEMPTS,
     };
     use base64::Engine;
     use reqwest::Url;
     use sha2::Digest;
+    use std::path::Path;
     use std::sync::{atomic::AtomicBool, Arc};
 
     #[test]
@@ -1403,6 +1447,18 @@ mod tests {
             }
         )
         .is_none());
+    }
+
+    #[test]
+    fn install_handoff_waits_for_old_process_and_relaunches_application() {
+        let script = windows_install_script(
+            Path::new(r"C:\cache\EmbedPix-update-0.8.3.exe"),
+            Path::new(r"C:\Program Files\EmbedPix\EmbedPix.exe"),
+            42,
+        );
+        assert!(script.contains("Wait-Process -Id 42"));
+        assert!(script.contains("-ArgumentList @('/S') -Wait -PassThru"));
+        assert!(script.contains("Start-Process -FilePath $application"));
     }
 
     #[test]
