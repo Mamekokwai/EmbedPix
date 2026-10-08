@@ -1235,6 +1235,8 @@
   min-width: 0;
 }
 
+.bit-depth-description-outside { display: flex; grid-column: 1 / -1; min-width: 0; align-items: center; justify-content: flex-end; align-self: end; margin: -10px 2px 0; overflow-wrap: anywhere; text-align: right; }
+
 .error-message {
   max-width: 100%;
   margin: 0;
