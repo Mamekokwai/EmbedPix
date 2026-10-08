@@ -103,17 +103,15 @@
 .compression-count { max-width: 100%; overflow: hidden; color: var(--qp-text-tertiary); font-family: var(--font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .compression-clear-button { min-height: 26px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); background: transparent; color: var(--qp-text-tertiary); font-size: 11px; padding-inline: 8px; }
 .compression-clear-button:hover { border-color: var(--qp-border-strong); color: var(--qp-text-primary); }
-.compression-drop-zone { display: flex; min-height: 166px; flex-direction: column; align-items: center; justify-content: center; margin-top: 12px; border: 1px dashed var(--qp-border-strong); border-radius: var(--qp-radius-control); background: var(--qp-bg-elevated); cursor: pointer; color: var(--qp-text-secondary); transition: border-color var(--qp-motion-fast) var(--qp-motion-ease), background-color var(--qp-motion-fast) var(--qp-motion-ease); }
-.compression-drop-zone:hover, .compression-drop-zone-dragging { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }
+.compression-drop-zone { margin-top: 20px; }
+.compression-drop-zone-dragging { border-color: var(--qp-accent-default); background: var(--qp-accent-muted); }
 .compression-drop-zone-disabled { cursor: not-allowed; opacity: .58; }
 .compression-drop-zone:focus-visible, .compression-secondary-button:focus-visible, .compression-primary-button:focus-visible, .compression-retry-button:focus-visible, .compression-clear-button:focus-visible, .compression-icon-button:focus-visible, .compression-field input:focus-visible, .compression-check input:focus-visible { outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent); outline-offset: 2px; }
 .compression-drop-icon, .compression-item-icon { display: grid; place-items: center; color: var(--qp-accent-default); }
 .compression-drop-icon { width: 44px; height: 44px; margin-bottom: 13px; border: 1px solid color-mix(in srgb, var(--qp-accent-default) 40%, var(--qp-border-subtle)); border-radius: var(--qp-radius-control); background: var(--qp-bg-panel); }
 .compression-drop-zone strong { color: var(--qp-text-primary); font-size: 14px; }
-.compression-drop-zone > span:not(.compression-drop-icon) { margin-top: 6px; font-size: 12px; }
-.compression-drop-zone small { margin-top: 12px; color: var(--qp-text-tertiary); font-size: 11px; }
-.compression-drop-hint { display: grid; width: min(100%, 360px); min-width: 0; gap: 2px; padding-inline: 12px; line-height: 1.5; overflow-wrap: anywhere; text-align: center; }
-.compression-drop-hint span { min-width: 0; }
+.compression-drop-zone small { max-width: 100%; overflow-wrap: anywhere; }
+.compression-drop-hint { max-width: min(100%, 520px); padding-inline: 12px; line-height: 1.5; overflow-wrap: anywhere; text-align: center; }
 .compression-source-actions { flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .compression-import-button { flex-basis: 100%; }
 .compression-secondary-button, .compression-primary-button, .compression-retry-button, .compression-icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-button); cursor: pointer; font: inherit; transition: background-color var(--qp-motion-fast) var(--qp-motion-ease), border-color var(--qp-motion-fast) var(--qp-motion-ease); }

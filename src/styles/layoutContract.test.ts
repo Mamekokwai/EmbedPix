@@ -337,11 +337,12 @@ describe("compact layout viewport contract", () => {
   });
   it("wraps the compression import support hint inside narrow drop zones", () => {
     expect(compressionView).toContain('className="compression-drop-hint"');
-    expect(compressionView).toContain('className="compression-secondary-button compression-import-button"');
-    expect(compressionCss).toContain(".compression-drop-hint { display: grid; width: min(100%, 360px); min-width: 0;");
-    expect(compressionCss).toContain(".compression-drop-hint span { min-width: 0; }");
+    expect(compressionView).toContain('className={`drop-zone compression-drop-zone');
+    expect(compressionView).toContain('className="drop-icon"');
+    expect(compressionView).toContain('className="drop-zone-actions compression-source-actions"');
+    expect(compressionView).toContain('className="quiet-button compression-secondary-button compression-import-button"');
+    expect(compressionCss).toContain(".compression-drop-hint { max-width: min(100%, 520px);");
     expect(compressionCss).toContain(".compression-import-button { flex-basis: 100%; }");
-    expect(compressionCss).toContain(".compression-drop-zone > span:not(.compression-drop-icon)");
     expect(compressionCss).toContain("overflow-wrap: anywhere;");
   });
   it("exposes a copyable compression batch summary without changing native wiring", () => {

@@ -1247,13 +1247,13 @@ export default function ImageCompressionView({ active = true }: ImageCompression
 
       <div className="compression-content">
       <div className="compression-grid">
-        <div className="compression-card compression-input-card">
-          <div className="compression-card-heading">
-            <div><span className="compression-card-kicker">01 / IMPORT</span><h2>导入图片</h2></div>
+        <div className="panel preview-panel compression-card compression-input-card">
+          <div className="panel-heading">
+            <div><p className="panel-kicker">01 / IMPORT</p><h3>源图片</h3></div>
             <div className="compression-heading-actions"><span className="compression-count">{items.length} 个文件</span>{items.length > 0 ? <button type="button" className="compression-clear-button" onClick={clearItems} disabled={sourceBusy}>清空</button> : null}</div>
           </div>
           <div
-            className={`compression-drop-zone${dragging ? " compression-drop-zone-dragging" : ""}${sourceBusy ? " compression-drop-zone-disabled" : ""}`}
+            className={`drop-zone compression-drop-zone${dragging ? " drop-zone-dragging compression-drop-zone-dragging" : ""}${sourceBusy ? " compression-drop-zone-disabled" : ""}`}
             onDragEnter={(event) => { event.preventDefault(); if (!sourceBusy) setDragging(true); }}
             onDragOver={(event) => event.preventDefault()}
             onDragLeave={() => setDragging(false)}
@@ -1264,15 +1264,15 @@ export default function ImageCompressionView({ active = true }: ImageCompression
             onKeyDown={(event) => { if (!sourceBusy && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); void chooseFiles(); } }}
             onClick={() => { void chooseFiles(); }}
           >
-            <span className="compression-drop-icon"><Download size={22} aria-hidden="true" /></span>
+            <div className="drop-icon"><Download size={22} aria-hidden="true" /></div>
             <strong>拖放图片到这里</strong>
-            <small className="compression-drop-hint"><span>支持格式：PNG / JPEG / WebP / BMP / GIF</span><span>单张输入上限：{COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB</span><span>输出格式：PNG / JPEG / WebP</span></small>
+            <small className="compression-drop-hint">支持格式：PNG / JPEG / WebP / BMP / GIF · 单张输入上限：{COMPRESSION_MAX_INPUT_BYTES / (1024 * 1024)} MiB · 输出格式：PNG / JPEG / WebP</small>
           </div>
           <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*,.bmp,.gif,.webp" multiple onChange={handleFileChange} disabled={sourceBusy} tabIndex={-1} aria-hidden="true" />
-          <div className="compression-source-actions">
-            <button type="button" className="compression-secondary-button compression-import-button" onClick={() => { void chooseFiles(); }} disabled={sourceBusy}><Images size={15} aria-hidden="true" /> {importBusy ? "正在导入" : "选择图片"}</button>
-            <button type="button" className="compression-secondary-button" onClick={replaceSelectedItem} disabled={sourceBusy || !selectedItemId}><RefreshCw size={15} aria-hidden="true" /> 替换当前</button>
-            <button type="button" className="compression-secondary-button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
+          <div className="drop-zone-actions compression-source-actions">
+            <button type="button" className="quiet-button compression-secondary-button compression-import-button" onClick={() => { void chooseFiles(); }} disabled={sourceBusy}><Images size={15} aria-hidden="true" /> {importBusy ? "正在导入" : "选择图片"}</button>
+            <button type="button" className="quiet-button compression-secondary-button" onClick={replaceSelectedItem} disabled={sourceBusy || !selectedItemId}><RefreshCw size={15} aria-hidden="true" /> 替换当前</button>
+            <button type="button" className="quiet-button compression-secondary-button" onClick={() => { void chooseDirectory(); }} disabled={sourceBusy}><FolderOpen size={15} aria-hidden="true" /> 导入文件夹</button>
           </div>
           <div className="compression-list" aria-label="待压缩图片列表">
             {items.length === 0 ? <p className="compression-empty">导入后将在这里显示文件、原始大小与来源。</p> : items.map((item) => (
