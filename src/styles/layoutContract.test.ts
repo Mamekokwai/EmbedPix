@@ -985,6 +985,7 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain('getFormatInfo(outputFormat).description');
     expect(converterView).not.toContain("format-description-footer");
     expect(converterView).not.toContain("EmbedPix · 嵌图匠");
+    expect(converterCss).toContain(".converter-footer:not(:has(.converter-footer-error)) { display: none; }");
     expect(converterCss).toContain(".converter-footer {\n  display: flex;");
     expect(formatMetadata).toContain("支持 1、4、8、16、24、32 位；仅 32 位保留透明度。");
   });

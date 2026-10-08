@@ -274,6 +274,7 @@
   color: var(--qp-text-tertiary);
   font-size: 11px;
 }
+.converter-footer:not(:has(.converter-footer-error)) { display: none; }
 
 /* 预览列的唯一内滚层：固定下限会把整块顶出卡片，min-height 归零后才能收窄并滚动。 */
 .preview-content {
