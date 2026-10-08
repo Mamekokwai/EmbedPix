@@ -643,6 +643,8 @@ describe("compact layout viewport contract", () => {
     expect(compressionCss).toContain(".compression-preview-compare-divider");
     expect(compressionCss).toContain(".compression-preview-compare-range input:focus-visible");
     expect(compressionView).toContain("hasPointerCapture(event.pointerId)");
+    expect(compressionView).toContain("onDragStart={(event) => event.preventDefault()}");
+    expect(compressionView).toContain("draggable={false}");
     expect(compressionView).toContain("Math.max(0, Math.min(100");
     expect(compressionView).toContain('className="compression-preview-compare-range visually-hidden"');
     expect(compressionCss).toContain("touch-action: none");
