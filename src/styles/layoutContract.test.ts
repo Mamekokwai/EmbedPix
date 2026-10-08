@@ -279,6 +279,9 @@ describe("compact layout viewport contract", () => {
     expect(gifCss).toContain(".gif-maker-view.page-view { padding: 4px var(--qp-space-page-inline); gap: 4px; }");
     expect(gifCss).not.toContain(".gif-maker-view.page-view { padding: 4px; gap: 4px; }");
     expect(compressionCss).not.toMatch(/\.compression-header \{[^}]*padding-top:/);
+    expect(compressionCss).toContain(".compression-app { padding-top: 12px; padding-bottom: 12px; }");
+    expect(gifCss).toContain(".gif-maker-view.page-view { padding-top: 12px; padding-bottom: 12px; }");
+    expect(compressionCss).toContain(".compression-app { padding-top: 8px; padding-bottom: 8px; }");
   });
 
   it("sinks the converter's left column scroll into the preview card so its toolbar stays clickable", () => {

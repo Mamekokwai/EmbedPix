@@ -528,6 +528,7 @@
 }
 
 @media (max-height: 700px) {
+  .gif-maker-view.page-view { padding-top: 12px; padding-bottom: 12px; }
   .gif-maker-content > .gif-workspace-grid {
     min-height: 280px;
   }
