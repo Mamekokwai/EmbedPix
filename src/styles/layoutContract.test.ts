@@ -112,10 +112,9 @@ describe("compact layout viewport contract", () => {
     expect(converterView).toContain('<div className="setting-group bit-depth-group">');
     expect(converterCss).toContain(".settings-module-body > .bit-depth-group { grid-column: 1 / -1; }");
     expect(converterView).toContain('<p className="field-help bit-depth-description-outside" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>');
-    expect(converterView.indexOf('className="field-help bit-depth-description-outside"')).toBeGreaterThan(converterView.indexOf('className="panel settings-panel"'));
-    expect(converterCss).toContain(".bit-depth-description-outside { display: flex; grid-column: 1 / -1;");
-    expect(converterCss).toContain("justify-content: flex-end;");
-    expect(converterCss).toContain("align-self: end;");
+    expect(converterView.indexOf('className="field-help bit-depth-description-outside"')).toBeGreaterThan(converterView.indexOf('className="output-summary"'));
+    expect(converterView.indexOf('className="field-help bit-depth-description-outside"')).toBeLessThan(converterView.indexOf('<div className="settings-stack"'));
+    expect(converterCss).toContain(".bit-depth-description-outside { min-width: 0; flex: 1 1 220px;");
   });
   it("centers the collapsible module header text and marker on one flex row", () => {
     // 标题与 +/− 标记都是 summary 的 flex 子项，靠 align-items:center 居中；标记 line-height:1 收敛到字形盒。

@@ -1562,6 +1562,7 @@ export default function ImageConverter({
               <h3>输出设置</h3>
             </div>
             <span className="output-summary">{outputSummary}</span>
+            <p className="field-help bit-depth-description-outside" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>
           </div>
 
           <div className="settings-stack" inert={status.kind === "busy"} aria-disabled={status.kind === "busy"} aria-busy={status.kind === "busy"}>
@@ -2001,7 +2002,6 @@ export default function ImageConverter({
             <div className="workspace-transfer-actions"><button className="quiet-button" type="button" onClick={saveWorkspace} disabled={status.kind === "busy"}>保存工作区</button><button className="quiet-button workspace-file-button" type="button" onClick={() => workspaceInputRef.current?.click()} disabled={status.kind === "busy"}>打开工作区</button></div>
           </div>
         </div>
-        <p className="field-help bit-depth-description-outside" id="bit-depth-description">{getBitDepthNote(outputFormat, bitDepth)}</p>
       </section>
 
       <footer className="converter-footer">

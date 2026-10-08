@@ -11,7 +11,6 @@ describe("位深选项提示布局契约", () => {
     expect(styles).toMatch(/\.bit-depth-select-row\s*\{\s*display:\s*flex;/);
     expect(styles).toContain("@media (max-width: 620px)");
     expect(styles).toContain(".bit-depth-select-row { flex-wrap: wrap; }");
-    expect(styles).toContain(".bit-depth-description-outside { display: flex; grid-column: 1 / -1;");
-    expect(styles).toContain("align-self: end;");
+    expect(styles).toContain(".bit-depth-description-outside { min-width: 0; flex: 1 1 220px;");
   });
 });
