@@ -642,6 +642,11 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain("aria-valuetext={`${previewSplit}% 原图与压缩结果分界`}");
     expect(compressionCss).toContain(".compression-preview-compare-divider");
     expect(compressionCss).toContain(".compression-preview-compare-range input:focus-visible");
+    expect(compressionView).toContain("previewPanDragRef");
+    expect(compressionView).toContain("setPointerCapture(event.pointerId)");
+    expect(compressionView).toContain("Math.max(-maxX");
+    expect(compressionCss).toContain("touch-action: none");
+    expect(compressionCss).toContain("cursor: grab");
     expect(compressionView).toContain("同名目标会拒绝写入");
     expect(compressionView).toContain("自动序号避免重名");
     expect(compressionView).toContain("autoNumbering");
