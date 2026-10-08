@@ -210,10 +210,11 @@
 .compression-summary-stat .compression-saving { color: var(--qp-success); }
 .compression-summary-stat .compression-failure { color: var(--qp-danger, #df6a6a); }
 .compression-estimate-note { margin-left: auto; }
-.compression-parameter-summary { display: flex; min-width: 0; max-width: min(760px, 62%); height: 34px; flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: 3px 9px; margin: 0; overflow: hidden; padding: 4px 8px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: color-mix(in srgb, var(--qp-bg-panel) 72%, var(--qp-bg-elevated)); color: var(--qp-text-tertiary); font-size: 10px; line-height: 1.2; }
+.compression-parameter-summary { box-sizing: border-box; display: flex; min-width: 0; max-width: min(760px, 62%); height: 34px; flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: 3px 9px; margin: 0; overflow: hidden; padding: 3px 8px; border: 1px solid var(--qp-border-subtle); border-radius: var(--qp-radius-control); background: color-mix(in srgb, var(--qp-bg-panel) 72%, var(--qp-bg-elevated)); color: var(--qp-text-tertiary); font-size: 10px; line-height: 1.1; }
 .compression-parameter-summary > strong { flex: 0 0 auto; color: var(--qp-text-secondary); font-size: 11px; }
 .compression-parameter-summary > div { display: flex; min-width: 0; flex: 1 1 240px; flex-wrap: wrap; gap: 1px 7px; max-height: 23px; overflow: hidden; }
 .compression-copy-summary { flex: 0 0 auto; }
+.compression-parameter-summary .compression-copy-summary { box-sizing: border-box; min-height: 24px; height: 24px; padding: 0 7px; font-size: 10px; line-height: 1; }
 .compression-parameter-summary span { max-width: 100%; overflow-wrap: anywhere; }
 .compression-parameter-summary span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .compression-parameter-summary span::after { margin-left: 4px; color: var(--qp-border-strong); content: "·"; }
@@ -328,7 +329,7 @@
 }
 
 .compression-parameter-summary {
-  margin-top: 14px;
+  margin-top: 0;
 }
 
 .compression-footer {

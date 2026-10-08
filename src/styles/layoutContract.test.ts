@@ -715,10 +715,13 @@ describe("compact layout viewport contract", () => {
     expect(compressionView).toContain('className="compression-alpha-status"');
     expect(compressionView).toContain('aria-label="复制当前压缩参数摘要"');
     expect(compressionView).toContain("formatCompressionParameterSummary");
-    expect(compressionCss).toContain(".compression-parameter-summary { display: flex;");
-    expect(compressionCss).toContain("padding: 4px 8px;");
+    expect(compressionCss).toContain(".compression-parameter-summary { box-sizing: border-box; display: flex;");
+    expect(compressionCss).toContain("padding: 3px 8px;");
     expect(compressionCss).toContain("height: 34px;");
     expect(compressionCss).toContain("align-items: center;");
+    expect(compressionCss).toContain("box-sizing: border-box;");
+    expect(compressionCss).toContain("min-height: 24px; height: 24px;");
+    expect(compressionCss).toContain("margin-top: 0;");
     expect(compressionCss).toContain("overflow: hidden;");
     expect(compressionCss).toContain("overflow-wrap: anywhere;");
     expect(compressionCss).toContain(".compression-alpha-status { display: flex;");
