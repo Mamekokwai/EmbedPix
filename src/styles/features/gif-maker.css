@@ -194,7 +194,8 @@
 }
 
 @media (max-height: 620px) {
-  .gif-maker-view.page-view { padding: 4px; gap: 4px; }
+  /* 短窗口只压缩纵向空间，横向仍与其他 page-view 对齐，保证页头分割线长度一致。 */
+  .gif-maker-view.page-view { padding: 4px var(--qp-space-page-inline); gap: 4px; }
   .gif-maker-header.page-header { gap: 5px; padding-bottom: 4px; }
   .gif-maker-header .page-header-icon { width: 28px; height: 28px; }
   .gif-maker-header h1 { font-size: 15px; }

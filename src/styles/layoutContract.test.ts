@@ -268,6 +268,9 @@ describe("compact layout viewport contract", () => {
     // 不许再退回各写一套的卡片间距。
     expect(compressionCss).not.toMatch(/\.compression-settings-card \{[^}]*gap: 15px;/);
     expect(gifCss).not.toMatch(/\.gif-workspace-grid \{[^}]*gap: 10px;/);
+    // GIF 短窗口只收紧上下边距，不能把横向页边距压成 4px，避免页头横线变短。
+    expect(gifCss).toContain(".gif-maker-view.page-view { padding: 4px var(--qp-space-page-inline); gap: 4px; }");
+    expect(gifCss).not.toContain(".gif-maker-view.page-view { padding: 4px; gap: 4px; }");
   });
 
   it("sinks the converter's left column scroll into the preview card so its toolbar stays clickable", () => {
