@@ -7,7 +7,6 @@ describe("输出格式选项网格契约", () => {
     const styles = readFileSync(resolve(__dirname, "features/image-converter.css"), "utf8");
     expect(styles).toMatch(/\.format-selector\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/s);
     expect(styles).toContain("grid-auto-rows: auto;");
-    expect(styles).toContain("aspect-ratio: 2 / 1;");
     expect(styles).toContain("container: format-options / inline-size;");
     expect(styles).toContain("@container format-options (max-width: 520px)");
     expect(styles).toContain("@container format-options (max-width: 360px)");

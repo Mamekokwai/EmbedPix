@@ -130,7 +130,7 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain("@container format-options (max-width: 210px)");
     expect(converterCss).toMatch(/\.format-option \{[^}]*min-width: 0;/);
     expect(converterCss).toContain("grid-auto-rows: auto;");
-    expect(converterCss).toContain("aspect-ratio: 2 / 1;");
+    expect(converterCss).not.toContain("aspect-ratio: 2 / 1;");
     expect(converterCss).toContain("box-sizing: border-box;");
     expect(converterCss).toContain(".format-option-content { display: flex;");
     expect(converterView).toContain('className="format-option-content"');
