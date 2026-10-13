@@ -23,6 +23,11 @@ describe("shared file drop boundary", () => {
       expect(source).toContain("fileDrop.onDragLeave");
       expect(source).toContain("fileDrop.onDrop");
     }
+    expect(gif).toContain('role="button"');
+    expect(gif).toContain("onClick={() => { if (canEditFrames) openFileDialog(); }}");
+    expect(gif).toContain('event.key === "Enter" || event.key === " "');
+    expect(gif).toContain('accept={sourceMode === "video" ? VIDEO_ACCEPT : IMAGE_ACCEPT}');
+    expect(gif).toContain("fileInputRef.current?.click()");
   });
 
   it("keeps converter preview images and compression preview images from becoming drop sources", () => {

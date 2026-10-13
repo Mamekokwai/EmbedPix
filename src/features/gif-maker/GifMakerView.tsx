@@ -2452,8 +2452,16 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
             </div>
             <div
               className={`gif-drop-zone${fileDrop.dragging ? " gif-drop-zone-active" : ""}`}
-              role="region"
+              role="button"
+              tabIndex={canEditFrames ? 0 : -1}
               aria-disabled={!canEditFrames}
+              onClick={() => { if (canEditFrames) openFileDialog(); }}
+              onKeyDown={(event) => {
+                if (canEditFrames && (event.key === "Enter" || event.key === " ")) {
+                  event.preventDefault();
+                  openFileDialog();
+                }
+              }}
               onDragEnter={fileDrop.onDragEnter}
               onDragOver={fileDrop.onDragOver}
               onDragLeave={fileDrop.onDragLeave}
