@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ChangeEvent, CSSProperties, DragEvent, KeyboardEvent } from "react";
+import type { ChangeEvent, CSSProperties, KeyboardEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   Check,
@@ -29,6 +29,7 @@ import {
 } from "../../platform/image/imageExportGateway";
 import type { ImageExportPreflightResult } from "../../platform/image/imageExportGateway";
 import type { ExportImageResponse, ImagePreviewResponse } from "./types";
+import { useFileDrop } from "../../shared/useFileDrop";
 import {
   DEFAULT_C_ARRAY_NAME,
   DEFAULT_JPEG_QUALITY,
@@ -801,15 +802,7 @@ export default function ImageConverter({
     } catch (error) { setError(formatWorkspaceTransferError(error)); setStatus({ kind: "error", text: "工作区打开失败" }); }
   };
 
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    if (status.kind === "busy") return;
-    setIsDragging(false);
-    const nextFiles = Array.from(event.dataTransfer.files);
-    if (nextFiles.length > 0) {
-      void loadFiles(nextFiles);
-    }
-  };
+  const fileDrop = useFileDrop({ disabled: status.kind === "busy", onFiles: (files) => { void loadFiles(files); } });
 
   const removeImage = (imageId: string) => {
     const removedImage = loadedImages.find((image) => image.id === imageId);
@@ -1400,18 +1393,11 @@ export default function ImageConverter({
 
           {!file ? (
             <div
-              className={`drop-zone${isDragging ? " drop-zone-dragging" : ""}`}
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragOver={(event) => event.preventDefault()}
-              onDragLeave={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                  setIsDragging(false);
-                }
-              }}
-              onDrop={handleDrop}
+              className={`drop-zone${isDragging || fileDrop.dragging ? " drop-zone-dragging" : ""}`}
+              onDragEnter={fileDrop.onDragEnter}
+              onDragOver={fileDrop.onDragOver}
+              onDragLeave={fileDrop.onDragLeave}
+              onDrop={fileDrop.onDrop}
               onClick={() => handleSelectImage()}
               role="button"
               tabIndex={0}
@@ -1429,7 +1415,7 @@ export default function ImageConverter({
               <small>支持 {SUPPORTED_IMAGE_FORMAT_LABEL}</small>
             </div>
           ) : (
-            <div className="preview-content">
+            <div className={`preview-content${fileDrop.dragging ? " drop-zone-dragging" : ""}`} onDragEnter={fileDrop.onDragEnter} onDragOver={fileDrop.onDragOver} onDragLeave={fileDrop.onDragLeave} onDrop={fileDrop.onDrop}>
               <div className="preview-frame" style={{ backgroundColor }}>
                 {previewUrl ? (cropPreview ? (
                   <div

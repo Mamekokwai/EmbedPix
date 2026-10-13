@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
+import { useFileDrop } from "../../shared/useFileDrop";
 import { getFormatMetadata, GIF_OUTPUT_FORMAT_IDS } from "../../shared/formatMetadata";
 import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSequenceSize, exportApng, exportGif, exportPngSequence, exportWebpAnimation, getGifExportProgress, isTauriEnvironment, pickAnimationOutput, pickGifOutput, pickGifSequenceOutput, planGifCompression, revealGifOutput } from "../../platform/gif/gifGateway";
 import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
@@ -556,7 +557,6 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [lastExportPath, setLastExportPath] = useState<string | null>(null);
   const [outputFormat, setOutputFormat] = useState<GifOutputFormat>(savedPreferences.outputFormat);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [sourceMode, setSourceMode] = useState<GifSourceMode>("image");
   const [videoSource, setVideoSource] = useState<VideoSourceModel | null>(null);
   const videoSourceRef = useRef<VideoSourceModel | null>(null);
@@ -1234,17 +1234,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   };
 
 
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-    if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
-    const droppedFiles = Array.from(event.dataTransfer.files);
-    if (sourceMode === "video") {
-      if (droppedFiles[0]) void importVideo(droppedFiles[0]);
-    } else {
-      void importFiles(droppedFiles);
-    }
-  };
+  const fileDrop = useFileDrop({ disabled: !canEditGifFrames(lockedRef.current, pendingRef.current, status.kind), onFiles: (files) => {
+    if (sourceMode === "video") { if (files[0]) void importVideo(files[0]); }
+    else void importFiles(files);
+  } });
 
   const removeFrame = (index: number) => {
     if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind)) return;
@@ -2458,18 +2451,18 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
               {frames.length ? <span className="gif-count-badge">{frames.length} 帧</span> : null}
             </div>
             <div
-              className={`gif-drop-zone${isDragging ? " gif-drop-zone-active" : ""}`}
+              className={`gif-drop-zone${fileDrop.dragging ? " gif-drop-zone-active" : ""}`}
               role="region"
               aria-disabled={!canEditFrames}
-              onDragEnter={(event) => { event.preventDefault(); if (canEditFrames) setIsDragging(true); }}
-              onDragOver={(event) => { event.preventDefault(); if (canEditFrames) setIsDragging(true); }}
-              onDragLeave={() => { if (canEditFrames) setIsDragging(false); }}
-              onDrop={(event) => { if (locked) { event.preventDefault(); return; } handleDrop(event); }}
+              onDragEnter={fileDrop.onDragEnter}
+              onDragOver={fileDrop.onDragOver}
+              onDragLeave={fileDrop.onDragLeave}
+              onDrop={fileDrop.onDrop}
               aria-label={sourceMode === "video" ? "将视频拖放到这里" : "将图片拖放到这里"}
             >
               <Download size={20} aria-hidden="true" />
               <strong>
-                <span className="gif-drop-label-full">{isDragging ? `松开以添加${sourceMode === "video" ? "视频" : "图片"}` : `拖放${sourceMode === "video" ? "视频" : "图片"}到这里`}</span>
+                <span className="gif-drop-label-full">{fileDrop.dragging ? `松开以添加${sourceMode === "video" ? "视频" : "图片"}` : `拖放${sourceMode === "video" ? "视频" : "图片"}到这里`}</span>
                 <span className="gif-drop-label-compact">添加{sourceMode === "video" ? "视频" : "图片"}</span>
               </strong>
             </div>

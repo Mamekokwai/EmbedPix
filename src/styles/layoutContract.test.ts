@@ -869,7 +869,8 @@ describe("compact layout viewport contract", () => {
   it("keeps GIF drag and drop isolated from the hidden image converter", () => {
     expect(appShell).toContain('<div className="app-kept-view" hidden={view !== "converter"}>');
     expect(appShell).toContain('<div className="app-kept-view app-kept-gif" hidden={view !== "gif"}>');
-    expect(gifView).toContain("onDrop={(event) => { if (locked) { event.preventDefault(); return; } handleDrop(event); }}");
+    expect(gifView).toContain("fileDrop.onDrop");
+    expect(gifView).toContain("disabled: !canEditGifFrames");
     expect(gifView).toContain('if (sourceMode === "video")');
   });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2, Download, FileDown, FolderOpen, Images, Info, LoaderCircle, Minimize2, RefreshCw, Trash2 } from "lucide-react";
 import ThemeSelect from "../../shared/components/ThemeSelect";
 import "../../styles/features/image-compression.css";
@@ -6,6 +6,7 @@ import { cancelCompression, compressImage, createCompressionRequest, estimateIma
 import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
 import { isTauriEnvironment, revealImageOutput } from "../../platform/image/imageExportGateway";
 import type { NativeImageFile } from "../../platform/image/imageExportGateway";
+import { useFileDrop } from "../../shared/useFileDrop";
 import {
   COMPRESSION_FORMATS,
   COMPRESSION_PRESETS,
@@ -234,7 +235,6 @@ export default function ImageCompressionView({ active = true }: ImageCompression
   const [customPresetMessage, setCustomPresetMessage] = useState<string | null>(null);
   const [status, setStatus] = useState<CompressionStatus>("idle");
   const [importBusy, setImportBusy] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [progressBytes, setProgressBytes] = useState<{ input: number | null; output: number | null }>({ input: null, output: null });
   const [stage, setStage] = useState("");
@@ -751,11 +751,7 @@ export default function ImageCompressionView({ active = true }: ImageCompression
     void chooseFiles();
   };
 
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setDragging(false);
-    if (!sourceBusy) addBrowserFiles(Array.from(event.dataTransfer.files));
-  };
+  const fileDrop = useFileDrop({ disabled: sourceBusy, onFiles: addBrowserFiles });
 
   const monitorCompressionProgress = async (jobId: string) => {
     const controller = new AbortController();
@@ -1238,22 +1234,22 @@ export default function ImageCompressionView({ active = true }: ImageCompression
       <div className="compression-content">
       <div className="compression-grid">
         <div
-          className={`panel preview-panel compression-card compression-input-card${dragging && items.length > 0 ? " compression-card-dragging" : ""}`}
-          onDragEnter={items.length > 0 ? (event) => { event.preventDefault(); if (!sourceBusy) setDragging(true); } : undefined}
-          onDragOver={items.length > 0 ? (event) => event.preventDefault() : undefined}
-          onDragLeave={items.length > 0 ? (event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); } : undefined}
-          onDrop={items.length > 0 ? handleDrop : undefined}
+          className={`panel preview-panel compression-card compression-input-card${fileDrop.dragging ? " compression-card-dragging" : ""}`}
+          onDragEnter={fileDrop.onDragEnter}
+          onDragOver={fileDrop.onDragOver}
+          onDragLeave={fileDrop.onDragLeave}
+          onDrop={fileDrop.onDrop}
         >
           <div className="panel-heading">
             <div><p className="panel-kicker">01 / IMPORT</p><h3>源图片</h3></div>
             <div className="compression-heading-actions"><span className="compression-count">{items.length} 个文件</span>{items.length > 0 ? <button type="button" className="compression-clear-button" onClick={clearItems} disabled={sourceBusy}>清空</button> : null}</div>
           </div>
           {items.length === 0 ? <div
-            className={`drop-zone compression-drop-zone${dragging ? " drop-zone-dragging compression-drop-zone-dragging" : ""}${sourceBusy ? " compression-drop-zone-disabled" : ""}`}
-            onDragEnter={(event) => { event.preventDefault(); if (!sourceBusy) setDragging(true); }}
-            onDragOver={(event) => event.preventDefault()}
-            onDragLeave={() => setDragging(false)}
-            onDrop={handleDrop}
+            className={`drop-zone compression-drop-zone${fileDrop.dragging ? " drop-zone-dragging compression-drop-zone-dragging" : ""}${sourceBusy ? " compression-drop-zone-disabled" : ""}`}
+            onDragEnter={fileDrop.onDragEnter}
+            onDragOver={fileDrop.onDragOver}
+            onDragLeave={fileDrop.onDragLeave}
+            onDrop={fileDrop.onDrop}
             role="button"
             tabIndex={sourceBusy ? -1 : 0}
             aria-disabled={sourceBusy}
