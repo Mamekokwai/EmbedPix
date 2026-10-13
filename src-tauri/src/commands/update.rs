@@ -135,10 +135,12 @@ fn clear_pending_install_marker(app: &AppHandle) {
     }
 }
 
+#[cfg(any(windows, test))]
 fn quote_powershell_literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
+#[cfg(any(windows, test))]
 fn windows_install_script(installer: &Path, application: &Path, process_id: u32) -> String {
     format!(
         "$ErrorActionPreference = 'Stop'; $installer = {}; $application = {}; Wait-Process -Id {}; $process = Start-Process -FilePath $installer -ArgumentList @('/S') -Wait -PassThru; if ($process.ExitCode -ne 0) {{ throw \"更新安装程序退出码：$($process.ExitCode)\" }}; Start-Process -FilePath $application",
