@@ -269,6 +269,7 @@ export default function ImageConverter({
   const [appliedPreviewTransform, setAppliedPreviewTransform] = useState<ImageTransform>({ rotation: 0, flipHorizontal: false, flipVertical: false, crop: null });
   const [pixelSettingsOpen, setPixelSettingsOpen] = useState(false);
   const [outputSettingsOpen, setOutputSettingsOpen] = useState(false);
+  const [exportResultOpen, setExportResultOpen] = useState(false);
   const [outputLocation, setOutputLocation] = useState<OutputLocation>("source");
   const [outputSubdirectory, setOutputSubdirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
@@ -1898,6 +1899,26 @@ export default function ImageConverter({
                 </div>
               </details>
 
+              {actualExportResult?.outputPath && status.kind === "success" ? (
+                <details className="settings-module export-result-module" open={exportResultOpen} onToggle={(event) => setExportResultOpen(event.currentTarget.open)}>
+                  <summary aria-expanded={exportResultOpen} aria-controls="image-export-result-panel" onKeyDown={(event) => handleSettingsSummaryKeyDown(event, () => setExportResultOpen(false))}>导出结果</summary>
+                  <div id="image-export-result-panel" className="settings-module-body export-result-body">
+                    <div className="export-result-summary" role="status">
+                      <strong>{exportOutputPaths.length > 1 ? `已完成 ${exportOutputPaths.length} 项导出` : "导出完成"}</strong>
+                      <span>{actualExportResult.format?.toUpperCase() ?? "格式由桌面端返回"} · {actualExportResult.width && actualExportResult.height ? `${actualExportResult.width} × ${actualExportResult.height} px` : "尺寸由桌面端返回"} · {actualExportResult.bitDepth ? `${actualExportResult.bitDepth} 位` : "位深由桌面端返回"} · {typeof actualExportResult.outputBytes === "number" ? formatFileSize(actualExportResult.outputBytes) : "文件体积由桌面端返回"}</span>
+                    </div>
+                    <ul className="export-result-paths" aria-label="导出文件路径">
+                      {(exportOutputPaths.length ? exportOutputPaths : [actualExportResult.outputPath]).map((path, index) => <li key={`${path}-${index}`}><code title={path}>{path}</code></li>)}
+                    </ul>
+                    <div className="export-output-actions">
+                      <button className="quiet-button" type="button" onClick={() => void revealExportFolder()}>打开所在文件夹</button>
+                      <button className="quiet-button" type="button" onClick={() => void copyExportPath()}>复制输出路径</button>
+                      {exportOutputPaths.length > 1 ? <button className="quiet-button" type="button" onClick={() => void copyExportPaths()}>复制全部路径</button> : null}
+                    </div>
+                  </div>
+                </details>
+              ) : null}
+
           </div>
 
           <div className="panel-footer">
@@ -1958,14 +1979,6 @@ export default function ImageConverter({
                 </p>
               ) : null}
               {nativePreflightStatus ? <p className="export-progress-summary" role="status">{nativePreflightStatus}</p> : null}
-              {actualExportResult?.outputPath && status.kind === "success" ? <p className="export-progress-summary export-actual-result" role="status">
-                实际导出：{actualExportResult.outputPath} · {actualExportResult.width && actualExportResult.height ? `${actualExportResult.width} × ${actualExportResult.height} px` : "尺寸由桌面端返回"} · {actualExportResult.format?.toUpperCase() ?? "格式由桌面端返回"} · {actualExportResult.bitDepth ? `${actualExportResult.bitDepth} 位` : "位深由桌面端返回"} · {typeof actualExportResult.outputBytes === "number" ? `实际体积 ${formatFileSize(actualExportResult.outputBytes)}` : "文件体积由桌面端返回"}
-              </p> : null}
-              {actualExportResult?.outputPath && status.kind !== "busy" ? <div className="export-output-actions">
-                <button className="quiet-button" type="button" onClick={() => void revealExportFolder()}>打开所在文件夹</button>
-                <button className="quiet-button" type="button" onClick={() => void copyExportPath()}>复制输出路径</button>
-                {exportOutputPaths.length > 1 ? <button className="quiet-button" type="button" onClick={() => void copyExportPaths()}>复制全部路径</button> : null}
-              </div> : null}
             </div>
             <div className="footer-actions">
               {failedExportIds.length > 0 && status.kind !== "busy" ? (

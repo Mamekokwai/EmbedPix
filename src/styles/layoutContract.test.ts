@@ -139,6 +139,19 @@ describe("compact layout viewport contract", () => {
     expect(converterCss).toContain(".format-option-content { display: flex;");
     expect(converterView).toContain('className="format-option-content"');
   });
+
+  it("keeps completed export information as the fourth sibling accordion in output settings", () => {
+    const resultIndex = converterView.indexOf('className="settings-module export-result-module"');
+    const stackEnd = converterView.indexOf('<div className="panel-footer">', resultIndex);
+    expect(resultIndex).toBeGreaterThan(converterView.indexOf('className="settings-stack"'));
+    expect(resultIndex).toBeLessThan(stackEnd);
+    expect(converterView).toContain('open={exportResultOpen}');
+    expect(converterView).toContain('actualExportResult?.outputPath && status.kind === "success"');
+    expect(converterView).toContain('className="export-result-paths"');
+    expect(converterView).toContain("copyExportPaths");
+    expect(converterCss).toContain(".export-result-body {");
+    expect(converterCss).toContain(".export-result-paths {");
+  });
   it("reveals converter explanations on hover instead of always showing them", () => {
     expect(fieldHintCss).toContain(".field-help-hover {");
     expect(fieldHintCss).toContain("*:has(+ .field-help-hover):hover + .field-help-hover,");
