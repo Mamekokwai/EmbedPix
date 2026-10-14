@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ExportSafetyPlan } from "./imageConverterLogic";
 import {
   BMP_BIT_DEPTHS,
   DEFAULT_C_ARRAY_NAME,
@@ -305,6 +306,16 @@ describe("batch image export helpers", () => {
     });
 
     expect(plan.targetPaths).toEqual(["C:\\Images\\export\\screen.png"]);
+    expect(formatExportSafetyConfirmation(plan)).toBeNull();
+  });
+
+  it("does not require overwrite confirmation when no target file exists", () => {
+    const plan: ExportSafetyPlan = {
+      targetPaths: [],
+      sourcePathsToBackup: [],
+      sourcePathsToDelete: [],
+      overwriteMode: "same-name",
+    };
     expect(formatExportSafetyConfirmation(plan)).toBeNull();
   });
 });

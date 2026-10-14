@@ -657,7 +657,7 @@ export function getExportSafetyPlan(
 }
 
 export function formatExportSafetyConfirmation(plan: ExportSafetyPlan): string | null {
-  const requiresConfirmation = plan.overwriteMode !== null || plan.sourcePathsToDelete.length > 0;
+  const requiresConfirmation = (plan.overwriteMode === "original" || (plan.overwriteMode === "same-name" && plan.targetPaths.length > 0)) || plan.sourcePathsToDelete.length > 0;
   if (!requiresConfirmation) return null;
 
   const lines = ["导出前请确认以下文件操作："];

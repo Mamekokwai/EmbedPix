@@ -248,6 +248,7 @@ export default function ImageConverter({
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
+  const [dimensionsCustomized, setDimensionsCustomized] = useState(false);
   const [widthInput, setWidthInput] = useState("");
   const [heightInput, setHeightInput] = useState("");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>(defaultOutputFormat);
@@ -288,6 +289,7 @@ export default function ImageConverter({
   const [exportPreflight, setExportPreflight] = useState<ExportPreflightResult | null>(null);
   const [nativePreflightStatus, setNativePreflightStatus] = useState<string | null>(null);
   const [actualExportResult, setActualExportResult] = useState<ExportImageResponse | null>(null);
+  const [exportCompletionSummary, setExportCompletionSummary] = useState<string | null>(null);
   const [exportOutputPaths, setExportOutputPaths] = useState<string[]>([]);
   const [realPreview, setRealPreview] = useState<ImagePreviewResponse | null>(null);
   const [realPreviewUrl, setRealPreviewUrl] = useState<string | null>(null);
@@ -551,6 +553,7 @@ export default function ImageConverter({
     setNativePreflightStatus(null);
     setFailureDetailsOpen(false);
     setExportProgress(null);
+    setExportCompletionSummary(null);
   };
 
   const activateLoadedImage = (image: LoadedImage, resetDeleteSource = true) => {
@@ -558,11 +561,13 @@ export default function ImageConverter({
     setFile(image.file);
     setPreviewUrl(image.previewUrl);
     setDimensions(image.dimensions);
-    const targetDimensions = constrainDimensions(image.dimensions);
-    setWidth(targetDimensions.width);
-    setHeight(targetDimensions.height);
-    setWidthInput(String(targetDimensions.width));
-    setHeightInput(String(targetDimensions.height));
+    if (!dimensionsCustomized) {
+      const targetDimensions = constrainDimensions(image.dimensions);
+      setWidth(targetDimensions.width);
+      setHeight(targetDimensions.height);
+      setWidthInput(String(targetDimensions.width));
+      setHeightInput(String(targetDimensions.height));
+    }
     resetImageTransform(image.dimensions);
     if (resetDeleteSource) {
       setDeleteSource(false);
@@ -837,6 +842,7 @@ export default function ImageConverter({
     setDeleteSource(false);
     setWidth(0);
     setHeight(0);
+    setDimensionsCustomized(false);
     setWidthInput("");
     setHeightInput("");
     setError(null);
@@ -866,6 +872,7 @@ export default function ImageConverter({
     setDeleteSource(false);
     setWidth(0);
     setHeight(0);
+    setDimensionsCustomized(false);
     setWidthInput("");
     setHeightInput("");
     setError(null);
@@ -886,6 +893,7 @@ export default function ImageConverter({
   };
 
   const handleWidthChange = (value: string) => {
+    setDimensionsCustomized(true);
     setWidthInput(value);
     const nextWidth = parseDimension(value);
     if (nextWidth === null) {
@@ -913,6 +921,7 @@ export default function ImageConverter({
   };
 
   const handleHeightChange = (value: string) => {
+    setDimensionsCustomized(true);
     setHeightInput(value);
     const nextHeight = parseDimension(value);
     if (nextHeight === null) {
@@ -940,6 +949,7 @@ export default function ImageConverter({
   };
 
   const handleDimensionBlur = (axis: "width" | "height") => {
+    setDimensionsCustomized(true);
     const value = axis === "width" ? widthInput : heightInput;
     if (parseDimension(value) !== null) {
       return;
@@ -1157,9 +1167,9 @@ export default function ImageConverter({
     setActualExportResult(null);
     const estimatedBytes = estimateImageExportBytesForDimensions(requestedImages.map((image) => {
       const targetSourceDimensions = getTransformedSourceDimensions(image.dimensions, imageTransform);
-      const targetDimensions = keepAspectRatio
-        ? constrainAspectDimensions("width", width, targetSourceDimensions)
-        : { width, height };
+      const targetDimensions = dimensionsCustomized
+        ? (keepAspectRatio ? constrainAspectDimensions("width", width, targetSourceDimensions) : { width, height })
+        : targetSourceDimensions;
       return { file: image.file, width: targetDimensions.width, height: targetDimensions.height };
     }), outputFormat, getEffectiveBitDepth(outputFormat, bitDepth));
     const preflight = getExportPreflight(safetyPlan);
@@ -1212,7 +1222,10 @@ export default function ImageConverter({
         return;
       }
     }
-    const confirmationMessage = formatExportSafetyConfirmation(safetyPlan);
+    const confirmationPlan = overwriteSameName && outputLocation !== "original" && nativePreflight?.supported
+      ? { ...safetyPlan, targetPaths: nativePreflight.items.filter((item) => item.targetExists).map((item) => item.targetPath) }
+      : safetyPlan;
+    const confirmationMessage = formatExportSafetyConfirmation(confirmationPlan);
     if (confirmationMessage && !window.confirm(confirmationMessage)) {
       setError(null);
       setStatus({ kind: "ready", text: "已取消导出，文件未改变" });
@@ -1236,9 +1249,9 @@ export default function ImageConverter({
           throw new Error(imageTransformError);
         }
         const targetSourceDimensions = getTransformedSourceDimensions(image.dimensions, imageTransform);
-        const targetDimensions = keepAspectRatio
-          ? constrainAspectDimensions("width", width, targetSourceDimensions)
-          : { width, height };
+        const targetDimensions = dimensionsCustomized
+          ? (keepAspectRatio ? constrainAspectDimensions("width", width, targetSourceDimensions) : { width, height })
+          : targetSourceDimensions;
         const request: ExportImageRequest = {
           fileName: requestedPlan.items[queueIndex]?.targetPath.split(/[\\/]/u).pop() ?? image.file.name,
           inputData: new Uint8Array(await image.file.arrayBuffer()),
@@ -1296,6 +1309,7 @@ export default function ImageConverter({
     setFailedExportIds(result.failed.map(({ item }) => item.id));
     setExportOutputPaths(exportedOutputPaths);
     setExportFailures(failures);
+    setExportCompletionSummary(formatExportQueueSummary(result));
     if (failures.length > 0) {
       setError(formatExportFailureDetails(failures));
     } else {
@@ -1928,9 +1942,11 @@ export default function ImageConverter({
                   <summary aria-expanded={exportResultOpen} aria-controls="image-export-result-panel" onKeyDown={(event) => handleSettingsSummaryKeyDown(event, () => setExportResultOpen(false))}>导出结果</summary>
                   <div id="image-export-result-panel" className="settings-module-body export-result-body">
                     <div className="export-result-summary" role="status">
-                      <strong>{exportOutputPaths.length > 1 ? `已完成 ${exportOutputPaths.length} 项导出` : "导出完成"}</strong>
+                      <strong>{exportCompletionSummary ?? (exportOutputPaths.length > 1 ? `已完成 ${exportOutputPaths.length} 项导出` : "导出完成")}</strong>
                       <span>{actualExportResult.format?.toUpperCase() ?? "格式由桌面端返回"} · {actualExportResult.width && actualExportResult.height ? `${actualExportResult.width} × ${actualExportResult.height} px` : "尺寸由桌面端返回"} · {actualExportResult.bitDepth ? `${actualExportResult.bitDepth} 位` : "位深由桌面端返回"} · {typeof actualExportResult.outputBytes === "number" ? formatFileSize(actualExportResult.outputBytes) : "文件体积由桌面端返回"}</span>
                     </div>
+                    {exportPreflight ? <p className="export-progress-summary">预检：预计成功 {exportPreflight.expectedSuccesses} · 失败 {exportPreflight.expectedFailures}{exportPreflight.diskSpaceChecked ? " · 已检查磁盘空间" : " · 未检查磁盘空间（当前平台无可靠探针）"}</p> : null}
+                    {nativePreflightStatus ? <p className="export-progress-summary">{nativePreflightStatus}</p> : null}
                     <ul className="export-result-paths" aria-label="导出文件路径">
                       {(exportOutputPaths.length ? exportOutputPaths : [actualExportResult.outputPath]).map((path, index) => <li key={`${path}-${index}`}><code title={path}>{path}</code></li>)}
                     </ul>
@@ -1996,13 +2012,6 @@ export default function ImageConverter({
                   ) : null}
                 </div>
               ) : null}
-              {exportPreflight ? (
-                <p className="export-progress-summary" role="status">
-                  预检：预计成功 {exportPreflight.expectedSuccesses} · 失败 {exportPreflight.expectedFailures}
-                  {exportPreflight.diskSpaceChecked ? " · 已检查磁盘空间" : " · 未检查磁盘空间（当前平台无可靠探针）"}
-                </p>
-              ) : null}
-              {nativePreflightStatus ? <p className="export-progress-summary" role="status">{nativePreflightStatus}</p> : null}
             </div>
             <div className="footer-actions">
               {failedExportIds.length > 0 && status.kind !== "busy" ? (
