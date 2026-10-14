@@ -28,7 +28,7 @@ import { cancelGifExport, estimateAnimationSize, estimateGifSize, estimatePngSeq
 import { registerWindowCloseHandler } from "../../platform/window/windowCloseCoordinator";
 import type { AnimationExportRequest, GifExportFrame, GifExportJobStatus, GifExportProgress, PngSequenceExportRequest } from "../../platform/gif/gifGateway";
 import type { GifOutputLocation } from "../../platform/gif/gifGateway";
-import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, createGifExportReport, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifExportCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifHoldDuration, compareGifSizes, createGifExportReport, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_GIF_COMPRESSION_CANDIDATES, MAX_TOTAL_PIXELS, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifExportCanvasSize, resolveGifContentRect, sampleGifFrames, snapGifFrameDuration, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifCanvasPreset, GifCanvasSize, GifColorCount, GifContentAlignment, GifContentFit, GifContentMargins, GifPlaybackSpeed, GifSizeComparison } from "./gifMakerLogic";
 import { loadGifMakerPreferences, saveGifMakerPreferences } from "./gifMakerPreferences";
 import { createGifCustomPreset, loadGifCustomPresets, saveGifCustomPresets, type GifCustomPreset } from "./gifCustomPresets";
@@ -521,7 +521,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   const [background, setBackground] = useState<GifBackground>(savedPreferences.background);
   const [customBackgroundColor, setCustomBackgroundColor] = useState(savedPreferences.customBackgroundColor);
   const [globalDuration, setGlobalDuration] = useState(savedPreferences.globalDuration);
+  const [globalDurationInput, setGlobalDurationInput] = useState(String(savedPreferences.globalDuration));
   const [batchDuration, setBatchDuration] = useState(savedPreferences.batchDuration);
+  const [batchDurationInput, setBatchDurationInput] = useState(String(savedPreferences.batchDuration));
+  const [selectedDurationInput, setSelectedDurationInput] = useState(String(DEFAULT_DURATION));
   const [firstFrameHoldDuration, setFirstFrameHoldDuration] = useState(savedPreferences.firstFrameHoldDuration);
   const [lastFrameHoldDuration, setLastFrameHoldDuration] = useState(savedPreferences.lastFrameHoldDuration);
   const [playbackSpeed, setPlaybackSpeed] = useState<GifPlaybackSpeed>(savedPreferences.playbackSpeed);
@@ -713,6 +716,10 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
   }, [autoCompress, background, canvasHeight, canvasWidth, colorCount, contentAlignment, contentMargins, customBackgroundColor, ditherMode, encodingQuality, firstFrameHoldDuration, fitMode, frames, globalDuration, lastFrameHoldDuration, loopCount, loopMode, maxSizeKiB, mergeIdenticalFrames, outputFormat, sourceMode, targetSizeKiB, videoCropPreset, videoEveryNthFrame, videoFps, videoMaxFrames, videoReverse, videoRotation]);
 
   const selectedFrame = frames[selectedIndex] ?? null;
+
+  useEffect(() => { setGlobalDurationInput(String(globalDuration)); }, [globalDuration]);
+  useEffect(() => { setBatchDurationInput(String(batchDuration)); }, [batchDuration]);
+  useEffect(() => { setSelectedDurationInput(String(selectedFrame?.durationMs ?? DEFAULT_DURATION)); }, [selectedFrame?.id, selectedFrame?.durationMs]);
 
   useEffect(() => {
     if (frames.length === 0) {
@@ -1598,6 +1605,7 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
     const duration = clampFrameDuration(value);
     setGifPreset("custom");
     setGlobalDuration(duration);
+    setGlobalDurationInput(String(duration));
     const next = applyGifFrameDuration(framesRef.current, duration);
     framesRef.current = next;
     setFrames(next);
@@ -1618,9 +1626,11 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
 
   const updateSelectedFramesDuration = () => {
     if (!canEditGifFrames(lockedRef.current, pendingRef.current, status.kind) || !selectedFrameIndices.size) return;
-    const duration = clampFrameDuration(batchDuration);
+    const parsed = Number(batchDurationInput);
+    const duration = clampFrameDuration(Number.isFinite(parsed) ? parsed : batchDuration);
     setGifPreset("custom");
     setBatchDuration(duration);
+    setBatchDurationInput(String(duration));
     const next = applyGifFrameDuration(framesRef.current, duration, selectedFrameIndices);
     framesRef.current = next;
     setFrames(next);
@@ -2546,15 +2556,15 @@ export default function GifMakerView({ active = true }: { active?: boolean }) {
           </div>
           {group === "timing" ? <div id="gif-panel-timing" role="region" aria-labelledby="gif-group-timing">
               <div className="gif-settings-grid">
-                <label className="gif-field"><span>全局帧时长 · 应用全部帧</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={globalDuration} onChange={(event) => updateAllDurations(Number(event.target.value))} /><small>ms</small></div></label>
+                <label className="gif-field"><span>全局帧时长 · 应用全部帧</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={globalDurationInput} onChange={(event) => setGlobalDurationInput(event.target.value)} onBlur={() => { const duration = snapGifFrameDuration(Number(globalDurationInput)); setGlobalDurationInput(String(duration)); updateAllDurations(duration); }} /><small>ms</small></div></label>
                 <label className="gif-field"><span>动画帧率 · 应用全部帧</span><div className="gif-input-with-suffix"><input type="number" min="1" max="100" step="0.01" value={fpsFromFrameDuration(globalDuration)} onChange={(event) => updateAnimationFps(Number(event.target.value))} /><small>FPS</small></div></label>
-                <label className="gif-field"><span>当前帧时长</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={selectedFrame?.durationMs ?? DEFAULT_DURATION} disabled={!selectedFrame} onChange={(event) => updateSelectedDuration(Number(event.target.value))} /><small>ms</small></div></label>
-                <label className="gif-field"><span>批量设置选中帧时长 · {selectedFrameIndices.size} 帧</span><div className="gif-batch-duration-row"><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={batchDuration} disabled={!selectedFrameIndices.size} onChange={(event) => setBatchDuration(clampFrameDuration(Number(event.target.value)))} /><small>ms</small></div><button className="quiet-button" type="button" disabled={!selectedFrameIndices.size || locked} onClick={updateSelectedFramesDuration}>应用</button></div></label>
+                <label className="gif-field"><span>当前帧时长</span><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={selectedDurationInput} disabled={!selectedFrame} onChange={(event) => setSelectedDurationInput(event.target.value)} onBlur={() => { const duration = snapGifFrameDuration(Number(selectedDurationInput)); setSelectedDurationInput(String(duration)); updateSelectedDuration(duration); }} /><small>ms</small></div></label>
+                <label className="gif-field"><span>批量设置选中帧时长 · {selectedFrameIndices.size} 帧</span><div className="gif-batch-duration-row"><div className="gif-input-with-suffix"><input type="number" min="10" max="60000" step="10" value={batchDurationInput} disabled={!selectedFrameIndices.size} onChange={(event) => setBatchDurationInput(event.target.value)} onBlur={() => { const duration = snapGifFrameDuration(Number(batchDurationInput)); setBatchDurationInput(String(duration)); setBatchDuration(duration); }} /><small>ms</small></div><button className="quiet-button" type="button" disabled={!selectedFrameIndices.size || locked} onClick={updateSelectedFramesDuration}>应用</button></div></label>
                 <label className="gif-field"><span>首帧停留时间</span><div className="gif-hold-row"><div className="gif-input-with-suffix"><input type="number" min="0" max="60000" step="10" value={firstFrameHoldDuration} onChange={(event) => setFirstFrameHoldDuration(clampGifHoldDuration(Number(event.target.value)))} /><small>ms</small></div><button className="quiet-button" type="button" disabled={locked} onClick={() => setFirstFrameHoldDuration((current) => clampGifHoldDuration(current + 100))}>+100</button><button className="quiet-button" type="button" disabled={locked || firstFrameHoldDuration === 0} onClick={() => setFirstFrameHoldDuration(0)}>清零</button></div></label>
                 <label className="gif-field"><span>尾帧停留时间</span><div className="gif-hold-row"><div className="gif-input-with-suffix"><input type="number" min="0" max="60000" step="10" value={lastFrameHoldDuration} onChange={(event) => setLastFrameHoldDuration(clampGifHoldDuration(Number(event.target.value)))} /><small>ms</small></div><button className="quiet-button" type="button" disabled={locked} onClick={() => setLastFrameHoldDuration((current) => clampGifHoldDuration(current + 100))}>+100</button><button className="quiet-button" type="button" disabled={locked || lastFrameHoldDuration === 0} onClick={() => setLastFrameHoldDuration(0)}>清零</button></div></label>
                 <SelectField id="gif-playback-speed" label="预览速度" value={playbackSpeed} options={[{ value: 0.25 as const, label: "0.25x" }, { value: 0.5 as const, label: "0.5x" }, { value: 1 as const, label: "1x" }, { value: 2 as const, label: "2x" }]} onChange={setPlaybackSpeed} />
               </div>
-              <p className="gif-help-text">10–60000 ms，向下取整到 10 ms；总时长 {(frames.reduce((sum, frame) => sum + frame.durationMs, 0) / 1000).toFixed(2)} 秒 / 轮。首尾停留会写入导出时长，预览速度仅影响预览。</p>
+              <p className="gif-help-text">10–60000 ms，失去焦点时自动吸附到最近的常用帧时长；总时长 {(frames.reduce((sum, frame) => sum + frame.durationMs, 0) / 1000).toFixed(2)} 秒 / 轮。首尾停留会写入导出时长，预览速度仅影响预览。</p>
           </div> : null}
           {group === "canvas" ? <div id="gif-panel-canvas" role="region" aria-labelledby="gif-group-canvas">
               <div className="gif-settings-grid">

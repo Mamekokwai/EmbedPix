@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, createGifExportReport, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
+import { advanceGifPlayback, applyGifFrameDuration, calculateBoundaryFrameDuration, clampFrameDuration, clampGifFps, clampGifHoldDuration, clampGifPlaybackSpeed, compareGifSizes, createGifExportReport, durationFromGifFps, estimateGifWorkload, formatGifBytes, fpsFromFrameDuration, getGifCompressionColorCandidates, getGifFrameOrder, getGifSamplingCandidates, getNextGifTabIndex, GifImportQueue, isCurrentCompressionPlanRequest, limitGifCompressionCandidates, MAX_FRAME_BYTES, MAX_FRAME_DURATION_MS, MAX_TOTAL_BYTES, mergeConsecutiveIdenticalFrames, previewFrameDurationAtSpeed, readGifBatch, reorderGifFrameIndices, resolveGifCanvasPreset, resolveGifCanvasSize, resolveGifContentRect, sampleGifFrames, snapGifFrameDuration, validateGifFiles, validateGifPixels } from "./gifMakerLogic";
 import type { GifByteFrame } from "./gifMakerLogic";
 import { resolveGifExportCanvasSize } from "./gifMakerLogic";
 
@@ -75,6 +75,12 @@ describe("GIF maker logic", () => {
     expect(clampFrameDuration(Number.NaN)).toBe(100);
     expect(clampFrameDuration(60_001)).toBe(60_000);
     expect(clampFrameDuration(19)).toBe(10);
+  });
+  it("snaps manual frame durations to the nearest common preset", () => {
+    expect(snapGifFrameDuration(97)).toBe(100);
+    expect(snapGifFrameDuration(58)).toBe(60);
+    expect(snapGifFrameDuration(123)).toBe(125);
+    expect(snapGifFrameDuration(60_001)).toBe(60_000);
   });
 
   it("converts animation FPS and frame duration safely", () => {

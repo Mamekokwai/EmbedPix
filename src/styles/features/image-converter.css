@@ -735,6 +735,16 @@
   min-height: 15px;
 }
 
+.bmp-visual-parameters {
+  align-items: end;
+}
+
+.bmp-visual-parameters .color-control,
+.bmp-visual-parameters .compact-field,
+.bmp-visual-parameters .select-field {
+  min-width: 0;
+}
+
 
 .field-label {
   color: var(--qp-text-primary);

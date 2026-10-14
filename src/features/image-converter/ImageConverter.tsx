@@ -77,6 +77,7 @@ import type {
   ByteOrder,
   ChannelOrder,
   ExportImageRequest,
+  BmpCompression,
   ImageDimensions,
   ImageRotation,
   ImageTransform,
@@ -251,6 +252,7 @@ export default function ImageConverter({
   const [heightInput, setHeightInput] = useState("");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>(defaultOutputFormat);
   const [bitDepth, setBitDepth] = useState<BmpBitDepth>(() => resolveDefaultBitDepth(defaultOutputFormat, defaultBitDepth));
+  const [bmpCompression, setBmpCompression] = useState<BmpCompression>("rgb");
   const [jpegQuality, setJpegQuality] = useState(defaultJpegQuality);
   const [byteOrder, setByteOrder] = useState<ByteOrder>(defaultByteOrder);
   const [channelOrder, setChannelOrder] = useState<ChannelOrder>(defaultChannelOrder);
@@ -493,6 +495,7 @@ export default function ImageConverter({
           height: targetDimensions.height,
           keepAspectRatio,
           bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
+          bmpCompression,
           backgroundColor,
           fillTransparent,
           jpegQuality,
@@ -523,7 +526,7 @@ export default function ImageConverter({
     };
     void requestPreview();
     return () => { cancelled = true; };
-  }, [active, backgroundColor, bitDepth, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, fillTransparent, height, previewTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
+  }, [active, backgroundColor, bitDepth, bmpCompression, byteOrder, channelOrder, cArrayName, cropValidationError, dimensions, file, fillTransparent, height, previewTransform, jpegQuality, keepAspectRatio, metadataPolicy, outputFormat, rowAlignment, rowOrder, width, dimensionError]);
 
   const resetImageTransform = (source: ImageDimensions | null = dimensions) => {
     setRotation(0);
@@ -987,6 +990,9 @@ export default function ImageConverter({
 
   const handleBitDepthChange = (nextBitDepth: BmpBitDepth) => {
     setBitDepth(nextBitDepth);
+    if (nextBitDepth !== 4 && bmpCompression === "rle4") setBmpCompression("rgb");
+    if (nextBitDepth !== 8 && bmpCompression === "rle8") setBmpCompression("rgb");
+    if (nextBitDepth !== 16 && nextBitDepth !== 32 && bmpCompression === "bitfields") setBmpCompression("rgb");
     setError(null);
     setSettingStatus();
   };
@@ -1241,6 +1247,7 @@ export default function ImageConverter({
           height: targetDimensions.height,
           keepAspectRatio,
           bitDepth: getEffectiveBitDepth(outputFormat, bitDepth),
+          bmpCompression,
           backgroundColor,
           fillTransparent,
           jpegQuality,
@@ -1764,10 +1771,27 @@ export default function ImageConverter({
               <div className="label-row">
                 <label className="field-label" htmlFor="background-color">透明色</label>
               </div>
-              <label className="color-control" htmlFor="background-color">
-                <input id="background-color" type="color" value={backgroundColor} onChange={(event) => handleBackgroundColorChange(event.target.value)} />
-                <span>{backgroundColor}</span>
-              </label>
+              <div className="parameter-grid bmp-visual-parameters">
+                <label className="color-control" htmlFor="background-color">
+                  <input id="background-color" type="color" value={backgroundColor} onChange={(event) => handleBackgroundColorChange(event.target.value)} />
+                  <span>{backgroundColor}</span>
+                </label>
+                {outputFormat === "bmp" ? (
+                  <SelectField
+                    id="bmp-compression"
+                    label="BMP 算法"
+                    value={bmpCompression}
+                    options={[
+                      { value: "rgb" as const, label: "标准兼容（BI_RGB）" },
+                      { value: "rle4" as const, label: "RLE4（仅 4 位）" },
+                      { value: "rle8" as const, label: "RLE8（仅 8 位）" },
+                      { value: "bitfields" as const, label: "位字段（16/32 位）" },
+                    ]}
+                    onChange={setBmpCompression}
+                  />
+                ) : null}
+              </div>
+              {outputFormat === "bmp" ? <p className="field-help">RLE 适合大面积连续色块；位字段适合 RGB565 或需要明确通道掩码的设备。</p> : null}
             </div>
 
             {outputFormat === "bmp" && getEffectiveBitDepth(outputFormat, bitDepth) === 32 ? (

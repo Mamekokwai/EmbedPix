@@ -7,7 +7,7 @@ type FileDropOptions = {
 };
 
 const isFileDrag = (event: DragEvent<HTMLElement>) =>
-  Array.from(event.dataTransfer.types).includes("Files");
+  Array.from(event.dataTransfer.types).includes("Files") || event.dataTransfer.files.length > 0;
 
 /** Shared boundary keeps nested previews and internal frame drags out of file import. */
 export function useFileDrop({ disabled = false, onFiles }: FileDropOptions) {
@@ -41,9 +41,12 @@ export function useFileDrop({ disabled = false, onFiles }: FileDropOptions) {
   }, []);
 
   const onDrop = useCallback((event: DragEvent<HTMLElement>) => {
-    if (disabled) return;
     event.preventDefault();
     event.stopPropagation();
+    if (disabled) {
+      reset();
+      return;
+    }
     const files = Array.from(event.dataTransfer.files);
     reset();
     if (files.length) onFiles(files);

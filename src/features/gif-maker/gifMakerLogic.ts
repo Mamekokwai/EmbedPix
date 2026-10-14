@@ -27,6 +27,8 @@ export const MAX_FRAME_BYTES = 32 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 export const MAX_TOTAL_PIXELS = 64 * 1024 * 1024;
 export const MAX_FRAME_DURATION_MS = 60_000;
+/** 常用播放帧率对应的时长，失焦时让手动输入落在稳定、可读的档位。 */
+export const GIF_FRAME_DURATION_PRESETS = [10, 20, 25, 30, 33, 40, 50, 60, 67, 80, 100, 125, 143, 167, 200, 250, 333, 500, 1000, 2000, 5000, 10000, 30000, 60000] as const;
 export const GIF_PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2] as const;
 export type GifPlaybackSpeed = typeof GIF_PLAYBACK_SPEEDS[number];
 export const GIF_COLOR_COUNTS = [2, 16, 32, 64, 128, 256] as const;
@@ -52,6 +54,12 @@ export function getGifCompressionColorCandidates(maxColorCount: number): GifColo
 
 export function clampFrameDuration(value: number): number {
   return Number.isFinite(value) ? Math.min(MAX_FRAME_DURATION_MS, Math.max(10, Math.floor(value / 10) * 10)) : 100;
+}
+
+export function snapGifFrameDuration(value: number): number {
+  if (!Number.isFinite(value)) return 100;
+  const bounded = Math.min(MAX_FRAME_DURATION_MS, Math.max(10, value));
+  return GIF_FRAME_DURATION_PRESETS.reduce((closest, preset) => Math.abs(preset - bounded) < Math.abs(closest - bounded) ? preset : closest, GIF_FRAME_DURATION_PRESETS[0]);
 }
 
 export function clampGifFps(value: number): number {

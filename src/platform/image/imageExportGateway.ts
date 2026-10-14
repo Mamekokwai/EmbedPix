@@ -64,6 +64,7 @@ function getExportMetadata(request: ExportImageRequest) {
     keepAspectRatio: request.keepAspectRatio,
     backgroundColor: request.backgroundColor,
     bitDepth: request.bitDepth,
+    ...(request.bmpCompression ? { bmpCompression: request.bmpCompression } : {}),
     jpegQuality: request.jpegQuality,
     byteOrder: request.byteOrder,
     channelOrder: request.channelOrder,

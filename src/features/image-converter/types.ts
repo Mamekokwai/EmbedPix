@@ -10,6 +10,7 @@ export type ImageRotation = 0 | 90 | 180 | 270;
 export type MetadataPolicy = "strip" | "preserve";
 
 export type BmpBitDepth = 1 | 4 | 8 | 16 | 24 | 32;
+export type BmpCompression = "rgb" | "rle4" | "rle8" | "bitfields";
 
 export interface CropRect {
   x: number;
@@ -33,6 +34,7 @@ export interface ExportImageRequest {
   height: number;
   keepAspectRatio: boolean;
   bitDepth: BmpBitDepth | null;
+  bmpCompression?: BmpCompression;
   backgroundColor: string;
   fillTransparent?: boolean;
   jpegQuality: number;
