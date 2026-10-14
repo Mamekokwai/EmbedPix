@@ -128,7 +128,9 @@
 .workspace-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.06fr) minmax(360px, 0.94fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 18px;
+  align-items: stretch;
 }
 
 .panel {
@@ -142,6 +144,8 @@
 .settings-panel {
   min-height: 0;
   padding: var(--qp-space-card);
+  height: 100%;
+  box-sizing: border-box;
 }
 
 /* 两栏卡片的设置体各自内滚：卡片撑满工作区行高，内容在卡片内部滚，不再把整块顶出内容区。 */
